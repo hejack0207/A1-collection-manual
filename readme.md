@@ -9,7 +9,7 @@
 * [collection-python](https://github.com/hejack0207/collection-python)
 
 # ruby
-* [collection-rust](https://github.com/hejack0207/collection-rust)
+* [collection-ruby](https://github.com/hejack0207/collection-ruby)
 
 # vim
 * [collection-vim](https://github.com/hejack0207/collection-vim)
