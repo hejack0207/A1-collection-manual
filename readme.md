@@ -14,9 +14,6 @@
 # vim
 * [collection-vim](https://github.com/hejack0207/collection-vim)
 
-# scripts
-* [collection-rust](https://github.com/hejack0207/collection-rust)
-
 # go
 * [collection-go](https://github.com/hejack0207/collection-go)
 
