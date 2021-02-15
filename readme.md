@@ -8,12 +8,6 @@
 # python
 * [collection-python](https://github.com/hejack0207/collection-python)
 
-# ruby
-* [collection-ruby](https://github.com/hejack0207/collection-ruby)
-
-# vim
-* [collection-vim](https://github.com/hejack0207/collection-vim)
-
 # go
 * [collection-go](https://github.com/hejack0207/collection-go)
 * [labs-go](https://github.com/hejack0207/labs-go)
