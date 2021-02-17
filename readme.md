@@ -23,3 +23,6 @@
 # others
 * [collection-haskell](https://github.com/hejack0207/collection-haskell)
 
+# library
+## curses
+* [pancurses:rs](https://github.com/ihalila/pancurses)
