@@ -1,5 +1,6 @@
 # c/cpp
 * [collection-c](https://github.com/hejack0207/collection-c)
+* [kernel](https://github.com/torvalds/linux)
 * [bcc](https://github.com/iovisor/bcc)
 * [bpftrace](https://github.com/iovisor/bpftrace)
 
@@ -8,17 +9,19 @@
 * [labs-rust](https://github.com/hejack0207/labs-rust)
 * [redox](https://github.com/redox-os/redox)
 * [book](https://github.com/redox-os/book)
-
-# python
-* [collection-python](https://github.com/hejack0207/collection-python)
+* [stratovirt](https://github.com/openeuler-mirror/stratovirt)
 
 # go
 * [collection-go](https://github.com/hejack0207/collection-go)
 * [labs-go](https://github.com/hejack0207/labs-go)
+* [k8s](https://github.com/kubernetes/kubernetes)
 * [tke](https://github.com/tkestack/tke)
 * [tke-docs](https://github.com/tkestack/docs)
 * [charts](https://github.com/tkestack/charts)
 * [galaxy](https://github.com/tkestack/galaxy)
+
+# python
+* [collection-python](https://github.com/hejack0207/collection-python)
 
 # typescript/javascript
 * [collection-javascript](https://github.com/hejack0207/collection-javascript)
