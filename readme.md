@@ -6,6 +6,8 @@
 # rust
 * [collection-rust](https://github.com/hejack0207/collection-rust)
 * [labs-rust](https://github.com/hejack0207/labs-rust)
+* [redox](https://github.com/redox-os/redox)
+* [book](https://github.com/redox-os/book)
 
 # python
 * [collection-python](https://github.com/hejack0207/collection-python)
