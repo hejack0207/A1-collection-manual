@@ -22,6 +22,7 @@
 
 # python
 * [collection-python](https://github.com/hejack0207/collection-python)
+* [jumpserver](https://github.com/jumpserver/jumpserver)
 * [ansible](https://github.com/ansible/ansible)
 
 # typescript/javascript
