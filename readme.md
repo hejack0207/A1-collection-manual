@@ -1,5 +1,7 @@
 # c/cpp
 * [collection-c](https://github.com/hejack0207/collection-c)
+* [bcc](https://github.com/iovisor/bcc)
+* [bpftrace](https://github.com/iovisor/bpftrace)
 
 # rust
 * [collection-rust](https://github.com/hejack0207/collection-rust)
