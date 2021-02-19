@@ -48,3 +48,6 @@
 ## netlink
 * [netlink:rs](https://github.com/little-dude/netlink)
 * [netlink:go](https://github.com/vishvananda/netlink)
+
+## textui
+* [indicatif:rs](https://github.com/mitsuhiko/indicatif)
