@@ -15,9 +15,9 @@
 * [collection-go](https://github.com/hejack0207/collection-go)
 * [labs-go](https://github.com/hejack0207/labs-go)
 * [k8s](https://github.com/kubernetes/kubernetes)
-* [tke](https://github.com/tkestack/tke)
-* [tke-docs](https://github.com/tkestack/docs)
-* [charts](https://github.com/tkestack/charts)
+* [runc](https://github.com/opencontainers/runc)
+* [flannel](https://github.com/coreos/flannel)
+* [calico](https://github.com/projectcalico/calico)
 * [galaxy](https://github.com/tkestack/galaxy)
 
 # python
