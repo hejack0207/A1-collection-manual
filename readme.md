@@ -1,8 +1,9 @@
 # c/cpp
 * [collection-c](https://github.com/hejack0207/collection-c)
 
-## samples
+* target
 * [kernel](https://github.com/torvalds/linux)
+* entry
 * [bcc](https://github.com/iovisor/bcc)
 * [bpftrace](https://github.com/iovisor/bpftrace)
 
@@ -10,17 +11,19 @@
 * [collection-rust](https://github.com/hejack0207/collection-rust)
 * [labs-rust](https://github.com/hejack0207/labs-rust)
 
-## samples
+* target
 * [redox](https://github.com/redox-os/redox)
 * [book](https://github.com/redox-os/book)
 * [stratovirt](https://github.com/openeuler-mirror/stratovirt)
+* entry
 
 # go
 * [collection-go](https://github.com/hejack0207/collection-go)
 * [labs-go](https://github.com/hejack0207/labs-go)
 
-## samples
+* target
 * [k8s](https://github.com/kubernetes/kubernetes)
+* entry
 * [runc](https://github.com/opencontainers/runc)
 * [flannel](https://github.com/coreos/flannel)
 * [calico](https://github.com/projectcalico/calico)
@@ -34,9 +37,10 @@
 # python
 * [collection-python](https://github.com/hejack0207/collection-python)
 
-## samples
+* target
 * [jumpserver](https://github.com/jumpserver/jumpserver)
 * [ansible](https://github.com/ansible/ansible)
+* entry
 * [zk_shell:py](https://github.com/rgs1/zk_shell)
 * [tabview:py](https://github.com/TabViewer/tabview)
 * [PathPicker:py](https://github.com/facebook/PathPicker)
