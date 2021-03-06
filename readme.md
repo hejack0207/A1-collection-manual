@@ -63,6 +63,9 @@
 ## auto
 * [pexpect:py](https://github.com/pexpect/pexpect)
 
+## tencentcloud
+* [tencentcloud-sdk-python:py](https://github.com/TencentCloud/tencentcloud-sdk-python)
+
 ## curses
 * [termion:rs](https://github.com/redox-os/termion)
 * [pancurses:rs](https://github.com/ihalila/pancurses)
