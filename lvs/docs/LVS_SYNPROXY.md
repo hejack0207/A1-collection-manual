@@ -220,7 +220,7 @@ Syn Proxy 增加了 syn proxy  开关  1 个配置；
 
 a)  该信息维护在 svc->flags 中，因此，需要在 ip_vs.h 头文件中增加
 
-#define IP_VS_CONN_F_SYNPROXY
+\#define IP_VS_CONN_F_SYNPROXY
 
 0x4000
 

@@ -156,7 +156,7 @@ FULLNAT 增加了 local address  和  fullnat 转发模式  2 个配置；
 
 a)  该信息维护在 svc->flags 中，因此，需要在 ip_vs.h 头文件中增加
 
-#define IP_VS_CONN_F_FULLNAT  0x0005  /* full nat */
+\#define IP_VS_CONN_F_FULLNAT  0x0005  /* full nat */
 
 b)  需要修改 keepalived 和 ipvsadm 程序
 

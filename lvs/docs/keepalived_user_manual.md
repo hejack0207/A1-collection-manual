@@ -1,6 +1,6 @@
 Keepalived 使用手册
 
-莫凡(陈家军)###   基本操作
+莫凡(陈家军)\#\#\#   基本操作
 
 1.  系统服务方式
 
@@ -52,7 +52,7 @@ B.  stop、reload
 
 不推荐使用“killall keepalived”和“kill -9  ”等来杀掉 keepalived，因为这样 keepalived不会做相应的 lvs 内核清理操作。
 
-###   配置
+\#\#\#   配置
 
 keepalived 默认的配置文件为/etc/keepalived/keepalived.conf。  例如：
 
@@ -74,15 +74,15 @@ gl obal _defs  {
 
 vi rtual_server_group taobao {
 
-1.1.1.1 80    #vi p1
+1.1.1.1 80    \#vi p1
 
-1.1.2.1-2 80    #vi p2,vip3
+1.1.2.1-2 80    \#vi p2,vip3
 
 local _address_group laddr_g1 {
 
 192.168.100.1
 
-192.168.100.5-254      #支持 i p 范围，注不要超过 254
+192.168.100.5-254      \#支持 i p 范围，注不要超过 254
 
 vi rtual_server group taobao {
 
@@ -96,19 +96,19 @@ protocol  TCP
 
 s yn_proxy
 
-persistence_ti meout 50        #默认为 0
+persistence_ti meout 50        \#默认为 0
 
 laddr_group_na me laddr_g1
 
-alpha               #开启 alpha 模式：启动时默认 rs 是 down 的状态，健康检查通过后才会添加到 vs  pool
+alpha               \#开启 alpha 模式：启动时默认 rs 是 down 的状态，健康检查通过后才会添加到 vs  pool
 
-omega             #开启 omega 模式，清除 rs 时会执行相应的脚本（rs 的 noti fy_up，quorum_up）
+omega             \#开启 omega 模式，清除 rs 时会执行相应的脚本（rs 的 noti fy_up，quorum_up）
 
-quorum 1        #服务是否有效的阀值（正常工作 rs 的 wi ght 值）
+quorum 1        \#服务是否有效的阀值（正常工作 rs 的 wi ght 值）
 
-hys teresis 0      #延迟系数跟 quorum 配合使用
+hys teresis 0      \#延迟系数跟 quorum 配合使用
 
-#高于或低于阀值时会执行以下脚本。
+\#高于或低于阀值时会执行以下脚本。
 
 quorum_up " ip addr add 1.1.1.1/32 dev lo; ip addr add 1.1.2.1/32 dev lo; ip addr add 1.1.2.2/32 dev lo;"
 
@@ -150,7 +150,7 @@ D.  目前在 fullnat 模式下暂不支持 fwmark。
 
 配置文件支持 include，需注意语义的完整，不要挎“{”或“}”。正确的配置，如下所示
 
-#/etc/keepali ved/keepali ved.conf
+\#/etc/keepali ved/keepali ved.conf
 
 ……
 
@@ -176,7 +176,7 @@ vi rtual_server 192.168.1.1 80 {
 
 include /etc/keepali ved/test/rs .conf
 
-#/etc/keepali ved/test/laddr.conf
+\#/etc/keepali ved/test/laddr.conf
 
 local _address_group laddr_g1 {
 
@@ -184,7 +184,7 @@ local _address_group laddr_g1 {
 
 192.168.100.5-254
 
-#/etc/keepali ved/test/rs .conf
+\#/etc/keepali ved/test/rs .conf
 
 real_server 192.168.1.1 80 {
 
@@ -198,7 +198,7 @@ connect_timeout 4
 
 }
 
-###   注意事项
+\#\#\#   注意事项
 
 1.  更新配置文件后，可通过 reload 更新，很多情况下 reload 只会加载不同之处（如增删2.
 
