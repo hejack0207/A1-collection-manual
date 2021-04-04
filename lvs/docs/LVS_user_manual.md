@@ -4,11 +4,11 @@ BY  王平安_阿骨打  吴佳明_普空1  集群模式-配置（单台）
 
 a)  安装系统和工具
 
-# 下载 LVS 开源目录 kernel/和 tools/下的源码进行编译安装；
+\# 下载 LVS 开源目录 kernel/和 tools/下的源码进行编译安装；
 
-# 目录 kernel 为改进后的 LVS 内核源码；
+\# 目录 kernel 为改进后的 LVS 内核源码；
 
-# 目录 tools 下包括 ipvsadm/keepalived/quagga，ipvsadm/keepalived 用于管理配
+\# 目录 tools 下包括 ipvsadm/keepalived/quagga，ipvsadm/keepalived 用于管理配
 
 置 LVS，quagga 用于实现 LVS 集群；
 
@@ -24,13 +24,13 @@ Sysctl 配置
 
 路径：/etc/sysctl.conf
 
-# configure for lvs
+\# configure for lvs
 
-# ethtool -K eth0 lro off
+\# ethtool -K eth0 lro off
 
 绑定网卡中断
 
-# set_irq_affinity eth0 #脚本参见附录,该脚本是 ixgbe/igb driver 网卡
+\# set_irq_affinity eth0 \#脚本参见附录,该脚本是 ixgbe/igb driver 网卡
 
 net.ipv4.conf.all.arp_ignore = 1
 
@@ -44,7 +44,7 @@ d)  配置网卡参数
 
 关闭网卡 LRO 和 GRO
 
-# ethtool -K eth0 gro off
+\# ethtool -K eth0 gro off
 
 e)  关闭系统参数
 
@@ -52,11 +52,11 @@ e)  关闭系统参数
 
 关闭 irqbalance
 
-# service irqbalance stop
+\# service irqbalance stop
 
 f)
 
-# chkconfig --level 2345 irqbalance off
+\# chkconfig --level 2345 irqbalance off
 
 LocalAddress 配置
 
@@ -156,17 +156,17 @@ i.  主配置文件 keepalived.conf
 
 global_defs {
 
-#   notification_email {
+\#   notification_email {
 
-#     abc@taobao.com
+\#     abc@taobao.com
 
-#   }
+\#   }
 
-#   notification_email_from abc@taobao.com
+\#   notification_email_from abc@taobao.com
 
-#   smtp_server 192.168.200.1
+\#   smtp_server 192.168.200.1
 
-#   smtp_connect_timeout 40
+\#   smtp_connect_timeout 40
 
 local_address_group laddr_g1 {
 
@@ -304,11 +304,11 @@ ii.
 
 a)  安装系统和工具
 
-# 下载 LVS 开源目录 kernel/和 tools/下的源码进行编译安装；
+\# 下载 LVS 开源目录 kernel/和 tools/下的源码进行编译安装；
 
-# 目录 kernel 为改进后的 LVS 内核源码；
+\# 目录 kernel 为改进后的 LVS 内核源码；
 
-# 目录 tools 下包括 ipvsadm/keepalived/quagga，ipvsadm/keepalived 用于管理配
+\# 目录 tools 下包括 ipvsadm/keepalived/quagga，ipvsadm/keepalived 用于管理配
 
 置 LVS，quagga 用于实现 LVS 集群；
 
@@ -324,7 +324,7 @@ Sysctl 配置
 
 路径：/etc/sysctl.conf
 
-# configure for lvs
+\# configure for lvs
 
 net.core.netdev_max_backlog = 500000
 
@@ -334,13 +334,13 @@ d)  配置网卡参数
 
 关闭网卡 LRO 和 GRO
 
-# ethtool -K eth0 gro off
+\# ethtool -K eth0 gro off
 
-# ethtool -K eth0 lro off
+\# ethtool -K eth0 lro off
 
 绑定网卡中断
 
-# set_irq_affinity eth0 #脚本参见附录,该脚本是 ixgbe/igb driver 网卡
+\# set_irq_affinity eth0 \#脚本参见附录,该脚本是 ixgbe/igb driver 网卡
 
 e)  关闭系统参数
 
@@ -348,11 +348,11 @@ e)  关闭系统参数
 
 关闭 irqbalance
 
-# service irqbalance stop
+\# service irqbalance stop
 
 f)
 
-# chkconfig --level 2345 irqbalance off
+\# chkconfig --level 2345 irqbalance off
 
 LocalAddress 配置
 
@@ -390,17 +390,17 @@ i.  主配置文件 keepalived.conf
 
 global_defs {
 
-#   notification_email {
+\#   notification_email {
 
-#     abc@taobao.com
+\#     abc@taobao.com
 
-#   }
+\#   }
 
-#   notification_email_from abc@taobao.com
+\#   notification_email_from abc@taobao.com
 
-#   smtp_server 192.168.200.1
+\#   smtp_server 192.168.200.1
 
-#   smtp_connect_timeout 40
+\#   smtp_connect_timeout 40
 
 }
 
@@ -530,9 +530,9 @@ delay_before_retry 5
 
 a)  安装系统
 
-b)  加载 TOA 模块，命令：# modprobe toa
+b)  加载 TOA 模块，命令：\# modprobe toa
 
-# vim /etc/rc.local
+\# vim /etc/rc.local
 
 添加 modproble toa
 
@@ -540,11 +540,11 @@ b)  加载 TOA 模块，命令：# modprobe toa
 
 4.1  添加/删除 realserver
 
-# RealServer 请采用阿里内核：https://github.com/alibaba/ali_kernel
+\# RealServer 请采用阿里内核：https://github.com/alibaba/ali_kernel
 
-# 该内核包含了 toa 网络模块，用于 RS 上的应用程序获得真实的 Client IP，而不是LVS 上的 Local Address；
+\# 该内核包含了 toa 网络模块，用于 RS 上的应用程序获得真实的 Client IP，而不是LVS 上的 Local Address；
 
-# toa 实现了 client ip 对于 RS 的应用层透明，但对内核层是不透明的；
+\# toa 实现了 client ip 对于 RS 的应用层透明，但对内核层是不透明的；
 
 如果添加，请确保 realserver 的监听的 port 是打开的（可以 telnet 连接该端口）。
 
@@ -552,9 +552,9 @@ b)  加载 TOA 模块，命令：# modprobe toa
 
 更新内核版本，加载相应的 TOA 模块：
 
-# modprobe toa.ko
+\# modprobe toa.ko
 
-# vim /etc/rc.local
+\# vim /etc/rc.local
 
 添加 modproble toa
 
@@ -562,7 +562,7 @@ b)  加载 TOA 模块，命令：# modprobe toa
 
 例如 realserver 的 IP 为 10.251.X.X，业务名 taobao
 
-# vim /etc/keepalived/taobao.conf
+\# vim /etc/keepalived/taobao.conf
 
 virtual_server group taobao {
 
@@ -584,7 +584,7 @@ connect_timeout 4
 
 3)  第 3 步，发送 HUP 信号给 keepalived，使配置修改生效；
 
-# service keepalived reload
+\# service keepalived reload
 
 4)  第 4 步，检查 realserver 是否操作成功
 
@@ -598,7 +598,7 @@ connect_timeout 4
 
 第一步，创建业务配置文件；
 
-#vim /etc/keepalived/taobao.conf
+\#vim /etc/keepalived/taobao.conf
 
 }
 
@@ -636,7 +636,7 @@ quorum_down " ip addr del 1.1.1.3/32 dev lo;"
 
 第二步，修改 keepalived 配置文件；
 
-#vim /etc/keepalived/keepalived.conf
+\#vim /etc/keepalived/keepalived.conf
 
 ……
 
@@ -648,15 +648,15 @@ include taobao.conf
 
 2)  发送 HUP 信号给 keepalived，使配置修改生效；
 
-# service keepalived reload
+\# service keepalived reload
 
 3)  检查 vip 配置是否生效；
 
-# ipvsadm –ln //查看 vip 是否已经配置到 lvs 中
+\# ipvsadm –ln //查看 vip 是否已经配置到 lvs 中
 
-# ip addr list //查看 lo 上 vip 是否绑定成功
+\# ip addr list //查看 lo 上 vip 是否绑定成功
 
-# 模拟用户访问 vip，结果是否正确
+\# 模拟用户访问 vip，结果是否正确
 
 4.3  添加/删除 local address
 
@@ -664,7 +664,7 @@ include taobao.conf
 
 2.  修改/etc/keepalived/keepalived.conf
 
-#vim /etc/keepalived/keepalived.conf
+\#vim /etc/keepalived/keepalived.conf
 
 local_address_group laddr_g1 {
 
@@ -676,13 +676,13 @@ local_address_group laddr_g1 {
 
 3.  发送 HUP 信号给 keepalived，使配置修改生效；
 
-# service keepalived reload
+\# service keepalived reload
 
 4.  检查 local address 配置是否生效；
 
-# ip addr list //查看网卡上是否已经绑定 ip
+\# ip addr list //查看网卡上是否已经绑定 ip
 
-# ipvsadm –G //查看 vip 上是否已经绑定 ip
+\# ipvsadm –G //查看 vip 上是否已经绑定 ip
 
 注：local address 和内网接口 ip 绝对不能重合；
 
@@ -692,17 +692,17 @@ local_address_group laddr_g1 {
 
 5 set_irq_affinity 脚本(源自 intel 82599 driver)
 
-# setting up irq affinity according to /proc/interrupts
+\# setting up irq affinity according to /proc/interrupts
 
-# 2008-11-25 Robert Olsson
+\# 2008-11-25 Robert Olsson
 
-# 2009-02-19 updated by Jesse Brandeburg
+\# 2009-02-19 updated by Jesse Brandeburg
 
-# > Dave Miller:
+\# > Dave Miller:
 
-# (To get consistent naming in /proc/interrups)
+\# (To get consistent naming in /proc/interrups)
 
-# I would suggest that people use something like:
+\# I would suggest that people use something like:
 
 char buf[IFNAMSIZ+6];
 
@@ -714,9 +714,9 @@ netdev->name,
 
 queue->index);
 
-#  Assuming a device with two RX and TX queues.
+\#  Assuming a device with two RX and TX queues.
 
-#  This script will assign:
+\#  This script will assign:
 
 eth0-rx-0  CPU0
 
@@ -758,33 +758,33 @@ MASK_TMP=$((1<<$VEC))
 
 MASK=`printf "%X" $MASK_TMP`
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
-#
+\#
 
 {
 
@@ -796,9 +796,9 @@ fi
 
 fi
 
-#
+\#
 
-#
+\#
 
 do
 
@@ -816,7 +816,7 @@ echo "    to the same numbered core, ie tx0|rx0 --> cpu0, tx1|rx1 --> cpu1"echo 
 
 echo "    $0 eth0 [eth1 eth2 eth3]"
 
-# check for irqbalance running
+\# check for irqbalance running
 
 IRQBALANCE_ON=`ps ax | grep -v grep | grep -q irqbalance; echo $?`
 
@@ -830,7 +830,7 @@ echo "          Please stop the irqbalance service and/or execute"
 
 echo "          'killall irqbalance'"
 
-# Set up the desired devices.
+\# Set up the desired devices.
 
 for DEV in $*
 
