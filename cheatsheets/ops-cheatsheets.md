@@ -1,3 +1,0 @@
-# tdsql
-# mongo
-# kafka
