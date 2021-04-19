@@ -20,7 +20,7 @@
  		"cluster.routing.allocation.node_concurrent_recoveries": "20",
  		"indices.recovery.max_bytes_per_sec": "100mb"
  	}
-* }'
+ }'
 * curl -XPUT http://HOST:9200/_cluster/settings -d '{
  	"transient": {
  		"cluster.routing.allocation.cluster_concurrent_rebalance":"20",
