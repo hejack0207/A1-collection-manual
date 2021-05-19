@@ -1,4 +1,4 @@
-#!/usr/bin/zsh
+#!/usr/bin/env -S zsh -i
 
 rfcnums=${1:-$(jq -r '.[]|.number' rfcs.json)}
 for n in $rfcnums; do
