@@ -22,7 +22,7 @@
 	# else
 	#         print rfc > "/dev/stderr"
 	if (match(rfc, /^([[:digit:]]{4}) ([^.]*|[^ ]*)\. .*$/, groups)){
-		rfc="- { number: " groups[1] ", category: \"\", title: \"" gensub(/"/,"\\\"","g",groups[2]) "\" }"
+		rfc="- { number: " groups[1] ", category: \"\", title: \"" gensub(/"/,"\\\\\"","g",groups[2]) "\" }"
 		print rfc >> "rfcs.yml"
 	}else
 		print rfc > "/dev/stderr"
