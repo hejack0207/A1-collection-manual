@@ -11,7 +11,7 @@
 }
 
 /^\r$/ && output=="1"{
-	gsub("[[:cntrl:]]","",rfc)
+	gsub("[[:cntrl:]]"," ",rfc)
 	gsub("[[:space:]]{2,}"," ",rfc)
 	gsub(" $","",rfc)
 	# # gsub(/^([[:digit:]]{4}) ([^.]*)\. .*$/,"- { number: \\1, category: \"\", title: \"\\2\" }",rfc)
@@ -21,8 +21,18 @@
 	#         print rfc
 	# else
 	#         print rfc > "/dev/stderr"
-	if (match(rfc, /^([[:digit:]]{4}) ([^.]*|[^ ]*)\. .*$/, groups)){
+	titlelen = index(rfc,". ")
+	if (titlelen > 0){
+                rfc = substr(rfc, 0, titlelen)
+		print "title: " rfc > "/dev/stderr"
+	}else{
+		print "Not found title in " rfc > "/dev/stderr"
+		next
+	}
+
+	if (match(rfc, /^([[:digit:]]{4}) (.*)$/, groups)){
 		rfc="- { number: " groups[1] ", category: \"\", title: \"" gensub(/"/,"\\\\\"","g",groups[2]) "\" }"
+		# print rfc > "/dev/stderr"
 		print rfc >> "rfcs.yml"
 	}else
 		print rfc > "/dev/stderr"
