@@ -1,5 +1,7 @@
 #!/usr/bin/env -S zsh -i
 
+test -f rfcs.tsv || ./gentsv.zsh
+
 cat rfcs.tsv | while read n cate title; do
 	ntitle=$(echo -n "$title" | tr '/' '-')
 	if ! test -f ~rfc/$cate/rfc$n-$ntitle.txt; then
