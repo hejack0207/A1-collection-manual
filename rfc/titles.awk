@@ -23,7 +23,7 @@
 	#         print rfc > "/dev/stderr"
 	titlelen = index(rfc,". ")
 	if (titlelen > 0){
-                rfc = substr(rfc, 0, titlelen)
+                rfc = substr(rfc, 0, titlelen-1)
 		print "title: " rfc > "/dev/stderr"
 	}else{
 		print "Not found title in " rfc > "/dev/stderr"
