@@ -1,9 +1,10 @@
 #!/usr/bin/env -S zsh -i
 
-test -f rfcs.tsv || ./gentsv.zsh
+./gentsv.zsh
 
 cat rfcs.tsv | while read n cate title; do
 	ntitle=$(echo -n "$title" | tr '/' '-')
+	test -d ~rfc/$cate || mkdir -p ~rfc/$cate
 	if ! test -f ~rfc/$cate/rfc$n-$ntitle.txt; then
 		sn=$(print -f "%d" $n)
 		rm ~rfc/$cate/rfc$n-*.txt
