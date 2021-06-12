@@ -1,0 +1,335 @@
+'\" t
+.\"     Title: ftrace
+.\"    Author: [FIXME: author] [see http://www.docbook.org/tdg5/en/html/author]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: April 2008
+.\"    Manual: Frysk
+.\"    Source: Frysk 0.4-63.fc30
+.\"  Language: English
+.\"
+.TH "FTRACE" "1" "April 2008" "Frysk 0\&.4\-63\&.fc30" "Frysk"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
+.SH "NAME"
+ftrace \- trace system calls, function calls and signals
+.SH "SYNOPSIS"
+.HP \w'\fBftrace\fR\ 'u
+\fBftrace\fR [\-f] [\-follow] [\-dl] [\-m] [\-o=\fIFILE\fR] [\-p=\fIPID\fR...] [\-pc] [\-sys=\fISYSCALL\fR[,\fISYSCALL\fR\&.\&.\&.]] [\-sig=\fISIG\fR[,\fISIG\fR\&.\&.\&.]] [\-sym=\fIRULE\fR[,\fIRULE\fR\&.\&.\&.]] [\-addr=\fIRULE\fR[,\fIRULE\fR\&.\&.\&.]] [\-stack] [\-\-] \fIcommand\fR\ [\fIarguments\fR\&.\&.\&.] 
+.SH "DESCRIPTION"
+.PP
+\fBftrace\fR
+starts given
+\fIcommand\fR
+and according to tracing script given via command\-line arguments, it traces its system calls, symbol entry points in general, and possibly other events as well\&. It uses the Frysk framework to implement tracing\&.
+.PP
+The working set of events
+\fBftrace\fR
+should trace is defined by the following arguments\&.
+.SS "Process Selection Options"
+.PP
+\-p=\fIPID\fR
+.RS 4
+Attach to a process with given
+\fIPID\fR\&.
+.RE
+.PP
+\-f, \-follow
+.RS 4
+Follow children: automatically attach to forks of traced process\&.
+.RE
+.SS "Symbol Tracing"
+.PP
+\-dl
+.RS 4
+Trace inside dynamic linker\&. When this option is not present,
+\fBftrace\fR
+will function as if \-#INTERP#* rule was present at the end of each tracing script\&.
+.RE
+.PP
+\-sym=\fISYMBOL\fR[,\fISYMBOL\fR\&.\&.\&.]
+.RS 4
+Trace calls through the symbol entry points\&. Ftrace displays a message each time a thread of execution hits entry point of one of the traced functions, and then when (if) the function returns\&.
+.sp
+If
+\fISYMBOL\fR
+references PLT slot, calls done through that PLT slot are recorded\&. You then effectively trace calls done FROM given library or executable, and generally can\*(Aqt say which library the call leads TO\&.
+.sp
+When tracing ordinary symbol, catch all calls that end up at this symbol\&. That includes the calls that don\*(Aqt go through PLT and as such are not intended as inter\-library calls, but rather intra\-library calls\&.
+.sp
+See below for detailed description of
+\fISYMBOL\fR
+rule syntax\&.
+.RE
+.SS "Other Traceable Events"
+.PP
+\-sys=\fISYSCALL\fR[,\fISYSCALL\fR\&.\&.\&.]
+.RS 4
+Trace system calls that match given
+\fISYSCALL\fR
+ruleset\&. See below for description of
+\fISYSCALL\fR
+syntax\&.
+.RE
+.PP
+\-sig=\fISIGNAL\fR[,\fISIGNAL\fR\&.\&.\&.]
+.RS 4
+Trace signals that match given
+\fISIGNAL\fR
+ruleset\&. See below for description of
+\fISIGNAL\fR
+syntax\&.
+.RE
+.PP
+\-addr=\fIRULE\fR[,\fIRULE\fR\&.\&.\&.]
+.RS 4
+Trace addresses given by
+\fIRULE\fRs\&. See below for description of address
+\fIRULE\fR
+syntax\&.
+.RE
+.SS "Other Options"
+.PP
+\-m
+.RS 4
+Print each file mapped to or unmapped from address space of the traced process\&.
+.RE
+.PP
+\-pc
+.RS 4
+Show the value of instruction pointer at each reported event\&.
+.RE
+.PP
+\-stack
+.RS 4
+Stack trace when traced symbol is hit\&. Note that this option also applies to traced system calls\&. If you need to cherry\-pick which event should stack trace, use # operator described in sections below\&.
+.RE
+.SS "Stack Print Options"
+.PP
+\fB\-number\-of\-frames \fR\fB\fIcount\fR\fR
+.RS 4
+Limit the back\-trace to
+\fIcount\fR
+frames\&. The default is to limit the back\-trace to 10 frames\&. Specify 0 or "all" to print all frames\&.
+.RE
+.PP
+\fB\-lite\fR
+.RS 4
+Perform a light\-weight stack backtrace containing only minimal information\&. Equivalent to
+\fB\-print \-\fR\&.
+.RE
+.PP
+\fB\-rich\fR
+.RS 4
+Perform a detailed stack back\-trace that includes, where possible, inlined function calls, parameter names and values, and debug\-names\&. Equivalent to
+\fB\-print inline,params,debug\-names\fR\&.
+.RE
+.PP
+\fB\-print \fR\fB\fIprint\-option\fR\fR\fB,\&.\&.\&.\fR
+.RS 4
+Specify the level of detail to include in a stack back\-trace\&.
+\fIprint\-option\fR
+can be any of:
+.sp
+debug\-names: use debug information, such as DWARF, to determine the name of functions
+.sp
+paths: include the full path to source files and libraries
+.sp
+inline: include in\-line function in back\-trace
+.sp
+locals: to include local variables from each frame
+.sp
+params: include the function parameters
+.sp
+To negate a
+\fIprint\-option\fR
+prefix it with "\-"\&.
+.RE
+.SS "Standard Frysk Options"
+.PP
+\fB\-exe\fR
+.RS 4
+The full path of the executable to read\&.
+.RE
+.PP
+\fB\-noexe\fR
+.RS 4
+Do not attempt to read the corresponding executable when loading a core file\&.
+.RE
+.PP
+\fB\-sysroot \fR\fB\fIdirectory\fR\fR
+.RS 4
+The system root directory under which all executables, libraries, and source are located\&.
+.RE
+.PP
+\fB\-debug \fR\fB\fIclass\fR\fR\fB=\fR\fB\fIlevel\fR\fR\fB\&.\&.\&.\fR
+.RS 4
+Set internal debug\-tracing of the specified Java
+\fIclass\fR
+to
+\fIlevel\fR
+(level can be NONE, INFO, WARNING, FINE, and FINEST)\&. If the
+\fIlevel\fR
+is absent, FINE is assumed; if the
+\fIclass\fR
+is absent, the global level is set\&.
+.RE
+.SH "SYMBOL RULE SYNTAX"
+.PP
+To decide which PLT slots or entry points should be traced, following process takes place\&. A set of symbols to trace ("working set") is initially empty\&. Rules, if present, are then enumerated from left to right, and set is modified depending on the rules\&. Rules are delimited by a comma\&. Syntax of each rule is following:
+.PP
+[\-]\fIpattern\fR[/\fIoptions\fR]
+.PP
+Without the optional "\-" all symbols that match the
+\fIpattern\fR
+are added to the working set\&. With "\-", matching symbols are removed\&.
+.PP
+If "/" is present at the end of the rule, following letters are interpreted as rule flags\&. Currently only one flag is available, "s"\&. When present, it means ftrace should show a stack trace when it hits a symbol that matches this rule\&.
+.PP
+When a "\-" rule has an "/s" flag, the call should still be traced, but stack trace shouldn\*(Aqt be generated\&.
+.PP
+\fIpattern\fR
+defines which symbols or PLT slots from which libraries should be added or removed from working set\&. Syntax of pattern is as follows:
+.PP
+[#\fIsoname\fR#][\fIfilename\&.c\fR#][(\fIproc\fR|\fIline\fR)#][plt:]symbol[@\fIversion\fR]
+.PP
+\fIsoname\fR
+component is matched against a soname of a library in which we wish to trace the call\&. If the library has no associated soname (such as is usual in case of main executable), the match is done against the file name (without a path)\&. Two special sonames are distinguished: "MAIN", which always matches main executable; and "INTERP", which always matches ELF interpreter (dynamic linker) of the main executable\&. If the component is missing, then the rule is applicable in all libraries and in main executable\&.
+.PP
+\fIfilename\&.c\fR
+component is matched against the name of a file where the symbol is defined\&. NOTE: This is currently not implemented\&.
+.PP
+\fIproc\fR
+component is matched against the name of block surrounding the definition we wish to trace\&. If the block doesn\*(Aqt have a name, you can instead refer to it with the
+\fIline\fR
+number that the block surrounds\&. NOTE: This is currently not implemented\&.
+.PP
+\fIsymbol\fR
+component is matched against the name of symbol under consideration\&. If "plt:" prefix is present, the rule matches PLT entry associated with the symbol instead of the symbol itself\&.
+.PP
+\fIversion\fR
+component is matched against version associated with symbol\&. If the symbol has no associated version, it is considered to be an empty string\&. (It is possible to request symbol without a version with the pattern "foo@"\&.) NOTE: This is currently not implemented\&.
+.PP
+All components are presented in glob syntax\&. See glob(7) manual page for more details\&. See below for examples\&.
+.SH "SYSCALL AND SIGNAL RULE SYNTAX"
+.PP
+Under the presence of the
+\fB\-sys\fR
+(or
+\fB\-sig\fR) option, ALL system calls (or signals) are ALWAYS traced\&. This is a limitation of the ptrace layer\&. The system call and signal rules however serve as a simple way of filtering out the output that you are not interested in\&. In following paragraphs, the word "event" will be used to mean "signal or syscall, whatever applies"\&.
+.PP
+The system call and signal rule syntax and semantics are the same as the symbol rule syntax:
+.PP
+[\-]\fIpattern\fR[/\fIoptions\fR]
+.PP
+Event selection pattern syntax is then as follows:
+.PP
+[\fIevent name\fR|\fIevent number\fR]
+.PP
+When the pattern is empty, it matches all events known to frysk\&. When the pattern is simple number (e\&.g\&. "12"), then the pattern matches the event with the given number\&. Otherwise the pattern is considered to be case\-insensitive glob, and matched against event names\&. Whole name has to match for event to be a part of working set\&.
+.PP
+Signal can be given both with and without leading "sig" (e\&.g\&. "sigkill" as well as "kill")\&.
+.SH "ADDRESS RULE SYNTAX"
+.PP
+The process of establishing a working set of addresses that should be traced is the same as for symbol rules, and the general syntax reflects that\&. Each rule looks like this:
+.PP
+[\-]\fIpattern\fR[/\fIoptions\fR]
+.PP
+Each pattern then looks like this:
+.PP
+[#\fIsoname\fR#][0x]\fIaddress\fR
+.PP
+Addresses are always given in hexadecimal notation, even if initial 0x is missing\&.
+.PP
+\fIsoname\fR
+component is the same as in symbol tracing, i\&.e\&. it\*(Aqs matched against a soname of a library in which we wish to trace the address\&. Same rules apply regarding INTERP and MAIN meta\-sonames\&. Refer to the chapter "SYMBOL RULE SYNTAX" for detailed description\&.
+.PP
+Even though
+\fIsoname\fR
+is optional, at least one soname has to be specified at the beginning of the
+\fB\-addr\fR
+command\&. That\*(Aqs because in general it makes no sense to want to trace the same address in ALL object files at once\&. The components that are soname\-less are assumed to have a soname of the previous component that has soname\&.
+.PP
+For example, this will trace two addresses from the main binary, and stack trace one of them:
+.HP \w'\fBftrace\ \-addr=#MAIN#0x08052780/s,08049314\ \-\-\ ls\fR\ 'u
+\fBftrace \-addr=#MAIN#0x08052780/s,08049314 \-\- ls\fR
+.PP
+If you need to trace the same address in several files, you can use the fact that the soname pattern is a glob\&.
+.PP
+The addresses are assumed to be copied from readelf or objdump\&. ftrace biases the value accordingly depending on where the module is actually mapped\&.
+.SH "EXAMPLES"
+.PP
+Trace all system calls:
+.HP \w'\fBftrace\ \-sys=\ ls\fR\ 'u
+\fBftrace \-sys= ls\fR
+.PP
+Trace variants of stat system call and moreover a system call #3:
+.HP \w'\fBftrace\ \-sys=\*(Aq*stat*,3\*(Aq\ ls\fR\ 'u
+\fBftrace \-sys=\*(Aq*stat*,3\*(Aq ls\fR
+.PP
+Various ways to tell ftrace that you want to stack trace on SIGUSR1:
+.HP \w'\fBftrace\ \-sig=USR1/s,usr1/s,SIGUSR1/s,sigusr1/s,10/s\ ~/sig\fR\ 'u
+\fBftrace \-sig=USR1/s,usr1/s,SIGUSR1/s,sigusr1/s,10/s ~/sig\fR
+.PP
+Trace all library calls:
+.HP \w'\fBftrace\ \-sym=plt:*\ ls\fR\ 'u
+\fBftrace \-sym=plt:* ls\fR
+.PP
+Trace all library calls to functions that contain substring "write" in their names:
+.HP \w'\fBftrace\ \-sym=plt:*write*\ ls\fR\ 'u
+\fBftrace \-sym=plt:*write* ls\fR
+.PP
+Trace memory functions done from libraries, i\&.e\&. not from main executable:
+.HP \w'\fBftrace\ \-sym=\*(Aqplt:*alloc,plt:free,\-#MAIN#plt:*\*(Aq\ ls\fR\ 'u
+\fBftrace \-sym=\*(Aqplt:*alloc,plt:free,\-#MAIN#plt:*\*(Aq ls\fR
+.PP
+Stack trace on everything, except for memory allocation functions (which should still be traced):
+.HP \w'\fBftrace\ \-sym=\*(Aqplt:*/s,\-plt:*alloc/s,\-plt:free/s\*(Aq\ ls\fR\ 'u
+\fBftrace \-sym=\*(Aqplt:*/s,\-plt:*alloc/s,\-plt:free/s\*(Aq ls\fR
+.SH "SEE ALSO"
+.PP
+frysk(7), glob(7)
+.SH "BUGS"
+.PP
+The option parser is greedy when looking for options so running ftrace on a program that uses options can be a problem, use \-\- to split between ftrace and the program\&. So change from:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+~/prefix/bin/ftrace ~/prefix/lib64/frysk/funit \-\-arch 32 frysk\&.proc\&.TestAbandon
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+to
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+~/prefix/bin/ftrace \-\- ~/prefix/lib64/frysk/funit \-\-arch 32 frysk\&.proc\&.TestAbandon
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+Report bugs to
+\m[blue]\fB\%http://sourceware.org/frysk\fR\m[]
