@@ -1,0 +1,214 @@
+# ip\-tunnel(8) - tunnel configuration
+
+iproute2, 20 Dec 2011
+
+```
+
+ .in +8 .ti -8 ip tunnel help 
+ .ti -8 ip  [ OPTIONS ] tunnel { add | change | del | show | prl | 6rd } [ NAME ]
+[ mode MODE ] [  remote ADDR ] [   local ADDR ]
+[ [i|o]seq ] [ [i|o]key KEY ] [  [i|o]csum ] ]
+[ encaplimit ELIM ] [ ttl|hoplimit TTL ]
+[ tos TOS ] [  flowlabel FLOWLABEL ]
+[ prl-default ADDR ] [  prl-nodefault ADDR ] [  prl-delete ADDR ]
+[ 6rd-prefix ADDR ] [ 6rd-relay_prefix ADDR][ 6rd-reset ]
+[ [no]pmtudisc ] [ [no]ignore-df ] [ [no]allow-localremote ]
+[ dev PHYS_DEV ]
+</synopsis>
+
+<synopsis>
+.ti -8 MODE :=   { ipip | gre | sit | isatap | vti | ip6ip6 | ipip6 | ip6gre | vti6 | any }
+</synopsis>
+
+<synopsis>
+.ti -8 ADDR := { IP_ADDRESS | any }
+</synopsis>
+
+<synopsis>
+.ti -8 TOS := { STRING | 00..ff | inherit | inherit/STRING | inherit/00..ff }
+</synopsis>
+
+<synopsis>
+.ti -8 ELIM := { none |  0..255 }
+</synopsis>
+
+<synopsis>
+.ti -8 .ti -8 TTL := { 1..255 |  inherit }
+</synopsis>
+
+<synopsis>
+.ti -8 KEY := { DOTTED_QUAD | NUMBER }
+```
+
+
+<a name="description"></a>
+
+# Description
+
+**tunnel**
+objects are tunnels, encapsulating packets in IP packets and then
+sending them over the IP infrastructure.
+The encapsulating (or outer) address family is specified by the
+**-f**
+option. The default is IPv4.
+
+
+* **ip tunnel add**  
+  add a new tunnel
+* **ip tunnel change**  
+  change an existing tunnel
+* **ip tunnel delete**  
+  destroy a tunnel
+    * **name**_ NAME _**(default)**  
+      select the tunnel device name.
+      
+    * **mode**_ MODE_  
+      set the tunnel mode. Available modes depend on the encapsulating address family.  
+      Modes for IPv4 encapsulation available:
+      **ipip**, **sit**, **isatap**, **vti**, and **gre**.  
+      Modes for IPv6 encapsulation available:
+      **ip6ip6**, **ipip6**, **ip6gre**, **vti6**, and **any**.
+      
+    * **remote**_ ADDRESS_  
+      set the remote endpoint of the tunnel.
+      
+    * **local**_ ADDRESS_  
+      set the fixed local address for tunneled packets.
+      It must be an address on another interface of this host.
+      
+    * **ttl**_ N_  
+    * **hoplimit**_ N_  
+      set a fixed TTL (IPv4) or hoplimit (IPv6)
+      _N_
+      on tunneled packets.
+      _N_
+      is a number in the range 1--255. 0 is a special value
+      meaning that packets inherit the TTL value.
+      The default value for IPv4 tunnels is:
+      **inherit**.
+      The default value for IPv6 tunnels is:
+      **64**.
+      
+      
+    * **tos**_ T_  
+    * **dsfield**_ T_  
+    * **tclass**_ T_  
+      set the type of service (IPv4) or traffic class (IPv6) field on
+      tunneled packets, which can be specified as either a two-digit
+      hex value (e.g. c0) or a predefined string (e.g. internet).
+      The value
+      **inherit**
+      causes the field to be copied from the original IP header. The
+      values
+      **inherit/**_STRING_
+      or
+      **inherit/**_00_**..**_ff_
+      will set the field to
+      _STRING_
+      or
+      _00_.._ff_
+      when tunneling non-IP packets. The default value is 00.
+      
+    * **dev**_ NAME_  
+      bind the tunnel to the device
+      _NAME_
+      so that tunneled packets will only be routed via this device and will
+      not be able to escape to another device when the route to endpoint
+      changes.
+      
+    * **nopmtudisc**  
+      disable Path MTU Discovery on this tunnel.
+      It is enabled by default. Note that a fixed ttl is incompatible
+      with this option: tunneling with a fixed ttl always makes pmtu
+      discovery.
+      
+    * **ignore-df**  
+      enable IPv4 DF suppression on this tunnel.
+      Normally datagrams that exceed the MTU will be fragmented; the presence
+      of the DF flag inhibits this, resulting instead in an ICMP Unreachable
+      (Fragmentation Required) message.  Enabling this attribute causes the
+      DF flag to be ignored.
+      
+    * **key**_ K_  
+    * **ikey**_ K_  
+    * **okey**_ K_  
+      (** only GRE tunnels **)
+      use keyed GRE with key
+      _K_. _K_
+      is either a number or an IP address-like dotted quad.
+      The
+      **key**
+      parameter sets the key to use in both directions.
+      The
+      **ikey** and **okey**
+      parameters set different keys for input and output.
+      
+    * **csum**, **icsum**, **ocsum**  
+      (** only GRE tunnels **)
+      generate/require checksums for tunneled packets.
+      The
+      **ocsum**
+      flag calculates checksums for outgoing packets.
+      The
+      **icsum**
+      flag requires that all input packets have the correct
+      checksum. The
+      **csum**
+      flag is equivalent to the combination
+      **icsum ocsum**.
+      
+    * **seq**, **iseq**, **oseq**  
+      (** only GRE tunnels **)
+      serialize packets.
+      The
+      **oseq**
+      flag enables sequencing of outgoing packets.
+      The
+      **iseq**
+      flag requires that all input packets are serialized.
+      The
+      **seq**
+      flag is equivalent to the combination
+      **iseq oseq**.
+      **It doesn't work. Don't use it.**
+      
+    * **encaplim**_ ELIM_  
+      (** only IPv6 tunnels **)
+      set a fixed encapsulation limit. Default is 4.
+      
+    * **flowlabel**_ FLOWLABEL_  
+      (** only IPv6 tunnels **)
+      set a fixed flowlabel.
+      
+    * **allow-localremote**  
+      (** only IPv6 tunnels **)
+      allow remote endpoint on the local host.
+  
+* **ip tunnel prl**  
+  potential router list (ISATAP only)
+    * **dev**_ NAME_  
+      mandatory device name.
+      
+    * **prl-default**_ ADDR_  
+    * **prl-nodefault**_ ADDR_  
+    * **prl-delete**_ ADDR_  
+      Add or delete **ADDR**
+      as a potential router or default router.
+  
+* **ip tunnel show**  
+  list tunnels
+  This command has no arguments.
+  
+
+<a name="see-also"></a>
+
+# See Also
+  
+**ip**(8)
+
+
+<a name="author"></a>
+
+# Author
+
+Original Manpage by Michail Litvak &lt;[mci@owl.openwall](mailto:mci@owl.openwall).com&gt;
