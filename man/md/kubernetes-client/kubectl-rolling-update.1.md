@@ -1,0 +1,405 @@
+# kubernetes(1)
+
+Eric Paris,  kubernetes User Manuals
+
+
+kubectl rolling-update - Perform a rolling update. This command is deprecated, use rollout instead.
+
+
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+
+ kubectl rolling-update [OPTIONS]
+```
+
+
+
+<a name="description"></a>
+
+# Description
+
+
+Perform a rolling update of the given ReplicationController.
+
+
+Replaces the specified replication controller with a new replication controller by updating one pod at a time to use the new PodTemplate. The new-controller.json must specify the same namespace as the existing replication controller and overwrite at least one (common) label in its replicaSelector.
+
+
+
+\[la]http://kubernetes.io/images/docs/kubectl_rollingupdate.svg\[ra]
+
+
+
+<a name="options"></a>
+
+# Options
+
+
+**--allow-missing-template-keys**=true
+    If true, ignore any errors in templates when a field or map key is missing in the template. Only applies to golang and jsonpath output formats.
+
+
+**--container**=""
+    Container name which will have its image upgraded. Only relevant when --image is specified, ignored otherwise. Required when using --image on a multi-container pod
+
+
+**--deployment-label-key**="deployment"
+    The key to use to differentiate between two different controllers, default 'deployment'.  Only relevant when --image is specified, ignored otherwise
+
+
+**--dry-run**=false
+    If true, only print the object that would be sent, without sending it.
+
+
+**-f**, **--filename**=[]
+    Filename or URL to file to use to create the new replication controller.
+
+
+**--image**=""
+    Image to use for upgrading the replication controller. Must be distinct from the existing image (either new image or new image tag).  Can not be used with --filename/-f
+
+
+**--image-pull-policy**=""
+    Explicit policy for when to pull container images. Required when --image is same as existing image, ignored otherwise.
+
+
+**-o**, **--output**=""
+    Output format. One of: json|yaml|name|go-template|go-template-file|template|templatefile|jsonpath|jsonpath-file.
+
+
+**--poll-interval**=3s
+    Time delay between polling for replication controller status after the update. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+
+
+**--rollback**=false
+    If true, this is a request to abort an existing rollout that is partially rolled out. It effectively reverses current and next and runs a rollout
+
+
+**--template**=""
+    Template string or path to template file to use when -o=go-template, -o=go-template-file. The template format is golang templates [
+\[la]http://golang.org/pkg/text/template/#pkg-overview\[ra]].
+
+
+**--timeout**=5m0s
+    Max time to wait for a replication controller to update before giving up. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+
+
+**--update-period**=1m0s
+    Time to wait between updating pods. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+
+
+**--validate**=true
+    If true, use a schema to validate the input before sending it
+
+
+
+<a name="options-inherited-from-parent-commands"></a>
+
+# Options Inherited from Parent Commands
+
+
+**--alsologtostderr**=false
+    log to standard error as well as files
+
+
+**--application-metrics-count-limit**=100
+    Max number of application metrics to store (per container)
+
+
+**--as**=""
+    Username to impersonate for the operation
+
+
+**--as-group**=[]
+    Group to impersonate for the operation, this flag can be repeated to specify multiple groups.
+
+
+**--azure-container-registry-config**=""
+    Path to the file containing Azure container registry configuration information.
+
+
+**--boot-id-file**="/proc/sys/kernel/random/boot\_id"
+    Comma-separated list of files to check for boot-id. Use the first one that exists.
+
+
+**--cache-dir**="/builddir/.kube/http-cache"
+    Default HTTP cache directory
+
+
+**--certificate-authority**=""
+    Path to a cert file for the certificate authority
+
+
+**--client-certificate**=""
+    Path to a client certificate file for TLS
+
+
+**--client-key**=""
+    Path to a client key file for TLS
+
+
+**--cloud-provider-gce-lb-src-cidrs**=130.211.0.0/22,209.85.152.0/22,209.85.204.0/22,35.191.0.0/16
+    CIDRs opened in GCE firewall for LB traffic proxy  health checks
+
+
+**--cluster**=""
+    The name of the kubeconfig cluster to use
+
+
+**--container-hints**="/etc/cadvisor/container\_hints.json"
+    location of the container hints file
+
+
+**--containerd**="/run/containerd/containerd.sock"
+    containerd endpoint
+
+
+**--containerd-namespace**="k8s.io"
+    containerd namespace
+
+
+**--context**=""
+    The name of the kubeconfig context to use
+
+
+**--default-not-ready-toleration-seconds**=300
+    Indicates the tolerationSeconds of the toleration for notReady:NoExecute that is added by default to every pod that does not already have such a toleration.
+
+
+**--default-unreachable-toleration-seconds**=300
+    Indicates the tolerationSeconds of the toleration for unreachable:NoExecute that is added by default to every pod that does not already have such a toleration.
+
+
+**--docker**="unix:///var/run/docker.sock"
+    docker endpoint
+
+
+**--docker-env-metadata-whitelist**=""
+    a comma-separated list of environment variable keys that needs to be collected for docker containers
+
+
+**--docker-only**=false
+    Only report docker containers in addition to root stats
+
+
+**--docker-root**="/var/lib/docker"
+    DEPRECATED: docker root is read from docker info (this is a fallback, default: /var/lib/docker)
+
+
+**--docker-tls**=false
+    use TLS to connect to docker
+
+
+**--docker-tls-ca**="ca.pem"
+    path to trusted CA
+
+
+**--docker-tls-cert**="cert.pem"
+    path to client certificate
+
+
+**--docker-tls-key**="key.pem"
+    path to private key
+
+
+**--enable-load-reader**=false
+    Whether to enable cpu load reader
+
+
+**--event-storage-age-limit**="default=0"
+    Max length of time for which to store events (per type). Value is a comma separated list of key values, where the keys are event types (e.g.: creation, oom) or "default" and the value is a duration. Default is applied to all non-specified event types
+
+
+**--event-storage-event-limit**="default=0"
+    Max number of events to store (per type). Value is a comma separated list of key values, where the keys are event types (e.g.: creation, oom) or "default" and the value is an integer. Default is applied to all non-specified event types
+
+
+**--global-housekeeping-interval**=1m0s
+    Interval between global housekeepings
+
+
+**--housekeeping-interval**=10s
+    Interval between container housekeepings
+
+
+**--insecure-skip-tls-verify**=false
+    If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+
+
+**--kubeconfig**=""
+    Path to the kubeconfig file to use for CLI requests.
+
+
+**--log-backtrace-at**=:0
+    when logging hits line file:N, emit a stack trace
+
+
+**--log-cadvisor-usage**=false
+    Whether to log the usage of the cAdvisor container
+
+
+**--log-dir**=""
+    If non-empty, write log files in this directory
+
+
+**--log-file**=""
+    If non-empty, use this log file
+
+
+**--log-file-max-size**=1800
+    Defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited.
+
+
+**--log-flush-frequency**=5s
+    Maximum number of seconds between log flushes
+
+
+**--logtostderr**=true
+    log to standard error instead of files
+
+
+**--machine-id-file**="/etc/machine-id,/var/lib/dbus/machine-id"
+    Comma-separated list of files to check for machine-id. Use the first one that exists.
+
+
+**--match-server-version**=false
+    Require server version to match client version
+
+
+**-n**, **--namespace**=""
+    If present, the namespace scope for this CLI request
+
+
+**--password**=""
+    Password for basic authentication to the API server
+
+
+**--profile**="none"
+    Name of profile to capture. One of (none|cpu|heap|goroutine|threadcreate|block|mutex)
+
+
+**--profile-output**="profile.pprof"
+    Name of the file to write the profile to
+
+
+**--request-timeout**="0"
+    The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests.
+
+
+**-s**, **--server**=""
+    The address and port of the Kubernetes API server
+
+
+**--skip-headers**=false
+    If true, avoid header prefixes in the log messages
+
+
+**--skip-log-headers**=false
+    If true, avoid headers when opening log files
+
+
+**--stderrthreshold**=2
+    logs at or above this threshold go to stderr
+
+
+**--storage-driver-buffer-duration**=1m0s
+    Writes in the storage driver will be buffered for this duration, and committed to the non memory backends as a single transaction
+
+
+**--storage-driver-db**="cadvisor"
+    database name
+
+
+**--storage-driver-host**="localhost:8086"
+    database host:port
+
+
+**--storage-driver-password**="root"
+    database password
+
+
+**--storage-driver-secure**=false
+    use secure connection with database
+
+
+**--storage-driver-table**="stats"
+    table name
+
+
+**--storage-driver-user**="root"
+    database username
+
+
+**--token**=""
+    Bearer token for authentication to the API server
+
+
+**--update-machine-info-interval**=5m0s
+    Interval between machine info updates.
+
+
+**--user**=""
+    The name of the kubeconfig user to use
+
+
+**--username**=""
+    Username for basic authentication to the API server
+
+
+**-v**, **--v**=0
+    number for the log level verbosity
+
+
+**--version**=false
+    Print version information and quit
+
+
+**--vmodule**=
+    comma-separated list of pattern=N settings for file-filtered logging
+
+
+
+<a name="example"></a>
+
+# Example
+
+
+
+      # Update pods of frontend-v1 using new replication controller data in frontend-v2.json.
+      kubectl rolling-update frontend-v1 -f frontend-v2.json
+      
+      # Update pods of frontend-v1 using JSON data passed into stdin.
+      cat frontend-v2.json | kubectl rolling-update frontend-v1 -f -
+      
+      # Update the pods of frontend-v1 to frontend-v2 by just changing the image, and switching the
+      # name of the replication controller.
+      kubectl rolling-update frontend-v1 frontend-v2 --image=image:v2
+      
+      # Update the pods of frontend by just changing the image, and keeping the old name.
+      kubectl rolling-update frontend --image=image:v2
+      
+      # Abort and reverse an existing rollout in progress (from frontend-v1 to frontend-v2).
+      kubectl rolling-update frontend-v1 frontend-v2 --rollback
+    
+
+
+
+<a name="see-also"></a>
+
+# See Also
+
+
+**kubectl(1)**,
+
+
+
+<a name="history"></a>
+
+# History
+
+
+January 2015, Originally compiled by Eric Paris (eparis at redhat dot com) based on the kubernetes source material, but hopefully they have been automatically generated since!

@@ -1,0 +1,407 @@
+# kubernetes(1)
+
+Eric Paris,  kubernetes User Manuals
+
+
+kubectl logs - Print the logs for a container in a pod
+
+
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+
+ kubectl logs [OPTIONS]
+```
+
+
+
+<a name="description"></a>
+
+# Description
+
+
+Print the logs for a container in a pod or specified resource. If the pod has only one container, the container name is optional.
+
+
+
+<a name="options"></a>
+
+# Options
+
+
+**--all-containers**=false
+    Get all containers' logs in the pod(s).
+
+
+**-c**, **--container**=""
+    Print the logs of this container
+
+
+**-f**, **--follow**=false
+    Specify if the logs should be streamed.
+
+
+**--ignore-errors**=false
+    If watching / following pod logs, allow for any errors that occur to be non-fatal
+
+
+**--limit-bytes**=0
+    Maximum bytes of logs to return. Defaults to no limit.
+
+
+**--max-log-requests**=5
+    Specify maximum number of concurrent logs to follow when using by a selector. Defaults to 5.
+
+
+**--pod-running-timeout**=20s
+    The length of time (like 5s, 2m, or 3h, higher than zero) to wait until at least one pod is running
+
+
+**-p**, **--previous**=false
+    If true, print the logs for the previous instance of the container in a pod if it exists.
+
+
+**-l**, **--selector**=""
+    Selector (label query) to filter on.
+
+
+**--since**=0s
+    Only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs. Only one of since-time / since may be used.
+
+
+**--since-time**=""
+    Only return logs after a specific date (RFC3339). Defaults to all logs. Only one of since-time / since may be used.
+
+
+**--tail**=-1
+    Lines of recent log file to display. Defaults to -1 with no selector, showing all log lines otherwise 10, if a selector is provided.
+
+
+**--timestamps**=false
+    Include timestamps on each line in the log output
+
+
+
+<a name="options-inherited-from-parent-commands"></a>
+
+# Options Inherited from Parent Commands
+
+
+**--alsologtostderr**=false
+    log to standard error as well as files
+
+
+**--application-metrics-count-limit**=100
+    Max number of application metrics to store (per container)
+
+
+**--as**=""
+    Username to impersonate for the operation
+
+
+**--as-group**=[]
+    Group to impersonate for the operation, this flag can be repeated to specify multiple groups.
+
+
+**--azure-container-registry-config**=""
+    Path to the file containing Azure container registry configuration information.
+
+
+**--boot-id-file**="/proc/sys/kernel/random/boot\_id"
+    Comma-separated list of files to check for boot-id. Use the first one that exists.
+
+
+**--cache-dir**="/builddir/.kube/http-cache"
+    Default HTTP cache directory
+
+
+**--certificate-authority**=""
+    Path to a cert file for the certificate authority
+
+
+**--client-certificate**=""
+    Path to a client certificate file for TLS
+
+
+**--client-key**=""
+    Path to a client key file for TLS
+
+
+**--cloud-provider-gce-lb-src-cidrs**=130.211.0.0/22,209.85.152.0/22,209.85.204.0/22,35.191.0.0/16
+    CIDRs opened in GCE firewall for LB traffic proxy  health checks
+
+
+**--cluster**=""
+    The name of the kubeconfig cluster to use
+
+
+**--container-hints**="/etc/cadvisor/container\_hints.json"
+    location of the container hints file
+
+
+**--containerd**="/run/containerd/containerd.sock"
+    containerd endpoint
+
+
+**--containerd-namespace**="k8s.io"
+    containerd namespace
+
+
+**--context**=""
+    The name of the kubeconfig context to use
+
+
+**--default-not-ready-toleration-seconds**=300
+    Indicates the tolerationSeconds of the toleration for notReady:NoExecute that is added by default to every pod that does not already have such a toleration.
+
+
+**--default-unreachable-toleration-seconds**=300
+    Indicates the tolerationSeconds of the toleration for unreachable:NoExecute that is added by default to every pod that does not already have such a toleration.
+
+
+**--docker**="unix:///var/run/docker.sock"
+    docker endpoint
+
+
+**--docker-env-metadata-whitelist**=""
+    a comma-separated list of environment variable keys that needs to be collected for docker containers
+
+
+**--docker-only**=false
+    Only report docker containers in addition to root stats
+
+
+**--docker-root**="/var/lib/docker"
+    DEPRECATED: docker root is read from docker info (this is a fallback, default: /var/lib/docker)
+
+
+**--docker-tls**=false
+    use TLS to connect to docker
+
+
+**--docker-tls-ca**="ca.pem"
+    path to trusted CA
+
+
+**--docker-tls-cert**="cert.pem"
+    path to client certificate
+
+
+**--docker-tls-key**="key.pem"
+    path to private key
+
+
+**--enable-load-reader**=false
+    Whether to enable cpu load reader
+
+
+**--event-storage-age-limit**="default=0"
+    Max length of time for which to store events (per type). Value is a comma separated list of key values, where the keys are event types (e.g.: creation, oom) or "default" and the value is a duration. Default is applied to all non-specified event types
+
+
+**--event-storage-event-limit**="default=0"
+    Max number of events to store (per type). Value is a comma separated list of key values, where the keys are event types (e.g.: creation, oom) or "default" and the value is an integer. Default is applied to all non-specified event types
+
+
+**--global-housekeeping-interval**=1m0s
+    Interval between global housekeepings
+
+
+**--housekeeping-interval**=10s
+    Interval between container housekeepings
+
+
+**--insecure-skip-tls-verify**=false
+    If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+
+
+**--kubeconfig**=""
+    Path to the kubeconfig file to use for CLI requests.
+
+
+**--log-backtrace-at**=:0
+    when logging hits line file:N, emit a stack trace
+
+
+**--log-cadvisor-usage**=false
+    Whether to log the usage of the cAdvisor container
+
+
+**--log-dir**=""
+    If non-empty, write log files in this directory
+
+
+**--log-file**=""
+    If non-empty, use this log file
+
+
+**--log-file-max-size**=1800
+    Defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited.
+
+
+**--log-flush-frequency**=5s
+    Maximum number of seconds between log flushes
+
+
+**--logtostderr**=true
+    log to standard error instead of files
+
+
+**--machine-id-file**="/etc/machine-id,/var/lib/dbus/machine-id"
+    Comma-separated list of files to check for machine-id. Use the first one that exists.
+
+
+**--match-server-version**=false
+    Require server version to match client version
+
+
+**-n**, **--namespace**=""
+    If present, the namespace scope for this CLI request
+
+
+**--password**=""
+    Password for basic authentication to the API server
+
+
+**--profile**="none"
+    Name of profile to capture. One of (none|cpu|heap|goroutine|threadcreate|block|mutex)
+
+
+**--profile-output**="profile.pprof"
+    Name of the file to write the profile to
+
+
+**--request-timeout**="0"
+    The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests.
+
+
+**-s**, **--server**=""
+    The address and port of the Kubernetes API server
+
+
+**--skip-headers**=false
+    If true, avoid header prefixes in the log messages
+
+
+**--skip-log-headers**=false
+    If true, avoid headers when opening log files
+
+
+**--stderrthreshold**=2
+    logs at or above this threshold go to stderr
+
+
+**--storage-driver-buffer-duration**=1m0s
+    Writes in the storage driver will be buffered for this duration, and committed to the non memory backends as a single transaction
+
+
+**--storage-driver-db**="cadvisor"
+    database name
+
+
+**--storage-driver-host**="localhost:8086"
+    database host:port
+
+
+**--storage-driver-password**="root"
+    database password
+
+
+**--storage-driver-secure**=false
+    use secure connection with database
+
+
+**--storage-driver-table**="stats"
+    table name
+
+
+**--storage-driver-user**="root"
+    database username
+
+
+**--token**=""
+    Bearer token for authentication to the API server
+
+
+**--update-machine-info-interval**=5m0s
+    Interval between machine info updates.
+
+
+**--user**=""
+    The name of the kubeconfig user to use
+
+
+**--username**=""
+    Username for basic authentication to the API server
+
+
+**-v**, **--v**=0
+    number for the log level verbosity
+
+
+**--version**=false
+    Print version information and quit
+
+
+**--vmodule**=
+    comma-separated list of pattern=N settings for file-filtered logging
+
+
+
+<a name="example"></a>
+
+# Example
+
+
+
+      # Return snapshot logs from pod nginx with only one container
+      kubectl logs nginx
+      
+      # Return snapshot logs from pod nginx with multi containers
+      kubectl logs nginx --all-containers=true
+      
+      # Return snapshot logs from all containers in pods defined by label app=nginx
+      kubectl logs -lapp=nginx --all-containers=true
+      
+      # Return snapshot of previous terminated ruby container logs from pod web-1
+      kubectl logs -p -c ruby web-1
+      
+      # Begin streaming the logs of the ruby container in pod web-1
+      kubectl logs -f -c ruby web-1
+      
+      # Begin streaming the logs from all containers in pods defined by label app=nginx
+      kubectl logs -f -lapp=nginx --all-containers=true
+      
+      # Display only the most recent 20 lines of output in pod nginx
+      kubectl logs --tail=20 nginx
+      
+      # Show all logs from pod nginx written in the last hour
+      kubectl logs --since=1h nginx
+      
+      # Return snapshot logs from first container of a job named hello
+      kubectl logs job/hello
+      
+      # Return snapshot logs from container nginx-1 of a deployment named nginx
+      kubectl logs deployment/nginx -c nginx-1
+    
+
+
+
+<a name="see-also"></a>
+
+# See Also
+
+
+**kubectl(1)**,
+
+
+
+<a name="history"></a>
+
+# History
+
+
+January 2015, Originally compiled by Eric Paris (eparis at redhat dot com) based on the kubernetes source material, but hopefully they have been automatically generated since!
