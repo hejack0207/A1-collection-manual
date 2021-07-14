@@ -1,0 +1,90 @@
+# lckdo(1)
+
+moreutils, 2007\-08\-15
+
+.ie \n(.g .ds Aq '
+.el       .ds Aq '
+
+
+
+
+.nh
+
+
+
+
+
+<a name="name"></a>
+
+# Name
+
+lckdo - run a program with a lock held
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+.HP \w'lckdo&nbsp;'u lckdo [options] {lockfile} {program} [arguments]
+```
+
+<a name="description"></a>
+
+# Description
+
+
+**lckdo**
+runs a program with a lock held, in order to prevent multiple processes from running in parallel. Use just like
+**nice**
+or
+**nohup**.
+
+Now that util-linux contains a similar command named
+**flock**, lckdo is deprecated, and will be removed from some future version of moreutils.
+
+<a name="options"></a>
+
+# Options
+
+
+**-w**
+If the lock is already held by another process, wait for it to complete instead of failing immediately.
+
+**-W {sec}**
+The same as -w but wait not more than sec seconds.
+
+**-e**
+Execute the program directly without forking and waiting (keeps an extra file descriptor open).
+
+**-E {nnn}**
+Set the file descriptor number to keep open when exec()ing (implies -e).
+
+**-n**
+Do not create the lock file if it does not exist.
+
+**-q**
+Produce no output if lock is already held.
+
+**-s**
+Lock in shared (read) mode.
+
+**-x**
+Lock in exclusive (write) mode (default).
+
+**-t**
+Test for lock existence.
+
+<a name="exit-status"></a>
+
+# Exit Status
+
+
+If the lock was successfully acquired, the return value is that of the program invoked by
+**lckdo**. If the lock couldnt be acquired, EX_TEMPFAIL is returned. If there was a problem opening/creating or locking the lock file, EX_CANTCREAT or EX_OSERR will be returned.
+
+<a name="author"></a>
+
+# Author
+
+
+Michael Tokarev
