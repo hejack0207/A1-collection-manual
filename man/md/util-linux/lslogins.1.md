@@ -1,0 +1,151 @@
+# lslogins(1) - display information about known users in the system
+
+util-linux, April 2014
+
+```
+lslogins [options] [-s|-u[=UID]] [-g groups] [-l logins] [username]
+```
+
+<a name="description"></a>
+
+# Description
+
+
+Examine the wtmp and btmp logs, /etc/shadow (if necessary) and /etc/passwd
+and output the desired data.
+
+The optional argument _username_ forces
+**lslogins**
+to print all available details about the specified user only. In this case the
+output format is different than in case of **-l** or **-g** and unknown
+is _username_ reported as an error.
+
+
+The default action is to list info about all the users in the system.
+
+<a name="options"></a>
+
+# Options
+
+Mandatory arguments to long options are mandatory for short options too.
+
+* **-a**, **--acc-expiration**  
+  Display data about the date of last password change and the account expiration
+  date (see **shadow**(5) for more info).  (Requires root privileges.)
+* **--btmp-file path**  
+  Alternate path for btmp.
+* **-c**, **--colon-separate**  
+  Separate info about each user with a colon instead of a newline.
+* **-e**, **--export**  
+  Output data in the format of NAME=VALUE.
+* **-f**, **--failed**  
+  Display data about the users' last failed login attempts.
+* **-G**, **--supp-groups**  
+  Show information about supplementary groups.
+* **-g**, **--groups**=_groups_  
+  Only show data of users belonging to _groups_.  More than one group
+  may be specified; the list has to be comma-separated.  The unknown group
+  names are ignored.
+  
+  Note that relation between user and group may be invisible for primary group if
+  the user is not explicitly specify as group member (e.g. in /etc/group). If the
+  command lslogins scans for groups than it uses groups database only, and user
+  database with primary GID is not used at all.
+* **-h**, **--help**  
+  Display help information and exit.
+* **-L**, **--last**  
+  Display data containing information about the users' last login sessions.
+* **-l**, **--logins**=_logins_  
+  Only show data of users with a login specified in _logins_ (user names or user
+  IDS).  More than one login may be specified; the list has to be comma-separated.
+  The unknown login names are ignored.
+* **-n**, **--newline**  
+  Display each piece of information on a separate line.
+* **--noheadings**  
+  Do not print a header line.
+* **--notruncate**  
+  Don't truncate output.
+* **-o**, **--output list**  
+  Specify which output columns to print. 
+  The default list of columns may be extended if _list_ is
+  specified in the format _+list_.
+* **--output-all**  
+  Output all available columns.
+  **--help**
+  to get a list of all supported columns.
+* **-p**, **--pwd**  
+  Display information related to login by password (see also -afL).
+* **-r**, **--raw**  
+  Raw output (no columnation).
+* **-s**, **--system-accs**  
+  Show system accounts.  These are by default all accounts with a UID below 1000
+  (non-inclusive), with the exception of either nobody or nfsnobody (UID 65534).
+  This hardcoded default maybe overwritten by parameters SYS_UID_MIN and SYS_UID_MAX in
+  the file /etc/login.defs.
+* **--time-format** _type_  
+  Display dates in short, full or iso format.  The default is short, this time
+  format is designed to be space efficient and human readable.
+* **-u**, **--user-accs**  
+  Show user accounts.  These are by default all accounts with UID above 1000
+  (inclusive), with the exception of either nobody or nfsnobody (UID 65534).
+  This hardcoded default maybe overwritten by parameters UID_MIN and UID_MAX in
+  the file /etc/login.defs.
+* **-V**, **--version**  
+  Display version information and exit.
+* **--wtmp-file path**  
+  Alternate path for wtmp.
+* **-Z**, **--context**  
+  Display the users' security context.
+* **-z**, **--print0**  
+  Delimit user entries with a nul character, instead of a newline.
+  
+
+<a name="notes"></a>
+
+# Notes
+
+The default UID thresholds are read from /etc/login.defs.
+
+
+<a name="exit-status"></a>
+
+# Exit Status
+
+
+* 0
+  if OK,
+* 1
+  if incorrect arguments specified,
+* 2
+  if a serious error occurs (e.g. a corrupt log).
+
+<a name="see-also"></a>
+
+# See Also
+
+**group**(5), **passwd**(5), **shadow**(5), **utmp**(5)
+
+<a name="history"></a>
+
+# History
+
+The **lslogins** utility is inspired by the **logins** utility, which first appeared in FreeBSD 4.10.
+
+<a name="authors"></a>
+
+# Authors
+
+.MT [ooprala@redhat.com](mailto:ooprala@redhat.com)
+Ondrej Oprala
+.ME  
+.MT [kzak@redhat.com](mailto:kzak@redhat.com)
+Karel Zak
+.ME
+
+
+<a name="availability"></a>
+
+# Availability
+
+The lslogins command is part of the util-linux package and is available from
+[Linux Kernel Archive](https://​www.kernel.org​/pub​/linux​/utils​/util-linux/).
