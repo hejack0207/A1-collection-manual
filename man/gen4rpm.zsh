@@ -46,11 +46,11 @@ done
 echo "man pages: ${mans[@]}"
 set -- ${mans[@]}
 
-test -d groff/$pkg || mkdir -p groff/$pkg
-test -d txt/$pkg || mkdir -p txt/$pkg
-test -d md/$pkg || mkdir -p md/$pkg
+test -d groff/$pkg$sect || mkdir -p groff/$pkg$sect
+test -d txt/$pkg$sect || mkdir -p txt/$pkg$sect
+test -d md/$pkg$sect || mkdir -p md/$pkg$sect
 for manname; do
-	zcat $(man -w $manname) >groff/$pkg/$manname
-	man_dump $manname >txt/$pkg/$manname.txt
-	MANWIDTH=40 zcat $(man -w $manname) | awk '/^.TH.*/ || p { p = 1; print }' | man-to-md.pl >md/$pkg/$manname.md
+	zcat $(man -w $manname) >groff/$pkg$sect/$manname
+	man_dump $manname >txt/$pkg$sect/$manname.txt
+	MANWIDTH=40 zcat $(man -w $manname) | awk '/^.TH.*/ || p { p = 1; print }' | man-to-md.pl >md/$pkg$sect/$manname.md
 done
