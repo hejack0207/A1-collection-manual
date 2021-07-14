@@ -1,0 +1,171 @@
+# nfs4_uid_to_name(3)
+
+nfs4_uid_to_name, nfs4_gid_to_name, nfs4_name_to_uid, nfs4_name_to_gid,
+nfs4_init_name_mapping, nfs4_get_default_domain,
+nfs4_gss_princ_to_ids, nfs4_gss_princ_to_grouplist,
+nfs4_gss_princ_to_ids_ex,
+nfs4_gss_princ_to_grouplist_ex,
+nfs4_set_debug - ID mapping routines used for NFSv4
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+#include <nfs4_idmap.h> 
+ int nfs4_init_name_mapping(char *conffile); 
+ int nfs4_get_default_domain(char *server, char *domain, size_t len); 
+ int nfs4_uid_to_name(uid_t uid, char *domain, char *name, size_t len); 
+ int nfs4_uid_to_owner(uid_t uid, char *domain, char *name, size_t len); 
+ int nfs4_gid_to_name(gid_t gid, char *domain, char *name, size_t len); 
+ int nfs4_gid_to_owner(gid_t gid, char *domain, char *name, size_t len); 
+ int nfs4_name_to_uid(char *name, uid_t *uid); 
+ int nfs4_name_to_gid(char *name, gid_t *gid); 
+ int nfs4_owner_to_uid(char *name, uid_t *uid); 
+ int nfs4_owner_to_gid(char *name, gid_t *gid); 
+ int nfs4_gss_princ_to_ids(char *secname, char *princ, uid_t *uid, gid_t *gid); 
+ int nfs4_gss_princ_to_grouplist(char *secname, char *princ, gid_t *groups, int *ngroups); 
+ int nfs4_gss_princ_to_ids_ex(char *secname, char *princ, uid_t *uid, gid_t *gid, extra_mapping_params **ex); 
+ int nfs4_gss_princ_to_grouplist_ex(char *secname, char *princ, gid_t *groups, int *ngroups, extra_mapping_params **ex); 
+ void nfs4_set_debug(int dbg_level, void (*logger)(const char *, ...)); 
+
+```
+
+<a name="description"></a>
+
+# Description
+
+NFSv4 uses names of the form
+_user@domain_.
+To write code that helps the kernel map uid's (as
+rpc.idmapd
+does) or that processes NFSv4 ACLs, you need to be able to convert between
+NFSv4 names and local uids and gids.
+
+The
+**nfs4_uid_to_name()**
+and
+**nfs4_gid_to_name()**
+functions, given
+_uid_
+or
+_gid_
+and 
+_domain_
+(as a null-terminated string),
+write the corresponding nfsv4 name into the buffer provided in
+_name_,
+which must be of length at least
+_len_.
+
+The
+**nfs4_uid_to_owner()**
+and
+**nfs4_gid_to_group_owner()**
+functions, given
+_uid_
+or
+_gid_
+and
+_domain_
+(as a null-terminated string),
+write the corresponding nfsv4 name into the buffer provided in
+_name_,
+which must be of length at least
+_len_.
+If there is no valid mapping from
+_uid_
+or
+_gid_
+to
+_name_,
+then the numerical string representing uid or gid is returned instead.
+
+The 
+**nfs4_name_to_uid()**
+and
+**nfs4_name_to_gid()**
+functions, given
+_name_
+(as a null-terminated string), return the corresponding uid or gid in
+the second parameter.
+
+The 
+**nfs4_owner_to_uid()**
+and
+**nfs4_group_owner_to_gid()**
+functions, given
+_name_
+(as a null-terminated string), return the corresponding uid or gid in
+the second parameter.
+If there is no valid mapping from
+_name_
+to
+_uid_
+or
+_gid_
+the value for the user or group "nobody" will be returned instead.
+The
+**nfs4_init_name_mapping()**
+function must be called before using any of these functions.  It reads
+defaults from the configuration file at the provided path, usually
+"etc/idmapd.conf".
+
+The
+_domain_
+argument to the id-to-name functions is there to provide a hint to the name
+mapper in the case where an id might be mapped to names in multiple domains.
+In most cases, this argument should just be the name returned in the
+_domain_
+argument to
+**nfs4_get_default_domain()**
+which should be called with
+_server_
+set to NULL.  The
+_domain_
+should be a buffer of length
+_len_.
+The constant NFS4_MAX_DOMAIN_LEN may be used to determine a reasonable
+value for that length.
+
+The function
+**nfs4_get_grouplist()**,
+given a
+_name_,
+fills the provided array
+_groups_
+with up to 
+<i>*ngroups</i>
+group IDs corresponding to which the user
+_name_
+belongs to, setting
+<i>*ngroups</i>
+to the actual number of such groups.  If the user belongs to more than
+<i>*ngroups</i>
+groups, then an error is returned and the actual number of groups is stored in
+*ngroups.
+
+Functions
+**nfs4_gss_princ_to_ids()**,
+**nfs4_gss_princ_to_grouplist()**,
+**nfs4_gss_princ_to_ids_ex()**,
+and
+**nfs4_gss_princ_to_grouplist_ex()**
+are used to convert from a gss principal name (as returned by
+**gss_display_name()**)
+to a uid and gid, or list of gids.
+
+Finally,
+**nfs4_set_debug()**
+allows the application to set a debugging level to produce extra
+debugging information from within the library.  The optional
+_logger_
+function specifies an alternative logging function to call for
+the debug messages rather than the default internal function
+within the library.
+
+<a name="return-value"></a>
+
+# Return Value
+
+All functions return 0 or, in the case of error, -ERRNO.

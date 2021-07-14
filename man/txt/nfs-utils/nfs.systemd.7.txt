@@ -1,0 +1,80 @@
+NFS.SYSTEMD(7)                                                               Miscellaneous Information Manual                                                              NFS.SYSTEMD(7)
+
+NAME
+       nfs.systemd - managing NFS services through systemd.
+
+SYNOPSIS
+       nfs-utils.service
+       nfs-server.service
+       nfs-client.target
+       etc
+
+DESCRIPTION
+       The nfs-utils package provides a suite of systemd unit files which allow the various services to be started and managed.  These unit files ensure that the services are started in
+       the correct order, and the prerequisites are active before dependant services start.  As there are quite  few unit files, it is not immediately obvious how best to  achieve  cer-
+       tain results.  The following subsections attempt to cover the issues that are most likely to come up.
+
+   Configuration
+       The  standard systemd unit files do not provide any easy way to pass any command line arguments to daemons so as to configure their behavior.  In many case such configuration can
+       be performed by making changes to /etc/nfs.conf or other configuration files.  When that is not convenient, a distribution might provide systemd "drop-in" files which replace the
+       ExecStart= setting to start the program with different arguments.  For example a drop-in file systemd/system/nfs-mountd.service.d/local.conf containing
+              [Service]
+              EnvironmentFile=/etc/sysconfig/nfs
+              ExecStart=
+              ExecStart= /usr/sbin/rpc.mountd $RPCMOUNTDOPTS
+       would  cause  the  nfs-mountd.service  unit to run the rpc.mountd program using, for arguments, the value given for RPCMOUNTDOPTS in /etc/sysconfig/nfs.  This allows for seamless
+       integration with existing configuration tools.
+
+   Enabling unit files
+       There are three unit files which are designed to be manually enabled.  All others are automatically run as required.  The three are:
+
+       nfs-client.target
+              This should be enabled on any host which ever serves as an NFS client.  There is little cost in transparently enabling it whenever NFS client software is installed.
+
+       nfs-server.service
+              This must be enabled to provide NFS service to clients.  It starts and configures the required daemons in the required order.
+
+       nfs-blkmap.service
+              The blkmapd daemon is only required on NFS clients which are using pNFS (parallel NFS), and particularly using the blocklayout layout protocol.  If you might use this par-
+              ticular extension to NFS, the nfs-blkmap.service unit should be enabled.
+
+       Several other units which might be considered to be optional, such as rpc-gssd.service are careful to only start if the required configuration file exists.  rpc-gssd.service will
+       not start if the krb5.keytab file does not exist (typically in /etc).
+
+   Restarting NFS services
+       Most NFS daemons can be restarted at any time.  They will reload any state that they need, and continue servicing requests.  This is rarely necessary though.
+
+       When configuration changesare make, it can be hard to know exactly which services need to be restarted to ensure that the configuration  takes  effect.   The  simplest  approach,
+       which is often the best, is to restart everything.  To help with this, the nfs-utils.service unit is provided.  It declares appropriate dependencies with other unit files so that
+              systemctl restart nfs-utils
+       will  restart  all  NFS  daemons  that are running.  This will cause all configuration changes to take effect except for changes to mount options lists in /etc/fstab or /etc/nfs-
+       mount.conf.  Mount options can only be changed by unmounting and remounting filesystem.  This can be a disruptive operation so it should only be done when the value justifies the
+       cost.  The command
+              umount -a -t nfs; mount -a -t nfs
+       should unmount and remount all NFS filesystems.
+
+   Masking unwanted services
+       Rarely  there  may be a desire to prohibit some services from running even though there are normally part of a working NFS system.  This may be needed to reduce system load to an
+       absolute minimum, or to reduce attack surface by not running daemons that are not absolutely required.
+
+       Three particular services which this can apply to are rpcbind, idmapd, and rpc-gssd.  rpcbind is not part of the nfs-utils package, but it used by several NFS services.   However
+       it is not needed when only NFSv4 is in use.  If a site will never use NFSv3 (or NFSv2) and does not want rpcbind to be running, the correct approach is to run
+              systemctl mask rpcbind
+       This  will  disable rpcbind, and the various NFS services which depend on it (and are only needed for NFSv3) will refuse to start, without interfering with the operation of NFSv4
+       services.  In particular, rpc.statd will not run when rpcbind is masked.
+
+       idmapd is only needed for NFSv4, and even then is not needed when the client and server agree to use user-ids rather than user-names to identify the owners of files.   If  idmapd
+       is not needed and not wanted, it can be masked with
+              systemctl mask idmapd
+       rpc-gssd is assumed to be needed if the krb5.keytab file is present.  If a site needs this file present but does not want rpc-gssd running, it can be masked with
+              systemctl mask rpc-gssd
+
+FILES
+       /etc/nfs.conf
+       /etc/nfsmount.conf
+       /etc/idmapd.conf
+
+SEE ALSO
+       systemd.unit(5), nfs.conf(5), nfsmount.conf(5).
+
+                                                                                                                                                                           NFS.SYSTEMD(7)
