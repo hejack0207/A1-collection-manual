@@ -1,0 +1,279 @@
+# etcd(1)
+
+Etcd contributors,  etcd User Manuals
+
+
+<a name="name"></a>
+
+# Name:
+
+etcd - Distributed reliable key-value store for the most critical data of a distributed system
+
+
+<a name="usage"></a>
+
+# Usage:
+
+etcd [flags]
+
+
+<a name="description"></a>
+
+# Description:
+
+Etcd is a distributed key-value store designed to reliably and quickly preserve and provide access to critical data. It enables reliable distributed coordination through distributed locking, leader elections, and write barriers. An etcd cluster is intended for high availability and permanent data storage and retrieval.
+
+
+<a name="general-options"></a>
+
+# General Options
+
+
+_Member flags_
+
+**--data-dir **
+      Path to the data directory.
+
+**--wal-dir **
+      Path to the dedicated wal directory.
+
+**--listen-peer-urls http://localhost:2380**
+      List of URLs to listen on for peer traffic.
+
+**--listen-client-urls http://localhost:2379**
+      List of URLs to listen on for client traffic.
+
+**--listen-metrics-urls **
+      List of URLs to listen on for the metrics and health endpoints.
+
+**--max-snapshots 5**
+      Maximum number of snapshot files to retain (0 is unlimited).
+
+**--max-wals 5**
+      Maximum number of wal files to retain (0 is unlimited).
+
+**--name default**
+      Human-readable name for this member.
+
+**--snapshot-count 100000**
+      Number of committed transactions to trigger a snapshot to disk.
+
+**--heartbeat-interval 100**
+      Time (in milliseconds) of a heartbeat interval.
+
+**--election-timeout 1000**
+      Time (in milliseconds) for an election to timeout.
+
+**--initial-election-tick-advance true**
+      Whether to fast-forward initial election ticks on boot for faster election.
+
+**--quota-backend-bytes 0**
+      Raise alarms when backend size exceeds the given quota. 0 means use the default quota.
+
+**--backend-batch-interval 0s**
+      BackendBatchInterval is the maximum time before commit the backend transaction.
+
+**--backend-batch-limit 0**
+      BackendBatchLimit is the maximum operations before commit the backend transaction.
+
+**--max-txn-ops 128**
+      Maximum number of operations permitted in a transaction.
+
+**--max-request-bytes 1572864**
+      Maximum client request size in bytes the server will accept.
+
+**--grpc-keepalive-min-time 5s**
+      Minimum interval duration that a client should wait before pinging server.
+
+**--grpc-keepalive-interval 2h0m0s**
+      Frequency duration of server-to-client ping to check if a connection is alive (0 to disable).
+
+**--grpc-keepalive-timeout 20s**
+      Additional duration of wait before closing a non-responsive connection (0 to disable).
+
+_Clustering flags_
+
+**--initial-advertise-peer-urls http://localhost:2380**
+      List of this member's peer URLs to advertise to the rest of the cluster.
+
+**--advertise-client-urls http://localhost:2379**
+      List of this member's client URLs to advertise to the public.
+
+**--discovery **
+      Discovery URL used to bootstrap the cluster.
+
+**--discovery-fallback proxy**
+      Valid values include ["exit" "proxy"]
+
+**--discovery-proxy **
+      HTTP proxy to use for traffic to discovery service.
+
+**--discovery-srv **
+      DNS domain used to bootstrap initial cluster.
+
+**--discovery-srv-name **
+      Service name to query when using DNS discovery.
+
+**--initial-cluster default=http://localhost:2380**
+      Initial cluster configuration for bootstrapping.
+
+**--initial-cluster-token etcd-cluster**
+      Initial cluster token for the etcd cluster during bootstrap.
+
+**--initial-cluster-state new**
+      Initial cluster state ('new' or 'existing').
+
+**--strict-reconfig-check true**
+      Reject reconfiguration requests that would cause quorum loss.
+
+**--enable-v2 true**
+      Accept etcd V2 client requests.
+
+**--pre-vote false**
+      Enable to run an additional Raft election phase.
+
+_Proxy flags_
+
+**--proxy off**
+      Valid values include ["off" "on" "readonly"]
+
+**--proxy-failure-wait 5000**
+      Time (in milliseconds) an endpoint will be held in a failed state.
+
+**--proxy-refresh-interval 30000**
+      Time (in milliseconds) of the endpoints refresh interval.
+
+**--proxy-dial-timeout 1000**
+      Time (in milliseconds) for a dial to timeout.
+
+**--proxy-write-timeout 5000**
+      Time (in milliseconds) for a write to timeout.
+
+**--proxy-read-timeout 0**
+      Time (in milliseconds) for a read to timeout.
+
+_Security flags_
+
+**--cert-file **
+      Path to the client server TLS cert file.
+
+**--key-file **
+      Path to the client server TLS key file.
+
+**--client-cert-auth false**
+      Enable client cert authentication.
+
+**--client-crl-file **
+      Path to the client certificate revocation list file.
+
+**--trusted-ca-file **
+      Path to the client server TLS trusted CA cert file.
+
+**--auto-tls false**
+      Client TLS using generated certificates
+
+**--peer-cert-file **
+      Path to the peer server TLS cert file.
+
+**--peer-key-file **
+      Path to the peer server TLS key file.
+
+**--peer-client-cert-auth false**
+      Enable peer client cert authentication.
+
+**--peer-trusted-ca-file **
+      Path to the peer server TLS trusted CA file.
+
+**--peer-auto-tls false**
+      Peer TLS using generated certificates
+
+**--peer-crl-file **
+      Path to the peer certificate revocation list file.
+
+**--peer-cert-allowed-cn **
+      Allowed CN for inter peer authentication.
+
+**--cipher-suites **
+      Comma-separated list of supported TLS cipher suites between client/server and peers (empty will be auto-populated by Go).
+
+**--cors ***
+      Comma-separated white list of origins for CORS, or cross-origin resource sharing, (empty or * means allow all)
+
+**--host-whitelist ***
+      Comma-separated acceptable hostnames from HTTP client requests, if server is not secure (empty means allow all).
+
+_Logging flags_
+
+**--logger capnslog**
+      Specify 'zap' for structured logging or 'capnslog'.
+
+**--log-output default**
+      DEPRECATED: use '--log-outputs'.
+
+**--log-outputs default**
+      Specify 'stdout' or 'stderr' to skip journald logging even when running under systemd, or list of comma separated output targets.
+
+**--debug false**
+      Enable debug-level logging for etcd.
+
+**--log-package-levels **
+      (To be deprecated) Specify a particular log level for each etcd package (eg: 'etcdmain=CRITICAL,etcdserver=DEBUG').
+
+_Version flags_
+
+**--version false**
+      Print the version and exit.
+
+**--auto-compaction-retention 0**
+      Auto compaction retention for mvcc key value store. 0 means disable auto compaction.
+
+**--auto-compaction-mode periodic**
+      interpret 'auto-compaction-retention' one of: periodic|revision. 'periodic' for duration based retention, defaulting to hours if no time unit is provided (e.g. '5m'). 'revision' for revision number based retention.
+
+_Profiling flags_
+
+**--enable-pprof false**
+      Enable runtime profiling data via HTTP server. Address is at client URL + "/debug/pprof/"
+
+**--metrics basic**
+      Set level of detail for exported metrics, specify 'extensive' to include histogram metrics
+
+_Auth flags_
+
+**--auth-token simple**
+      Specify auth token specific options.
+
+**--bcrypt-cost 10**
+      Specify bcrypt algorithm cost factor for auth password hashing.
+
+_Gateway flags_
+
+**--enable-grpc-gateway true**
+      Enable GRPC gateway.
+
+_Experimental flags_
+
+**--experimental-initial-corrupt-check false**
+      Enable to check data corruption before serving any client/peer traffic.
+
+**--experimental-corrupt-check-time 0s**
+      Duration of time between cluster corruption check passes.
+
+**--experimental-enable-v2v3 **
+      v3 prefix for serving emulated v2 state.
+
+**--experimental-backend-bbolt-freelist-type **
+      ExperimentalBackendFreelistType specifies the type of freelist that boltdb backend uses(array and map are supported types)
+
+_Unsafe flags_
+
+**--force-new-cluster false**
+      Force to create a new one member cluster.
+
+
+<a name="see-also"></a>
+
+# See Also:
+
+**etcdctl(1)**, **etcdctl2(1)**, **etcdctl3(1)**
+
