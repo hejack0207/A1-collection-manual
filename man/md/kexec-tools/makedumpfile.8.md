@@ -1,6 +1,6 @@
 # makedumpfile(8) - make a small dumpfile of kdump
 
-Version 1.6.7, 16 Jan 2020
+Version 1.6.5, 5 Dec 2018
 
 ```
 makedumpfile    [OPTION] [-x VMLINUX|-i VMCOREINFO] VMCORE DUMPFILE
@@ -498,10 +498,6 @@ configuration, you need to use --diskset option.
   
 * **-v**  
   Show the version of makedumpfile.
-  
-* **--check-params**  
-  Only check whether the command-line parameters are valid or not, and exit.
-  Preferable to be given as the first parameter.
   
 
 <a name="environment-variables"></a>
