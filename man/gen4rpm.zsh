@@ -34,6 +34,9 @@ grepv=()
 if [[ "$pkg" = "man-pages" && "$sect" = "7" ]]; then
 	grepv=(\| grep -v -e utf-8 -e iso_ -e urn -e url -e latin)
 fi
+if [[ "$pkg" = "man-pages" && "$sect" = "2" ]]; then
+	grepv=(\| grep -v -e _Exit.2)
+fi
 pkgversion=$(rpm -qi $pkg | grep Version | sed -re 's/(.*:\s+)//g')
 mans=()
 for p in $(eval rpm -ql $pkg | grep -e "/man$sect/" ${grepv[@]});
