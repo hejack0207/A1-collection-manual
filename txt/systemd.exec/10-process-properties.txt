@@ -1,0 +1,91 @@
+PROCESS PROPERTIES
+       LimitCPU=, LimitFSIZE=, LimitDATA=, LimitSTACK=, LimitCORE=, LimitRSS=, LimitNOFILE=, LimitAS=, LimitNPROC=, LimitMEMLOCK=, LimitLOCKS=, LimitSIGPENDING=, LimitMSGQUEUE=,
+       LimitNICE=, LimitRTPRIO=, LimitRTTIME=
+           Set soft and hard limits on various resources for executed processes. See setrlimit(2) for details on the resource limit concept. Resource limits may be specified in two
+           formats: either as single value to set a specific soft and hard limit to the same value, or as colon-separated pair soft:hard to set both limits individually (e.g.
+           "LimitAS=4G:16G"). Use the string infinity to configure no limit on a specific resource. The multiplicative suffixes K, M, G, T, P and E (to the base 1024) may be used for
+           resource limits measured in bytes (e.g. LimitAS=16G). For the limits referring to time values, the usual time units ms, s, min, h and so on may be used (see systemd.time(7)
+           for details). Note that if no time unit is specified for LimitCPU= the default unit of seconds is implied, while for LimitRTTIME= the default unit of microseconds is implied.
+           Also, note that the effective granularity of the limits might influence their enforcement. For example, time limits specified for LimitCPU= will be rounded up implicitly to
+           multiples of 1s. For LimitNICE= the value may be specified in two syntaxes: if prefixed with "+" or "-", the value is understood as regular Linux nice value in the range
+           -20..19. If not prefixed like this the value is understood as raw resource limit parameter in the range 0..40 (with 0 being equivalent to 1).
+
+           Note that most process resource limits configured with these options are per-process, and processes may fork in order to acquire a new set of resources that are accounted
+           independently of the original process, and may thus escape limits set. Also note that LimitRSS= is not implemented on Linux, and setting it has no effect. Often it is
+           advisable to prefer the resource controls listed in systemd.resource-control(5) over these per-process limits, as they apply to services as a whole, may be altered
+           dynamically at runtime, and are generally more expressive. For example, MemoryLimit= is a more powerful (and working) replacement for LimitRSS=.
+
+           For system units these resource limits may be chosen freely. For user units however (i.e. units run by a per-user instance of systemd(1)), these limits are bound by (possibly
+           more restrictive) per-user limits enforced by the OS.
+
+           Resource limits not configured explicitly for a unit default to the value configured in the various DefaultLimitCPU=, DefaultLimitFSIZE=, ... options available in systemd-
+           system.conf(5), and - if not configured there - the kernel or per-user defaults, as defined by the OS (the latter only for user services, see above).
+
+           Table 1. Resource limit directives, their equivalent ulimit shell commands and the unit used
+           +-----------------+-------------------+----------------------------+
+           |Directive        | ulimit equivalent | Unit                       |
+           +-----------------+-------------------+----------------------------+
+           |LimitCPU=        | ulimit -t         | Seconds                    |
+           +-----------------+-------------------+----------------------------+
+           |LimitFSIZE=      | ulimit -f         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitDATA=       | ulimit -d         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitSTACK=      | ulimit -s         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitCORE=       | ulimit -c         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitRSS=        | ulimit -m         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitNOFILE=     | ulimit -n         | Number of File Descriptors |
+           +-----------------+-------------------+----------------------------+
+           |LimitAS=         | ulimit -v         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitNPROC=      | ulimit -u         | Number of Processes        |
+           +-----------------+-------------------+----------------------------+
+           |LimitMEMLOCK=    | ulimit -l         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitLOCKS=      | ulimit -x         | Number of Locks            |
+           +-----------------+-------------------+----------------------------+
+           |LimitSIGPENDING= | ulimit -i         | Number of Queued Signals   |
+           +-----------------+-------------------+----------------------------+
+           |LimitMSGQUEUE=   | ulimit -q         | Bytes                      |
+           +-----------------+-------------------+----------------------------+
+           |LimitNICE=       | ulimit -e         | Nice Level                 |
+           +-----------------+-------------------+----------------------------+
+           |LimitRTPRIO=     | ulimit -r         | Realtime Priority          |
+           +-----------------+-------------------+----------------------------+
+           |LimitRTTIME=     | No equivalent     | Microseconds               |
+           +-----------------+-------------------+----------------------------+
+
+       UMask=
+           Controls the file mode creation mask. Takes an access mode in octal notation. See umask(2) for details. Defaults to 0022.
+
+       KeyringMode=
+           Controls how the kernel session keyring is set up for the service (see session-keyring(7) for details on the session keyring). Takes one of inherit, private, shared. If set
+           to inherit no special keyring setup is done, and the kernel's default behaviour is applied. If private is used a new session keyring is allocated when a service process is
+           invoked, and it is not linked up with any user keyring. This is the recommended setting for system services, as this ensures that multiple services running under the same
+           system user ID (in particular the root user) do not share their key material among each other. If shared is used a new session keyring is allocated as for private, but the
+           user keyring of the user configured with User= is linked into it, so that keys assigned to the user may be requested by the unit's processes. In this modes multiple units
+           running processes under the same user ID may share key material. Unless inherit is selected the unique invocation ID for the unit (see below) is added as a protected key by
+           the name "invocation_id" to the newly created session keyring. Defaults to private for services of the system service manager and to inherit for non-service units and for
+           services of the user service manager.
+
+       OOMScoreAdjust=
+           Sets the adjustment level for the Out-Of-Memory killer for executed processes. Takes an integer between -1000 (to disable OOM killing for this process) and 1000 (to make
+           killing of this process under memory pressure very likely). See proc.txt[3] for details.
+
+       TimerSlackNSec=
+           Sets the timer slack in nanoseconds for the executed processes. The timer slack controls the accuracy of wake-ups triggered by timers. See prctl(2) for more information. Note
+           that in contrast to most other time span definitions this parameter takes an integer value in nano-seconds if no unit is specified. The usual time units are understood too.
+
+       Personality=
+           Controls which kernel architecture uname(2) shall report, when invoked by unit processes. Takes one of the architecture identifiers x86, x86-64, ppc, ppc-le, ppc64, ppc64-le,
+           s390 or s390x. Which personality architectures are supported depends on the system architecture. Usually the 64bit versions of the various system architectures support their
+           immediate 32bit personality architecture counterpart, but no others. For example, x86-64 systems support the x86-64 and x86 personalities but no others. The personality
+           feature is useful when running 32-bit services on a 64-bit host system. If not specified, the personality is left unmodified and thus reflects the personality of the host
+           system's kernel.
+
+       IgnoreSIGPIPE=
+           Takes a boolean argument. If true, causes SIGPIPE to be ignored in the executed process. Defaults to true because SIGPIPE generally is useful only in shell pipelines.
+

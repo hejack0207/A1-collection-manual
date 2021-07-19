@@ -1,0 +1,61 @@
+PATHS
+       The following settings may be used to change a service's view of the filesystem. Please note that the paths must be absolute and must not contain a ".."  path component.
+
+       WorkingDirectory=
+           Takes a directory path relative to the service's root directory specified by RootDirectory=, or the special value "~". Sets the working directory for executed processes. If
+           set to "~", the home directory of the user specified in User= is used. If not set, defaults to the root directory when systemd is running as a system instance and the
+           respective user's home directory if run as user. If the setting is prefixed with the "-" character, a missing working directory is not considered fatal. If
+           RootDirectory=/RootImage= is not set, then WorkingDirectory= is relative to the root of the system running the service manager. Note that setting this parameter might result
+           in additional dependencies to be added to the unit (see above).
+
+       RootDirectory=
+           Takes a directory path relative to the host's root directory (i.e. the root of the system running the service manager). Sets the root directory for executed processes, with
+           the chroot(2) system call. If this is used, it must be ensured that the process binary and all its auxiliary files are available in the chroot() jail. Note that setting this
+           parameter might result in additional dependencies to be added to the unit (see above).
+
+           The MountAPIVFS= and PrivateUsers= settings are particularly useful in conjunction with RootDirectory=. For details, see below.
+
+           This option is only available for system services and is not supported for services running in per-user instances of the service manager.
+
+       RootImage=
+           Takes a path to a block device node or regular file as argument. This call is similar to RootDirectory= however mounts a file system hierarchy from a block device node or
+           loopback file instead of a directory. The device node or file system image file needs to contain a file system without a partition table, or a file system within an
+           MBR/MS-DOS or GPT partition table with only a single Linux-compatible partition, or a set of file systems within a GPT partition table that follows the Discoverable
+           Partitions Specification[1].
+
+           When DevicePolicy= is set to "closed" or "strict", or set to "auto" and DeviceAllow= is set, then this setting adds /dev/loop-control with rw mode, "block-loop" and
+           "block-blkext" with rwm mode to DeviceAllow=. See systemd.resource-control(5) for the details about DevicePolicy= or DeviceAllow=. Also, see PrivateDevices= below, as it may
+           change the setting of DevicePolicy=.
+
+           This option is only available for system services and is not supported for services running in per-user instances of the service manager.
+
+       MountAPIVFS=
+           Takes a boolean argument. If on, a private mount namespace for the unit's processes is created and the API file systems /proc, /sys, and /dev are mounted inside of it, unless
+           they are already mounted. Note that this option has no effect unless used in conjunction with RootDirectory=/RootImage= as these three mounts are generally mounted in the
+           host anyway, and unless the root directory is changed, the private mount namespace will be a 1:1 copy of the host's, and include these three mounts. Note that the /dev file
+           system of the host is bind mounted if this option is used without PrivateDevices=. To run the service with a private, minimal version of /dev/, combine this option with
+           PrivateDevices=.
+
+           This option is only available for system services and is not supported for services running in per-user instances of the service manager.
+
+       BindPaths=, BindReadOnlyPaths=
+           Configures unit-specific bind mounts. A bind mount makes a particular file or directory available at an additional place in the unit's view of the file system. Any bind
+           mounts created with this option are specific to the unit, and are not visible in the host's mount table. This option expects a whitespace separated list of bind mount
+           definitions. Each definition consists of a colon-separated triple of source path, destination path and option string, where the latter two are optional. If only a source path
+           is specified the source and destination is taken to be the same. The option string may be either "rbind" or "norbind" for configuring a recursive or non-recursive bind mount.
+           If the destination path is omitted, the option string must be omitted too. Each bind mount definition may be prefixed with "-", in which case it will be ignored when its
+           source path does not exist.
+
+           BindPaths= creates regular writable bind mounts (unless the source file system mount is already marked read-only), while BindReadOnlyPaths= creates read-only bind mounts.
+           These settings may be used more than once, each usage appends to the unit's list of bind mounts. If the empty string is assigned to either of these two options the entire
+           list of bind mounts defined prior to this is reset. Note that in this case both read-only and regular bind mounts are reset, regardless which of the two settings is used.
+
+           This option is particularly useful when RootDirectory=/RootImage= is used. In this case the source path refers to a path on the host file system, while the destination path
+           refers to a path below the root directory of the unit.
+
+           Note that the destination directory must exist or systemd must be able to create it. Thus, it is not possible to use those options for mount points nested underneath paths
+           specified in InaccessiblePaths=, or under /home/ and other protected directories if ProtectHome=yes is specified.  TemporaryFileSystem= with ":ro" or ProtectHome=tmpfs should
+           be used instead.
+
+           This option is only available for system services and is not supported for services running in per-user instances of the service manager.
+

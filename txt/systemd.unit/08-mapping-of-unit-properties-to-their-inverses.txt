@@ -1,0 +1,80 @@
+MAPPING OF UNIT PROPERTIES TO THEIR INVERSES
+       Unit settings that create a relationship with a second unit usually show up in properties of both units, for example in systemctl show output. In some cases the name of the
+       property is the same as the name of the configuration setting, but not always. This table lists the properties that are shown on two units which are connected through some
+       dependency, and shows which property on "source" unit corresponds to which property on the "target" unit.
+
+       Table 3.  Forward and reverse unit properties
+       +----------------------+-----------------------+------------------------------------------------+
+       |"Forward" property    | "Reverse" property    | Where used                                     |
+       +----------------------+-----------------------+------------------------------------------------+
+       |Before=               | After=                |                                                |
+       +----------------------+-----------------------+ Both are unit file options                     |
+       |After=                | Before=               |                                                |
+       +----------------------+-----------------------+------------------------------------------------+
+       |Requires=             | RequiredBy=           | A unit file option; an option in the [Install] |
+       |                      |                       | section                                        |
+       +----------------------+-----------------------+------------------------------------------------+
+       |Wants=                | WantedBy=             | A unit file option; an option in the [Install] |
+       |                      |                       | section                                        |
+       +----------------------+-----------------------+------------------------------------------------+
+       |PartOf=               | ConsistsOf=           | A unit file option; an automatic property      |
+       +----------------------+-----------------------+------------------------------------------------+
+       |BindsTo=              | BoundBy=              | A unit file option; an automatic property      |
+       +----------------------+-----------------------+------------------------------------------------+
+       |Requisite=            | RequisiteOf=          | A unit file option; an automatic property      |
+       +----------------------+-----------------------+------------------------------------------------+
+       |Triggers=             | TriggeredBy=          | Automatic properties, see notes below          |
+       +----------------------+-----------------------+------------------------------------------------+
+       |Conflicts=            | ConflictedBy=         | A unit file option; an automatic property      |
+       +----------------------+-----------------------+------------------------------------------------+
+       |PropagatesReloadTo=   | ReloadPropagatedFrom= |                                                |
+       +----------------------+-----------------------+ Both are unit file options                     |
+       |ReloadPropagatedFrom= | PropagatesReloadTo=   |                                                |
+       +----------------------+-----------------------+------------------------------------------------+
+       |Following=            | n/a                   | An automatic property                          |
+       +----------------------+-----------------------+------------------------------------------------+
+
+       Note: WantedBy= and RequiredBy= are used in the [Install] section to create symlinks in .wants/ and .requires/ directories. They cannot be used directly as a unit configuration
+       setting.
+
+       Note: ConsistsOf=, BoundBy=, RequisiteOf=, ConflictedBy= are created implicitly along with their reverses and cannot be specified directly.
+
+       Note: Triggers= is created implicitly between a socket, path unit, or an automount unit, and the unit they activate. By default a unit with the same name is triggered, but this
+       can be overridden using Sockets=, Service=, and Unit= settings. See systemd.service(5), systemd.socket(5), systemd.path(5), and systemd.automount(5) for details.  TriggeredBy= is
+       created implicitly on the triggered unit.
+
+       Note: Following= is used to group device aliases and points to the "primary" device unit that systemd is using to track device state, usually corresponding to a sysfs path. It
+       does not show up in the "target" unit.
+
+[INSTALL] SECTION OPTIONS
+       Unit files may include an "[Install]" section, which carries installation information for the unit. This section is not interpreted by systemd(1) during runtime; it is used by
+       the enable and disable commands of the systemctl(1) tool during installation of a unit.
+
+       Alias=
+           A space-separated list of additional names this unit shall be installed under. The names listed here must have the same suffix (i.e. type) as the unit filename. This option
+           may be specified more than once, in which case all listed names are used. At installation time, systemctl enable will create symlinks from these names to the unit filename.
+           Note that not all unit types support such alias names, and this setting is not supported for them. Specifically, mount, slice, swap, and automount units do not support
+           aliasing.
+
+       WantedBy=, RequiredBy=
+           This option may be used more than once, or a space-separated list of unit names may be given. A symbolic link is created in the .wants/ or .requires/ directory of each of the
+           listed units when this unit is installed by systemctl enable. This has the effect that a dependency of type Wants= or Requires= is added from the listed unit to the current
+           unit. The primary result is that the current unit will be started when the listed unit is started. See the description of Wants= and Requires= in the [Unit] section for
+           details.
+
+           WantedBy=foo.service in a service bar.service is mostly equivalent to Alias=foo.service.wants/bar.service in the same file. In case of template units, systemctl enable must
+           be called with an instance name, and this instance will be added to the .wants/ or .requires/ list of the listed unit. E.g.  WantedBy=getty.target in a service getty@.service
+           will result in systemctl enable getty@tty2.service creating a getty.target.wants/getty@tty2.service link to getty@.service.
+
+       Also=
+           Additional units to install/deinstall when this unit is installed/deinstalled. If the user requests installation/deinstallation of a unit with this option configured,
+           systemctl enable and systemctl disable will automatically install/uninstall units listed in this option as well.
+
+           This option may be used more than once, or a space-separated list of unit names may be given.
+
+       DefaultInstance=
+           In template unit files, this specifies for which instance the unit shall be enabled if the template is enabled without any explicitly set instance. This option has no effect
+           in non-template unit files. The specified string must be usable as instance identifier.
+
+       The following specifiers are interpreted in the Install section: %n, %N, %p, %i, %j, %g, %G, %U, %u, %m, %H, %b, %v. For their meaning see the next section.
+

@@ -16,7 +16,7 @@ mkdir $name
 csplit $txtfile -f "$name/$name-" -b "%02d.txt" '/^[[:alpha:]][[:alpha:][:space:]]\+$/' '{*}'
 
 for f in $name/$name-*.txt; do
-	i=${${f%.?.txt}##$name/$name-}
+	i=${${f%.txt}##$name/$name-}
 	mv $name/$name-$i.txt "$name/$i-$(head -n1 $f | tr 'A-Z ' 'a-z-').txt"
 done
 rm $name/00-*

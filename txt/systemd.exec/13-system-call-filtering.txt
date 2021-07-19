@@ -1,0 +1,151 @@
+SYSTEM CALL FILTERING
+       SystemCallFilter=
+           Takes a space-separated list of system call names. If this setting is used, all system calls executed by the unit processes except for the listed ones will result in
+           immediate process termination with the SIGSYS signal (whitelisting). If the first character of the list is "~", the effect is inverted: only the listed system calls will
+           result in immediate process termination (blacklisting). Blacklisted system calls and system call groups may optionally be suffixed with a colon (":") and "errno" error number
+           (between 0 and 4095) or errno name such as EPERM, EACCES or EUCLEAN. This value will be returned when a blacklisted system call is triggered, instead of terminating the
+           processes immediately. This value takes precedence over the one given in SystemCallErrorNumber=. If running in user mode, or in system mode, but without the CAP_SYS_ADMIN
+           capability (e.g. setting User=nobody), NoNewPrivileges=yes is implied. This feature makes use of the Secure Computing Mode 2 interfaces of the kernel ('seccomp filtering')
+           and is useful for enforcing a minimal sandboxing environment. Note that the execve, exit, exit_group, getrlimit, rt_sigreturn, sigreturn system calls and the system calls for
+           querying time and sleeping are implicitly whitelisted and do not need to be listed explicitly. This option may be specified more than once, in which case the filter masks are
+           merged. If the empty string is assigned, the filter is reset, all prior assignments will have no effect. This does not affect commands prefixed with "+".
+
+           Note that on systems supporting multiple ABIs (such as x86/x86-64) it is recommended to turn off alternative ABIs for services, so that they cannot be used to circumvent the
+           restrictions of this option. Specifically, it is recommended to combine this option with SystemCallArchitectures=native or similar.
+
+           Note that strict system call filters may impact execution and error handling code paths of the service invocation. Specifically, access to the execve system call is required
+           for the execution of the service binary -- if it is blocked service invocation will necessarily fail. Also, if execution of the service binary fails for some reason (for
+           example: missing service executable), the error handling logic might require access to an additional set of system calls in order to process and log this failure correctly.
+           It might be necessary to temporarily disable system call filters in order to simplify debugging of such failures.
+
+           If you specify both types of this option (i.e. whitelisting and blacklisting), the first encountered will take precedence and will dictate the default action (termination or
+           approval of a system call). Then the next occurrences of this option will add or delete the listed system calls from the set of the filtered system calls, depending of its
+           type and the default action. (For example, if you have started with a whitelisting of read and write, and right after it add a blacklisting of write, then write will be
+           removed from the set.)
+
+           As the number of possible system calls is large, predefined sets of system calls are provided. A set starts with "@" character, followed by name of the set.
+
+           Table 3. Currently predefined system call sets
+           +----------------+----------------------------------------------------------------+
+           |Set             | Description                                                    |
+           +----------------+----------------------------------------------------------------+
+           |@aio            | Asynchronous I/O (io_setup(2), io_submit(2), and related       |
+           |                | calls)                                                         |
+           +----------------+----------------------------------------------------------------+
+           |@basic-io       | System calls for basic I/O: reading, writing, seeking, file    |
+           |                | descriptor duplication and closing (read(2), write(2), and     |
+           |                | related calls)                                                 |
+           +----------------+----------------------------------------------------------------+
+           |@chown          | Changing file ownership (chown(2), fchownat(2), and related    |
+           |                | calls)                                                         |
+           +----------------+----------------------------------------------------------------+
+           |@clock          | System calls for changing the system clock (adjtimex(2),       |
+           |                | settimeofday(2), and related calls)                            |
+           +----------------+----------------------------------------------------------------+
+           |@cpu-emulation  | System calls for CPU emulation functionality (vm86(2) and      |
+           |                | related calls)                                                 |
+           +----------------+----------------------------------------------------------------+
+           |@debug          | Debugging, performance monitoring and tracing functionality    |
+           |                | (ptrace(2), perf_event_open(2) and related calls)              |
+           +----------------+----------------------------------------------------------------+
+           |@file-system    | File system operations: opening, creating files and            |
+           |                | directories for read and write, renaming and removing them,    |
+           |                | reading file properties, or creating hard and symbolic links.  |
+           +----------------+----------------------------------------------------------------+
+           |@io-event       | Event loop system calls (poll(2), select(2), epoll(7),         |
+           |                | eventfd(2) and related calls)                                  |
+           +----------------+----------------------------------------------------------------+
+           |@ipc            | Pipes, SysV IPC, POSIX Message Queues and other IPC            |
+           |                | (mq_overview(7), svipc(7))                                     |
+           +----------------+----------------------------------------------------------------+
+           |@keyring        | Kernel keyring access (keyctl(2) and related calls)            |
+           +----------------+----------------------------------------------------------------+
+           |@memlock        | Locking of memory into RAM (mlock(2), mlockall(2) and related  |
+           |                | calls)                                                         |
+           +----------------+----------------------------------------------------------------+
+           |@module         | Loading and unloading of kernel modules (init_module(2),       |
+           |                | delete_module(2) and related calls)                            |
+           +----------------+----------------------------------------------------------------+
+           |@mount          | Mounting and unmounting of file systems (mount(2), chroot(2),  |
+           |                | and related calls)                                             |
+           +----------------+----------------------------------------------------------------+
+           |@network-io     | Socket I/O (including local AF_UNIX): socket(7), unix(7)       |
+           +----------------+----------------------------------------------------------------+
+           |@obsolete       | Unusual, obsolete or unimplemented (create_module(2), gtty(2), |
+           |                | ...)                                                           |
+           +----------------+----------------------------------------------------------------+
+           |@privileged     | All system calls which need super-user capabilities            |
+           |                | (capabilities(7))                                              |
+           +----------------+----------------------------------------------------------------+
+           |@process        | Process control, execution, namespaceing operations (clone(2), |
+           |                | kill(2), namespaces(7), ...                                    |
+           +----------------+----------------------------------------------------------------+
+           |@raw-io         | Raw I/O port access (ioperm(2), iopl(2), pciconfig_read(),     |
+           |                | ...)                                                           |
+           +----------------+----------------------------------------------------------------+
+           |@reboot         | System calls for rebooting and reboot preparation (reboot(2),  |
+           |                | kexec(), ...)                                                  |
+           +----------------+----------------------------------------------------------------+
+           |@resources      | System calls for changing resource limits, memory and          |
+           |                | scheduling parameters (setrlimit(2), setpriority(2), ...)      |
+           +----------------+----------------------------------------------------------------+
+           |@setuid         | System calls for changing user ID and group ID credentials,    |
+           |                | (setuid(2), setgid(2), setresuid(2), ...)                      |
+           +----------------+----------------------------------------------------------------+
+           |@signal         | System calls for manipulating and handling process signals     |
+           |                | (signal(2), sigprocmask(2), ...)                               |
+           +----------------+----------------------------------------------------------------+
+           |@swap           | System calls for enabling/disabling swap devices (swapon(2),   |
+           |                | swapoff(2))                                                    |
+           +----------------+----------------------------------------------------------------+
+           |@sync           | Synchronizing files and memory to disk: (fsync(2), msync(2),   |
+           |                | and related calls)                                             |
+           +----------------+----------------------------------------------------------------+
+           |@system-service | A reasonable set of system calls used by common system         |
+           |                | services, excluding any special purpose calls. This is the     |
+           |                | recommended starting point for whitelisting system calls for   |
+           |                | system services, as it contains what is typically needed by    |
+           |                | system services, but excludes overly specific interfaces. For  |
+           |                | example, the following APIs are excluded: "@clock", "@mount",  |
+           |                | "@swap", "@reboot".                                            |
+           +----------------+----------------------------------------------------------------+
+           |@timer          | System calls for scheduling operations by time (alarm(2),      |
+           |                | timer_create(2), ...)                                          |
+           +----------------+----------------------------------------------------------------+
+           Note, that as new system calls are added to the kernel, additional system calls might be added to the groups above. Contents of the sets may also change between systemd
+           versions. In addition, the list of system calls depends on the kernel version and architecture for which systemd was compiled. Use systemd-analyze syscall-filter to list the
+           actual list of system calls in each filter.
+
+           Generally, whitelisting system calls (rather than blacklisting) is the safer mode of operation. It is recommended to enforce system call whitelists for all long-running
+           system services. Specifically, the following lines are a relatively safe basic choice for the majority of system services:
+
+               [Service]
+               SystemCallFilter=@system-service
+               SystemCallErrorNumber=EPERM
+
+           It is recommended to combine the file system namespacing related options with SystemCallFilter=~@mount, in order to prohibit the unit's processes to undo the mappings.
+           Specifically these are the options PrivateTmp=, PrivateDevices=, ProtectSystem=, ProtectHome=, ProtectKernelTunables=, ProtectControlGroups=, ReadOnlyPaths=,
+           InaccessiblePaths= and ReadWritePaths=.
+
+       SystemCallErrorNumber=
+           Takes an "errno" error number (between 1 and 4095) or errno name such as EPERM, EACCES or EUCLEAN, to return when the system call filter configured with SystemCallFilter= is
+           triggered, instead of terminating the process immediately. When this setting is not used, or when the empty string is assigned, the process will be terminated immediately
+           when the filter is triggered.
+
+       SystemCallArchitectures=
+           Takes a space-separated list of architecture identifiers to include in the system call filter. The known architecture identifiers are the same as for ConditionArchitecture=
+           described in systemd.unit(5), as well as x32, mips64-n32, mips64-le-n32, and the special identifier native. The special identifier native implicitly maps to the native
+           architecture of the system (or more precisely: to the architecture the system manager is compiled for). If running in user mode, or in system mode, but without the
+           CAP_SYS_ADMIN capability (e.g. setting User=nobody), NoNewPrivileges=yes is implied. By default, this option is set to the empty list, i.e. no system call architecture
+           filtering is applied.
+
+           If this setting is used, processes of this unit will only be permitted to call native system calls, and system calls of the specified architectures. For the purposes of this
+           option, the x32 architecture is treated as including x86-64 system calls. However, this setting still fulfills its purpose, as explained below, on x32.
+
+           System call filtering is not equally effective on all architectures. For example, on x86 filtering of network socket-related calls is not possible, due to ABI limitations -- a
+           limitation that x86-64 does not have, however. On systems supporting multiple ABIs at the same time -- such as x86/x86-64 -- it is hence recommended to limit the set of
+           permitted system call architectures so that secondary ABIs may not be used to circumvent the restrictions applied to the native ABI of the system. In particular, setting
+           SystemCallArchitectures=native is a good choice for disabling non-native ABIs.
+
+           System call architectures may also be restricted system-wide via the SystemCallArchitectures= option in the global configuration. See systemd-system.conf(5) for details.
+
