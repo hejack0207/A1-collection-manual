@@ -1,12 +1,20 @@
 #!/usr/bin/zsh
 
-rm -rf bash
-mkdir bash
+if [ $# -lt 1 ]; then
+	echo "usage: $0 txtfile"
+	exit 0
+fi
 
-csplit ../man/txt/bash.1.txt -f "bash/bash-" -b "%02d.txt" '/^[[:alpha:]][[:alpha:][:space:]]\+$/' '{*}'
+txtfile=${1:-../man/txt/bash.1.txt}
+name=${$(basename $txtfile)%%.*}
 
-for f in bash/bash-*.txt; do
-	i=${${f%%.txt}##bash/bash-}
-	mv bash/bash-$i.txt "bash/$i-$(head -n1 $f | tr 'A-Z ' 'a-z-').txt"
-	rm bash/00-*
+rm -rf $name
+mkdir $name
+
+csplit $txtfile -f "$name/$name-" -b "%02d.txt" '/^[[:alpha:]][[:alpha:][:space:]]\+$/' '{*}'
+
+for f in $name/$name-*.txt; do
+	i=${${f%%.txt}##$name/$name-}
+	mv $name/$name-$i.txt "$name/$i-$(head -n1 $f | tr 'A-Z ' 'a-z-').txt"
+	rm $name/00-*
 done
