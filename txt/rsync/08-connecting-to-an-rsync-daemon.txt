@@ -1,0 +1,61 @@
+CONNECTING TO AN RSYNC DAEMON
+       It is also possible to use rsync without a remote shell as the transport.  In this case you will directly connect to a remote rsync daemon, typically using TCP port  873.   (This
+       obviously requires the daemon to be running on the remote system, so refer to the STARTING AN RSYNC DAEMON TO ACCEPT CONNECTIONS section below for information on that.)
+
+       Using rsync in this way is the same as using it with a remote shell except that:
+
+       o      you either use a double colon :: instead of a single colon to separate the hostname from the path, or you use an rsync:// URL.
+
+       o      the first word of the "path" is actually a module name.
+
+       o      the remote daemon may print a message of the day when you connect.
+
+       o      if you specify no path name on the remote daemon then the list of accessible paths on the daemon will be shown.
+
+       o      if you specify no local destination then a listing of the specified files on the remote daemon is provided.
+
+       o      you must not specify the --rsh (-e) option.
+
+       An example that copies all the files in a remote module named "src":
+
+           rsync -av host::src /dest
+
+       Some  modules  on the remote daemon may require authentication. If so, you will receive a password prompt when you connect. You can avoid the password prompt by setting the envi-
+       ronment variable RSYNC_PASSWORD to the password you want to use or using the --password-file option. This may be useful when scripting rsync.
+
+       WARNING: On some systems environment variables are visible to all users. On those systems using --password-file is recommended.
+
+       You may establish the connection via a web proxy by setting the environment variable RSYNC_PROXY to a hostname:port pair pointing to your web proxy.  Note that your  web  proxy's
+       configuration must support proxy connections to port 873.
+
+       You  may also establish a daemon connection using a program as a proxy by setting the environment variable RSYNC_CONNECT_PROG to the commands you wish to run in place of making a
+       direct socket connection.  The string may contain the escape "%H" to represent the hostname specified in the rsync command (so use "%%" if you need a single "%" in your  string).
+       For example:
+
+         export RSYNC_CONNECT_PROG='ssh proxyhost nc %H 873'
+         rsync -av targethost1::module/src/ /dest/
+         rsync -av rsync:://targethost2/module/src/ /dest/
+
+       The command specified above uses ssh to run nc (netcat) on a proxyhost, which forwards all data to port 873 (the rsync daemon) on the targethost (%H).
+
+USING RSYNC-DAEMON FEATURES VIA A REMOTE-SHELL CONNECTION
+       It  is  sometimes useful to use various features of an rsync daemon (such as named modules) without actually allowing any new socket connections into a system (other than what is
+       already required to allow remote-shell access).  Rsync supports connecting to a host using a remote shell and then spawning a single-use "daemon" server that expects to read  its
+       config  file in the home dir of the remote user.  This can be useful if you want to encrypt a daemon-style transfer's data, but since the daemon is started up fresh by the remote
+       user, you may not be able to use features such as chroot or change the uid used by the daemon.  (For another way to encrypt a daemon transfer, consider  using  ssh  to  tunnel  a
+       local port to a remote machine and configure a normal rsync daemon on that remote host to only allow connections from "localhost".)
+
+       From  the  user's perspective, a daemon transfer via a remote-shell connection uses nearly the same command-line syntax as a normal rsync-daemon transfer, with the only exception
+       being that you must explicitly set the remote shell program on the command-line with the --rsh=COMMAND option.  (Setting the RSYNC_RSH in the environment will not  turn  on  this
+       functionality.)  For example:
+
+           rsync -av --rsh=ssh host::module /dest
+
+       If  you  need  to  specify  a  different remote-shell user, keep in mind that the user@ prefix in front of the host is specifying the rsync-user value (for a module that requires
+       user-based authentication).  This means that you must give the '-l user' option to ssh when specifying the remote-shell, as in this example that uses the  short  version  of  the
+       --rsh option:
+
+           rsync -av -e "ssh -l ssh-user" rsync-user@host::module /dest
+
+       The "ssh-user" will be used at the ssh level; the "rsync-user" will be used to log-in to the "module".
+

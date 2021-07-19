@@ -1,0 +1,55 @@
+INCREMENTAL MODE
+       Usage: mdadm --incremental [--run] [--quiet] component-device [optional-aliases-for-device]
+
+       Usage: mdadm --incremental --fail component-device
+
+       Usage: mdadm --incremental --rebuild-map
+
+       Usage: mdadm --incremental --run --scan
+
+       This mode is designed to be used in conjunction with a device discovery system.  As devices are found in a system, they can be passed to mdadm --incremental to be  conditionally
+       added to an appropriate array.
+
+       Conversely, it can also be used with the --fail flag to do just the opposite and find whatever array a particular device is part of and remove the device from that array.
+
+       If  the device passed is a CONTAINER device created by a previous call to mdadm, then rather than trying to add that device to an array, all the arrays described by the metadata
+       of the container will be started.
+
+       mdadm performs a number of tests to determine if the device is part of an array, and which array it should be part of.  If an appropriate array is  found,  or  can  be  created,
+       mdadm adds the device to the array and conditionally starts the array.
+
+       Note  that  mdadm  will  normally only add devices to an array which were previously working (active or spare) parts of that array.  The support for automatic inclusion of a new
+       drive as a spare in some array requires a configuration through POLICY in config file.
+
+       The tests that mdadm makes are as follow:
+
+       +      Is the device permitted by mdadm.conf?  That is, is it listed in a DEVICES line in that file.  If DEVICES is absent then the default it to allow any device.  Similarly if
+              DEVICES  contains the special word partitions then any device is allowed.  Otherwise the device name given to mdadm, or one of the aliases given, or an alias found in the
+              filesystem, must match one of the names or patterns in a DEVICES line.
+
+              This is the only context where the aliases are used.  They are usually provided by a udev rules mentioning $env{DEVLINKS}.
+
+       +      Does the device have a valid md superblock?  If a specific metadata version is requested with --metadata or -e then only that style of  metadata  is  accepted,  otherwise
+              mdadm finds any known version of metadata.  If no md metadata is found, the device may be still added to an array as a spare if POLICY allows.
+
+       mdadm keeps a list of arrays that it has partially assembled in /run/mdadm/map.  If no array exists which matches the metadata on the new device, mdadm must choose a device name
+       and unit number.  It does this based on any name given in mdadm.conf or any name information stored in the metadata.  If this name suggests a unit number, that  number  will  be
+       used, otherwise a free unit number will be chosen.  Normally mdadm will prefer to create a partitionable array, however if the CREATE line in mdadm.conf suggests that a non-par-
+       titionable array is preferred, that will be honoured.
+
+       If the array is not found in the config file and its metadata does not identify it as belonging to the "homehost", then mdadm will choose a name for the array which  is  certain
+       not to conflict with any array which does belong to this host.  It does this be adding an underscore and a small number to the name preferred by the metadata.
+
+       Once  an  appropriate array is found or created and the device is added, mdadm must decide if the array is ready to be started.  It will normally compare the number of available
+       (non-spare) devices to the number of devices that the metadata suggests need to be active.  If there are at least that many, the array will be started.  This means that  if  any
+       devices are missing the array will not be restarted.
+
+       As an alternative, --run may be passed to mdadm in which case the array will be run as soon as there are enough devices present for the data to be accessible.  For a RAID1, that
+       means one device will start the array.  For a clean RAID5, the array will be started as soon as all but one drive is present.
+
+       Note that neither of these approaches is really ideal.  If it can be known that all device discovery has completed, then
+          mdadm -IRs
+       can be run which will try to start all arrays that are being incrementally assembled.  They are started in "read-auto" mode in which they are read-only until the first write re-
+       quest.   This  means  that  no  metadata updates are made and no attempt at resync or recovery happens.  Further devices that are found before the first write can still be added
+       safely.
+

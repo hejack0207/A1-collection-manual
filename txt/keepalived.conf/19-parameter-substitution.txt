@@ -1,0 +1,139 @@
+Parameter substitution
+       Substitutable parameters can be specified. The format for defining a parameter is:
+
+       $PARAMETER=VALUE
+
+       where there must be no space before the '=' and only whitespace may preceed to '$'.  Empty values are allowed.
+
+       Parameter  names  can  be  made up of any combination of A-Za-z0-9 and _, but cannot start with a digit. Parameter names starting with an underscore should be considered reserved
+       names that keepalived will define for various pre-defined options.
+
+       After a parameter is defined, any occurrence of $PARAMETER followed by whitespace, or any occurrence of ${PARAMETER} (which need not be followed by whitespace) will  be  replaced
+       by VALUE.
+
+       Replacement  is  recursive,  so  that  if  a  parameter  value itself includes a replaceable parameter, then after the first substitution, the parameter in the value will then be
+       replaced; the substitution is done at replacement time and not at definition time, so for example:
+
+           $ADDRESS_BASE=10.2.${ADDRESS_BASE_SUB}
+           $ADDRESS_BASE_SUB=0
+           ${ADDRESS_BASE}.100/32
+           $ADDRESS_BASE_SUB=10
+           ${ADDRESS_BASE}.100/32
+
+           will produce:
+               10.2.0.100/32
+               10.2.10.100/32
+
+       Note in the above examples the use of both ADDRESS_BASE and ADDRESS_BASE_SUB required braces ({}) since the parameters were not followed by whitespace (after the first  substitu-
+       tion which produced 10.2.${ADDRESS_BASE_SUB}.100/32 the parameter is still not followed by whitespace).
+
+       If  a  parameter  is  not defined, it will not be replaced at all, so for example ${UNDEF_PARAMETER} will remain in the configuration if it is undefined; this means that existing
+       configuration that contains a '$' character (for example in a script definition) will not be changed so long as no new parameter definitions are added to the configuration.
+
+       Parameter substitution works in conjunction with conditional configuration.  For example:
+
+           @main $PRIORITY=240
+           @backup $PRIORITY=200
+           ...
+           vrrp_instance VI_0 {
+               priority $PRIORITY
+           }
+
+           will produce:
+               ...
+               vrrp_instance VI_0 {
+                   priority 240
+               }
+               if the config_id is main.
+
+           $IF_MAIN=@main
+           $IF_MAIN priority 240
+
+           will produce:
+               priority 240
+               if the config_id is main and nothing if the config_id is not main,
+               although why anyone would want to use this rather than simply the
+               following is not known (but still possible):
+                   @main priority 240
+
+       Multiline definitions are also supported, but when used there must be nothing on the line after the parameter name. A multiline definition is specified by ending each line except
+       the last with a '\' character.
+
+       Example:
+           $INSTANCE= \
+           vrrp_instance VI_${NUM} { \
+               interface eth0.${NUM} \
+               use_vmac vrrp${NUM}.1 \
+               virtual_router_id 1 \
+               @high priority 130 \
+               @low priority 120 \
+               advert_int 1 \
+               virtual_ipaddress { \
+                   10.0.${NUM}.254/24 \
+               } \
+               track_script { \
+                   offset_instance_${NUM} \
+               } \
+           }
+
+           $NUM=0
+           $INSTANCE
+
+           $NUM=1
+           $INSTANCE
+
+       The use of multiline definitions can be nested.
+
+       Example:
+           $RS= \
+           real_server 192.168.${VS_NUM}.${RS_NUM} 80 { \
+               weight 1 \
+               inhibit_on_failure \
+               smtp_alert \
+               MISC_CHECK { \
+                   misc_path "${_PWD}/scripts/vs.sh RS_misc.${INST}.${VS_NUM}.${RS_NUM}.0 10.0.${VS_NUM}.4:80->192.168.${VS_NUM}.${RS_NUM}:80" \
+               } \
+
+               MISC_CHECK { \
+                   misc_path "${_PWD}/scripts/vs.sh RS_misc.${INST}.${VS_NUM}.${RS_NUM}.1 10.0.${VS_NUM}.4:80->192.168.${VS_NUM}.${RS_NUM}:80" \
+               } \
+
+               notify_up "${_PWD}/scripts/notify.sh RS_notify.${INST}.${VS_NUM}.${RS_NUM} UP 10.0.${VS_NUM}.4:80->192.168.${VS_NUM}.${RS_NUM}:80" \
+
+               notify_down "${_PWD}/scripts/notify.sh RS_notify.${INST}.${VS_NUM}.${RS_NUM} DOWN 10.0.${VS_NUM}.4:80->192.168.${VS_NUM}.${RS_NUM}:80" \
+
+           }
+
+           $VS= \
+           virtual_server 10.0.${VS_NUM}.4 80 { \
+               quorum 2 \
+               quorum_up "${_PWD}/scripts/notify.sh VS_notify.${INST} UP 10.0.${VS_NUM}.4:80" \
+               quorum_down "${_PWD}/scripts/notify.sh VS_notify.${INST} DOWN 10.0.${VS_NUM}.4:80" \
+               $RS_NUM=1 \
+               $RS \
+               $RS_NUM=2 \
+               $RS \
+               $RS_NUM=3 \
+               $RS \
+           }
+
+           $VS_NUM=0
+           $ALPHA=alpha
+           $VS
+
+           $VS_NUM=1
+           $ALPHA=
+           $VS
+
+       The above will create 2 virtual servers, each with 3 real servers
+
+Pre-defined definitions
+       The following pre-defined definitions are defined:
+
+       ${_PWD} : The directory of the current configuration file (this can be changed if using the include directive).
+       ${_INSTANCE} : The instance name (as defined by the -i option, defaults to hostname).
+       ${_RANDOM [MIN [MAX]]} : This is replaced by a random integer in the range [MIN, MAX], where MIN and MAX are optional non-negative integers. Defaults are MIN=0 and MAX=32767.
+
+       Additional pre-defined definitions will be added as their need is identified.  It will normally be quite straightforward to add additional pre-defined definitions, so if you need
+       one, or have a good idea for one, then raise an issue at https://github.com/acassen/keepalived/issues requesting it.
+

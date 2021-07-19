@@ -1,0 +1,98 @@
+VRRP track processes
+       The configuration block looks like:
+
+           vrrp_track_process <STRING> {
+               # process to monitor (with optional parameters)
+               # A quoted string is treated as a single element, so if the first item
+               # after the process keyword is quoted, that will be the command name.
+               # For example:
+               #  process "/tmp/a b" param1 "param 2"
+               # would mean a process named '/tmp/a b' (quotes removed) with 2 parameters
+               #  'param1' and 'param 2'.
+               process <STRING>|<QUOTED_STRING> [<STRING>|<QUOTED_STRING> ...]
+
+               # If matching parameters, this specifies a partial match (i.e. the first
+               #   n parameters match exactly), or an initial match, i.e. the last
+               #   parameter may be longer that the parameter configured.
+               # To specify that a command must have no parameters, don't specify
+               #   any parameters, but specify param_match.
+               param_match {initial|partial}
+
+               # default weight (default is 1). For description of reverse, see track_process.
+               # 'weight 0 reverse' will cause the vrrp instance to be down when the
+               # quorum is up, and vice versa.
+               weight <-254..254> [reverse]
+
+               # minimum number of processes for success
+               quorum NUM
+
+               # maximum number of processes for success. For example, setting
+               #   this to 1 would cause a failure if two instances of the process
+               #   were running (but beware forks - see fork_delay below).
+               #   Setting this to 0 would mean failure if the matching process were
+               #   running at all.
+               quorum_max NUM
+
+               # time to delay after process quorum gained after fork before
+               #   consider process up (in fractions of second)
+               #   This is to avoid up/down bounce for fork/exec
+               fork_delay SECS
+
+               # time to delay after process quorum lost before
+               #   consider process down (in fractions of second)
+               #   This is to avoid down/up bounce after terminate/parent refork.
+               terminate_delay SECS
+
+               # this sets fork_delay and terminate_delay
+               delay SECS
+
+               # Normally process string is matched against the process name,
+               #   as shown on the Name: line in /proc/PID/status, unless
+               #   parameters are specified.
+               #   This option forces matching the full command line
+               full_command
+          }
+
+       To  avoid  having to frequently run a track_script to monitor the existance of processes (often haproxy or nginx), vrrp_track_process can monitor whether other processes are run-
+       ning.
+
+       One difference from pgrep is track_process doesn't do a regular expression match of the command string, but does an exact match. 'pgrep ssh' will  match  an  sshd  process,  this
+       track_process will not (it is equivalent to pgrep "^ssh$").
+
+       If  full_command is used (equivalent to pgrep -f), /proc/PID/cmdline is used, but any updates to cmdline will not be detected (a process shouldn't normally change it, although it
+       is possible with great care, for example systemd).
+
+       Prior to Linux v3.2 track_process will not support detection of changes to a process name, since the kernel did not notify changes of process name prior to 3.2. Most processes do
+       not  change  their  process  name, but, for example, firefox forks processes that change their process name to "Web Content". The process name referred to here is the contents of
+       /proc/PID/comm.
+
+       Quorum is the number of matching processes that must be run for an OK status.
+
+       Delay might be useful if it anticipated that a process may be reloaded (stopped and restarted), and it isn't desired to down and up a vrrp instance.
+
+       A positive weight means that an OK status will add <weight> to the priority of all VRRP instances which monitor it. On the opposite, a negative weight will be subtracted from the
+       initial priority in case of insufficient processes.
+
+       If the vrrp instance or sync group is not the address owner and the result is between -253 and 253, the result will be added to the initial priority of the VRRP instance (a nega-
+       tive value will reduce the priority), although the effective priority will be limited to the range [1,254].
+
+       If a vrrp instance using a track_process is a member of a sync group, unless sync_group_tracking_weight is set on the group weight 0 must be set.  Likewise, if the vrrp  instance
+       is the address owner, weight 0 must also be set.
+
+       Rational for not using pgrep/pidof/killall and the likes:
+
+       Every  time  pgrep  or  its equivalent is run, it iterates though the /proc/[1-9][0-9]* directories, and opens the status and cmdline pseudo files in each directory.  The cmdline
+       pseudo file is mapped to the process's address space, and so if that part of the process is swapped out, it will have to be fetched from the swap space.  pgrep etc  also  include
+       zombie processes whereas keepalived does not, since they aren't running.
+
+       This implementation only iterates though /proc/[1-9][0-9]*/ directories at start up, and it won't even read the cmdline pseudo files if 'full_command' is not specified for any of
+       the vrrp_track_process entries. After startup, it uses the process_events kernel <-> userspace connector to receive notification of process changes. If full_command is  specified
+       for  any  track_process  instance, the cmdline pseudo file will have to be read upon notification of the creation of the new process, but at that time it is very unlikely that it
+       will have already been swapped out.
+
+       On a busy system with a high number of process creations/terminations, using a track_script with pgrep/pidof/killall may be more efficient, although those processes  are  ineffi-
+       cient compared to the minimum that keepalived needs.
+
+       Using  pgrep  etc  on  a  system  that is swapping can have a significant detrimental impact on the performance of the system, due to having to fetch swapped memory from the swap
+       space, thereby causing additional swapping.
+

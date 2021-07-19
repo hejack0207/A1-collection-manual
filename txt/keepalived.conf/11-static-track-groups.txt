@@ -1,0 +1,75 @@
+Static track groups
+       Static  track  groups  are  used  to  allow  vrrp  instances  to  track  static  addresses,  routes and rules. If a static address/route/rule specifies a track group, then if the
+       address/route/rule is deleted and cannot be restored, the vrrp instance will transition to fault state.
+
+       The syntax for a track group is:
+           track_group GROUP1 {
+               group {
+                   VI_1
+                   VI_2
+               }
+           }
+
+Static routes/addresses/rules
+       Keepalived can configure static addresses, routes, and rules. These addresses are NOT moved by vrrpd, they stay on the machine.  If you  already  have  IPs  and  routes  on  your
+       machines  and your machines can ping each other, you don't need this section.  The syntax for rules and routes is that same as for ip rule add/ip route add (except shorted option
+       names aren't supported due to ambiguities).  The track_group specification refers to a named track_group which lists the vrrp instances which will track the address, i.e. if  the
+       address is deleted the vrrp instances will transition to backup.
+
+       NOTE:  since rules without preferences can be added in different orders due to vrrp instances transitioning from master to backup etc, rules need to have a preference. If a pref-
+       erence is not specified, keepalived will assign one, but it will probably not be what you want.
+
+       The syntax is the same for virtual addresses and virtual routes. If no dev element is specified, it defaults to default_interface (default eth0).  Note: the broadcast address may
+       be specified as '-' or '+' to clear or set the host bits of the address.
+
+       If a route or rule could apply to either IPv4 or IPv6 it will default to IPv4.  To force a route/rule to be IPv6, add the keyword "inet6".
+
+           static_ipaddress {
+               <IPADDR>[/<MASK>] [brd <IPADDR>] [dev <STRING>] [scope <SCOPE>]
+                                 [label <LABEL>] [peer <IPADDR>] [home]
+                                 [-nodad] [mngtmpaddr] [noprefixroute]
+                                 [autojoin] [track_group GROUP]
+               192.168.1.1/24 dev eth0 scope global
+               ...
+           }
+
+           static_routes {
+               192.168.2.0/24 via 192.168.1.100 dev eth0 track_group GROUP1
+
+               192.168.100.0/24 table 6909 nexthop via 192.168.101.1 dev wlan0
+                                onlink weight 1 nexthop via 192.168.101.2
+                                dev wlan0 onlink weight 2
+
+               192.168.200.0/24 dev p33p1.2 table 6909 tos 0x04 protocol bird
+                                scope link priority 12 mtu 1000 hoplimit 100
+                                advmss 101 rtt 102 rttvar 103 reordering 104
+                                window 105 cwnd 106 ssthresh lock 107 realms
+                                PQA/0x14 rto_min 108 initcwnd 109 initrwnd 110
+                                features ecn
+
+               2001:470:69e9:1:2::4 dev p33p1.2 table 6909 tos 0x04 protocol
+                                    bird scope link priority 12 mtu 1000
+                                    hoplimit 100 advmss 101 rtt 102 rttvar 103
+                                    reordering 104 window 105 cwnd 106 ssthresh
+                                    lock 107 rto_min 108 initcwnd 109
+                                    initrwnd 110 features ecn fastopen_no_cookie 1
+               ...
+           }
+
+           static_rules {
+               from 192.168.2.0/24 table 1 track_group GROUP1
+
+               to 192.168.2.0/24 table 1
+
+               from 192.168.28.0/24 to 192.168.29.0/26 table small iif p33p1
+                                    oif wlan0 tos 22 fwmark 24/12
+                                    preference 39 realms 30/20 goto 40
+
+               to 1:2:3:4:5:6:7:0/112 from 7:6:5:4:3:2::/96 table 6908
+                                      uidrange 10000-19999
+
+               to 1:2:3:4:6:6:7:0/112 from 8:6:5:4:3:2::/96 l3mdev protocol 12
+                                      ip_proto UDP sport 10-20 dport 20-30
+               ...
+           }
+

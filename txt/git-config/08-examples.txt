@@ -1,0 +1,96 @@
+EXAMPLES
+       Given a .git/config like this:
+
+           #
+           # This is the config file, and
+           # a '#' or ';' character indicates
+           # a comment
+           #
+
+           ; core variables
+           [core]
+                   ; Don't trust file modes
+                   filemode = false
+
+           ; Our diff algorithm
+           [diff]
+                   external = /usr/local/bin/diff-wrapper
+                   renames = true
+
+           ; Proxy settings
+           [core]
+                   gitproxy=proxy-command for kernel.org
+                   gitproxy=default-proxy ; for all the rest
+
+           ; HTTP
+           [http]
+                   sslVerify
+           [http "https://weak.example.com"]
+                   sslVerify = false
+                   cookieFile = /tmp/cookie.txt
+
+       you can set the filemode to true with
+
+           % git config core.filemode true
+
+       The hypothetical proxy command entries actually have a postfix to discern what URL they apply to. Here is how to change the entry for kernel.org to "ssh".
+
+           % git config core.gitproxy '"ssh" for kernel.org' 'for kernel.org$'
+
+       This makes sure that only the key/value pair for kernel.org is replaced.
+
+       To delete the entry for renames, do
+
+           % git config --unset diff.renames
+
+       If you want to delete an entry for a multivar (like core.gitproxy above), you have to provide a regex matching the value of exactly one line.
+
+       To query the value for a given key, do
+
+           % git config --get core.filemode
+
+       or
+
+           % git config core.filemode
+
+       or, to query a multivar:
+
+           % git config --get core.gitproxy "for kernel.org$"
+
+       If you want to know all the values for a multivar, do:
+
+           % git config --get-all core.gitproxy
+
+       If you like to live dangerously, you can replace all core.gitproxy by a new one with
+
+           % git config --replace-all core.gitproxy ssh
+
+       However, if you really only want to replace the line for the default proxy, i.e. the one without a "for ..." postfix, do something like this:
+
+           % git config core.gitproxy ssh '! for '
+
+       To actually match only values with an exclamation mark, you have to
+
+           % git config section.key value '[!]'
+
+       To add a new proxy, without altering any of the existing ones, use
+
+           % git config --add core.gitproxy '"proxy-command" for example.com'
+
+       An example to use customized color from the configuration in your script:
+
+           #!/bin/sh
+           WS=$(git config --get-color color.diff.whitespace "blue reverse")
+           RESET=$(git config --get-color "" "reset")
+           echo "${WS}your whitespace color or blue reverse${RESET}"
+
+       For URLs in https://weak.example.com, http.sslVerify is set to false, while it is set to true for all others:
+
+           % git config --type=bool --get-urlmatch http.sslverify https://good.example.com
+           true
+           % git config --type=bool --get-urlmatch http.sslverify https://weak.example.com
+           false
+           % git config --get-urlmatch http https://weak.example.com
+           http.cookieFile /tmp/cookie.txt
+           http.sslverify false
+

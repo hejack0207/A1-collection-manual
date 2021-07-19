@@ -1,0 +1,93 @@
+GROW MODE
+       The GROW mode is used for changing the size or shape of an active array.  For this to work, the kernel must support the necessary change.  Various  types  of  growth  are  being
+       added during 2.6 development.
+
+       Currently the supported changes include
+
+       o   change the "size" attribute for RAID1, RAID4, RAID5 and RAID6.
+
+       o   increase or decrease the "raid-devices" attribute of RAID0, RAID1, RAID4, RAID5, and RAID6.
+
+       o   change the chunk-size and layout of RAID0, RAID4, RAID5, RAID6 and RAID10.
+
+       o   convert between RAID1 and RAID5, between RAID5 and RAID6, between RAID0, RAID4, and RAID5, and between RAID0 and RAID10 (in the near-2 mode).
+
+       o   add a write-intent bitmap to any array which supports these bitmaps, or remove a write-intent bitmap from such an array.
+
+       o   change the array's consistency policy.
+
+       Using  GROW on containers is currently supported only for Intel's IMSM container format.  The number of devices in a container can be increased - which affects all arrays in the
+       container - or an array in a container can be converted between levels where those levels are supported by the container, and the conversion is on of those listed above.  Resiz-
+       ing arrays in an IMSM container with --grow --size is not yet supported.
+
+       Notes:
+
+       o   Intel's native checkpointing doesn't use --backup-file option and it is transparent for assembly feature.
+
+       o   Roaming between Windows(R) and Linux systems for IMSM metadata is not supported during grow process.
+
+   SIZE CHANGES
+       Normally  when  an array is built the "size" is taken from the smallest of the drives.  If all the small drives in an arrays are, one at a time, removed and replaced with larger
+       drives, then you could have an array of large drives with only a small amount used.  In this situation, changing the "size" with "GROW" mode will allow the extra space to  start
+       being used.  If the size is increased in this way, a "resync" process will start to make sure the new parts of the array are synchronised.
+
+       Note  that when an array changes size, any filesystem that may be stored in the array will not automatically grow or shrink to use or vacate the space.  The filesystem will need
+       to be explicitly told to use the extra space after growing, or to reduce its size prior to shrinking the array.
+
+       Also the size of an array cannot be changed while it has an active bitmap.  If an array has a bitmap, it must be removed before the size can be changed. Once the change is  com-
+       plete a new bitmap can be created.
+
+       Note: --grow --size is not yet supported for external file bitmap.
+
+   RAID-DEVICES CHANGES
+       A  RAID1  array can work with any number of devices from 1 upwards (though 1 is not very useful).  There may be times which you want to increase or decrease the number of active
+       devices.  Note that this is different to hot-add or hot-remove which changes the number of inactive devices.
+
+       When reducing the number of devices in a RAID1 array, the slots which are to be removed from the array must already be vacant.  That is, the devices which were  in  those  slots
+       must be failed and removed.
+
+       When the number of devices is increased, any hot spares that are present will be activated immediately.
+
+       Changing  the  number of active devices in a RAID5 or RAID6 is much more effort.  Every block in the array will need to be read and written back to a new location.  From 2.6.17,
+       the Linux Kernel is able to increase the number of devices in a RAID5 safely, including restarting an interrupted "reshape".  From 2.6.31, the Linux Kernel is able  to  increase
+       or decrease the number of devices in a RAID5 or RAID6.
+
+       From  2.6.35, the Linux Kernel is able to convert a RAID0 in to a RAID4 or RAID5.  mdadm uses this functionality and the ability to add devices to a RAID4 to allow devices to be
+       added to a RAID0.  When requested to do this, mdadm will convert the RAID0 to a RAID4, add the necessary disks and make the reshape happen, and then convert the  RAID4  back  to
+       RAID0.
+
+       When  decreasing  the  number  of  devices,  the size of the array will also decrease.  If there was data in the array, it could get destroyed and this is not reversible, so you
+       should firstly shrink the filesystem on the array to fit within the new size.  To help prevent accidents, mdadm requires that the size of the array be decreased first with mdadm
+       --grow  --array-size.  This is a reversible change which simply makes the end of the array inaccessible.  The integrity of any data can then be checked before the non-reversible
+       reduction in the number of devices is request.
+
+       When relocating the first few stripes on a RAID5 or RAID6, it is not possible to keep the data on disk completely consistent and crash-proof.  To provide  the  required  safety,
+       mdadm  disables  writes  to the array while this "critical section" is reshaped, and takes a backup of the data that is in that section.  For grows, this backup may be stored in
+       any spare devices that the array has, however it can also be stored in a separate file specified with the --backup-file option, and is required to be specified for shrinks, RAID
+       level changes and layout changes.  If this option is used, and the system does crash during the critical period, the same file must be passed to --assemble to restore the backup
+       and reassemble the array.  When shrinking rather than growing the array, the reshape is done from the end towards the beginning, so the "critical section" is at the end  of  the
+       reshape.
+
+   LEVEL CHANGES
+       Changing  the  RAID  level  of  any array happens instantaneously.  However in the RAID5 to RAID6 case this requires a non-standard layout of the RAID6 data, and in the RAID6 to
+       RAID5 case that non-standard layout is required before the change can be accomplished.  So while the level change is instant, the accompanying layout change  can  take  quite  a
+       long  time.   A  --backup-file  is  required.   If  the array is not simultaneously being grown or shrunk, so that the array size will remain the same - for example, reshaping a
+       3-drive RAID5 into a 4-drive RAID6 - the backup file will be used not just for a "cricital section" but throughout  the  reshape  operation,  as  described  below  under  LAYOUT
+       CHANGES.
+
+   CHUNK-SIZE AND LAYOUT CHANGES
+       Changing  the  chunk-size of layout without also changing the number of devices as the same time will involve re-writing all blocks in-place.  To ensure against data loss in the
+       case of a crash, a --backup-file must be provided for these changes.  Small sections of the array will be copied to the backup file while they are being rearranged.  This  means
+       that all the data is copied twice, once to the backup and once to the new layout on the array, so this type of reshape will go very slowly.
+
+       If  the  reshape  is  interrupted  for  any reason, this backup file must be made available to mdadm --assemble so the array can be reassembled.  Consequently the file cannot be
+       stored on the device being reshaped.
+
+   BITMAP CHANGES
+       A write-intent bitmap can be added to, or removed from, an active array.  Either internal bitmaps, or bitmaps stored in a separate file, can be added.  Note that if  you  add  a
+       bitmap stored in a file which is in a filesystem that is on the RAID array being affected, the system will deadlock.  The bitmap must be on a separate filesystem.
+
+   CONSISTENCY POLICY CHANGES
+       The consistency policy of an active array can be changed by using the --consistency-policy option in Grow mode. Currently this works only for the ppl and resync policies and al-
+       lows to enable or disable the RAID5 Partial Parity Log (PPL).
+

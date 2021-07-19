@@ -1,0 +1,189 @@
+IPFIX TABLE
+       Configuration for sending packets to IPFIX collectors.
+
+       IPFIX  is a protocol that exports a number of details about flows. The IPFIX implementation in Open vSwitch samples packets at a configurable rate, extracts flow information from
+       those packets, optionally caches and aggregates the flow information, and sends the result to one or more collectors.
+
+       IPFIX in Open vSwitch can be configured two different ways:
+
+              ·      With per-bridge sampling, Open vSwitch performs IPFIX sampling automatically on all packets that pass through a bridge. To configure per-bridge sampling, create  an
+                     IPFIX record and point a Bridge table's ipfix column to it. The Flow_Sample_Collector_Set table is not used for per-bridge sampling.
+
+              ·      With flow-based sampling, sample actions in the OpenFlow flow table drive IPFIX sampling. See ovs-ofctl(8) for a description of the sample action.
+
+                     Flow-based  sampling  also requires database configuration: create a IPFIX record that describes the IPFIX configuration and a Flow_Sample_Collector_Set record that
+                     points to the Bridge whose flow table holds the sample actions and to IPFIX record. The ipfix in the Bridge table is not used for flow-based sampling.
+
+   Summary:
+       targets                       set of strings
+       cache_active_timeout          optional integer, in range 0 to 4,200
+       cache_max_flows               optional integer, in range 0 to 4,294,967,295
+       other_config : enable-tunnel-sampling
+                                     optional string, either true or false
+       other_config : virtual_obs_id optional string
+       Per-Bridge Sampling:
+         sampling                    optional integer, in range 1 to 4,294,967,295
+         obs_domain_id               optional integer, in range 0 to 4,294,967,295
+         obs_point_id                optional integer, in range 0 to 4,294,967,295
+         other_config : enable-input-sampling
+                                     optional string, either true or false
+         other_config : enable-output-sampling
+                                     optional string, either true or false
+       Common Columns:
+         external_ids                map of string-string pairs
+
+   Details:
+       targets: set of strings
+              IPFIX target collectors in the form ip:port.
+
+       cache_active_timeout: optional integer, in range 0 to 4,200
+              The maximum period in seconds for which an IPFIX flow record is cached and aggregated before being sent. If not specified, defaults to 0. If 0, caching is disabled.
+
+       cache_max_flows: optional integer, in range 0 to 4,294,967,295
+              The maximum number of IPFIX flow records that can be cached at a time. If not specified, defaults to 0. If 0, caching is disabled.
+
+       other_config : enable-tunnel-sampling: optional string, either true or false
+              Set to true to enable sampling and reporting tunnel header 7-tuples in IPFIX flow records. Tunnel sampling is enabled by default.
+
+              The following enterprise entities report the sampled tunnel info:
+
+              tunnelType:
+                     ID: 891, and enterprise ID 6876 (VMware).
+
+                     type: unsigned 8-bit integer.
+
+                     data type semantics: identifier.
+
+                     description: Identifier of the layer 2 network overlay network encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x07 GENEVE.
+
+              tunnelKey:
+                     ID: 892, and enterprise ID 6876 (VMware).
+
+                     type: variable-length octetarray.
+
+                     data type semantics: identifier.
+
+                     description: Key which is used for identifying an individual traffic flow within a VxLAN (24-bit VNI), GENEVE (24-bit  VNI),  GRE  (32-bit  key),  or  LISP  (24-bit
+                     instance ID) tunnel. The key is encoded in this octetarray as a 3-, 4-, or 8-byte integer ID in network byte order.
+
+              tunnelSourceIPv4Address:
+                     ID: 893, and enterprise ID 6876 (VMware).
+
+                     type: unsigned 32-bit integer.
+
+                     data type semantics: identifier.
+
+                     description: The IPv4 source address in the tunnel IP packet header.
+
+              tunnelDestinationIPv4Address:
+                     ID: 894, and enterprise ID 6876 (VMware).
+
+                     type: unsigned 32-bit integer.
+
+                     data type semantics: identifier.
+
+                     description: The IPv4 destination address in the tunnel IP packet header.
+
+              tunnelProtocolIdentifier:
+                     ID: 895, and enterprise ID 6876 (VMware).
+
+                     type: unsigned 8-bit integer.
+
+                     data type semantics: identifier.
+
+                     description: The value of the protocol number in the tunnel IP packet header. The protocol number identifies the tunnel IP packet payload type.
+
+              tunnelSourceTransportPort:
+                     ID: 896, and enterprise ID 6876 (VMware).
+
+                     type: unsigned 16-bit integer.
+
+                     data type semantics: identifier.
+
+                     description:  The source port identifier in the tunnel transport header. For the transport protocols UDP, TCP, and SCTP, this is the source port number given in the
+                     respective header.
+
+              tunnelDestinationTransportPort:
+                     ID: 897, and enterprise ID 6876 (VMware).
+
+                     type: unsigned 16-bit integer.
+
+                     data type semantics: identifier.
+
+                     description: The destination port identifier in the tunnel transport header. For the transport protocols UDP, TCP, and SCTP, this is  the  destination  port  number
+                     given in the respective header.
+
+              Before  Open  vSwitch 2.5.90, other_config:enable-tunnel-sampling was only supported with per-bridge sampling, and ignored otherwise. Open vSwitch 2.5.90 and later support
+              other_config:enable-tunnel-sampling for per-bridge and per-flow sampling.
+
+       other_config : virtual_obs_id: optional string
+              A string that accompanies each IPFIX flow record. Its intended use is for the ``virtual observation ID,'' an identifier of a virtual  observation  point  that  is  locally
+              unique  in a virtual network. It describes a location in the virtual network where IP packets can be observed. The maximum length is 254 bytes. If not specified, the field
+              is omitted from the IPFIX flow record.
+
+              The following enterprise entity reports the specified virtual observation ID:
+
+              virtualObsID:
+                     ID: 898, and enterprise ID 6876 (VMware).
+
+                     type: variable-length string.
+
+                     data type semantics: identifier.
+
+                     description: A virtual observation domain ID that is locally unique in a virtual network.
+
+              This feature was introduced in Open vSwitch 2.5.90.
+
+     Per-Bridge Sampling:
+
+       These values affect only per-bridge sampling. See above for a description of the differences between per-bridge and flow-based sampling.
+
+       sampling: optional integer, in range 1 to 4,294,967,295
+              The rate at which packets should be sampled and sent to each target collector. If not specified, defaults to 400, which means one out of 400 packets, on average,  will  be
+              sent to each target collector.
+
+       obs_domain_id: optional integer, in range 0 to 4,294,967,295
+              The IPFIX Observation Domain ID sent in each IPFIX packet. If not specified, defaults to 0.
+
+       obs_point_id: optional integer, in range 0 to 4,294,967,295
+              The IPFIX Observation Point ID sent in each IPFIX flow record. If not specified, defaults to 0.
+
+       other_config : enable-input-sampling: optional string, either true or false
+              By default, Open vSwitch samples and reports flows at bridge port input in IPFIX flow records. Set this column to false to disable input sampling.
+
+       other_config : enable-output-sampling: optional string, either true or false
+              By default, Open vSwitch samples and reports flows at bridge port output in IPFIX flow records. Set this column to false to disable output sampling.
+
+     Common Columns:
+
+       The overall purpose of these columns is described under Common Columns at the beginning of this document.
+
+       external_ids: map of string-string pairs
+
+Flow_Sample_Collector_Set TABLE
+       A  set  of  IPFIX  collectors  of packet samples generated by OpenFlow sample actions. This table is used only for IPFIX flow-based sampling, not for per-bridge sampling (see the
+       IPFIX table for a description of the two forms).
+
+   Summary:
+       id                            integer, in range 0 to 4,294,967,295
+       bridge                        Bridge
+       ipfix                         optional IPFIX
+       Common Columns:
+         external_ids                map of string-string pairs
+
+   Details:
+       id: integer, in range 0 to 4,294,967,295
+              The ID of this collector set, unique among the bridge's collector sets, to be used as the collector_set_id in OpenFlow sample actions.
+
+       bridge: Bridge
+              The bridge into which OpenFlow sample actions can be added to send packet samples to this set of IPFIX collectors.
+
+       ipfix: optional IPFIX
+              Configuration of the set of IPFIX collectors to send one flow record per sampled packet to.
+
+     Common Columns:
+
+       The overall purpose of these columns is described under Common Columns at the beginning of this document.
+
+       external_ids: map of string-string pairs
+

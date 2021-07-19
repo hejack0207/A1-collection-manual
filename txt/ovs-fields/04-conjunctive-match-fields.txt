@@ -1,0 +1,121 @@
+CONJUNCTIVE MATCH FIELDS
+   Summary:
+       Name      Bytes   Mask   RW?   Prereqs   NXM/OXM Support
+
+       --------  ------  -----  ----  --------  ----------------
+       conj_id   4       no     no    none      OVS 2.4+
+
+       An  individual  OpenFlow  flow  can  match  only  a single value for each field. However, situations often arise where one wants to match one of a set of values within a field or
+       fields. For matching a single field against a set, it is straightforward and efficient to add multiple flows to the flow table, one for each value in the set.  For  example,  one
+       might use the following flows to send packets with IP source address a, b, c, or d to the OpenFlow controller:
+
+             ip,ip_src=a actions=controller
+             ip,ip_src=b actions=controller
+             ip,ip_src=c actions=controller
+             ip,ip_src=d actions=controller
+
+       Similarly, these flows send packets with IP destination address e, f, g, or h to the OpenFlow controller:
+
+             ip,ip_dst=e actions=controller
+             ip,ip_dst=f actions=controller
+             ip,ip_dst=g actions=controller
+             ip,ip_dst=h actions=controller
+
+       Installing  all  of  the above flows in a single flow table yields a disjunctive effect: a packet is sent to the controller if ip_src ? {a,b,c,d} or ip_dst ? {e,f,g,h} (or both).
+       (Pedantically, if both of the above sets of flows are present in the flow table, they should have different priorities, because OpenFlow says that the results are undefined  when
+       two flows with same priority can both match a single packet.)
+
+       Suppose, on the other hand, one wishes to match conjunctively, that is, to send a packet to the controller only if both ip_src ? {a,b,c,d} and ip_dst ? {e,f,g,h}. This requires 4
+       × 4 = 16 flows, one for each possible pairing of ip_src and ip_dst. That is acceptable for our small example, but it does not gracefully extend to larger sets or greater  numbers
+       of dimensions.
+
+       The  conjunction  action  is  a  solution for conjunctive matches that is built into Open vSwitch. A conjunction action ties groups of individual OpenFlow flows into higher-level
+       ``conjunctive flows''. Each group corresponds to one dimension, and each flow within the group matches one possible value for the dimension. A packet that matches one  flow  from
+       each group matches the conjunctive flow.
+
+       To  implement  a  conjunctive flow with conjunction, assign the conjunctive flow a 32-bit id, which must be unique within an OpenFlow table. Assign each of the n >= 2 dimensions a
+       unique number from 1 to n; the ordering is unimportant. Add one flow to the OpenFlow flow table for each possible value of each dimension with conjunction(id, k/n) as the  flow's
+       actions,  where  k  is  the number assigned to the flow's dimension. Together, these flows specify the conjunctive flow's match condition. When the conjunctive match condition is
+       met, Open vSwitch looks up one more flow that specifies the conjunctive flow's actions and receives its statistics. This flow is found by setting conj_id to the specified id  and
+       then again searching the flow table.
+
+       The  following flows provide an example. Whenever the IP source is one of the values in the flows that match on the IP source (dimension 1 of 2), and the IP destination is one of
+       the values in the flows that match on IP destination (dimension 2 of 2), Open vSwitch searches for a flow that matches conj_id against the  conjunction  ID  (1234),  finding  the
+       first flow listed below.
+
+             conj_id=1234 actions=controller
+             ip,ip_src=10.0.0.1 actions=conjunction(1234, 1/2)
+             ip,ip_src=10.0.0.4 actions=conjunction(1234, 1/2)
+             ip,ip_src=10.0.0.6 actions=conjunction(1234, 1/2)
+             ip,ip_src=10.0.0.7 actions=conjunction(1234, 1/2)
+             ip,ip_dst=10.0.0.2 actions=conjunction(1234, 2/2)
+             ip,ip_dst=10.0.0.5 actions=conjunction(1234, 2/2)
+             ip,ip_dst=10.0.0.7 actions=conjunction(1234, 2/2)
+             ip,ip_dst=10.0.0.8 actions=conjunction(1234, 2/2)
+
+       Many subtleties exist:
+
+              ·      In  the  example  above,  every  flow  in  a single dimension has the same form, that is, dimension 1 matches on ip_src and dimension 2 on ip_dst, but this is not a
+                     requirement. Different flows within a dimension may match on different bits within a field (e.g. IP network prefixes of different lengths, or TCP/UDP port ranges as
+                     bitwise matches), or even on entirely different fields (e.g. to match packets for TCP source port 80 or TCP destination port 80).
+
+              ·      The  flows within a dimension can vary their matches across more than one field, e.g. to match only specific pairs of IP source and destination addresses or L4 port
+                     numbers.
+
+              ·      A flow may have multiple conjunction actions, with different id values. This is useful for multiple conjunctive flows with overlapping sets. If one conjunctive flow
+                     matches packets with both ip_src ? {a,b} and ip_dst ? {d,e} and a second conjunctive flow matches ip_src ? {b,c} and ip_dst ? {f,g}, for example, then the flow that
+                     matches ip_src=b would have two conjunction actions, one for each conjunctive flow. The order of conjunction actions within a list of actions is not significant.
+
+              ·      A flow with conjunction actions may also include note actions for annotations, but not any other kind of actions. (They would not be useful because they would never
+                     be executed.)
+
+              ·      All  of  the  flows  that  constitute a conjunctive flow with a given id must have the same priority. (Flows with the same id but different priorities are currently
+                     treated as different conjunctive flows, that is, currently id values need only be unique within an OpenFlow table at a given priority. This behavior  isn't  guaran-
+                     teed to stay the same in later releases, so please use id values unique within an OpenFlow table.)
+
+              ·      Conjunctive  flows  must  not  overlap with each other, at a given priority, that is, any given packet must be able to match at most one conjunctive flow at a given
+                     priority. Overlapping conjunctive flows yield unpredictable results.
+
+              ·      Following a conjunctive flow match, the search for the flow with conj_id=id is done in the same general-purpose way as other flow table searches,  so  one  can  use
+                     flows  with conj_id=id to act differently depending on circumstances. (One exception is that the search for the conj_id=id flow itself ignores conjunctive flows, to
+                     avoid recursion.) If the search with conj_id=id fails, Open vSwitch acts as if the conjunctive flow had not matched at all, and continues searching the  flow  table
+                     for other matching flows.
+
+              ·      OpenFlow  prerequisite checking occurs for the flow with conj_id=id in the same way as any other flow, e.g. in an OpenFlow 1.1+ context, putting a mod_nw_src action
+                     into the example above would require adding an ip match, like this:
+
+                               conj_id=1234,ip actions=mod_nw_src:1.2.3.4,controller
+
+              ·      OpenFlow prerequisite checking also occurs for the individual flows that comprise a conjunctive match in the same way as any other flow.
+
+              ·      The flows that constitute a conjunctive flow do not have useful statistics. They are never updated with byte or packet counts, and so on. (For such a  flow,  there-
+                     fore, the idle and hard timeouts work much the same way.)
+
+              ·      Sometimes  there  is a choice of which flows include a particular match. For example, suppose that we added an extra constraint to our example, to match on ip_src ?
+                     {a,b,c,d} and ip_dst ? {e,f,g,h} and tcp_dst = i. One way to implement this is to add the new constraint to the conj_id flow, like this:
+
+                               conj_id=1234,tcp,tcp_dst=i actions=mod_nw_src:1.2.3.4,controller
+
+                     but this is not recommended because of the cost of the extra flow table lookup. Instead, add the constraint to the individual flows, either in one of the dimensions
+                     or (slightly better) all of them.
+
+              ·      A conjunctive match must have n >= 2 dimensions (otherwise a conjunctive match is not necessary). Open vSwitch enforces this.
+
+              ·      Each dimension within a conjunctive match should ordinarily have more than one flow. Open vSwitch does not enforce this.
+
+       Conjunction ID Field
+
+       Name:            conj_id
+       Width:           32 bits
+       Format:          decimal
+       Masking:         not maskable
+       Prerequisites:   none
+       Access:          read-only
+
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CONJ_ID (37) since Open vSwitch 2.4
+
+       Used for conjunctive matching. See above for more information.
+

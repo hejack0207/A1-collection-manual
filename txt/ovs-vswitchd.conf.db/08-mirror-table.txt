@@ -1,0 +1,109 @@
+Mirror TABLE
+       A port mirror within a Bridge.
+
+       A  port  mirror  configures a bridge to send selected frames to special ``mirrored'' ports, in addition to their normal destinations. Mirroring traffic may also be referred to as
+       SPAN or RSPAN, depending on how the mirrored traffic is sent.
+
+       When a packet enters an Open vSwitch bridge, it becomes eligible for mirroring based on its ingress port and VLAN. As the packet travels through the flow tables, each time it  is
+       output to a port, it becomes eligible for mirroring based on the egress port and VLAN. In Open vSwitch 2.5 and later, mirroring occurs just after a packet first becomes eligible,
+       using the packet as it exists at that point; in Open vSwitch 2.4 and earlier, mirroring occurs only after a packet has traversed all the flow tables, using the original packet as
+       it  entered the bridge. This makes a difference only when the flow table modifies the packet: in Open vSwitch 2.4, the modifications are never visible to mirrors, whereas in Open
+       vSwitch 2.5 and later modifications made before the first output that makes it eligible for mirroring to a particular destination are visible.
+
+       A packet that enters an Open vSwitch bridge is mirrored to a particular destination only once, even if it is eligible for multiple reasons. For example, a packet  would  be  mir-
+       rored to a particular output_port only once, even if it is selected for mirroring to that port by select_dst_port and select_src_port in the same or different Mirror records.
+
+   Summary:
+       name                          string
+       Selecting Packets for Mirroring:
+         select_all                  boolean
+         select_dst_port             set of weak reference to Ports
+         select_src_port             set of weak reference to Ports
+         select_vlan                 set of up to 4,096 integers, in range 0 to 4,095
+       Mirroring Destination Configuration:
+         output_port                 optional weak reference to Port
+         output_vlan                 optional integer, in range 1 to 4,095
+         snaplen                     optional integer, in range 14 to 65,535
+       Statistics: Mirror counters:
+         statistics : tx_packets     optional integer
+         statistics : tx_bytes       optional integer
+       Common Columns:
+         external_ids                map of string-string pairs
+
+   Details:
+       name: string
+              Arbitrary identifier for the Mirror.
+
+     Selecting Packets for Mirroring:
+
+       To be selected for mirroring, a given packet must enter or leave the bridge through a selected port and it must also be in one of the selected VLANs.
+
+       select_all: boolean
+              If true, every packet arriving or departing on any port is selected for mirroring.
+
+       select_dst_port: set of weak reference to Ports
+              Ports on which departing packets are selected for mirroring.
+
+       select_src_port: set of weak reference to Ports
+              Ports on which arriving packets are selected for mirroring.
+
+       select_vlan: set of up to 4,096 integers, in range 0 to 4,095
+              VLANs on which packets are selected for mirroring. An empty set selects packets on all VLANs.
+
+     Mirroring Destination Configuration:
+
+       These columns are mutually exclusive. Exactly one of them must be nonempty.
+
+       output_port: optional weak reference to Port
+              Output port for selected packets, if nonempty.
+
+              Specifying  a  port  for mirror output reserves that port exclusively for mirroring. No frames other than those selected for mirroring via this column will be forwarded to
+              the port, and any frames received on the port will be discarded.
+
+              The output port may be any kind of port supported by Open vSwitch. It may be, for example, a physical port (sometimes called SPAN) or a GRE tunnel.
+
+       output_vlan: optional integer, in range 1 to 4,095
+              Output VLAN for selected packets, if nonempty.
+
+              The frames will be sent out all ports that trunk output_vlan, as well as any ports with implicit VLAN output_vlan. When a mirrored frame is sent  out  a  trunk  port,  the
+              frame's VLAN tag will be set to output_vlan, replacing any existing tag; when it is sent out an implicit VLAN port, the frame will not be tagged. This type of mirroring is
+              sometimes called RSPAN.
+
+              See the documentation for other_config:forward-bpdu in the Interface table for a list of destination MAC addresses which will not be mirrored to a VLAN to avoid  confusing
+              switches that interpret the protocols that they represent.
+
+              Please  note: Mirroring to a VLAN can disrupt a network that contains unmanaged switches. Consider an unmanaged physical switch with two ports: port 1, connected to an end
+              host, and port 2, connected to an Open vSwitch configured to mirror received packets into VLAN 123 on port 2. Suppose that the end host sends a packet on port 1  that  the
+              physical  switch forwards to port 2. The Open vSwitch forwards this packet to its destination and then reflects it back on port 2 in VLAN 123. This reflected packet causes
+              the unmanaged physical switch to replace the MAC learning table entry, which correctly pointed to port 1, with one that incorrectly points to port 2. Afterward, the physi-
+              cal  switch  will  direct packets destined for the end host to the Open vSwitch on port 2, instead of to the end host on port 1, disrupting connectivity. If mirroring to a
+              VLAN is desired in this scenario, then the physical switch must be replaced by one that learns Ethernet addresses on a per-VLAN basis. In addition, learning should be dis-
+              abled  on  the  VLAN  containing mirrored traffic. If this is not done then intermediate switches will learn the MAC address of each end host from the mirrored traffic. If
+              packets being sent to that end host are also mirrored, then they will be dropped since the switch will attempt to send them out the input port. Disabling learning for  the
+              VLAN  will  cause  the switch to correctly send the packet out all ports configured for that VLAN. If Open vSwitch is being used as an intermediate switch, learning can be
+              disabled by adding the mirrored VLAN to flood_vlans in the appropriate Bridge table or tables.
+
+              Mirroring to a GRE tunnel has fewer caveats than mirroring to a VLAN and should generally be preferred.
+
+       snaplen: optional integer, in range 14 to 65,535
+              Maximum per-packet number of bytes to mirror.
+
+              A mirrored packet with size larger than snaplen will be truncated in datapath to snaplen bytes before sending to the mirror output port. If omitted, packets are not  trun-
+              cated.
+
+     Statistics: Mirror counters:
+
+       Key-value pairs that report mirror statistics. The update period is controlled by other_config:stats-update-interval in the Open_vSwitch table.
+
+       statistics : tx_packets: optional integer
+              Number of packets transmitted through this mirror.
+
+       statistics : tx_bytes: optional integer
+              Number of bytes transmitted through this mirror.
+
+     Common Columns:
+
+       The overall purpose of these columns is described under Common Columns at the beginning of this document.
+
+       external_ids: map of string-string pairs
+

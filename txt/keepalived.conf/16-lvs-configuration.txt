@@ -1,0 +1,401 @@
+LVS CONFIGURATION
+       contains subblocks of Virtual server group(s) and Virtual server(s)
+
+       The subblocks contain arguments for configuring Linux IPVS (LVS) feature.  Knowledge of ipvsadm(8) will be helpful here. Configuring LVS is achieved by  defining  virtual  server
+       groups,  virtual  servers and optionally SSL configuration. Every virtual server defines a set of real servers, you can attach healthcheckers to each real server. Keepalived will
+       then lead LVS operation by dynamically maintaining topology.
+
+       For details of what configuration combinations are valid, see the ipvsadm(8) man page.
+
+       Note: Where an option can be configured for a virtual server, real server, and possibly checker, the virtual server setting is the default for real servers, and the  real  server
+       setting is the default for checkers.
+
+       Note:  Tunnelled  real/sorry  servers  can  differ from the address family of the virtual server and non tunnelled real/sorry servers, which all have to be the same. If a virtual
+       server uses a fwmark, and all the real/sorry servers are tunnelled, the address family of the virtual server will be the same as the address family of the real/sorry  servers  if
+       they are all the same, otherwise it will default to IPv4 (use ip_family inet6 to override this).
+
+       Note: The port for the virtual server can only be omitted if the virtual service is persistent.
+
+Virtual server group(s)
+       This  feature  offers  a way to simplify your configuration by factorizing virtual server definitions. If you need to define a bunch of virtual servers with exactly the same real
+       server topology then this feature will make your configuration much more readable and will optimize healthchecking task by only spawning one healthchecking where multiple virtual
+       server declaration will spawn a dedicated healthchecker for every real server which will waste system resources.
+
+       Any combination of IP addresses, IP address ranges and firewall marks can be used. Use of this option is intended for very large LVSs.
+
+       The syntax for virtual_server_group is :
+
+       virtual_server_group <STRING> {
+           # Virtual IP Address and Port
+           <IPADDR> [<PORT>]
+           <IPADDR> [<PORT>]
+           ...
+           # <IPADDR RANGE> has the form
+           # XXX.YYY.ZZZ.WWW-VVV eg 192.168.200.1-10
+           # range includes both .1 and .10 address
+           <IPADDR RANGE> [<PORT>] # VIP range [VPORT]
+           <IPADDR RANGE> [<PORT>]
+           ...
+           # Firewall Mark (fwmark)
+           fwmark <INTEGER>
+           fwmark <INTEGER>
+           ...
+       }
+
+Virtual server(s)
+       A virtual_server can be a declaration of one of <IPADDR> [<PORT>] , fwmark <INTEGER> or group <STRING>
+
+       The syntax for virtual_server is :
+
+       virtual_server <IPADDR> [<PORT>]  |
+       virtual_server fwmark <INTEGER> |
+       virtual_server group <STRING> {
+           # LVS scheduler
+           lvs_sched rr|wrr|lc|wlc|lblc|sh|mh|dh|fo|ovf|lblcr|sed|nq
+
+           # Enable hashed entry
+           hashed
+           # Enable flag-1 for scheduler (-b flag-1 in ipvsadm)
+           flag-1
+           # Enable flag-2 for scheduler (-b flag-2 in ipvsadm)
+           flag-2
+           # Enable flag-3 for scheduler (-b flag-3 in ipvsadm)
+           flag-3
+           # Enable sh-port for sh scheduler (-b sh-port in ipvsadm)
+           sh-port
+           # Enable sh-fallback for sh scheduler  (-b sh-fallback in ipvsadm)
+           sh-fallback
+           # Enable mh-port for mh scheduler (-b mh-port in ipvsadm)
+           mh-port
+           # Enable mh-fallback for mh scheduler  (-b mh-fallback in ipvsadm)
+           mh-fallback
+           # Enable One-Packet-Scheduling for UDP (-O in ipvsadm)
+           ops
+
+           # Default LVS forwarding method.
+           # Default tunnel type is ipip. Since Linux 5.2 the GUE tunnel type can
+           # be specified. If using GUE, a port number is required. Since Linux 5.3
+           # if the tunnel type is GUE, the checksum option can also be specified.
+           # Since Linux 5.3, GRE tunnel type is also supported, but without the
+           # remcsum option.
+           lvs_method NAT|DR
+           or
+           lvs_method TUN [type {ipip|gue port NUM|gre} [nocsum|csum|remcsum]]
+           # LVS persistence engine name
+           persistence_engine <STRING>
+           # LVS persistence timeout in seconds, default 6 minutes
+           persistence_timeout [<INTEGER>]
+           # LVS granularity mask (-M in ipvsadm)
+           persistence_granularity <NETMASK>
+           # L4 protocol
+           protocol TCP|UDP|SCTP
+           # If VS IP address is not set,
+           # suspend healthchecker's activity
+           ha_suspend
+
+           # Send email notification during quorum up/down transition,
+           # using addresses in global_defs above (default no,
+           # unless global smtp_alert/smtp_alert_checker set)
+           smtp_alert <BOOL>
+
+           # Default VirtualHost string for HTTP_GET or SSL_GET
+           # eg virtualhost www.firewall.loc
+           # Overridden by virtualhost config of real server or checker
+           virtualhost <STRING>
+
+           # On daemon startup assume that all RSs are down
+           # and healthchecks failed. This helps to prevent
+           # false positives on startup. Alpha mode is
+           # disabled by default.
+           alpha
+
+           # On daemon shutdown consider quorum and RS
+           # down notifiers for execution, where appropriate.
+           # Omega mode is disabled by default.
+           omega
+
+           # Minimum total weight of all live servers in
+           # the pool necessary to operate VS with no
+           # quality regression. Defaults to 1.
+           quorum <INTEGER>
+
+           # Tolerate this much weight units compared to the
+           # nominal quorum, when considering quorum gain
+           # or loss. A flap dampener. Defaults to 0.
+           hysteresis <INTEGER>
+
+           # Script to execute when quorum is gained.
+           quorum_up <STRING>|<QUOTED-STRING> [username [groupname]]
+
+           # Script to execute when quorum is lost.
+           quorum_down <STRING>|<QUOTED-STRING> [username [groupname]]
+
+           # IP family for a fwmark service (optional)
+           ip_family inet|inet6
+
+           # setup realserver(s)
+
+           # RS to add to LVS topology when the quorum isn't achieved.
+           #  If a sorry server is configured, all real servers will
+           #  be brought down when the quorum is not achieved.
+           sorry_server <IPADDR> [<PORT>]
+           # applies inhibit_on_failure behaviour to the sorry_server
+           sorry_server_inhibit
+           # Sorry server LVS forwarding method
+           # For details of tunnel type, see virtual_server details.
+           sorry_server_lvs_method NAT|DR
+           or
+           sorry_server_lvs_method TUN [type {ipip|gue port NUM|gre} [nocsum|csum|remcsum]]
+
+           # Optional connection timeout in seconds.
+           # The default is 5 seconds
+           connect_timeout <TIMER>
+
+           # Retry count to make additional checks if check
+           # of an alive server fails. Default: 1 unless specified below
+           retry <INTEGER>
+
+           # delay before retry after failure
+           delay_before_retry <TIMER>
+
+           # Optional random delay to start the initial check
+           # for maximum N seconds.
+           # Useful to scatter multiple simultaneous
+           # checks to the same RS. Enabled by default, with
+           # the maximum at delay_loop. Specify 0 to disable
+           warmup <TIMER>
+
+           # delay timer for checker polling
+           delay_loop <TIMER>
+
+           # Set weight to 0 when healthchecker detects failure
+           inhibit_on_failure
+
+           # one entry for each realserver
+           real_server <IPADDR> [<PORT>] {
+               # relative weight to use, default: 1
+               weight <INTEGER>
+               # LVS forwarding method
+               # For details of tunnel type, see virtual_server details.
+               lvs_method NAT|DR
+               or
+               lvs_method TUN [type {ipip|gue port NUM|gre} [nocsum|csum|remcsum]]
+
+               # Script to execute when healthchecker
+               # considers service as up.
+               notify_up <STRING>|<QUOTED-STRING> [username [groupname]]
+               # Script to execute when healthchecker
+               # considers service as down.
+               notify_down <STRING>|<QUOTED-STRING> [username [groupname]]
+
+               # maximum number of connections to server
+               uthreshold <INTEGER>
+               # minimum number of connections to server
+               lthreshold <INTEGER>
+
+               # Send email notification during state transition,
+               # using addresses in global_defs above (default yes,
+               # unless global smtp_alert/smtp_alert_checker set)
+               smtp_alert <BOOL>
+
+               # Default VirtualHost string for HTTP_GET or SSL_GET
+               # eg virtualhost www.firewall.loc
+               # Overridden by virtualhost config of a checker
+               virtualhost <STRING>
+
+               alpha <BOOL>                    # see above
+               connect_timeout <TIMER>         # see above
+               retry <INTEGER>                 # see above
+               delay_before_retry <TIMER>      # see above
+               warmup <TIMER>                  # see above
+               delay_loop <TIMER>              # see above
+               inhibit_on_failure <BOOL>       # see above
+               log_all_failures <BOOL>         # log all failures when checker up
+
+               # healthcheckers. Can be multiple of each type
+               # HTTP_GET|SSL_GET|TCP_CHECK|SMTP_CHECK|DNS_CHECK|MISC_CHECK|BFD_CHECK
+
+               # All checkers have the following options, except MISC_CHECK
+               # which only has options alpha onwards, and BFD_CHECK which has none
+               # of the standard options:
+               CHECKER_TYPE {
+                   # ======== generic connection options
+                   # Optional IP address to connect to.
+                   # The default is the realserver IP
+                   connect_ip <IPADDR>
+
+                   # Optional port to connect to
+                   # The default is the realserver port
+                   connect_port <PORT>
+
+                   # Optional address to use to
+                   # originate the connection
+                   bindto <IPADDR>
+
+                   # Optional interface to use; needed if
+                   # the bindto address is IPv6 link local
+                   bind_if <IFNAME>
+
+                   # Optional source port to
+                   # originate the connection from
+                   bind_port <PORT>
+
+                   # Optional fwmark to mark all outgoing
+                   # checker packets with
+                   fwmark <INTEGER>
+
+                   alpha <BOOL>                    # see above
+                   connect_timeout <TIMER>         # see above
+                   retry <INTEGER>                 # see above
+                   delay_before_retry <TIMER>      # see above
+                   warmup <TIMER>                  # see above
+                   delay_loop <TIMER>              # see above
+                   inhibit_on_failure <BOOL>       # see above
+               }
+
+               # The following options are additional checker specific
+
+               # HTTP and SSL healthcheckers
+               HTTP_GET|SSL_GET {
+                   # HTTP protocol version, one of 1.0, 1.0C, 1.1
+                   # Protocol version 1.0C means version 1.0 with the addition
+                   # of a "Connection: close" line, which is included in
+                   # version 1.1 by default.
+                   http_protocol <PROTOCOL>
+                   # When alpha mode is set, or when recovering from a failure,
+                   # each URL is checked, with a delay of <delay_loop> between
+                   # each check. if there were 20 URLs, and the <delay_loop> were
+                   # 3 seconds, it would take 1 minute before the RS would come up
+                   # following startup, or recovery from a failure. Setting
+                   # fast_recovery removes the delay, both at start up and after
+                   # recovery from a failure, meaning that the RS will come up
+                   # once all the URLs have been checked, with no delay between
+                   # checking each URL.
+                   fast_recovery [<BOOL>]
+                   # An url to test
+                   # can have multiple entries here
+                   url {
+                     #eg path / , or path /mrtg2/
+                     path <STRING>
+                     # healthcheck needs digest
+                     # or status_code and digest
+                     # Digest computed with genhash
+                     # eg digest 9b3a0c85a887a256d6939da88aabd8cd
+                     digest <STRING>
+                     # status code returned in the HTTP header
+                     # eg status_code 200 or status_code 200-299 400-499 503 505
+                     # Default is 200-299
+                     status_code <INTEGER|RANGE> [<INTEGER|RANGE>] ...
+                     # VirtualHost string. eg virtualhost www.firewall.loc
+                     # If not set, uses virtualhost from real or virtual server
+                     virtualhost <STRING>
+                     # Regular expression to search returned data against.
+                     # A failure to match causes the check to fail.
+                     regex <STRING>
+                     # Reverse the sense of the match, so a match of the
+                     # returned text causes the check to fail.
+                     regex_no_match
+                     # Space separated list of options for regex.
+                     #  See man pcre2api for a description of the options.
+                     #  The following option are supported:
+                     #   allow_empty_class alt_bsux auto_callout caseless
+                     #   dollar_endonly dotall dupnames extended firstline
+                     #   match_unset_backref multiline never_ucp never_utf
+                     #   no_auto_capture no_auto_possess no_dotstar_anchor
+                     #   no_start_optimize ucp ungreedy utf never_backslash_c
+                     #   alt_circumflex alt_verbnames use_offset_limit
+                     regex_options <OPTIONS>
+                     # For complicated regular expressions a larger stack
+                     #   may be needed, and this allows the start and maximum
+                     #   sizes in bytes to be specified. For more details see
+                     #   the documentation for pcre2_jit_stack_create()
+                     regex_stack <START> <MAX>
+                     # The minimum offset into the returned data to start
+                     #   checking for the regex pattern match. This can save
+                     #   processing time if the returned data is large.
+                     regex_min_offset <OFFSET>
+                     # The maximum offset into the returned data for the
+                     #   start of the subject match.
+                     regex_max_offset <OFFSET>
+                   }
+               }
+
+               SSL_GET {
+                   # when provided, send Server Name Indicator during SSL handshake
+                   enable_sni
+               }
+
+               # TCP healthchecker
+               TCP_CHECK {
+                   # No additional options
+               }
+
+               # SMTP healthchecker
+               SMTP_CHECK {
+                   # Optional string to use for the SMTP HELO request
+                   helo_name <STRING>|<QUOTED-STRING>
+               }
+
+               # DNS healthchecker
+               DNS_CHECK {
+                   # The retry default is 3.
+
+                   # DNS query type
+                   #   A|NS|CNAME|SOA|MX|TXT|AAAA
+                   # The default is SOA
+                   type <STRING>
+
+                   # Domain name to use for the DNS query
+                   # The default is . (dot)
+                   name <STRING>
+               }
+
+               # MISC healthchecker, run a program
+               MISC_CHECK {
+                   # The retry default is 0.
+
+                   # External script or program
+                   misc_path <STRING>|<QUOTED-STRING>
+                   # Script execution timeout
+                   misc_timeout <INTEGER>
+
+                   # If set, the exit code from healthchecker is used
+                   # to dynamically adjust the weight as follows:
+                   #   exit status 0: svc check success, weight
+                   #     unchanged.
+                   #   exit status 1: svc check failed.
+                   #   exit status 2-255: svc check success, weight
+                   #     changed to 2 less than exit status.
+                   #   (for example: exit status of 255 would set
+                   #     weight to 253)
+                   # NOTE: do not have more than one dynamic MISC_CHECK per real_server.
+                   misc_dynamic
+
+                   # Specify the username/groupname that the script should
+                   #   be run under.
+                   # If GROUPNAME is not specified, the group of the user
+                   #   is used
+                   user USERNAME [GROUPNAME]
+               }
+
+               # BFD instance name to check
+               BFD_CHECK {
+                   name <STRING>
+               }
+           }
+       }
+
+       # Parameters used for SSL_GET check.
+       # If none of the parameters are specified, the SSL context
+       # will be auto generated.
+       SSL {
+           # Password
+           password <STRING>
+           # CA file
+           ca <STRING>
+           # Certificate file
+           certificate <STRING>
+           # Key file
+           key <STRING>
+       }
+

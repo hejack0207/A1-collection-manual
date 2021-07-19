@@ -1,0 +1,727 @@
+TARGET EXTENSIONS
+       iptables can use extended target modules: the following are included in the standard distribution.
+
+   AUDIT
+       This  target  allows  to  create  audit  records  for  packets hitting the target.  It can be used to record accepted, dropped, and rejected packets. See auditd(8) for additional
+       details.
+
+       --type {accept|drop|reject}
+              Set type of audit record.
+
+       Example:
+
+              iptables -N AUDIT_DROP
+
+              iptables -A AUDIT_DROP -j AUDIT --type drop
+
+              iptables -A AUDIT_DROP -j DROP
+
+   CHECKSUM
+       This target allows to selectively work around broken/old applications.  It can only be used in the mangle table.
+
+       --checksum-fill
+              Compute and fill in the checksum in a packet that lacks a checksum.  This is particularly useful, if you need to work around old applications such as dhcp clients, that do
+              not work well with checksum offloads, but don't want to disable checksum offload in your device.
+
+   CLASSIFY
+       This module allows you to set the skb->priority value (and thus classify the packet into a specific CBQ class).
+
+       --set-class major:minor
+              Set the major and minor class value. The values are always interpreted as hexadecimal even if no 0x prefix is given.
+
+   CLUSTERIP (IPv4-specific)
+       This  module allows you to configure a simple cluster of nodes that share a certain IP and MAC address without an explicit load balancer in front of them.  Connections are stati-
+       cally distributed between the nodes in this cluster.
+
+       --new  Create a new ClusterIP.  You always have to set this on the first rule for a given ClusterIP.
+
+       --hashmode mode
+              Specify the hashing mode.  Has to be one of sourceip, sourceip-sourceport, sourceip-sourceport-destport.
+
+       --clustermac mac
+              Specify the ClusterIP MAC address. Has to be a link-layer multicast address
+
+       --total-nodes num
+              Number of total nodes within this cluster.
+
+       --local-node num
+              Local node number within this cluster.
+
+       --hash-init rnd
+              Specify the random seed used for hash initialization.
+
+   CONNMARK
+       This module sets the netfilter mark value associated with a connection. The mark is 32 bits wide.
+
+       --set-xmark value[/mask]
+              Zero out the bits given by mask and XOR value into the ctmark.
+
+       --save-mark [--nfmask nfmask] [--ctmask ctmask]
+              Copy the packet mark (nfmark) to the connection mark (ctmark) using the given masks. The new nfmark value is determined as follows:
+
+              ctmark = (ctmark & ~ctmask) ^ (nfmark & nfmask)
+
+              i.e. ctmask defines what bits to clear and nfmask what bits of the nfmark to XOR into the ctmark. ctmask and nfmask default to 0xFFFFFFFF.
+
+       --restore-mark [--nfmask nfmask] [--ctmask ctmask]
+              Copy the connection mark (ctmark) to the packet mark (nfmark) using the given masks. The new ctmark value is determined as follows:
+
+              nfmark = (nfmark & ~nfmask) ^ (ctmark & ctmask);
+
+              i.e. nfmask defines what bits to clear and ctmask what bits of the ctmark to XOR into the nfmark. ctmask and nfmask default to 0xFFFFFFFF.
+
+              --restore-mark is only valid in the mangle table.
+
+       The following mnemonics are available for --set-xmark:
+
+       --and-mark bits
+              Binary AND the ctmark with bits. (Mnemonic for --set-xmark 0/invbits, where invbits is the binary negation of bits.)
+
+       --or-mark bits
+              Binary OR the ctmark with bits. (Mnemonic for --set-xmark bits/bits.)
+
+       --xor-mark bits
+              Binary XOR the ctmark with bits. (Mnemonic for --set-xmark bits/0.)
+
+       --set-mark value[/mask]
+              Set the connection mark. If a mask is specified then only those bits set in the mask are modified.
+
+       --save-mark [--mask mask]
+              Copy the nfmark to the ctmark. If a mask is specified, only those bits are copied.
+
+       --restore-mark [--mask mask]
+              Copy the ctmark to the nfmark. If a mask is specified, only those bits are copied. This is only valid in the mangle table.
+
+   CONNSECMARK
+       This module copies security markings from packets to connections (if unlabeled), and from connections back to packets (also only if unlabeled).   Typically  used  in  conjunction
+       with SECMARK, it is valid in the security table (for backwards compatibility with older kernels, it is also valid in the mangle table).
+
+       --save If the packet has a security marking, copy it to the connection if the connection is not marked.
+
+       --restore
+              If the packet does not have a security marking, and the connection does, copy the security marking from the connection to the packet.
+
+   CT
+       The  CT target allows to set parameters for a packet or its associated connection. The target attaches a "template" connection tracking entry to the packet, which is then used by
+       the conntrack core when initializing a new ct entry. This target is thus only valid in the "raw" table.
+
+       --notrack
+              Disables connection tracking for this packet.
+
+       --helper name
+              Use the helper identified by name for the connection. This is more flexible than loading the conntrack helper modules with preset ports.
+
+       --ctevents event[,...]
+              Only generate the specified conntrack events for this connection. Possible event types are: new, related, destroy, reply, assured, protoinfo, helper, mark (this refers  to
+              the ctmark, not nfmark), natseqinfo, secmark (ctsecmark).
+
+       --expevents event[,...]
+              Only generate the specified expectation events for this connection.  Possible event types are: new.
+
+       --zone-orig {id|mark}
+              For  traffic coming from ORIGINAL direction, assign this packet to zone id and only have lookups done in that zone. If mark is used instead of id, the zone is derived from
+              the packet nfmark.
+
+       --zone-reply {id|mark}
+              For traffic coming from REPLY direction, assign this packet to zone id and only have lookups done in that zone. If mark is used instead of id, the zone is derived from the
+              packet nfmark.
+
+       --zone {id|mark}
+              Assign this packet to zone id and only have lookups done in that zone.  If mark is used instead of id, the zone is derived from the packet nfmark. By default, packets have
+              zone 0. This option applies to both directions.
+
+       --timeout name
+              Use the timeout policy identified by name for the connection. This  is  provides  more  flexible  timeout  policy  definition  than  global  timeout  values  available  at
+              /proc/sys/net/netfilter/nf_conntrack_*_timeout_*.
+
+   DNAT
+       This  target is only valid in the nat table, in the PREROUTING and OUTPUT chains, and user-defined chains which are only called from those chains.  It specifies that the destina-
+       tion address of the packet should be modified (and all future packets in this connection will also be mangled), and rules should cease being examined.   It  takes  the  following
+       options:
+
+       --to-destination [ipaddr[-ipaddr]][:port[-port]]
+              which  can specify a single new destination IP address, an inclusive range of IP addresses. Optionally a port range, if the rule also specifies one of the following proto-
+              cols: tcp, udp, dccp or sctp.  If no port range is specified, then the destination port will never be modified. If no IP address is specified  then  only  the  destination
+              port  will  be modified.  In Kernels up to 2.6.10 you can add several --to-destination options. For those kernels, if you specify more than one destination address, either
+              via an address range or multiple --to-destination options, a simple round-robin (one after another in cycle) load balancing takes place  between  these  addresses.   Later
+              Kernels (>= 2.6.11-rc1) don't have the ability to NAT to multiple ranges anymore.
+
+       --random
+              If option --random is used then port mapping will be randomized (kernel >= 2.6.22).
+
+       --persistent
+              Gives a client the same source-/destination-address for each connection.  This supersedes the SAME target. Support for persistent mappings is available from 2.6.29-rc2.
+
+       IPv6 support available since Linux kernels >= 3.7.
+
+   DNPT (IPv6-specific)
+       Provides stateless destination IPv6-to-IPv6 Network Prefix Translation (as described by RFC 6296).
+
+       You have to use this target in the mangle table, not in the nat table. It takes the following options:
+
+       --src-pfx [prefix/length]
+              Set source prefix that you want to translate and length
+
+       --dst-pfx [prefix/length]
+              Set destination prefix that you want to use in the translation and length
+
+       You have to use the SNPT target to undo the translation. Example:
+
+              ip6tables -t mangle -I POSTROUTING -s fd00::/64  -o vboxnet0 -j SNPT --src-pfx fd00::/64 --dst-pfx 2001:e20:2000:40f::/64
+
+              ip6tables -t mangle -I PREROUTING -i wlan0 -d 2001:e20:2000:40f::/64 -j DNPT --src-pfx 2001:e20:2000:40f::/64 --dst-pfx fd00::/64
+
+       You may need to enable IPv6 neighbor proxy:
+
+              sysctl -w net.ipv6.conf.all.proxy_ndp=1
+
+       You also have to use the NOTRACK target to disable connection tracking for translated flows.
+
+   DSCP
+       This target allows to alter the value of the DSCP bits within the TOS header of the IPv4 packet.  As this manipulates a packet, it can only be used in the mangle table.
+
+       --set-dscp value
+              Set the DSCP field to a numerical value (can be decimal or hex)
+
+       --set-dscp-class class
+              Set the DSCP field to a DiffServ class.
+
+   ECN (IPv4-specific)
+       This target allows to selectively work around known ECN blackholes.  It can only be used in the mangle table.
+
+       --ecn-tcp-remove
+              Remove all ECN bits from the TCP header.  Of course, it can only be used in conjunction with -p tcp.
+
+   HL (IPv6-specific)
+       This  is used to modify the Hop Limit field in IPv6 header. The Hop Limit field is similar to what is known as TTL value in IPv4.  Setting or incrementing the Hop Limit field can
+       potentially be very dangerous, so it should be avoided at any cost. This target is only valid in mangle table.
+
+       Don't ever set or increment the value on packets that leave your local network!
+
+       --hl-set value
+              Set the Hop Limit to `value'.
+
+       --hl-dec value
+              Decrement the Hop Limit `value' times.
+
+       --hl-inc value
+              Increment the Hop Limit `value' times.
+
+   HMARK
+       Like MARK, i.e. set the fwmark, but the mark is calculated from hashing packet selector at choice. You have also to specify the mark range and, optionally, the  offset  to  start
+       from. ICMP error messages are inspected and used to calculate the hashing.
+
+       Existing options are:
+
+       --hmark-tuple tuple
+              Possible  tuple  members  are:  src meaning source address (IPv4, IPv6 address), dst meaning destination address (IPv4, IPv6 address), sport meaning source port (TCP, UDP,
+              UDPlite, SCTP, DCCP), dport meaning destination port (TCP, UDP, UDPlite, SCTP, DCCP), spi meaning Security Parameter Index (AH, ESP), and ct meaning the usage of the  con-
+              ntrack tuple instead of the packet selectors.
+
+       --hmark-mod value (must be > 0)
+              Modulus for hash calculation (to limit the range of possible marks)
+
+       --hmark-offset value
+              Offset to start marks from.
+
+       For advanced usage, instead of using --hmark-tuple, you can specify custom
+              prefixes and masks:
+
+       --hmark-src-prefix cidr
+              The source address mask in CIDR notation.
+
+       --hmark-dst-prefix cidr
+              The destination address mask in CIDR notation.
+
+       --hmark-sport-mask value
+              A 16 bit source port mask in hexadecimal.
+
+       --hmark-dport-mask value
+              A 16 bit destination port mask in hexadecimal.
+
+       --hmark-spi-mask value
+              A 32 bit field with spi mask.
+
+       --hmark-proto-mask value
+              An 8 bit field with layer 4 protocol number.
+
+       --hmark-rnd value
+              A 32 bit random custom value to feed hash calculation.
+
+       Examples:
+
+       iptables -t mangle -A PREROUTING -m conntrack --ctstate NEW
+        -j HMARK --hmark-tuple ct,src,dst,proto --hmark-offset 10000 --hmark-mod 10 --hmark-rnd 0xfeedcafe
+
+       iptables -t mangle -A PREROUTING -j HMARK --hmark-offset 10000 --hmark-tuple src,dst,proto --hmark-mod 10 --hmark-rnd 0xdeafbeef
+
+   IDLETIMER
+       This  target  can  be used to identify when interfaces have been idle for a certain period of time.  Timers are identified by labels and are created when a rule is set with a new
+       label.  The rules also take a timeout value (in seconds) as an option.  If more than one rule uses the same timer label, the timer will be restarted whenever any of the rules get
+       a  hit.   One  entry  for each timer is created in sysfs.  This attribute contains the timer remaining for the timer to expire.  The attributes are located under the xt_idletimer
+       class:
+
+       /sys/class/xt_idletimer/timers/<label>
+
+       When the timer expires, the target module sends a sysfs notification to the userspace, which can then decide what to do (eg. disconnect to save power).
+
+       --timeout amount
+              This is the time in seconds that will trigger the notification.
+
+       --label string
+              This is a unique identifier for the timer.  The maximum length for the label string is 27 characters.
+
+   LED
+       This creates an LED-trigger that can then be attached to system indicator lights, to blink or illuminate them when certain packets pass through the system. One example  might  be
+       to light up an LED for a few minutes every time an SSH connection is made to the local machine. The following options control the trigger behavior:
+
+       --led-trigger-id name
+              This is the name given to the LED trigger. The actual name of the trigger will be prefixed with "netfilter-".
+
+       --led-delay ms
+              This indicates how long (in milliseconds) the LED should be left illuminated when a packet arrives before being switched off again. The default is 0 (blink as fast as pos-
+              sible.) The special value inf can be given to leave the LED on permanently once activated. (In this case the trigger will need to be manually detached  and  reattached  to
+              the LED device to switch it off again.)
+
+       --led-always-blink
+              Always  make  the  LED  blink on packet arrival, even if the LED is already on.  This allows notification of new packets even with long delay values (which otherwise would
+              result in a silent prolonging of the delay time.)
+
+       Example:
+
+       Create an LED trigger for incoming SSH traffic:
+              iptables -A INPUT -p tcp --dport 22 -j LED --led-trigger-id ssh
+
+       Then attach the new trigger to an LED:
+              echo netfilter-ssh >/sys/class/leds/ledname/trigger
+
+   LOG
+       Turn on kernel logging of matching packets.  When this option is set for a rule, the Linux kernel will print some information on all matching packets (like  most  IP/IPv6  header
+       fields) via the kernel log (where it can be read with dmesg(1) or read in the syslog).
+
+       This  is  a "non-terminating target", i.e. rule traversal continues at the next rule.  So if you want to LOG the packets you refuse, use two separate rules with the same matching
+       criteria, first using target LOG then DROP (or REJECT).
+
+       --log-level level
+              Level of logging, which can be (system-specific) numeric or a mnemonic.  Possible values are (in decreasing order of priority): emerg, alert, crit, error, warning, notice,
+              info or debug.
+
+       --log-prefix prefix
+              Prefix log messages with the specified prefix; up to 29 letters long, and useful for distinguishing messages in the logs.
+
+       --log-tcp-sequence
+              Log TCP sequence numbers. This is a security risk if the log is readable by users.
+
+       --log-tcp-options
+              Log options from the TCP packet header.
+
+       --log-ip-options
+              Log options from the IP/IPv6 packet header.
+
+       --log-uid
+              Log the userid of the process which generated the packet.
+
+   MARK
+       This target is used to set the Netfilter mark value associated with the packet.  It can, for example, be used in conjunction with routing based on fwmark (needs iproute2). If you
+       plan on doing so, note that the mark needs to be set in the PREROUTING chain of the mangle table to affect routing.  The mark field is 32 bits wide.
+
+       --set-xmark value[/mask]
+              Zeroes out the bits given by mask and XORs value into the packet mark ("nfmark"). If mask is omitted, 0xFFFFFFFF is assumed.
+
+       --set-mark value[/mask]
+              Zeroes out the bits given by mask and ORs value into the packet mark. If mask is omitted, 0xFFFFFFFF is assumed.
+
+       The following mnemonics are available:
+
+       --and-mark bits
+              Binary AND the nfmark with bits. (Mnemonic for --set-xmark 0/invbits, where invbits is the binary negation of bits.)
+
+       --or-mark bits
+              Binary OR the nfmark with bits. (Mnemonic for --set-xmark bits/bits.)
+
+       --xor-mark bits
+              Binary XOR the nfmark with bits. (Mnemonic for --set-xmark bits/0.)
+
+   MASQUERADE
+       This target is only valid in the nat table, in the POSTROUTING chain.  It should only be used with dynamically assigned IP (dialup) connections: if you have a static IP  address,
+       you  should use the SNAT target.  Masquerading is equivalent to specifying a mapping to the IP address of the interface the packet is going out, but also has the effect that con-
+       nections are forgotten when the interface goes down.  This is the correct behavior when the next dialup is unlikely to have the same interface address (and hence any  established
+       connections are lost anyway).
+
+       --to-ports port[-port]
+              This specifies a range of source ports to use, overriding the default SNAT source port-selection heuristics (see above).  This is only valid if the rule also specifies one
+              of the following protocols: tcp, udp, dccp or sctp.
+
+       --random
+              Randomize source port mapping If option --random is used then port mapping will be randomized (kernel >= 2.6.21).
+
+       --random-fully
+              Full randomize source port mapping If option --random-fully is used then port mapping will be fully randomized (kernel >= 3.13).
+
+       IPv6 support available since Linux kernels >= 3.7.
+
+   NETMAP
+       This target allows you to statically map a whole network of addresses onto another network of addresses.  It can only be used from rules in the nat table.
+
+       --to address[/mask]
+              Network address to map to.  The resulting address will be constructed in the following way: All 'one' bits in the mask are filled in from the new `address'.  All bits that
+              are zero in the mask are filled in from the original address.
+
+       IPv6 support available since Linux kernels >= 3.7.
+
+   NFLOG
+       This  target provides logging of matching packets. When this target is set for a rule, the Linux kernel will pass the packet to the loaded logging backend to log the packet. This
+       is usually used in combination with nfnetlink_log as logging backend, which will multicast the packet through a netlink socket to the  specified  multicast  group.  One  or  more
+       userspace processes may subscribe to the group to receive the packets. Like LOG, this is a non-terminating target, i.e. rule traversal continues at the next rule.
+
+       --nflog-group nlgroup
+              The netlink group (0 - 2^16-1) to which packets are (only applicable for nfnetlink_log). The default value is 0.
+
+       --nflog-prefix prefix
+              A prefix string to include in the log message, up to 64 characters long, useful for distinguishing messages in the logs.
+
+       --nflog-range size
+              This option has never worked, use --nflog-size instead
+
+       --nflog-size size
+              The number of bytes to be copied to userspace (only applicable for nfnetlink_log). nfnetlink_log instances may specify their own range, this option overrides it.
+
+       --nflog-threshold size
+              Number  of  packets  to queue inside the kernel before sending them to userspace (only applicable for nfnetlink_log). Higher values result in less overhead per packet, but
+              increase delay until the packets reach userspace. The default value is 1.
+
+   NFQUEUE
+       This target passes the packet to userspace using the nfnetlink_queue handler.  The packet is put into the queue identified by its 16-bit queue number.  Userspace can inspect  and
+       modify  the  packet  if  desired. Userspace must then drop or reinject the packet into the kernel.  Please see libnetfilter_queue for details.  nfnetlink_queue was added in Linux
+       2.6.14. The queue-balance option was added in Linux 2.6.31, queue-bypass in 2.6.39.
+
+       --queue-num value
+              This specifies the QUEUE number to use. Valid queue numbers are 0 to 65535. The default value is 0.
+
+       --queue-balance value:value
+              This specifies a range of queues to use. Packets are then balanced across the given queues.  This is  useful  for  multicore  systems:  start  multiple  instances  of  the
+              userspace program on queues x, x+1, .. x+n and use "--queue-balance x:x+n".  Packets belonging to the same connection are put into the same nfqueue.
+
+       --queue-bypass
+              By  default,  if  no  userspace program is listening on an NFQUEUE, then all packets that are to be queued are dropped.  When this option is used, the NFQUEUE rule behaves
+              like ACCEPT instead, and the packet will move on to the next table.
+
+       --queue-cpu-fanout
+              Available starting Linux kernel 3.10. When used together with --queue-balance this will use the CPU ID as an index to map packets to the queues. The idea is that  you  can
+              improve performance if there's a queue per CPU. This requires --queue-balance to be specified.
+
+   NOTRACK
+       This extension disables connection tracking for all packets matching that rule.  It is equivalent with -j CT --notrack. Like CT, NOTRACK can only be used in the raw table.
+
+   RATEEST
+       The RATEEST target collects statistics, performs rate estimation calculation and saves the results for later evaluation using the rateest match.
+
+       --rateest-name name
+              Count matched packets into the pool referred to by name, which is freely choosable.
+
+       --rateest-interval amount{s|ms|us}
+              Rate measurement interval, in seconds, milliseconds or microseconds.
+
+       --rateest-ewmalog value
+              Rate measurement averaging time constant.
+
+   REDIRECT
+       This  target is only valid in the nat table, in the PREROUTING and OUTPUT chains, and user-defined chains which are only called from those chains.  It redirects the packet to the
+       machine itself by changing the destination IP to the primary address of the incoming interface (locally-generated packets are mapped to the localhost address, 127.0.0.1 for  IPv4
+       and ::1 for IPv6).
+
+       --to-ports port[-port]
+              This  specifies a destination port or range of ports to use: without this, the destination port is never altered.  This is only valid if the rule also specifies one of the
+              following protocols: tcp, udp, dccp or sctp.
+
+       --random
+              If option --random is used then port mapping will be randomized (kernel >= 2.6.22).
+
+       IPv6 support available starting Linux kernels >= 3.7.
+
+   REJECT (IPv6-specific)
+       This is used to send back an error packet in response to the matched packet: otherwise it is equivalent to DROP so it is a terminating TARGET, ending rule traversal.  This target
+       is  only  valid  in  the INPUT, FORWARD and OUTPUT chains, and user-defined chains which are only called from those chains.  The following option controls the nature of the error
+       packet returned:
+
+       --reject-with type
+              The type given can be icmp6-no-route, no-route, icmp6-adm-prohibited, adm-prohibited, icmp6-addr-unreachable, addr-unreach, or  icmp6-port-unreachable,  which  return  the
+              appropriate ICMPv6 error message (icmp6-port-unreachable is the default). Finally, the option tcp-reset can be used on rules which only match the TCP protocol: this causes
+              a TCP RST packet to be sent back.  This is mainly useful for blocking ident (113/tcp) probes which frequently occur when sending mail to broken  mail  hosts  (which  won't
+              accept your mail otherwise).  tcp-reset can only be used with kernel versions 2.6.14 or later.
+
+   REJECT (IPv4-specific)
+       This is used to send back an error packet in response to the matched packet: otherwise it is equivalent to DROP so it is a terminating TARGET, ending rule traversal.  This target
+       is only valid in the INPUT, FORWARD and OUTPUT chains, and user-defined chains which are only called from those chains.  The following option controls the  nature  of  the  error
+       packet returned:
+
+       --reject-with type
+              The   type  given  can  be  icmp-net-unreachable,  icmp-host-unreachable,  icmp-port-unreachable,  icmp-proto-unreachable,  icmp-net-prohibited,  icmp-host-prohibited,  or
+              icmp-admin-prohibited (*), which return the appropriate ICMP error message (icmp-port-unreachable is the default).  The option tcp-reset can be used on  rules  which  only
+              match  the  TCP protocol: this causes a TCP RST packet to be sent back.  This is mainly useful for blocking ident (113/tcp) probes which frequently occur when sending mail
+              to broken mail hosts (which won't accept your mail otherwise).
+
+              (*) Using icmp-admin-prohibited with kernels that do not support it will result in a plain DROP instead of REJECT
+
+   SECMARK
+       This is used to set the security mark value associated with the packet for use by security subsystems such as SELinux.  It is valid in the security table (for backwards  compati-
+       bility with older kernels, it is also valid in the mangle table). The mark is 32 bits wide.
+
+       --selctx security_context
+
+   SET
+       This module adds and/or deletes entries from IP sets which can be defined by ipset(8).
+
+       --add-set setname flag[,flag...]
+              add the address(es)/port(s) of the packet to the set
+
+       --del-set setname flag[,flag...]
+              delete the address(es)/port(s) of the packet from the set
+
+       --map-set setname flag[,flag...]
+              [--map-mark] [--map-prio] [--map-queue] map packet properties (firewall mark, tc priority, hardware queue)
+
+              where flag(s) are src and/or dst specifications and there can be no more than six of them.
+
+       --timeout value
+              when adding an entry, the timeout value to use instead of the default one from the set definition
+
+       --exist
+              when adding an entry if it already exists, reset the timeout value to the specified one or to the default from the set definition
+
+       --map-set set-name
+              the set-name should be created with --skbinfo option --map-mark map firewall mark to packet by lookup of value in the set --map-prio map traffic control priority to packet
+              by lookup of value in the set --map-queue map hardware NIC queue to packet by lookup of value in the set
+
+              The --map-set option can be used from the mangle table only. The --map-prio and --map-queue flags can be used in the OUTPUT, FORWARD and POSTROUTING chains.
+
+       Use of -j SET requires that ipset kernel support is provided, which, for standard kernels, is the case since Linux 2.6.39.
+
+   SNAT
+       This target is only valid in the nat table, in the POSTROUTING and INPUT chains, and user-defined chains which are only called from those chains.  It specifies  that  the  source
+       address of the packet should be modified (and all future packets in this connection will also be mangled), and rules should cease being examined.  It takes the following options:
+
+       --to-source [ipaddr[-ipaddr]][:port[-port]]
+              which  can  specify a single new source IP address, an inclusive range of IP addresses. Optionally a port range, if the rule also specifies one of the following protocols:
+              tcp, udp, dccp or sctp.  If no port range is specified, then source ports below 512 will be mapped to other ports below 512: those between 512 and 1023 inclusive  will  be
+              mapped  to  ports below 1024, and other ports will be mapped to 1024 or above. Where possible, no port alteration will occur.  In Kernels up to 2.6.10, you can add several
+              --to-source options. For those kernels, if you specify more than one source address, either via an address range or multiple --to-source options, a simple round-robin (one
+              after another in cycle) takes place between these addresses.  Later Kernels (>= 2.6.11-rc1) don't have the ability to NAT to multiple ranges anymore.
+
+       --random
+              If option --random is used then port mapping will be randomized through a hash-based algorithm (kernel >= 2.6.21).
+
+       --random-fully
+              If option --random-fully is used then port mapping will be fully randomized through a PRNG (kernel >= 3.14).
+
+       --persistent
+              Gives a client the same source-/destination-address for each connection.  This supersedes the SAME target. Support for persistent mappings is available from 2.6.29-rc2.
+
+       Kernels prior to 2.6.36-rc1 don't have the ability to SNAT in the INPUT chain.
+
+       IPv6 support available since Linux kernels >= 3.7.
+
+   SNPT (IPv6-specific)
+       Provides stateless source IPv6-to-IPv6 Network Prefix Translation (as described by RFC 6296).
+
+       You have to use this target in the mangle table, not in the nat table. It takes the following options:
+
+       --src-pfx [prefix/length]
+              Set source prefix that you want to translate and length
+
+       --dst-pfx [prefix/length]
+              Set destination prefix that you want to use in the translation and length
+
+       You have to use the DNPT target to undo the translation. Example:
+
+              ip6tables -t mangle -I POSTROUTING -s fd00::/64  -o vboxnet0 -j SNPT --src-pfx fd00::/64 --dst-pfx 2001:e20:2000:40f::/64
+
+              ip6tables -t mangle -I PREROUTING -i wlan0 -d 2001:e20:2000:40f::/64 -j DNPT --src-pfx 2001:e20:2000:40f::/64 --dst-pfx fd00::/64
+
+       You may need to enable IPv6 neighbor proxy:
+
+              sysctl -w net.ipv6.conf.all.proxy_ndp=1
+
+       You also have to use the NOTRACK target to disable connection tracking for translated flows.
+
+   SYNPROXY
+       This  target  will  process  TCP  three-way-handshake  parallel  in  netfilter context to protect either local or backend system. This target requires connection tracking because
+       sequence numbers need to be translated.
+
+       --mss maximum segment size
+              Maximum segment size announced to clients. This must match the backend.
+
+       --wscale window scale
+              Window scale announced to clients. This must match the backend.
+
+       --sack-perm
+              Pass client selective acknowledgement option to backend (will be disabled if not present).
+
+       --timestamps
+              Pass client timestamp option to backend (will be disabled if not present, also needed for selective acknowledgement and window scaling).
+
+       Example:
+
+       Determine tcp options used by backend, from an external system
+
+              tcpdump -pni eth0 -c 1 'tcp[tcpflags] == (tcp-syn|tcp-ack)'
+                  port 80 &
+              telnet 192.0.2.42 80
+              18:57:24.693307 IP 192.0.2.42.80 > 192.0.2.43.48757:
+                  Flags [S.], seq 360414582, ack 788841994, win 14480,
+                  options [mss 1460,sackOK,
+                  TS val 1409056151 ecr 9690221,
+                  nop,wscale 9],
+                  length 0
+
+       Switch tcp_loose mode off, so conntrack will mark out-of-flow packets as state INVALID.
+
+              echo 0 > /proc/sys/net/netfilter/nf_conntrack_tcp_loose
+
+       Make SYN packets untracked
+
+              iptables -t raw -A PREROUTING -i eth0 -p tcp --dport 80
+                  --syn -j CT --notrack
+
+       Catch UNTRACKED (SYN packets) and INVALID (3WHS ACK packets) states and send them to SYNPROXY. This rule will respond to SYN packets with SYN+ACK syncookies,  create  ESTABLISHED
+       for valid client response (3WHS ACK packets) and drop incorrect cookies. Flags combinations not expected during 3WHS will not match and continue (e.g. SYN+FIN, SYN+ACK).
+
+              iptables -A INPUT -i eth0 -p tcp --dport 80
+                  -m state --state UNTRACKED,INVALID -j SYNPROXY
+                  --sack-perm --timestamp --mss 1460 --wscale 9
+
+       Drop invalid packets, this will be out-of-flow packets that were not matched by SYNPROXY.
+
+              iptables -A INPUT -i eth0 -p tcp --dport 80 -m state --state INVALID -j DROP
+
+   TCPMSS
+       This  target  allows to alter the MSS value of TCP SYN packets, to control the maximum size for that connection (usually limiting it to your outgoing interface's MTU minus 40 for
+       IPv4 or 60 for IPv6, respectively).  Of course, it can only be used in conjunction with -p tcp.
+
+       This target is used to overcome criminally braindead ISPs or servers which block "ICMP Fragmentation Needed" or "ICMPv6 Packet Too Big" packets.  The symptoms of this problem are
+       that everything works fine from your Linux firewall/router, but machines behind it can never exchange large packets:
+
+       1.  Web browsers connect, then hang with no data received.
+
+       2.  Small mail works fine, but large emails hang.
+
+       3.  ssh works fine, but scp hangs after initial handshaking.
+
+       Workaround: activate this option and add a rule to your firewall configuration like:
+
+               iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN
+                           -j TCPMSS --clamp-mss-to-pmtu
+
+       --set-mss value
+              Explicitly  sets  MSS  option  to specified value. If the MSS of the packet is already lower than value, it will not be increased (from Linux 2.6.25 onwards) to avoid more
+              problems with hosts relying on a proper MSS.
+
+       --clamp-mss-to-pmtu
+              Automatically clamp MSS value to (path_MTU - 40 for IPv4; -60 for IPv6).  This may not function as desired where asymmetric routes with differing path MTU exist -- the ker-
+              nel  uses  the path MTU which it would use to send packets from itself to the source and destination IP addresses. Prior to Linux 2.6.25, only the path MTU to the destina-
+              tion IP address was considered by this option; subsequent kernels also consider the path MTU to the source IP address.
+
+       These options are mutually exclusive.
+
+   TCPOPTSTRIP
+       This target will strip TCP options off a TCP packet. (It will actually replace them by NO-OPs.) As such, you will need to add the -p tcp parameters.
+
+       --strip-options option[,option...]
+              Strip the given option(s). The options may be specified by TCP option number or by symbolic name. The list of recognized options can be obtained by calling  iptables  with
+              -j TCPOPTSTRIP -h.
+
+   TEE
+       The  TEE  target  will clone a packet and redirect this clone to another machine on the local network segment. In other words, the nexthop must be the target, or you will have to
+       configure the nexthop to forward it further if so desired.
+
+       --gateway ipaddr
+              Send the cloned packet to the host reachable at the given IP address.  Use of 0.0.0.0 (for IPv4 packets) or :: (IPv6) is invalid.
+
+       To forward all incoming traffic on eth0 to an Network Layer logging box:
+
+       -t mangle -A PREROUTING -i eth0 -j TEE --gateway 2001:db8::1
+
+   TOS
+       This module sets the Type of Service field in the IPv4 header (including the "precedence" bits) or the Priority field in the IPv6 header. Note that TOS shares the  same  bits  as
+       DSCP and ECN. The TOS target is only valid in the mangle table.
+
+       --set-tos value[/mask]
+              Zeroes out the bits given by mask (see NOTE below) and XORs value into the TOS/Priority field. If mask is omitted, 0xFF is assumed.
+
+       --set-tos symbol
+              You can specify a symbolic name when using the TOS target for IPv4. It implies a mask of 0xFF (see NOTE below). The list of recognized TOS names can be obtained by calling
+              iptables with -j TOS -h.
+
+       The following mnemonics are available:
+
+       --and-tos bits
+              Binary AND the TOS value with bits. (Mnemonic for --set-tos 0/invbits, where invbits is the binary negation of bits.  See NOTE below.)
+
+       --or-tos bits
+              Binary OR the TOS value with bits. (Mnemonic for --set-tos bits/bits. See NOTE below.)
+
+       --xor-tos bits
+              Binary XOR the TOS value with bits. (Mnemonic for --set-tos bits/0. See NOTE below.)
+
+       NOTE: In Linux kernels up to and including 2.6.38, with the exception of longterm releases 2.6.32 (>=.42), 2.6.33 (>=.15), and 2.6.35 (>=.14), there is a  bug  whereby  IPv6  TOS
+       mangling  does not behave as documented and differs from the IPv4 version. The TOS mask indicates the bits one wants to zero out, so it needs to be inverted before applying it to
+       the original TOS field. However, the aformentioned kernels forgo the inversion which breaks --set-tos and its mnemonics.
+
+   TPROXY
+       This target is only valid in the mangle table, in the PREROUTING chain and user-defined chains which are only called from this chain. It redirects the packet to  a  local  socket
+       without changing the packet header in any way. It can also change the mark value which can then be used in advanced routing rules.  It takes three options:
+
+       --on-port port
+              This specifies a destination port to use. It is a required option, 0 means the new destination port is the same as the original. This is only valid if the rule also speci-
+              fies -p tcp or -p udp.
+
+       --on-ip address
+              This specifies a destination address to use. By default the address is the IP address of the incoming interface. This is only valid if the rule also specifies -p tcp or -p
+              udp.
+
+       --tproxy-mark value[/mask]
+              Marks  packets  with  the  given value/mask. The fwmark value set here can be used by advanced routing. (Required for transparent proxying to work: otherwise these packets
+              will get forwarded, which is probably not what you want.)
+
+   TRACE
+       This target marks packets so that the kernel will log every rule which match the packets as those traverse the tables, chains, rules.
+
+       A logging backend, such as ip(6)t_LOG or nfnetlink_log, must be loaded for this to be  visible.   The  packets  are  logged  with  the  string  prefix:  "TRACE:  tablename:chain-
+       name:type:rulenum " where type can be "rule" for plain rule, "return" for implicit rule at the end of a user defined chain and "policy" for the policy of the built in chains.
+       It can only be used in the raw table.
+
+   TTL (IPv4-specific)
+       This is used to modify the IPv4 TTL header field.  The TTL field determines how many hops (routers) a packet can traverse until it's time to live is exceeded.
+
+       Setting or incrementing the TTL field can potentially be very dangerous, so it should be avoided at any cost. This target is only valid in mangle table.
+
+       Don't ever set or increment the value on packets that leave your local network!
+
+       --ttl-set value
+              Set the TTL value to `value'.
+
+       --ttl-dec value
+              Decrement the TTL value `value' times.
+
+       --ttl-inc value
+              Increment the TTL value `value' times.
+
+   ULOG (IPv4-specific)
+       This  is  the deprecated ipv4-only predecessor of the NFLOG target.  It provides userspace logging of matching packets.  When this target is set for a rule, the Linux kernel will
+       multicast this packet through a netlink socket. One or more userspace processes may then subscribe to various multicast groups and receive the packets.  Like LOG, this is a "non-
+       terminating target", i.e. rule traversal continues at the next rule.
+
+       --ulog-nlgroup nlgroup
+              This specifies the netlink group (1-32) to which the packet is sent.  Default value is 1.
+
+       --ulog-prefix prefix
+              Prefix log messages with the specified prefix; up to 32 characters long, and useful for distinguishing messages in the logs.
+
+       --ulog-cprange size
+              Number of bytes to be copied to userspace.  A value of 0 always copies the entire packet, regardless of its size.  Default is 0.
+
+       --ulog-qthreshold size
+              Number  of  packet to queue inside kernel.  Setting this value to, e.g. 10 accumulates ten packets inside the kernel and transmits them as one netlink multipart message to
+              userspace.  Default is 1 (for backwards compatibility).
+
+iptables 1.8.0                                                                                                                                                     iptables-extensions(8)

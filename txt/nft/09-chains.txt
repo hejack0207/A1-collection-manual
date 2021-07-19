@@ -1,0 +1,59 @@
+CHAINS
+       {add | create} chain [family] table chain [ { type type hook hook [device device] priority priority ; [policy policy ;] } ]
+       {delete | list | flush} chain [family] table chain
+       delete chain [family] table handle handle
+       rename chain [family] table chain newname
+
+       Chains  are  containers  for rules. They exist in two kinds, base chains and regular chains. A base chain is an entry point for packets from the networking stack, a regular chain
+       may be used as jump target and is used for better rule organization.
+
+       add    Add a new chain in the specified table. When a hook and priority value are specified, the chain is created as a base chain and hooked up to the networking stack.
+
+       create Similar to the add command, but returns an error if the chain already exists.
+
+       delete Delete the specified chain. The chain must not contain any rules or be used as jump target.
+
+       rename Rename the specified chain.
+
+       list   List all rules of the specified chain.
+
+       flush  Flush all rules of the specified chain.
+
+       For base chains, type, hook and priority parameters are mandatory.
+
+       Supported chain types
+
+       +-------+----------+---------------------------------------+---------------------------------------+
+       |Type   | Families | Hooks                                 | Description                           |
+       +-------+----------+---------------------------------------+---------------------------------------+
+       |filter | all      | all                                   | Standard chain type to use in doubt.  |
+       +-------+----------+---------------------------------------+---------------------------------------+
+       |nat    | ip, ip6  | prerouting, input, output,  postrout- | Chains  of  this type perform Network |
+       |       |          | ing                                   | Address  Translation  based  on  con- |
+       |       |          |                                       | ntrack entries. Only the first packet |
+       |       |          |                                       | of a  connection  actually  traverses |
+       |       |          |                                       | this chain - its rules usually define |
+       |       |          |                                       | details of the created conntrack  en- |
+       |       |          |                                       | try (NAT statements for instance).    |
+       +-------+----------+---------------------------------------+---------------------------------------+
+       |route  | ip, ip6  | output                                | If  a packet has traversed a chain of |
+       |       |          |                                       | this type and is about to be  accept- |
+       |       |          |                                       | ed,  a  new route lookup is performed |
+       |       |          |                                       | if relevant parts of  the  IP  header |
+       |       |          |                                       | have  changed.  This  allows  to e.g. |
+       |       |          |                                       | implement policy routing selectors in |
+       |       |          |                                       | nftables.                             |
+       +-------+----------+---------------------------------------+---------------------------------------+
+       Apart from the special cases illustrated above (e.g. nat type not supporting forward hook or route type only supporting output hook), there are two further quirks worth noticing:
+
+       · netdev  family  supports merely a single combination, namely filter type and ingress hook. Base chains in this family also require the device parameter to be present since they
+         exist per incoming interface only.
+
+       · arp family supports only input and output hooks, both in chains of type filter.
+
+       The priority parameter accepts a signed integer value which specifies the order in which chains with same hook value are traversed. The ordering is ascending, i.e. lower priority
+       values have precedence over higher ones.
+
+       Base chains also allow to set the chain's policy, i.e. what happens to packets not explicitly accepted or refused in contained rules. Supported policy values are accept (which is
+       the default) or drop.
+

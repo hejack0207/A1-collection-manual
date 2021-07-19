@@ -1,0 +1,304 @@
+METADATA FIELDS
+   Summary:
+       Name            Bytes   Mask   RW?   Prereqs   NXM/OXM Support
+       --------------  ------  -----  ----  --------  ---------------------
+       in_port         2       no     yes   none      OVS 1.1+
+       in_port_oxm     4       no     yes   none      OF 1.2+ and OVS 1.7+
+       skb_priority    4       no     no    none
+
+       pkt_mark        4       yes    yes   none      OVS 2.0+
+       actset_output   4       no     no    none      OF 1.3+ and OVS 2.4+
+       packet_type     4       no     no    none      OF 1.5+ and OVS 2.8+
+
+       These fields relate to the origin or treatment of a packet, but they are not extracted from the packet data itself.
+
+       Ingress Port Field
+
+       Name:            in_port
+       Width:           16 bits
+       Format:          OpenFlow 1.0 port
+       Masking:         not maskable
+       Prerequisites:   none
+       Access:          read/write
+       OpenFlow 1.0:    yes (exact match only)
+       OpenFlow 1.1:    yes (exact match only)
+
+       OXM:             none
+       NXM:             NXM_OF_IN_PORT (0) since Open vSwitch 1.1
+
+       The OpenFlow port on which the packet being processed arrived. This is a 16-bit field that holds an OpenFlow 1.0 port number. For receiving a packet, the only values that  appear
+       in this field are:
+
+              1 through 0xfeff (65,279), inclusive.
+                     Conventional OpenFlow port numbers.
+
+              OFPP_LOCAL (0xfffe or 65,534).
+                     The ``local'' port, which in Open vSwitch is always named the same as the bridge itself. This represents a connection between the switch and the local TCP/IP stack.
+                     This port is where an IP address is most commonly configured on an Open vSwitch switch.
+
+                     OpenFlow does not require a switch to have a local port, but all existing versions of Open vSwitch have always included a local port. Future Directions: Future ver-
+                     sions of Open vSwitch might be able to optionally omit the local port, if someone submits code to implement such a feature.
+
+              OFPP_NONE (OpenFlow 1.0) or OFPP_ANY (OpenFlow 1.1+) (0xffff or 65,535).
+              OFPP_CONTROLLER (0xfffd or 65,533).
+                   When  a  controller  injects a packet into an OpenFlow switch with a ``packet-out'' request, it can specify one of these ingress ports to indicate that the packet was
+                   generated internally rather than having been received on some port.
+
+                   OpenFlow 1.0 specified OFPP_NONE for this purpose. Despite that, some controllers used OFPP_CONTROLLER, and some switches only accepted OFPP_CONTROLLER,  so  OpenFlow
+                   1.0.2  required support for both ports. OpenFlow 1.1 and later were more clearly drafted to allow only OFPP_CONTROLLER. For maximum compatibility, Open vSwitch allows
+                   both ports with all OpenFlow versions.
+
+       Values not mentioned above will never appear when receiving a packet, including the following notable values:
+
+              0      Zero is not a valid OpenFlow port number.
+
+              OFPP_MAX (0xff00 or 65,280).
+                     This value has only been clearly specified as a valid port number as of OpenFlow 1.3.3. Before that, its status was unclear, and so Open vSwitch has  never  allowed
+                     OFPP_MAX to be used as a port number, so packets will never be received on this port. (Other OpenFlow switches, of course, might use it.)
+
+              OFPP_UNSET (0xfff7 or 65,527)
+              OFPP_IN_PORT (0xfff8 or 65,528)
+              OFPP_TABLE (0xfff9 or 65,529)
+              OFPP_NORMAL (0xfffa or 65,530)
+              OFPP_FLOOD (0xfffb or 65,531)
+              OFPP_ALL (0xfffc or 65,532)
+                   These port numbers are used only in output actions and never appear as ingress ports.
+
+                   Most of these port numbers were defined in OpenFlow 1.0, but OFPP_UNSET was only introduced in OpenFlow 1.5.
+
+       Values that will never appear when receiving a packet may still be matched against in the flow table. There are still circumstances in which those flows can be matched:
+
+              �      The resubmit Open vSwitch extension action allows a flow table lookup with an arbitrary ingress port.
+
+              �      An  action  that  modifies the ingress port field (see below), such as e.g. load or set_field, followed by an action or instruction that performs another flow table
+                     lookup, such as resubmit or goto_table.
+
+       This field is heavily used for matching in OpenFlow tables, but for packet egress, it has only very limited roles:
+
+              �      OpenFlow requires suppressing output actions to in_port. That is, the following two flows both drop all packets that arrive on port 1:
+
+                     in_port=1,actions=1
+                     in_port=1,actions=drop
+
+                     (This behavior is occasionally useful for flooding to a subset of ports. Specifying actions=1,2,3,4, for example, outputs to ports 1, 2,  3,  and  4,  omitting  the
+                     ingress port.)
+
+              �      OpenFlow  has  a  special port OFPP_IN_PORT (with value 0xfff8) that outputs to the ingress port. For example, in a switch that has four ports numbered 1 through 4,
+                     actions=1,2,3,4,in_port outputs to ports 1, 2, 3, and 4, including the ingress port.
+
+       Because the ingress port field has so little influence on packet processing, it does not ordinarily make sense to modify the ingress port field. The field  is  writable  only  to
+       support  the  occasional  use  case where the ingress port's roles in packet egress, described above, become troublesome. For example, actions=load:0->NXM_OF_IN_PORT[],output:123
+       will output to port 123 regardless of whether it is in the ingress port. If the ingress port is important, then one may save and restore it on the stack:
+
+       actions=push:NXM_OF_IN_PORT[],load:0->NXM_OF_IN_PORT[],output:123,pop:NXM_OF_IN_PORT[]
+
+       or, in Open vSwitch 2.7 or later, use the clone action to save and restore it:
+
+       actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
+
+       The ability to modify the ingress port is an Open vSwitch extension to OpenFlow.
+
+       OXM Ingress Port Field
+
+       Name:            in_port_oxm
+       Width:           32 bits
+       Format:          OpenFlow 1.1+ port
+       Masking:         not maskable
+       Prerequisites:   none
+       Access:          read/write
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    yes (exact match only)
+       OXM:             OXM_OF_IN_PORT (0) since OpenFlow 1.2 and Open vSwitch 1.7
+       NXM:             none
+
+       OpenFlow 1.1 and later use a 32-bit port number, so this field supplies a 32-bit view of the ingress port. Current versions of Open vSwitch support only a 16-bit range of ports:
+
+              �      OpenFlow 1.0 ports 0x0000 to 0xfeff, inclusive, map to OpenFlow 1.1 port numbers with the same values.
+
+              �      OpenFlow 1.0 ports 0xff00 to 0xffff, inclusive, map to OpenFlow 1.1 port numbers 0xffffff00 to 0xffffffff.
+
+              �      OpenFlow 1.1 ports 0x0000ff00 to 0xfffffeff are not mapped and not supported.
+
+       in_port and in_port_oxm are two views of the same information, so all of the comments on in_port apply to in_port_oxm too. Modifying in_port changes in_port_oxm, and vice versa.
+
+       Setting in_port_oxm to an unsupported value yields unspecified behavior.
+
+       Output Queue Field
+
+       Name:            skb_priority
+       Width:           32 bits
+       Format:          hexadecimal
+       Masking:         not maskable
+       Prerequisites:   none
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             none
+
+       Future Directions: Open vSwitch implements the output queue as a field, but does not currently expose it through OXM or NXM for matching purposes. If this turns out to be a  use-
+       ful feature, it could be implemented in future versions. Only the set_queue, enqueue, and pop_queue actions currently influence the output queue.
+
+       This  field influences how packets in the flow will be queued, for quality of service (QoS) purposes, when they egress the switch. Its range of meaningful values, and their mean-
+       ings, varies greatly from one OpenFlow implementation to another. Even within a single implementation, there is no guarantee that all OpenFlow ports have the same queues  config-
+       ured or that all OpenFlow ports in an implementation can be configured the same way queue-wise.
+
+       Configuring  queues  on  OpenFlow  is  not  well  standardized.  On  Linux,  Open  vSwitch  supports  queue  configuration  via  OVSDB, specifically the QoS and Queue tables (see
+       ovs-vswitchd.conf.db(5) for details). Ports of Open vSwitch to other platforms might require queue configuration through some separate protocol (such as a CLI).  Even  on  Linux,
+       Open  vSwitch  exposes  only  a  fraction  of the kernel's queuing features through OVSDB, so advanced or unusual uses might require use of separate utilities (e.g. tc). OpenFlow
+       switches other than Open vSwitch might use OF-CONFIG or any of the configuration methods mentioned above. Finally, some OpenFlow switches have a fixed  number  of  fixed-function
+       queues (e.g. eight queues with strictly defined priorities) and others do not support any control over queuing.
+
+       The  only  output queue that all OpenFlow implementations must support is zero, to identify a default queue, whose properties are implementation-defined. Outputting a packet to a
+       queue that does not exist on the output port yields unpredictable behavior: among the possibilities are that the packet might be dropped or transmitted with a very high  or  very
+       low priority.
+
+       OpenFlow  1.0 only allowed output queues to be specified as part of an enqueue action that specified both a queue and an output port. That is, OpenFlow 1.0 treats the queue as an
+       argument to an action, not as a field.
+
+       To increase flexibility, OpenFlow 1.1 added an action to set the output queue. This model was carried forward, without change, through OpenFlow 1.5.
+
+       Open vSwitch implements the native queuing model of each OpenFlow version it supports. Open vSwitch also includes an extension for setting the output queue as an action in  Open-
+       Flow 1.0.
+
+       When  a  packet ingresses into an OpenFlow switch, the output queue is ordinarily set to 0, indicating the default queue. However, Open vSwitch supports various ways to forward a
+       packet from one OpenFlow switch to another within a single host. In these cases, Open vSwitch maintains the output queue across the forwarding step. For example:
+
+              �      A hop across an Open vSwitch ``patch port'' (which does not actually involve queuing) preserves the output queue.
+
+              �      When a flow sets the output queue then outputs to an OpenFlow tunnel port, the encapsulation preserves the output queue. If  the  kernel  TCP/IP  stack  routes  the
+                     encapsulated  packet  directly  to  a  physical  interface, then that output honors the output queue. Alternatively, if the kernel routes the encapsulated packet to
+                     another Open vSwitch bridge, then the output queue set previously becomes the initial output queue on ingress to the second bridge and will thus be used for further
+                     output actions (unless overridden by a new ``set queue'' action).
+
+                     (This  description  reflects the current behavior of Open vSwitch on Linux. This behavior relies on details of the Linux TCP/IP stack. It could be difficult to make
+                     ports to other operating systems behave the same way.)
+
+       Packet Mark Field
+
+       Name:            pkt_mark
+       Width:           32 bits
+       Format:          hexadecimal
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   none
+       Access:          read/write
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+
+       NXM:             NXM_NX_PKT_MARK (33) since Open vSwitch 2.0
+
+       Packet mark comes to Open vSwitch from the Linux kernel, in which the sk_buff data structure that represents a packet contains a  32-bit  member  named  skb_mark.  The  value  of
+       skb_mark  propagates  along  with  the packet it accompanies wherever the packet goes in the kernel. It has no predefined semantics but various kernel-user interfaces can set and
+       match on it, which makes it suitable for ``marking'' packets at one point in their handling and then acting on the mark later. With iptables, for example, one can mark some traf-
+       fic specially at ingress and then handle that traffic differently at egress based on the marked value.
+
+       Packet  mark is an attempt at a generalization of the skb_mark concept beyond Linux, at least through more generic naming. Like skb_priority, packet mark is preserved across for-
+       warding steps within a machine. Unlike skb_priority, packet mark has no direct effect on packet forwarding: the value set in packet mark does not matter unless some  later  Open-
+       Flow  table  or switch matches on packet mark, or unless the packet passes through some other kernel subsystem that has been configured to interpret packet mark in specific ways,
+       e.g. through iptables configuration mentioned above.
+
+       Preserving packet mark across kernel forwarding steps relies heavily on kernel support, which ports to non-Linux operating systems may not have. Regardless  of  operating  system
+       support, Open vSwitch supports packet mark within a single bridge and across patch ports.
+
+       The  value of packet mark when a packet ingresses into the first Open vSwich bridge is typically zero, but it could be nonzero if its value was previously set by some kernel sub-
+       system.
+
+       Action Set Output Port Field
+
+       Name:            actset_output
+       Width:           32 bits
+       Format:          OpenFlow 1.1+ port
+       Masking:         not maskable
+       Prerequisites:   none
+
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             ONFOXM_ET_ACTSET_OUTPUT (43) since OpenFlow 1.3 and Open vSwitch 2.4; OXM_OF_ACTSET_OUTPUT (43) since OpenFlow 1.5 and Open vSwitch 2.4
+       NXM:             none
+
+       Holds the output port currently in the OpenFlow action set (i.e. from an output action within a write_actions instruction). Its value is an OpenFlow port number. If there  is  no
+       output  port  in  the  OpenFlow  action  set,  or  if  the  output port will be ignored (e.g. because there is an output group in the OpenFlow action set), then the value will be
+       OFPP_UNSET.
+
+       Open vSwitch allows any table to match this field. OpenFlow, however, only requires this field to be matchable from within an OpenFlow egress table (a feature that  Open  vSwitch
+       does not yet implement).
+
+       Packet Type Field
+
+       Name:            packet_type
+       Width:           32 bits
+       Format:          packet type
+       Masking:         not maskable
+       Prerequisites:   none
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             OXM_OF_PACKET_TYPE (44) since OpenFlow 1.5 and Open vSwitch 2.8
+       NXM:             none
+
+       The type of the packet in the format specified in OpenFlow 1.5:
+
+        Packet type
+        <--------->
+        16    16
+       +---+-------+
+       |ns |ns_type| ...
+       +---+-------+
+
+       The upper 16 bits, ns, are a namespace. The meaning of ns_type depends on the namespace. The packet type field is specified and displayed in the format (ns,ns_type).
+
+       Open vSwitch currently supports the following classes of packet types for matching:
+
+              (0,0)  Ethernet.
+
+              (1,ethertype)
+                     The  specified  ethertype.  Open vSwitch can forward packets with any ethertype, but it can only match on and process data fields for the following supported packet
+                     types:
+
+                     (1,0x800)
+                            IPv4
+
+                     (1,0x806)
+                            ARP
+
+                     (1,0x86dd)
+                            IPv6
+
+                     (1,0x8847)
+                            MPLS
+
+                     (1,0x8848)
+                            MPLS multicast
+
+                     (1,0x8035)
+                            RARP
+
+                     (1,0x894f)
+                            NSH
+
+       Consider the distinction between a packet with packet_type=(0,0), dl_type=0x800 and one with packet_type=(1,0x800). The former is an Ethernet frame that contains an IPv4  packet,
+       like this:
+
+          Ethernet            IPv4
+        <----------->   <--------------->
+        48  48   16           8   32  32
+       +---+---+-----+ +---+-----+---+---+
+       |dst|src|type | |...|proto|src|dst| ...
+       +---+---+-----+ +---+-----+---+---+
+                0x800
+
+       The latter is an IPv4 packet not encapsulated inside any outer frame, like this:
+
+              IPv4
+        <--------------->
+              8   32  32
+       +---+-----+---+---+
+       |...|proto|src|dst| ...
+       +---+-----+---+---+
+
+       Matching  on  packet_type  is a pre-requisite for matching on any data field, but for backward compatibility, when a match on a data field is present without a packet_type match,
+       Open vSwitch acts as though a match on (0,0) (Ethernet) had been supplied. Similarly, when Open vSwitch sends flow match information to a controller, e.g. in a reply to a request
+       to dump the flow table, Open vSwitch omits a match on packet type (0,0) if it would be implied by a data field match.
+

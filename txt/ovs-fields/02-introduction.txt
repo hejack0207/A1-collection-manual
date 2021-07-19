@@ -1,0 +1,414 @@
+INTRODUCTION
+       This document aims to comprehensively document all of the fields, both standard and non-standard, supported by OpenFlow or Open vSwitch, regardless of origin.
+
+   Fields
+       A  field  is a property of a packet. Most familiarly, data fields are fields that can be extracted from a packet. Most data fields are copied directly from protocol headers, e.g.
+       at layer 2, the Ethernet source and destination addresses, or the VLAN ID; at layer 3, the IPv4 or IPv6 source and destination; and at layer 4, the TCP or UDP ports.  Other  data
+       fields are computed, e.g. ip_frag describes whether a packet is a fragment but it is not copied directly from the IP header.
+
+       Data  fields  that  are  always present as a consequence of the basic networking technology in use are called called root fields. Open vSwitch 2.7 and earlier considered Ethernet
+       fields to be root fields, and this remains the default mode of operation for Open vSwitch bridges. When a packet is received from a non-Ethernet interfaces,  such  as  a  layer-3
+       LISP  tunnel,  Open  vSwitch 2.7 and earlier force-fit the packet to this Ethernet-centric point of view by pretending that an Ethernet header is present whose Ethernet type that
+       indicates the packet's actual type (and whose source and destination addresses are all-zero).
+
+       Open vSwitch 2.8 and later implement the ``packet type-aware pipeline'' concept introduced in OpenFlow 1.5. Such a pipeline does not have any root fields. Instead, a new metadata
+       field,  packet_type,  indicates the basic type of the packet, which can be Ethernet, IPv4, IPv6, or another type. For backward compatibility, by default Open vSwitch 2.8 imitates
+       the behavior of Open vSwitch 2.7 and earlier. Later versions of Open vSwitch may change the default, and in the meantime controllers can turn off this legacy behavior, on a port-
+       by-port  basis,  by  setting  options:packet_type to ptap in the Interface table. This is significant only for ports that can handle non-Ethernet packets, which is currently just
+       LISP, VXLAN-GPE, and GRE tunnel ports. See ovs-vwitchd.conf.db(5) for more information.
+
+       Non-root data fields are not always present. A packet contains ARP fields, for example, only when its packet type is ARP or when it is an Ethernet packet  whose  Ethernet  header
+       indicates  the Ethertype for ARP, 0x0806. In this documentation, we say that a field is applicable when it is present in a packet, and inapplicable when it is not. (These are not
+       standard terms.) We refer to the conditions that determine whether a field is applicable as prerequisites. Some VLAN-related fields are a special case: these  fields  are  always
+       applicable  for  Ethernet  packets,  but  have  a  designated  value or bit that indicates whether a VLAN header is present, with the remaining values or bits indicating the VLAN
+       header's content (if it is present).
+
+       An inapplicable field does not have a value, not even a nominal ``value'' such as all-zero-bits. In many circumstances, OpenFlow and Open vSwitch allow references only to  appli-
+       cable  fields.  For  example, one may match (see Matching, below) a given field only if the match includes the field's prerequisite, e.g. matching an ARP field is only allowed if
+       one also matches on Ethertype 0x0806 or the packet_type for ARP in a packet type-aware bridge.
+
+       Sometimes a packet may contain multiple instances of a header. For example, a packet may contain multiple VLAN or MPLS headers, and tunnels can cause any  data  field  to  recur.
+       OpenFlow  and Open vSwitch do not address these cases uniformly. For VLAN and MPLS headers, only the outermost header is accessible, so that inner headers may be accessed only by
+       ``popping'' (removing) the outer header. (Open vSwitch supports only a single VLAN header in any case.) For tunnels, e.g. GRE or VXLAN, the outer header  and  inner  headers  are
+       treated as different data fields.
+
+       Many network protocols are built in layers as a stack of concatenated headers. Each header typically contains a ``next type'' field that indicates the type of the protocol header
+       that follows, e.g. Ethernet contains an Ethertype and IPv4 contains a IP protocol type. The exceptional cases, where protocols are layered but an outer layer  does  not  indicate
+       the  protocol  type  for  the inner layer, or gives only an ambiguous indication, are troublesome. An MPLS header, for example, only indicates whether another MPLS header or some
+       other protocol follows, and in the latter case the inner protocol must be known from the context. In these exceptional cases, OpenFlow and Open  vSwitch  cannot  provide  insight
+       into  the inner protocol data fields without additional context, and thus they treat all later data fields as inapplicable until an OpenFlow action explicitly specifies what pro-
+       tocol follows. In the case of MPLS, the OpenFlow ``pop MPLS'' action that removes the last MPLS header from a packet provides this context, as the Ethertype of the  payload.  See
+       Layer 2.5: MPLS for more information.
+
+       OpenFlow  and  Open  vSwitch support some fields other than data fields. Metadata fields relate to the origin or treatment of a packet, but they are not extracted from the packet
+       data itself. One example is the physical port on which a packet arrived at the switch. Register fields act like variables: they give an OpenFlow switch space for temporary  stor-
+       age while processing a packet. Existing metadata and register fields have no prerequisites.
+
+       A  field's  value  consists  of an integral number of bytes. For data fields, sometimes those bytes are taken directly from the packet. Other data fields are copied from a packet
+       with padding (usually with zeros and in the most significant positions). The remaining data fields are transformed in other ways as they are copied from the packets, to make them
+       more useful for matching.
+
+   Matching
+       The most important use of fields in OpenFlow is matching, to determine whether particular field values agree with a set of constraints called a match. A match consists of zero or
+       more constraints on individual fields, all of which must be met to satisfy the match. (A match that contains no constraints is always satisfied.) OpenFlow and Open  vSwitch  sup-
+       port a number of forms of matching on individual fields:
+
+              Exact match, e.g. nw_src=10.1.2.3
+                     Only  a  particular  value of the field is matched; for example, only one particular source IP address. Exact matches are written as field=value. The forms accepted
+                     for value depend on the field.
+
+                     All fields support exact matches.
+
+              Bitwise match, e.g. nw_src=10.1.0.0/255.255.0.0
+                     Specific bits in the field must have  specified  values;  for  example,  only  source  IP  addresses  in  a  particular  subnet.  Bitwise  matches  are  written  as
+                     field=value/mask,  where value and mask take one of the forms accepted for an exact match on field. Some fields accept other forms for bitwise matches; for example,
+                     nw_src=10.1.0.0/255.255.0.0 may also be written nw_src=10.1.0.0/16.
+
+                     Most OpenFlow switches do not allow every bitwise matching on every field (and before OpenFlow 1.2, the protocol did not even provide for the possibility  for  most
+                     fields).  Even switches that do allow bitwise matching on a given field may restrict the masks that are allowed, e.g. by allowing matches only on contiguous sets of
+                     bits starting from the most significant bit, that is, ``CIDR'' masks [RFC 4632]. Open vSwitch does not allows bitwise matching on every field, but it  allows  arbi-
+                     trary bitwise masks on any field that does support bitwise matching. (Older versions had some restrictions, as documented in the descriptions of individual fields.)
+
+              Wildcard, e.g. ``any nw_src''
+                     The  value  of the field is not constrained. Wildcarded fields may be written as field=*, although it is unusual to mention them at all. (When specifying a wildcard
+                     explicitly in a command invocation, be sure to using quoting to protect against shell expansion.)
+
+                     There is a tiny difference between wildcarding a field and not specifying any match on a field: wildcarding a field requires satisfying the field's prerequisites.
+
+       Some types of matches on individual fields cannot be expressed directly with OpenFlow and Open vSwitch. These can be expressed indirectly:
+
+              Set match, e.g. ``tcp_dst ? {80, 443, 8080}''
+                     The value of a field is one of a specified set of values; for example, the TCP destination port is 80, 443, or 8080.
+
+                     For matches used in flows (see Flows, below), multiple flows can simulate set matches.
+
+              Range match, e.g. ``1000 <= tcp_dst <= 1999''
+                     The value of the field must lie within a numerical range, for example, TCP destination ports between 1000 and 1999.
+
+                     Range matches can be expressed as a collection of bitwise matches. For example, suppose that the goal is to match TCP source ports  1000  to  1999,  inclusive.  The
+                     binary representations of 1000 and 1999 are:
+
+                     01111101000
+                     11111001111
+
+                     The following series of bitwise matches will match 1000 and 1999 and all the values in between:
+
+                     01111101xxx
+                     0111111xxxx
+                     10xxxxxxxxx
+                     110xxxxxxxx
+                     1110xxxxxxx
+                     11110xxxxxx
+                     1111100xxxx
+
+                     which can be written as the following matches:
+
+                     tcp,tp_src=0x03e8/0xfff8
+                     tcp,tp_src=0x03f0/0xfff0
+                     tcp,tp_src=0x0400/0xfe00
+                     tcp,tp_src=0x0600/0xff00
+                     tcp,tp_src=0x0700/0xff80
+                     tcp,tp_src=0x0780/0xffc0
+                     tcp,tp_src=0x07c0/0xfff0
+
+              Inequality match, e.g. ``tcp_dst != 80''
+                     The value of the field differs from a specified value, for example, all TCP destination ports except 80.
+
+                     An  inequality  match on an n-bit field can be expressed as a disjunction of n 1-bit matches. For example, the inequality match ``vlan_pcp != 5'' can be expressed as
+                     ``vlan_pcp = 0/4 or vlan_pcp = 2/2 or vlan_pcp = 0/1.'' For matches used in flows (see Flows, below), sometimes one can  more  compactly  express  inequality  as  a
+                     higher-priority flow that matches the exceptional case paired with a lower-priority flow that matches the general case.
+
+                     Alternatively,  an inequality match may be converted to a pair of range matches, e.g. tcp_src !!= 80 may be expressed as ``0 <= tcp_src < 80 or 80 < tcp_src <= 65535'',
+                     and then each range match may in turn be converted to a bitwise match.
+
+              Conjunctive match, e.g. ``tcp_src ? {80, 443, 8080} and tcp_dst ? {80, 443, 8080}''
+                     As an OpenFlow extension, Open vSwitch supports matching on conditions on conjunctions of the previously mentioned forms of  matching.  See  the  documentation  for
+                     conj_id for more information.
+
+       All  of  these supported forms of matching are special cases of bitwise matching. In some cases this influences the design of field values. ip_frag is the most prominent example:
+       it is designed to make all of the practically useful checks for IP fragmentation possible as a single bitwise match.
+
+     Shorthands
+
+       Some matches are very commonly used, so Open vSwitch accepts shorthand notations. In some cases, Open vSwitch also uses shorthand notations when it displays matches. The  follow-
+       ing shorthands are defined, with their long forms shown on the right side:
+
+              eth    packet_type=(0,0) (Open vSwitch 2.8 and later)
+
+              ip     eth_type=0x0800
+
+              ipv6   eth_type=0x86dd
+
+              icmp   eth_type=0x0800,ip_proto=1
+
+              icmp6  eth_type=0x86dd,ip_proto=58
+
+              tcp    eth_type=0x0800,ip_proto=6
+
+              tcp6   eth_type=0x86dd,ip_proto=6
+
+              udp    eth_type=0x0800,ip_proto=17
+
+              udp6   eth_type=0x86dd,ip_proto=17
+
+              sctp   eth_type=0x0800,ip_proto=132
+
+              sctp6  eth_type=0x86dd,ip_proto=132
+
+              arp    eth_type=0x0806
+
+              rarp   eth_type=0x8035
+
+              mpls   eth_type=0x8847
+
+              mplsm  eth_type=0x8848
+
+   Evolution of OpenFlow Fields
+       The  discussion  so  far  applies  to  all OpenFlow and Open vSwitch versions. This section starts to draw in specific information by explaining, in broad terms, the treatment of
+       fields and matches in each OpenFlow version.
+
+     OpenFlow 1.0
+
+       OpenFlow 1.0 defined the OpenFlow protocol format of a match as a fixed-length data structure that could match on the following fields:
+
+              ·      Ingress port.
+
+              ·      Ethernet source and destination MAC.
+
+              ·      Ethertype (with a special value to match frames that lack an Ethertype).
+
+              ·      VLAN ID and priority.
+
+              ·      IPv4 source, destination, protocol, and DSCP.
+
+              ·      TCP source and destination port.
+
+              ·      UDP source and destination port.
+
+              ·      ICMPv4 type and code.
+
+              ·      ARP IPv4 addresses (SPA and TPA) and opcode.
+
+       Each supported field corresponded to some member of the data structure. Some members represented multiple fields, in the case of the TCP, UDP, ICMPv4, and ARP fields whose  pres-
+       ence  is  mutually exclusive. This also meant that some members were poor fits for their fields: only the low 8 bits of the 16-bit ARP opcode could be represented, and the ICMPv4
+       type and code were padded with 8 bits of zeros to fit in the 16-bit members primarily meant for TCP and UDP ports. An additional bitmap member indicated, for each member, whether
+       its field should be an ``exact'' or ``wildcarded'' match (see Matching), with additional support for CIDR prefix matching on the IPv4 source and destination fields.
+
+       Simplicity  was  recognized  early on as the main virtue of this approach. Obviously, any fixed-length data structure cannot support matching new protocols that do not fit. There
+       was no room, for example, for matching IPv6 fields, which was not a priority at the time. Lack of room to support matching the Ethernet  addresses  inside  ARP  packets  actually
+       caused  more  of  a  design problem later, leading to an Open vSwitch extension action specialized for dropping ``spoofed'' ARP packets in which the frame and ARP Ethernet source
+       addressed differed. (This extension was never standardized. Open vSwitch dropped support for it a few releases after it added support for full ARP matching.)
+
+       The design of the OpenFlow fixed-length matches also illustrates compromises, in both directions, between the strengths and weaknesses of software and hardware that  have  always
+       influenced  the design of OpenFlow. Support for matching ARP fields that do fit in the data structure was only added late in the design process (and remained optional in OpenFlow
+       1.0), for example, because common switch ASICs did not support matching these fields.
+
+       The compromises in favor of software occurred for more complicated reasons. The OpenFlow designers did not know how to implement matching in software that was fast, dynamic,  and
+       general.  (A  way was later found [Srinivasan].) Thus, the designers sought to support dynamic, general matching that would be fast in realistic special cases, in particular when
+       all of the matches were microflows, that is, matches that specify every field present in a packet, because such matches can be implemented as a single hash table lookup.  Contem-
+       porary  research supported the feasibility of this approach: the number of microflows in a campus network had been measured to peak at about 10,000 [Casado, section 3.2]. (Calcu-
+       lations show that this can only be true in a lightly loaded network [Pepelnjak].)
+
+       As a result, OpenFlow 1.0 required switches to treat microflow matches as the highest possible priority. This let software switches perform the microflow hash table lookup first.
+       Only  on  failure  to match a microflow did the switch need to fall back to checking the more general and presumed slower matches. Also, the OpenFlow 1.0 flow match was minimally
+       flexible, with no support for general bitwise matching, partly on the basis that this seemed more likely amenable to relatively efficient software implementation.  (CIDR  masking
+       for IPv4 addresses was added relatively late in the OpenFlow 1.0 design process.)
+
+       Microflow matching was later discovered to aid some hardware implementations. The TCAM chips used for matching in hardware do not support priority in the same way as OpenFlow but
+       instead tie priority to ordering [Pagiamtzis]. Thus, adding a new match with a priority between the priorities of existing matches can require reordering an arbitrary  number  of
+       TCAM entries. On the other hand, when microflows are highest priority, they can be managed as a set-aside portion of the TCAM entries.
+
+       The  emphasis on matching microflows also led designers to carefully consider the bandwidth requirements between switch and controller: to maximize the number of microflow setups
+       per second, one must minimize the size of each flow's description. This favored the fixed-length format in use, because it expressed common TCP and UDP microflows in fewer  bytes
+       than more flexible ``type-length-value'' (TLV) formats. (Early versions of OpenFlow also avoided TLVs in general to head off protocol fragmentation.)
+
+       Inapplicable Fields
+
+       OpenFlow  1.0  does not clearly specify how to treat inapplicable fields. The members for inapplicable fields are always present in the match data structure, as are the bits that
+       indicate whether the fields are matched, and the ``correct'' member and bit values for inapplicable fields is unclear. OpenFlow 1.0 implementations changed  their  behavior  over
+       time  as priorities shifted. The early OpenFlow reference implementation, motivated to make every flow a microflow to enable hashing, treated inapplicable fields as exact matches
+       on a value of 0. Initially, this behavior was implemented in the reference controller only.
+
+       Later, the reference switch was also changed to actually force any wildcarded inapplicable fields into exact matches on 0. The latter behavior sometimes caused problems,  because
+       the  modified  flow was the one reported back to the controller later when it queried the flow table, and the modifications sometimes meant that the controller could not properly
+       recognize the flow that it had added. In retrospect, perhaps this problem should have alerted the designers to a design error, but the ability to use a single hash table was held
+       to be more important than almost every other consideration at the time.
+
+       When  more  flexible match formats were introduced much later, they disallowed any mention of inapplicable fields as part of a match. This raised the question of how to translate
+       between this new format and the OpenFlow 1.0 fixed format. It seemed somewhat inconsistent and backward to treat fields as exact-match in one format and forbid matching  them  in
+       the other, so instead the treatment of inapplicable fields in the fixed-length format was changed from exact match on 0 to wildcarding. (A better classifier had by now eliminated
+       software performance problems with wildcards.)
+
+       The OpenFlow 1.0.1 errata (released only in 2012) added some additional explanation [OpenFlow 1.0.1, section 3.4], but it did not mandate specific behavior because  of  variation
+       among implementations.
+
+     OpenFlow 1.1
+
+       The  OpenFlow  1.1  protocol  match  format  was  designed  as a type/length/value (TLV) format to allow for future flexibility. The specification standardized only a single type
+       OFPMT_STANDARD (0) with a fixed-size payload, described here. The additional fields and bitwise masks in OpenFlow 1.1 cause this match structure to be over twice as large  as  in
+       OpenFlow 1.0, 88 bytes versus 40.
+
+       OpenFlow 1.1 added support for the following fields:
+
+              ·      SCTP source and destination port.
+
+              ·      MPLS label and traffic control (TC) fields.
+
+              ·      One 64-bit register (named ``metadata'').
+
+       OpenFlow 1.1 increased the width of the ingress port number field (and all other port numbers in the protocol) from 16 bits to 32 bits.
+
+       OpenFlow  1.1  increased  matching  flexibility by introducing arbitrary bitwise matching on Ethernet and IPv4 address fields and on the new ``metadata'' register field. Switches
+       were not required to support all possible masks [OpenFlow 1.1, section 4.3].
+
+       By a strict reading of the specification, OpenFlow 1.1 removed support for matching ICMPv4 type and code [OpenFlow 1.1, section A.2.3],  but  this  is  likely  an  editing  error
+       because ICMP matching is described elsewhere [OpenFlow 1.1, Table 3, Table 4, Figure 4]. Open vSwitch does support ICMPv4 type and code matching with OpenFlow 1.1.
+
+       OpenFlow  1.1  avoided  the  pitfalls  of  inapplicable  fields that OpenFlow 1.0 encountered, by requiring the switch to ignore the specified field values [OpenFlow 1.1, section
+       A.2.3]. It also implied that the switch should ignore the bits that indicate whether to match inapplicable fields.
+
+       Physical Ingress Port
+
+       OpenFlow 1.1 introduced a new pseudo-field, the physical ingress port. The physical ingress port is only a pseudo-field because it cannot be used for matching.  It  appears  only
+       one place in the protocol, in the ``packet-in'' message that passes a packet received at the switch to an OpenFlow controller.
+
+       A packet's ingress port and physical ingress port are identical except for packets processed by a switch feature such as bonding or tunneling that makes a packet appear to arrive
+       on a ``virtual'' port associated with the bond or the tunnel. For such packets, the ingress port is the virtual port and the physical ingress port  is,  naturally,  the  physical
+       port.  Open vSwitch implements both bonding and tunneling, but its bonding implementation does not use virtual ports and its tunnels are typically not on the same OpenFlow switch
+       as their physical ingress ports (which need not be part of any switch), so the ingress port and physical ingress port are always the same in Open vSwitch.
+
+     OpenFlow 1.2
+
+       OpenFlow 1.2 abandoned the fixed-length approach to matching. One reason was size, since adding support for IPv6 address matching (now seen as  important),  with  bitwise  masks,
+       would  have  added  64  bytes  to  the  match length, increasing it from 88 bytes in OpenFlow 1.1 to over 150 bytes. Extensibility had also become important as controller writers
+       increasingly wanted support for new fields without having to change messages throughout the OpenFlow protocol. The challenges of carefully defining fixed-length matches to  avoid
+       problems with inapplicable fields had also become clear over time.
+
+       Therefore,  OpenFlow  1.2 adopted a flow format using a flexible type-length-value (TLV) representation, in which each TLV expresses a match on one field. These TLVs were in turn
+       encapsulated inside the outer TLV wrapper introduced in OpenFlow 1.1 with the new identifier OFPMT_OXM (1). (This wrapper fulfilled its intended purpose of reducing the amount of
+       churn in the protocol when changing match formats; some messages that included matches remained unchanged from OpenFlow 1.1 to 1.2 and later versions.)
+
+       OpenFlow 1.2 added support for the following fields:
+
+              ·      ARP hardware addresses (SHA and THA).
+
+              ·      IPv4 ECN.
+
+              ·      IPv6 source and destination addresses, flow label, DSCP, ECN, and protocol.
+
+              ·      TCP, UDP, and SCTP port numbers when encapsulated inside IPv6.
+
+              ·      ICMPv6 type and code.
+
+              ·      ICMPv6 Neighbor Discovery target address and source and target Ethernet addresses.
+
+       The  OpenFlow  1.2  format, called OXM (OpenFlow Extensible Match), was modeled closely on an extension to OpenFlow 1.0 introduced in Open vSwitch 1.1 called NXM (Nicira Extended
+       Match). Each OXM or NXM TLV has the following format:
+
+               type
+        <---------------->
+             16        7   1    8      length bytes
+       +------------+-----+--+------+ +------------+
+       |vendor/class|field|HM|length| |    body    |
+       +------------+-----+--+------+ +------------+
+
+       The most significant 16 bits of the NXM or OXM header, called vendor by NXM and class by OXM, identify an organization permitted to allocate identifiers for fields. NXM allocates
+       only two vendors, 0x0000 for fields supported by OpenFlow 1.0 and 0x0001 for fields implemented as an Open vSwitch extension. OXM assigns classes as follows:
+
+              0x0000 (OFPXMC_NXM_0).
+              0x0001 (OFPXMC_NXM_1).
+                   Reserved for NXM compatibility.
+
+              0x0002 to 0x7fff
+                   Reserved for allocation to ONF members, but none yet assigned.
+
+              0x8000 (OFPXMC_OPENFLOW_BASIC)
+                   Used for most standard OpenFlow fields.
+
+              0x8001 (OFPXMC_PACKET_REGS)
+                   Used for packet register fields in OpenFlow 1.5 and later.
+
+              0x8002 to 0xfffe
+                   Reserved for the OpenFlow specification.
+
+              0xffff (OFPXMC_EXPERIMENTER)
+                   Experimental use.
+
+       When  class is 0xffff, the OXM header is extended to 64 bits by using the first 32 bits of the body as an experimenter field whose most significant byte is zero and whose remain-
+       ing bytes are an Organizationally Unique Identifier (OUI) assigned by the IEEE [IEEE OUI], as shown below.
+
+            type                 experimenter
+        <---------->             <---------->
+          16     7   1    8        8     24     (length - 4) bytes
+       +------+-----+--+------+ +------+-----+ +------------------+
+       |class |field|HM|length| | zero | OUI | |       body       |
+       +------+-----+--+------+ +------+-----+ +------------------+
+        0xffff                    0x00
+
+       OpenFlow says that support for experimenter fields is optional. Open vSwitch 2.4 and later does support them, so that it can support the following experimenter classes:
+
+              0x4f4e4600 (ONFOXM_ET)
+                     Used by official Open Networking Foundation extensions in OpenFlow 1.3 and later. e.g. [TCP Flags Match Field Extension].
+
+              0x005ad650 (NXOXM_NSH)
+                     Used by Open vSwitch for NSH extensions, in the absence of an official ONF-assigned class. (This OUI is randomly generated.)
+
+       Taken as a unit, class (or vendor), field, and experimenter (when present) uniquely identify a particular field.
+
+       When hasmask (abbreviated HM above) is 0, the OXM is an exact match on an entire field. In this case, the body (excluding the experimenter field, if present) is a single value to
+       be matched.
+
+       When  hasmask  is  1,  the OXM is a bitwise match. The body (excluding the experimenter field) consists of a value to match, followed by the bitwise mask to apply. A 1-bit in the
+       mask indicates that the corresponding bit in the value should be matched and a 0-bit that it should be ignored. For example, for an IP address field, a value of 192.168.0.0  fol-
+       lowed by a mask of 255.255.0.0 would match addresses in the 196.168.0.0/16 subnet.
+
+              ·      Some  fields  might  not  support  masking  at  all, and some fields that do support masking might restrict it to certain patterns. For example, fields that have IP
+                     address values might be restricted to CIDR masks. The descriptions of individual fields note these restrictions.
+
+              ·      An OXM TLV with a mask that is all zeros is not useful (although it is not forbidden), because it is has the same effect as omitting the TLV entirely.
+
+              ·      It is not meaningful to pair a 0-bit in an OXM mask with a 1-bit in its value, and Open vSwitch rejects such an OXM with the error OFPBMC_BAD_WILDCARDS, as required
+                     by OpenFlow 1.3 and later.
+
+       The  length  identifies the number of bytes in the body, including the 4-byte experimenter header, if it is present. Each OXM TLV has a fixed length; that is, given class, field,
+       experimenter (if present), and hasmask, length is a constant. The length is included explicitly to allow software to minimally parse OXM TLVs of unknown types.
+
+       OXM TLVs must be ordered so that a field's prerequisites are satisfied before it is parsed. For example, an OXM TLV that matches on the IPv4 source address field is only  allowed
+       following an OXM TLV that matches on the Ethertype for IPv4. Similarly, an OXM TLV that matches on the TCP source port must follow a TLV that matches an Ethertype of IPv4 or IPv6
+       and one that matches an IP protocol of TCP (in that order). The order of OXM TLVs is not otherwise restricted; no canonical ordering is defined.
+
+       A given field may be matched only once in a series of OXM TLVs.
+
+     OpenFlow 1.3
+
+       OpenFlow 1.3 showed OXM to be largely successful, by adding new fields without making any changes to how flow matches otherwise worked. It added OXMs  for  the  following  fields
+       supported by Open vSwitch:
+
+              ·      Tunnel ID for ports associated with e.g. VXLAN or keyed GRE.
+
+              ·      MPLS ``bottom of stack'' (BOS) bit.
+
+       OpenFlow 1.3 also added OXMs for the following fields not documented here and not yet implemented by Open vSwitch:
+
+              ·      IPv6 extension header handling.
+
+              ·      PBB I-SID.
+
+     OpenFlow 1.4
+
+       OpenFlow 1.4 added OXMs for the following fields not documented here and not yet implemented by Open vSwitch:
+
+              ·      PBB UCA.
+
+     OpenFlow 1.5
+
+       OpenFlow 1.5 added OXMs for the following fields supported by Open vSwitch:
+
+              ·      Packet type.
+
+              ·      TCP flags.
+
+              ·      Packet registers.
+
+              ·      The output port in the OpenFlow action set.
+

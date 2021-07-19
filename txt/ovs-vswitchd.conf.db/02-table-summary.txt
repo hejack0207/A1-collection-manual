@@ -1,0 +1,486 @@
+TABLE SUMMARY
+       The following list summarizes the purpose of each of the tables in the Open_vSwitch database.  Each table is described in more detail on a later page.
+
+       Table     Purpose
+       Open_vSwitch
+                 Open vSwitch configuration.
+       Bridge    Bridge configuration.
+       Port      Port configuration.
+       Interface One physical network device in a Port.
+       Flow_Table
+                 OpenFlow table configuration
+       QoS       Quality of Service configuration
+       Queue     QoS output queue.
+       Mirror    Port mirroring.
+       Controller
+                 OpenFlow controller configuration.
+       Manager   OVSDB management connection.
+       NetFlow   NetFlow configuration.
+       SSL       SSL configuration.
+       sFlow     sFlow configuration.
+       IPFIX     IPFIX configuration.
+       Flow_Sample_Collector_Set
+                 Flow_Sample_Collector_Set configuration.
+       AutoAttach
+                 AutoAttach configuration.
+
+Open_vSwitch TABLE
+       Configuration for an Open vSwitch daemon. There must be exactly one record in the Open_vSwitch table.
+
+   Summary:
+       Configuration:
+         bridges                     set of Bridges
+         ssl                         optional SSL
+         external_ids : system-id    optional string
+         external_ids : xs-system-uuid
+                                     optional string
+         external_ids : hostname     optional string
+         external_ids : rundir       optional string
+         other_config : stats-update-interval
+                                     optional string, containing an integer, at least 5,000
+         other_config : flow-restore-wait
+                                     optional string, either true or false
+         other_config : flow-limit   optional string, containing an integer, at least 0
+         other_config : max-idle     optional string, containing an integer, at least 500
+         other_config : hw-offload   optional string, either true or false
+         other_config : tc-policy    optional string, one of none, skip_hw, or skip_sw
+         other_config : dpdk-init    optional string, one of false, true, or try
+         other_config : dpdk-lcore-mask
+                                     optional string, containing an integer, at least 1
+         other_config : pmd-cpu-mask
+                                     optional string
+         other_config : dpdk-alloc-mem
+                                     optional string, containing an integer, at least 0
+         other_config : dpdk-socket-mem
+                                     optional string
+         other_config : dpdk-hugepage-dir
+                                     optional string
+         other_config : dpdk-extra   optional string
+         other_config : vhost-sock-dir
+                                     optional string
+         other_config : vhost-iommu-support
+                                     optional string, either true or false
+         other_config : per-port-memory
+                                     optional string, either true or false
+         other_config : tx-flush-interval
+                                     optional string, containing an integer, in range 0 to 1,000,000
+         other_config : pmd-perf-metrics
+                                     optional string, either true or false
+         other_config : smc-enable   optional string, either true or false
+         other_config : n-handler-threads
+                                     optional string, containing an integer, at least 1
+         other_config : n-revalidator-threads
+                                     optional string, containing an integer, at least 1
+         other_config : emc-insert-inv-prob
+                                     optional string, containing an integer, in range 0 to 4,294,967,295
+         other_config : vlan-limit   optional string, containing an integer, at least 0
+         other_config : bundle-idle-timeout
+                                     optional string, containing an integer, at least 1
+       Status:
+         next_cfg                    integer
+         cur_cfg                     integer
+         dpdk_initialized            boolean
+         Statistics:
+            other_config : enable-statistics
+                                     optional string, either true or false
+            statistics : cpu         optional string, containing an integer, at least 1
+            statistics : load_average
+                                     optional string
+            statistics : memory      optional string
+            statistics : process_NAME
+                                     optional string
+            statistics : file_systems
+                                     optional string
+       Version Reporting:
+         ovs_version                 optional string
+         db_version                  optional string
+         system_type                 optional string
+         system_version              optional string
+         dpdk_version                optional string
+       Capabilities:
+         datapath_types              set of strings
+         iface_types                 set of strings
+       Database Configuration:
+         manager_options             set of Managers
+       Common Columns:
+         other_config                map of string-string pairs
+         external_ids                map of string-string pairs
+
+   Details:
+     Configuration:
+
+       bridges: set of Bridges
+              Set of bridges managed by the daemon.
+
+       ssl: optional SSL
+              SSL used globally by the daemon.
+
+       external_ids : system-id: optional string
+              A unique identifier for the Open vSwitch's physical host. The form of the identifier depends on the type of the host. On a Citrix XenServer, this will likely be  the  same
+              as external_ids:xs-system-uuid.
+
+       external_ids : xs-system-uuid: optional string
+              The Citrix XenServer universally unique identifier for the physical host as displayed by xe host-list.
+
+       external_ids : hostname: optional string
+              The hostname for the host running Open vSwitch. This is a fully qualified domain name since version 2.6.2.
+
+       external_ids : rundir: optional string
+              In  Open  vSwitch 2.8 and later, the run directory of the running Open vSwitch daemon. This directory is used for runtime state such as control and management sockets. The
+              value of other_config:vhost-sock-dir is relative to this directory.
+
+       other_config : stats-update-interval: optional string, containing an integer, at least 5,000
+              Interval for updating statistics to the database, in milliseconds. This option will affect the update of the statistics column in the following tables: Port,  Interface  ,
+              Mirror.
+
+              Default value is 5000 ms.
+
+              Getting statistics more frequently can be achieved via OpenFlow.
+
+       other_config : flow-restore-wait: optional string, either true or false
+              When  ovs-vswitchd  starts  up, it has an empty flow table and therefore it handles all arriving packets in its default fashion according to its configuration, by dropping
+              them or sending them to an OpenFlow controller or switching them as a standalone switch. This behavior is ordinarily desirable. However, if ovs-vswitchd is  restarting  as
+              part of a ``hot-upgrade,'' then this leads to a relatively long period during which packets are mishandled.
+
+              This  option  allows  for improvement. When ovs-vswitchd starts with this value set as true, it will neither flush or expire previously set datapath flows nor will it send
+              and receive any packets to or from the datapath. When this value is later set to false, ovs-vswitchd will start receiving packets from the datapath and re-setup the flows.
+
+              Thus, with this option, the procedure for a hot-upgrade of ovs-vswitchd becomes roughly the following:
+
+              1.
+                Stop ovs-vswitchd.
+
+              2.
+                Set other_config:flow-restore-wait to true.
+
+              3.
+                Start ovs-vswitchd.
+
+              4.
+                Use ovs-ofctl (or some other program, such as an OpenFlow controller) to restore the OpenFlow flow table to the desired state.
+
+              5.
+                Set other_config:flow-restore-wait to false (or remove it entirely from the database).
+
+              The ovs-ctl's ``restart'' and ``force-reload-kmod'' functions use the above config option during hot upgrades.
+
+       other_config : flow-limit: optional string, containing an integer, at least 0
+              The maximum number of flows allowed in the datapath flow table. Internally OVS will choose a flow limit which will likely be lower than this number,  based  on  real  time
+              network conditions. Tweaking this value is discouraged unless you know exactly what you're doing.
+
+              The default is 200000.
+
+       other_config : max-idle: optional string, containing an integer, at least 500
+              The  maximum  time  (in  ms)  that  idle flows will remain cached in the datapath. Internally OVS will check the validity and activity for datapath flows regularly and may
+              expire flows quicker than this number, based on real time network conditions. Tweaking this value is discouraged unless you know exactly what you're doing.
+
+              The default is 10000.
+
+       other_config : hw-offload: optional string, either true or false
+              Set this value to true to enable netdev flow offload.
+
+              The default value is false. Changing this value requires restarting the daemon
+
+              Currently Open vSwitch supports hardware offloading on Linux systems. On other systems, this value is ignored. This functionality is considered  'experimental'.  Depending
+              on  which  OpenFlow matches and actions are configured, which kernel version is used, and what hardware is available, Open vSwitch may not be able to offload functionality
+              to hardware.
+
+       other_config : tc-policy: optional string, one of none, skip_hw, or skip_sw
+              Specified the policy used with HW offloading. Options:
+
+              none   Add software rule and offload rule to HW.
+
+              skip_sw
+                     Offload rule to HW only.
+
+              skip_hw
+                     Add software rule without offloading rule to HW.
+
+              This is only relevant if other_config:hw-offload is enabled.
+
+              The default value is none.
+
+       other_config : dpdk-init: optional string, one of false, true, or try
+              Set this value to true or try to enable runtime support for DPDK ports. The vswitch must have compile-time support for DPDK as well.
+
+              A value of true will cause the ovs-vswitchd process to abort if DPDK cannot be initialized. A value of try will allow the ovs-vswitchd process to continue running even  if
+              DPDK cannot be initialized.
+
+              The default value is false. Changing this value requires restarting the daemon
+
+              If this value is false at startup, any dpdk ports which are configured in the bridge will fail due to memory errors.
+
+       other_config : dpdk-lcore-mask: optional string, containing an integer, at least 1
+              Specifies  the  CPU  cores where dpdk lcore threads should be spawned. The DPDK lcore threads are used for DPDK library tasks, such as library internal message processing,
+              logging, etc. Value should be in the form of a hex string (so '0x123') similar to the 'taskset' mask input.
+
+              The lowest order bit corresponds to the first CPU core. A set bit means the corresponding core is available and an lcore thread will be created and pinned to  it.  If  the
+              input does not cover all cores, those uncovered cores are considered not set.
+
+              For performance reasons, it is best to set this to a single core on the system, rather than allow lcore threads to float.
+
+              If  not  specified,  the  value will be determined by choosing the lowest CPU core from initial cpu affinity list. Otherwise, the value will be passed directly to the DPDK
+              library.
+
+       other_config : pmd-cpu-mask: optional string
+              Specifies CPU mask for setting the cpu affinity of PMD (Poll Mode Driver) threads. Value should be in the form of hex string, similar to the dpdk EAL '-c COREMASK'  option
+              input or the 'taskset' mask input.
+
+              The lowest order bit corresponds to the first CPU core. A set bit means the corresponding core is available and a pmd thread will be created and pinned to it. If the input
+              does not cover all cores, those uncovered cores are considered not set.
+
+              If not specified, one pmd thread will be created for each numa node and pinned to any available core on the numa node by default.
+
+       other_config : dpdk-alloc-mem: optional string, containing an integer, at least 0
+              Specifies the amount of memory to preallocate from the hugepage pool, regardless of socket. It is recommended that dpdk-socket-mem is used instead.
+
+       other_config : dpdk-socket-mem: optional string
+              Specifies the amount of memory to preallocate from the hugepage pool, on a per-socket basis.
+
+              The specifier is a comma-separated string, in ascending order of CPU socket. E.g. On a four socket system 1024,0,2048 would set socket 0 to preallocate 1024MB, socket 1 to
+              preallocate 0MB, socket 2 to preallocate 2048MB and socket 3 (no value given) to preallocate 0MB.
+
+              If  dpdk-socket-mem and dpdk-alloc-mem are not specified, dpdk-socket-mem will be used and the default value is 1024 for each numa node. If dpdk-socket-mem and dpdk-alloc-
+              mem are specified at same time, dpdk-socket-mem will be used as default. Changing this value requires restarting the daemon.
+
+       other_config : dpdk-hugepage-dir: optional string
+              Specifies the path to the hugetlbfs mount point.
+
+              If not specified, this will be guessed by the DPDK library (default is /dev/hugepages). Changing this value requires restarting the daemon.
+
+       other_config : dpdk-extra: optional string
+              Specifies additional eal command line arguments for DPDK.
+
+              The default is empty. Changing this value requires restarting the daemon
+
+       other_config : vhost-sock-dir: optional string
+              Specifies a relative path from external_ids:rundir to the vhost-user unix domain socket files. If this value is unset, the sockets are put directly in external_ids:rundir.
+
+              Changing this value requires restarting the daemon.
+
+       other_config : vhost-iommu-support: optional string, either true or false
+              vHost IOMMU is a security feature, which restricts the vhost memory that a virtio device may access. vHost IOMMU support is disabled by default,  due  to  a  bug  in  QEMU
+              implementations  of  the  vhost  REPLY_ACK  protocol,  (on which vHost IOMMU relies) prior to v2.9.1. Setting this value to true enables vHost IOMMU support for vHost User
+              Client ports in OvS-DPDK, starting from DPDK v17.11.
+
+              Changing this value requires restarting the daemon.
+
+       other_config : per-port-memory: optional string, either true or false
+              By default OVS DPDK uses a shared memory model wherein devices that have the same MTU and socket values can share the same mempool. Setting this value to true changes this
+              behaviour.  Per  port memory allow DPDK devices to use private memory per device. This can provide greater transparency as regards memory usage but potentially at the cost
+              of greater memory requirements.
+
+              Changing this value requires restarting the daemon if dpdk-init has already been set to true.
+
+       other_config : tx-flush-interval: optional string, containing an integer, in range 0 to 1,000,000
+              Specifies the time in microseconds that a packet can wait in output batch for sending i.e. amount of time that packet can spend in  an  intermediate  output  queue  before
+              sending to netdev. This option can be used to configure balance between throughput and latency. Lower values decreases latency while higher values may be useful to achieve
+              higher performance.
+
+              Defaults to 0 i.e. instant packet sending (latency optimized).
+
+       other_config : pmd-perf-metrics: optional string, either true or false
+              Enables recording of detailed PMD performance metrics for analysis and trouble-shooting. This can have a performance impact in the order of 1%.
+
+              Defaults to false but can be changed at any time.
+
+       other_config : smc-enable: optional string, either true or false
+              Signature match cache or SMC is a cache between EMC and megaflow cache. It does not store the full key of the flow, so it is more memory efficient comparing to EMC  cache.
+              SMC is especially useful when flow count is larger than EMC capacity.
+
+              Defaults to false but can be changed at any time.
+
+       other_config : n-handler-threads: optional string, containing an integer, at least 1
+              Specifies the number of threads for software datapaths to use for handling new flows. The default the number of online CPU cores minus the number of revalidators.
+
+              This  configuration  is  per  datapath. If you have more than one software datapath (e.g. some system bridges and some netdev bridges), then the total number of threads is
+              n-handler-threads times the number of software datapaths.
+
+       other_config : n-revalidator-threads: optional string, containing an integer, at least 1
+              Specifies the number of threads for software datapaths to use for revalidating flows in the datapath. Typically, there is a direct correlation between the number of reval-
+              idator  threads, and the number of flows allowed in the datapath. The default is the number of cpu cores divided by four plus one. If n-handler-threads is set, the default
+              changes to the number of cpu cores minus the number of handler threads.
+
+              This configuration is per datapath. If you have more than one software datapath (e.g. some system bridges and some netdev bridges), then the total  number  of  threads  is
+              n-handler-threads times the number of software datapaths.
+
+       other_config : emc-insert-inv-prob: optional string, containing an integer, in range 0 to 4,294,967,295
+              Specifies  the  inverse  probability (1/emc-insert-inv-prob) of a flow being inserted into the Exact Match Cache (EMC). On average one in every emc-insert-inv-prob packets
+              that generate a unique flow will cause an insertion into the EMC. A value of 1 will result in an insertion for every flow (1/1 = 100%) whereas a value of zero will  result
+              in no insertions and essentially disable the EMC.
+
+              Defaults to 100 ie. there is (1/100 =) 1% chance of EMC insertion.
+
+       other_config : vlan-limit: optional string, containing an integer, at least 0
+              Limits the number of VLAN headers that can be matched to the specified number. Further VLAN headers will be treated as payload, e.g. a packet with more 802.1q headers will
+              match Ethernet type 0x8100.
+
+              Value 0 means unlimited. The actual number of supported VLAN headers is the smallest of vlan-limit, the number of VLANs supported by Open vSwitch userspace (currently  2),
+              and the number supported by the datapath.
+
+              If  this  value is absent, the default is currently 1. This maintains backward compatibility with controllers that were designed for use with Open vSwitch versions earlier
+              than 2.8, which only supported one VLAN.
+
+       other_config : bundle-idle-timeout: optional string, containing an integer, at least 1
+              The maximum time (in seconds) that idle bundles will wait to be expired since it was either opened, modified or closed.
+
+              OpenFlow specification mandates the timeout to be at least one second. The default is 10 seconds.
+
+     Status:
+
+       next_cfg: integer
+              Sequence number for client to increment. When a client modifies any part of the database configuration and wishes to wait for Open vSwitch to finish applying the  changes,
+              it may increment this sequence number.
+
+       cur_cfg: integer
+              Sequence number that Open vSwitch sets to the current value of next_cfg after it finishes applying a set of configuration changes.
+
+       dpdk_initialized: boolean
+              True if other_config:dpdk-init is set to true and the DPDK library is successfully initialized.
+
+     Statistics:
+
+       The  statistics  column  contains key-value pairs that report statistics about a system running an Open vSwitch. These are updated periodically (currently, every 5 seconds). Key-
+       value pairs that cannot be determined or that do not apply to a platform are omitted.
+
+       other_config : enable-statistics: optional string, either true or false
+              Statistics are disabled by default to avoid overhead in the common case when statistics gathering is not useful. Set this value to true to enable populating the statistics
+              column or to false to explicitly disable it.
+
+       statistics : cpu: optional string, containing an integer, at least 1
+              Number  of  CPU processors, threads, or cores currently online and available to the operating system on which Open vSwitch is running, as an integer. This may be less than
+              the number installed, if some are not online or if they are not available to the operating system.
+
+              Open vSwitch userspace processes are not multithreaded, but the Linux kernel-based datapath is.
+
+       statistics : load_average: optional string
+              A comma-separated list of three floating-point numbers, representing the system load average over the last 1, 5, and 15 minutes, respectively.
+
+       statistics : memory: optional string
+              A comma-separated list of integers, each of which represents a quantity of memory in kilobytes that describes the operating system on which Open  vSwitch  is  running.  In
+              respective order, these values are:
+
+              1.
+                Total amount of RAM allocated to the OS.
+
+              2.
+                RAM allocated to the OS that is in use.
+
+              3.
+                RAM  that  can  be  flushed out to disk or otherwise discarded if that space is needed for another purpose. This number is necessarily less than or equal to the previous
+                value.
+
+              4.
+                Total disk space allocated for swap.
+
+              5.
+                Swap space currently in use.
+
+              On Linux, all five values can be determined and are included. On other operating systems, only the first two values can be determined, so the list will only have two  val-
+              ues.
+
+       statistics : process_NAME: optional string
+              One  such  key-value  pair,  with  NAME  replaced by a process name, will exist for each running Open vSwitch daemon process, with name replaced by the daemon's name (e.g.
+              process_ovs-vswitchd). The value is a comma-separated list of integers. The integers represent the following, with memory measured in kilobytes and durations in  millisec-
+              onds:
+
+              1.
+                The process's virtual memory size.
+
+              2.
+                The process's resident set size.
+
+              3.
+                The amount of user and system CPU time consumed by the process.
+
+              4.
+                The number of times that the process has crashed and been automatically restarted by the monitor.
+
+              5.
+                The duration since the process was started.
+
+              6.
+                The duration for which the process has been running.
+
+              The  interpretation of some of these values depends on whether the process was started with the --monitor. If it was not, then the crash count will always be 0 and the two
+              durations will always be the same. If --monitor was given, then the crash count may be positive; if it is, the latter duration is the amount of time since the most  recent
+              crash and restart.
+
+              There will be one key-value pair for each file in Open vSwitch's ``run directory'' (usually /var/run/openvswitch) whose name ends in .pid, whose contents are a process ID,
+              and which is locked by a running process. The name is taken from the pidfile's name.
+
+              Currently Open vSwitch is only able to obtain all of the above detail on Linux systems. On other systems, the same key-value pairs will be  present  but  the  values  will
+              always be the empty string.
+
+       statistics : file_systems: optional string
+              A  space-separated  list  of information on local, writable file systems. Each item in the list describes one file system and consists in turn of a comma-separated list of
+              the following:
+
+              1.
+                Mount point, e.g. / or /var/log. Any spaces or commas in the mount point are replaced by underscores.
+
+              2.
+                Total size, in kilobytes, as an integer.
+
+              3.
+                Amount of storage in use, in kilobytes, as an integer.
+
+              This key-value pair is omitted if there are no local, writable file systems or if Open vSwitch cannot obtain the needed information.
+
+     Version Reporting:
+
+       These columns report the types and versions of the hardware and software running Open vSwitch. We recommend in general that software should test  whether  specific  features  are
+       supported instead of relying on version number checks. These values are primarily intended for reporting to human administrators.
+
+       ovs_version: optional string
+              The Open vSwitch version number, e.g. 1.1.0.
+
+       db_version: optional string
+              The database schema version number, e.g. 1.2.3. See ovsdb-tool(1) for an explanation of the numbering scheme.
+
+              The schema version is part of the database schema, so it can also be retrieved by fetching the schema using the Open vSwitch database protocol.
+
+       system_type: optional string
+              An identifier for the type of system on top of which Open vSwitch runs, e.g. XenServer or KVM.
+
+              System integrators are responsible for choosing and setting an appropriate value for this column.
+
+       system_version: optional string
+              The version of the system identified by system_type, e.g. 5.6.100-39265p on XenServer 5.6.100 build 39265.
+
+              System integrators are responsible for choosing and setting an appropriate value for this column.
+
+       dpdk_version: optional string
+              The version of the linked DPDK library.
+
+     Capabilities:
+
+       These columns report capabilities of the Open vSwitch instance.
+
+       datapath_types: set of strings
+              This column reports the different dpifs registered with the system. These are the values that this instance supports in the datapath_type column of the Bridge table.
+
+       iface_types: set of strings
+              This column reports the different netdevs registered with the system. These are the values that this instance supports in the type column of the Interface table.
+
+     Database Configuration:
+
+       These columns primarily configure the Open vSwitch database (ovsdb-server), not the Open vSwitch switch (ovs-vswitchd). The OVSDB database also uses the ssl settings.
+
+       The Open vSwitch switch does read the database configuration to determine remote IP addresses to which in-band control should apply.
+
+       manager_options: set of Managers
+              Database  clients to which the Open vSwitch database server should connect or to which it should listen, along with options for how these connections should be configured.
+              See the Manager table for more information.
+
+              For this column to serve its purpose,  ovsdb-server  must  be  configured  to  honor  it.  The  easiest  way  to  do  this  is  to  invoke  ovsdb-server  with  the  option
+              --remote=db:Open_vSwitch,Open_vSwitch,manager_options The startup scripts that accompany Open vSwitch do this by default.
+
+     Common Columns:
+
+       The overall purpose of these columns is described under Common Columns at the beginning of this document.
+
+       other_config: map of string-string pairs
+
+       external_ids: map of string-string pairs
+

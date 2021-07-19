@@ -1,0 +1,99 @@
+QoS TABLE
+       Quality of Service (QoS) configuration for each Port that references it.
+
+   Summary:
+       type                          string
+       queues                        map of integer-Queue pairs, key in range 0 to 4,294,967,295
+       Configuration for linux-htb and linux-hfsc:
+         other_config : max-rate     optional string, containing an integer
+       Configuration for egress-policer QoS:
+         other_config : cir          optional string, containing an integer
+         other_config : cbs          optional string, containing an integer
+       Configuration for linux-sfq:
+         other_config : perturb      optional string, containing an integer
+         other_config : quantum      optional string, containing an integer
+       Common Columns:
+         other_config                map of string-string pairs
+         external_ids                map of string-string pairs
+
+   Details:
+       type: string
+              The type of QoS to implement. The currently defined types are listed below:
+
+              linux-htb
+                     Linux ``hierarchy token bucket'' classifier. See tc-htb(8) (also at http://linux.die.net/man/8/tc-htb) and the HTB  manual  (http://luxik.cdi.cz/~devik/qos/htb/man-
+                     ual/userg.htm) for information on how this classifier works and how to configure it.
+
+              linux-hfsc
+                     Linux "Hierarchical Fair Service Curve" classifier. See http://linux-ip.net/articles/hfsc.en/ for information on how this classifier works.
+
+              linux-sfq
+                     Linux ``Stochastic Fairness Queueing'' classifier. See tc-sfq(8) (also at http://linux.die.net/man/8/tc-sfq) for information on how this classifier works.
+
+              linux-codel
+                     Linux ``Controlled Delay'' classifier. See tc-codel(8) (also at http://man7.org/linux/man-pages/man8/tc-codel.8.html) for information on how this classifier works.
+
+              linux-fq_codel
+                     Linux ``Fair Queuing with Controlled Delay'' classifier. See tc-fq_codel(8) (also at http://man7.org/linux/man-pages/man8/tc-fq_codel.8.html) for information on how
+                     this classifier works.
+
+              linux-noop
+                     Linux ``No operation.'' By default, Open vSwitch manages quality of service on all of its configured ports. This can be helpful, but sometimes administrators prefer
+                     to use other software to manage QoS. This type prevents Open vSwitch from changing the QoS configuration for a port.
+
+              egress-policer
+                     A  DPDK  egress policer algorithm using the DPDK rte_meter library. The rte_meter library provides an implementation which allows the metering and policing of traf-
+                     fic. The implementation in OVS essentially creates a single token bucket used to police traffic. It should be noted that when the rte_meter is configured as part of
+                     QoS there will be a performance overhead as the rte_meter itself will consume CPU cycles in order to police traffic. These CPU cycles ordinarily are used for packet
+                     proccessing. As such the drop in performance will be noticed in terms of overall aggregate traffic throughput.
+
+       queues: map of integer-Queue pairs, key in range 0 to 4,294,967,295
+              A map from queue numbers to Queue records. The supported range of queue numbers depend on type. The queue numbers are the same as the queue_id used in OpenFlow  in  struct
+              ofp_action_enqueue and other structures.
+
+              Queue  0 is the ``default queue.'' It is used by OpenFlow output actions when no specific queue has been set. When no configuration for queue 0 is present, it is automati-
+              cally configured as if a Queue record with empty dscp and other_config columns had been specified. (Before version 1.6, Open vSwitch would leave queue  0  unconfigured  in
+              this case. With some queuing disciplines, this dropped all packets destined for the default queue.)
+
+     Configuration for linux-htb and linux-hfsc:
+
+       The linux-htb and linux-hfsc classes support the following key-value pair:
+
+       other_config : max-rate: optional string, containing an integer
+              Maximum rate shared by all queued traffic, in bit/s. Optional. If not specified, for physical interfaces, the default is the link rate. For other interfaces or if the link
+              rate cannot be determined, the default is currently 100 Mbps.
+
+     Configuration for egress-policer QoS:
+
+       QoS type egress-policer provides egress policing for userspace port types with DPDK. It has the following key-value pairs defined.
+
+       other_config : cir: optional string, containing an integer
+              The Committed Information Rate (CIR) is measured in bytes of IP packets per second, i.e. it includes the IP header, but not link specific  (e.g.  Ethernet)  headers.  This
+              represents the bytes per second rate at which the token bucket will be updated. The cir value is calculated by (pps x packet data size). For example assuming a user wishes
+              to limit a stream consisting of 64 byte packets to 1 million packets per second the CIR would be set to to to 46000000. This value can be broken  into  '1,000,000  x  46'.
+              Where 1,000,000 is the policing rate for the number of packets per second and 46 represents the size of the packet data for a 64 byte ip packet.
+
+       other_config : cbs: optional string, containing an integer
+              The  Committed  Burst  Size  (CBS)  is measured in bytes and represents a token bucket. At a minimum this value should be be set to the expected largest size packet in the
+              traffic stream. In practice larger values may be used to increase the size of the token bucket. If a packet can be transmitted then the cbs will be decremented by the num-
+              ber of bytes/tokens of the packet. If there are not enough tokens in the cbs bucket the packet will be dropped.
+
+     Configuration for linux-sfq:
+
+       The linux-sfq QoS supports the following key-value pairs:
+
+       other_config : perturb: optional string, containing an integer
+              Number  of seconds between consecutive perturbations in hashing algorithm. Different flows can end up in the same hash bucket causing unfairness. Perturbation's goal is to
+              remove possible unfairness. The default and recommended value is 10. Too low a value is discouraged because each perturbation can cause packet reordering.
+
+       other_config : quantum: optional string, containing an integer
+              Number of bytes linux-sfq QoS can dequeue in one turn in round-robin from one flow. The default and recommended value is equal to interface's MTU.
+
+     Common Columns:
+
+       The overall purpose of these columns is described under Common Columns at the beginning of this document.
+
+       other_config: map of string-string pairs
+
+       external_ids: map of string-string pairs
+

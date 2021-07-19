@@ -1,0 +1,79 @@
+MONITOR MODE
+       Usage: mdadm --monitor options... devices...
+
+       This  usage  causes  mdadm  to  periodically  poll  a number of md arrays and to report on any events noticed.  mdadm will never exit once it decides that there are arrays to be
+       checked, so it should normally be run in the background.
+
+       As well as reporting events, mdadm may move a spare drive from one array to another if they are in the same spare-group or domain and if the destination array has a failed drive
+       but no spares.
+
+       If  any  devices  are  listed  on the command line, mdadm will only monitor those devices.  Otherwise all arrays listed in the configuration file will be monitored.  Further, if
+       --scan is given, then any other md devices that appear in /proc/mdstat will also be monitored.
+
+       The result of monitoring the arrays is the generation of events.  These events are passed to a separate program (if specified) and may be mailed to a given E-mail address.
+
+       When passing events to a program, the program is run once for each event, and is given 2 or 3 command-line arguments: the first is the name of the event (see below), the  second
+       is the name of the md device which is affected, and the third is the name of a related device if relevant (such as a component device that has failed).
+
+       If  --scan is given, then a program or an E-mail address must be specified on the command line or in the config file.  If neither are available, then mdadm will not monitor any-
+       thing.  Without --scan, mdadm will continue monitoring as long as something was found to monitor.  If no program or email is given, then each event is reported to stdout.
+
+       The different events are:
+
+           DeviceDisappeared
+                  An md array which previously was configured appears to no longer be configured. (syslog priority: Critical)
+
+                  If mdadm was told to monitor an array which is RAID0 or Linear, then it will report DeviceDisappeared with the extra information Wrong-Level.  This is  because  RAID0
+                  and Linear do not support the device-failed, hot-spare and resync operations which are monitored.
+
+           RebuildStarted
+                  An md array started reconstruction (e.g. recovery, resync, reshape, check, repair). (syslog priority: Warning)
+
+           RebuildNN
+                  Where  NN  is  a  two-digit  number (ie. 05, 48). This indicates that rebuild has passed that many percent of the total. The events are generated with fixed increment
+                  since 0. Increment size may be specified with a commandline option (default is 20). (syslog priority: Warning)
+
+           RebuildFinished
+                  An md array that was rebuilding, isn't any more, either because it finished normally or was aborted. (syslog priority: Warning)
+
+           Fail   An active component device of an array has been marked as faulty. (syslog priority: Critical)
+
+           FailSpare
+                  A spare component device which was being rebuilt to replace a faulty device has failed. (syslog priority: Critical)
+
+           SpareActive
+                  A spare component device which was being rebuilt to replace a faulty device has been successfully rebuilt and has been made active.  (syslog priority: Info)
+
+           NewArray
+                  A new md array has been detected in the /proc/mdstat file.  (syslog priority: Info)
+
+           DegradedArray
+                  A newly noticed array appears to be degraded.  This message is not generated when mdadm notices a drive failure which causes degradation, but only when mdadm  notices
+                  that an array is degraded when it first sees the array.  (syslog priority: Critical)
+
+           MoveSpare
+                  A spare drive has been moved from one array in a spare-group or domain to another to allow a failed drive to be replaced.  (syslog priority: Info)
+
+           SparesMissing
+                  If mdadm has been told, via the config file, that an array should have a certain number of spare devices, and mdadm detects that it has fewer than this number when it
+                  first sees the array, it will report a SparesMissing message.  (syslog priority: Warning)
+
+           TestMessage
+                  An array was found at startup, and the --test flag was given.  (syslog priority: Info)
+
+       Only Fail, FailSpare, DegradedArray, SparesMissing and TestMessage cause Email to be sent.  All events cause the program to be run.  The program is run with two or  three  argu-
+       ments: the event name, the array device and possibly a second device.
+
+       Each  event  has  an associated array device (e.g.  /dev/md1) and possibly a second device.  For Fail, FailSpare, and SpareActive the second device is the relevant component de-
+       vice.  For MoveSpare the second device is the array that the spare was moved from.
+
+       For mdadm to move spares from one array to another, the different arrays need to be labeled with the same spare-group or the spares must be allowed to migrate  through  matching
+       POLICY domains in the configuration file.  The spare-group name can be any string; it is only necessary that different spare groups use different names.
+
+       When mdadm detects that an array in a spare group has fewer active devices than necessary for the complete array, and has no spare devices, it will look for another array in the
+       same spare group that has a full complement of working drive and a spare.  It will then attempt to remove the spare from the second drive and add it to the first.   If  the  re-
+       moval succeeds but the adding fails, then it is added back to the original array.
+
+       If  the spare group for a degraded array is not defined, mdadm will look at the rules of spare migration specified by POLICY lines in mdadm.conf and then follow similar steps as
+       above if a matching spare is found.
+

@@ -1,0 +1,119 @@
+FIELDS REFERENCE
+       The  following  sections document the fields that Open vSwitch supports. Each section provides introductory material on a group of related fields, followed by information on each
+       individual field. In addition to field-specific information, each field begins with a table with entries for the following important properties:
+
+              Name   The field's name, used for parsing and formatting the field, e.g. in ovs-ofctl commands. For historical reasons,  some  fields  have  an  additional  name  that  is
+                     accepted as an alternative in parsing. This name, when there is one, is listed as well, e.g. ``tun (aka tunnel_id).''
+
+              Width  The  field's  width,  always a multiple of 8 bits. Some fields don't use all of the bits, so this may be accompanied by an explanation. For example, OpenFlow embeds
+                     the 2-bit IP ECN field as as the low bits in an 8-bit byte, and so its width is expressed as ``8 bits (only the least-significant 2 bits may be nonzero).''
+
+              Format How a value for the field is formatted or parsed by, e.g., ovs-ofctl. Some possibilities are generic:
+
+                     decimal
+                            Formats as a decimal number. On input, accepts decimal numbers or hexadecimal numbers prefixed by 0x.
+
+                     hexadecimal
+                            Formats as a hexadecimal number prefixed by 0x. On input, accepts decimal numbers or hexadecimal numbers prefixed by 0x. (The  default  for  parsing  is  not
+                            hexadecimal: only a 0x prefix causes input to be treated as hexadecimal.)
+
+                     Ethernet
+                            Formats and accepts the common Ethernet address format xx:xx:xx:xx:xx:xx.
+
+                     IPv4   Formats and accepts the dotted-quad format a.b.c.d. For bitwise matches, formats and accepts address/length CIDR notation in addition to address/mask.
+
+                     IPv6   Formats and accepts the common IPv6 address formats, plus CIDR notation for bitwise matches.
+
+                     OpenFlow 1.0 port
+                            Accepts 16-bit port numbers in decimal, plus OpenFlow well-known port names (e.g. IN_PORT) in uppercase or lowercase.
+
+                     OpenFlow 1.1+ port
+                            Same syntax as OpenFlow 1.0 ports but for 32-bit OpenFlow 1.1+ port number fields.
+
+                     Other, field-specific formats are explained along with their fields.
+
+              Masking
+                     For  most  fields,  this says ``arbitrary bitwise masks,'' meaning that a flow may match any combination of bits in the field. Some fields instead say ``exact match
+                     only,'' which means that a flow that matches on this field must match on the whole field instead of just certain bits. Either way, this reports masking support  for
+                     the  latest  version  of Open vSwitch using OXM or NXM (that is, either OpenFlow 1.2+ or OpenFlow 1.0 plus Open vSwitch NXM extensions). In particular, OpenFlow 1.0
+                     (without NXM) and 1.1 don't always support masking even if Open vSwitch itself does; refer to the OpenFlow 1.0 and OpenFlow 1.1 rows to  learn  about  masking  with
+                     these protocol versions.
+
+              Prerequisites
+                     Requirements  that must be met to match on this field. For example, ip_src has IPv4 as a prerequisite, meaning that a match must include eth_type=0x0800 to match on
+                     the IPv4 source address. The following prerequisites, with their requirements, are currently in use:
+
+                     none   (no requirements)
+
+                     VLAN VID
+                            vlan_tci=0x1000/0x1000 (i.e. a VLAN header is present)
+
+                     ARP    eth_type=0x0806 (ARP) or eth_type=0x8035 (RARP)
+
+                     IPv4   eth_type=0x0800
+
+                     IPv6   eth_type=0x86dd
+
+                     IPv4/IPv6
+                            IPv4 or IPv6
+
+                     MPLS   eth_type=0x8847 or eth_type=0x8848
+
+                     TCP    IPv4/IPv6 and ip_proto=6
+
+                     UDP    IPv4/IPv6 and ip_proto=17
+
+                     SCTP   IPv4/IPv6 and ip_proto=132
+
+                     ICMPv4 IPv4 and ip_proto=1
+
+                     ICMPv6 IPv6 and ip_proto=58
+
+                     ND solicit
+                            ICMPv6 and icmp_type=135 and icmp_code=0
+
+                     ND advert
+                            ICMPv6 and icmp_type=136 and icmp_code=0
+
+                     ND     ND solicit or ND advert
+
+                     The TCP, UDP, and SCTP prerequisites also have the special requirement that nw_frag is not being used to select ``later fragments.'' This is because only the  first
+                     fragment of a fragmented IPv4 or IPv6 datagram contains the TCP or UDP header.
+
+              Access Most  fields  are ``read/write,'' which means that common OpenFlow actions like set_field can modify them. Fields that are ``read-only'' cannot be modified in these
+                     general-purpose ways, although there may be other ways that actions can modify them.
+
+              OpenFlow 1.0
+              OpenFlow 1.1
+                   These rows report the level of support that OpenFlow 1.0 or OpenFlow 1.1, respectively, has for a field. For OpenFlow 1.0, supported fields  are  reported  as  either
+                   ``yes  (exact  match  only)''  for fields that do not support any bitwise masking or ``yes (CIDR match only)'' for fields that support CIDR masking. OpenFlow 1.1 sup-
+                   ported fields report either ``yes (exact match only)'' or simply ``yes'' for fields that do support arbitrary masks. These OpenFlow versions supported a fixed collec-
+                   tion of fields that cannot be extended, so many more fields are reported as ``not supported.''
+
+              OXM
+              NXM  These rows report the OXM and NXM code points that correspond to a given field. Either or both may be ``none.''
+
+                   A  field  that has only an OXM code point is usually one that was standardized before it was added to Open vSwitch. A field that has only an NXM code point is usually
+                   one that is not yet standardized. When a field has both OXM and NXM code points, it usually indicates that it was introduced as an Open vSwitch  extension  under  the
+                   NXM  code  point,  then later standardized under the OXM code point. A field can have more than one OXM code point if it was standardized in OpenFlow 1.4 or later and
+                   additionally introduced as an official ONF extension for OpenFlow 1.3. (A field that has neither OXM nor NXM code point is typically an obsolete field  that  is  sup-
+                   ported in some other form using OXM or NXM.)
+
+                   Each  code  point in these rows is described in the form ``NAME (number) since OpenFlow spec and Open vSwitch version,'' e.g. ``OXM_OF_ETH_TYPE (5) since OpenFlow 1.2
+                   and Open vSwitch 1.7.'' First, NAME, which specifies a name for the code point, starts with a prefix that designates a class and, in some cases, a vendor,  as  listed
+                   in the following table:
+
+                   Prefix           Vendor       Class
+                   ---------------  -----------  -------
+                   NXM_OF           (none)       0x0000
+                   NXM_NX           (none)       0x0001
+                   OXM_OF           (none)       0x8000
+                   OXM_OF_PKT_REG   (none)       0x8001
+                   NXOXM_ET         0x00002320   0xffff
+                   NXOXM_NSH        0x005ad650   0xffff
+                   ONFOXM_ET        0x4f4e4600   0xffff
+
+                   For  more  information  on OXM/NXM classes and vendors, refer back to OpenFlow 1.2 under Evolution of OpenFlow Fields. The number is the field number within the class
+                   and vendor. The OpenFlow spec is the version of OpenFlow that standardized the code point. It is omitted for NXM code points because they are nonstandard. The version
+                   is the version of Open vSwitch that first supported the code point.
+

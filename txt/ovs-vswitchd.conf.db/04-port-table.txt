@@ -1,0 +1,469 @@
+Port TABLE
+       A port within a Bridge.
+
+       Most  commonly,  a port has exactly one ``interface,'' pointed to by its interfaces column. Such a port logically corresponds to a port on a physical Ethernet switch. A port with
+       more than one interface is a ``bonded port'' (see Bonding Configuration).
+
+       Some properties that one might think as belonging to a port are actually part of the port's Interface members.
+
+   Summary:
+       name                          immutable string (must be unique within table)
+       interfaces                    set of 1 or more Interfaces
+       VLAN Configuration:
+         vlan_mode                   optional string, one of access, dot1q-tunnel, native-tagged, native-untagged, or trunk
+         tag                         optional integer, in range 0 to 4,095
+         trunks                      set of up to 4,096 integers, in range 0 to 4,095
+         cvlans                      set of up to 4,096 integers, in range 0 to 4,095
+         other_config : qinq-ethtype
+                                     optional string, either 802.1ad or 802.1q
+         other_config : priority-tags
+                                     optional string, either true or false
+       Bonding Configuration:
+         bond_mode                   optional string, one of active-backup, balance-slb, or balance-tcp
+         other_config : bond-hash-basis
+                                     optional string, containing an integer
+         Link Failure Detection:
+            other_config : bond-detect-mode
+                                     optional string, either carrier or miimon
+            other_config : bond-miimon-interval
+                                     optional string, containing an integer
+            bond_updelay             integer
+            bond_downdelay           integer
+         LACP Configuration:
+            lacp                     optional string, one of active, off, or passive
+            other_config : lacp-system-id
+                                     optional string
+            other_config : lacp-system-priority
+                                     optional string, containing an integer, in range 1 to 65,535
+            other_config : lacp-time optional string, either fast or slow
+            other_config : lacp-fallback-ab
+                                     optional string, either true or false
+         Rebalancing Configuration:
+            other_config : bond-rebalance-interval
+                                     optional string, containing an integer, in range 0 to 10,000
+         bond_fake_iface             boolean
+       Spanning Tree Protocol:
+         STP Configuration:
+            other_config : stp-enable
+                                     optional string, either true or false
+            other_config : stp-port-num
+                                     optional string, containing an integer, in range 1 to 255
+            other_config : stp-port-priority
+                                     optional string, containing an integer, in range 0 to 255
+            other_config : stp-path-cost
+                                     optional string, containing an integer, in range 0 to 65,535
+         STP Status:
+            status : stp_port_id     optional string
+            status : stp_state       optional string, one of blocking, disabled, forwarding, learning, or listening
+            status : stp_sec_in_state
+                                     optional string, containing an integer, at least 0
+            status : stp_role        optional string, one of alternate, designated, or root
+       Rapid Spanning Tree Protocol:
+         RSTP Configuration:
+            other_config : rstp-enable
+                                     optional string, either true or false
+            other_config : rstp-port-priority
+                                     optional string, containing an integer, in range 0 to 240
+            other_config : rstp-port-num
+                                     optional string, containing an integer, in range 1 to 4,095
+            other_config : rstp-port-path-cost
+                                     optional string, containing an integer
+            other_config : rstp-port-admin-edge
+                                     optional string, either true or false
+            other_config : rstp-port-auto-edge
+                                     optional string, either true or false
+            other_config : rstp-port-mcheck
+                                     optional string, either true or false
+         RSTP Status:
+            rstp_status : rstp_port_id
+                                     optional string
+            rstp_status : rstp_port_role
+                                     optional string, one of Alternate, Backup, Designated, Disabled, or Root
+            rstp_status : rstp_port_state
+                                     optional string, one of Disabled, Discarding, Forwarding, or Learning
+            rstp_status : rstp_designated_bridge_id
+                                     optional string
+            rstp_status : rstp_designated_port_id
+                                     optional string
+            rstp_status : rstp_designated_path_cost
+                                     optional string, containing an integer
+         RSTP Statistics:
+            rstp_statistics : rstp_tx_count
+                                     optional integer
+            rstp_statistics : rstp_rx_count
+                                     optional integer
+            rstp_statistics : rstp_error_count
+                                     optional integer
+            rstp_statistics : rstp_uptime
+                                     optional integer
+       Multicast Snooping:
+         other_config : mcast-snooping-flood
+                                     optional string, either true or false
+         other_config : mcast-snooping-flood-reports
+                                     optional string, either true or false
+       Other Features:
+         qos                         optional QoS
+         mac                         optional string
+         fake_bridge                 boolean
+         protected                   boolean
+         external_ids : fake-bridge-id-*
+                                     optional string
+         other_config : transient    optional string, either true or false
+       bond_active_slave             optional string
+       Port Statistics:
+         Statistics: STP transmit and receive counters:
+            statistics : stp_tx_count
+                                     optional integer
+            statistics : stp_rx_count
+                                     optional integer
+            statistics : stp_error_count
+                                     optional integer
+       Common Columns:
+         other_config                map of string-string pairs
+         external_ids                map of string-string pairs
+
+   Details:
+       name: immutable string (must be unique within table)
+              Port name. For a non-bonded port, this should be the same as its interface's name. Port names must otherwise be unique among the names of ports, interfaces, and bridges on
+              a  host.  Because  port  and  interfaces names are usually the same, the restrictions on the name column in the Interface table, particularly on length, also apply to port
+              names. Refer to the documentation for Interface names for details.
+
+       interfaces: set of 1 or more Interfaces
+              The port's interfaces. If there is more than one, this is a bonded Port.
+
+     VLAN Configuration:
+
+       In short, a VLAN (short for ``virtual LAN'') is a way to partition a single switch into multiple switches. VLANs can be confusing, so for an introduction,  please  refer  to  the
+       question ``What's a VLAN?'' in the Open vSwitch FAQ.
+
+       A  VLAN is sometimes encoded into a packet using a 802.1Q or 802.1ad VLAN header, but every packet is part of some VLAN whether or not it is encoded in the packet. (A packet that
+       appears to have no VLAN is part of VLAN 0, by default.) As a result, it's useful to think of a VLAN as a metadata property of a packet, separate from how the VLAN is encoded. For
+       a  given  port,  this  column  determines how the encoding of a packet that ingresses or egresses the port maps to the packet's VLAN. When a packet enters the switch, its VLAN is
+       determined based on its setting in this column and its VLAN headers, if any, and then, conceptually, the VLAN headers are then stripped off. Conversely, when a packet  exits  the
+       switch, its VLAN and the settings in this column determine what VLAN headers, if any, are pushed onto the packet before it egresses the port.
+
+       The  VLAN  configuration in this column affects Open vSwitch only when it is doing ``normal switching.'' It does not affect flows set up by an OpenFlow controller, outside of the
+       OpenFlow ``normal action.''
+
+       Bridge ports support the following types of VLAN configuration:
+
+              trunk  A trunk port carries packets on one or more specified VLANs specified in the trunks column (often, on every VLAN). A packet that ingresses on a trunk port is in the
+                     VLAN  specified in its 802.1Q header, or VLAN 0 if the packet has no 802.1Q header. A packet that egresses through a trunk port will have an 802.1Q header if it has
+                     a nonzero VLAN ID.
+
+                     Any packet that ingresses on a trunk port tagged with a VLAN that the port does not trunk is dropped.
+
+              access An access port carries packets on exactly one VLAN specified in the tag column. Packets egressing on an access port have no 802.1Q header.
+
+                     Any packet with an 802.1Q header with a nonzero VLAN ID that ingresses on an access port is dropped, regardless of whether the VLAN ID in the header is  the  access
+                     port's VLAN ID.
+
+              native-tagged
+                     A  native-tagged  port  resembles  a trunk port, with the exception that a packet without an 802.1Q header that ingresses on a native-tagged port is in the ``native
+                     VLAN'' (specified in the tag column).
+
+              native-untagged
+                     A native-untagged port resembles a native-tagged port, with the exception that a packet that egresses on a native-untagged port in the native VLAN will not have  an
+                     802.1Q header.
+
+              dot1q-tunnel
+                     A  dot1q-tunnel  port  is somewhat like an access port. Like an access port, it carries packets on the single VLAN specified in the tag column and this VLAN, called
+                     the service VLAN, does not appear in an 802.1Q header for packets that ingress or egress on the port. The main difference lies in the  behavior  when  packets  that
+                     include  a  802.1Q  header  ingress on the port. Whereas an access port drops such packets, a dot1q-tunnel port treats these as double-tagged with the outer service
+                     VLAN tag and the inner customer VLAN taken from the 802.1Q header. Correspondingly, to egress on the port, a packet outer VLAN (or only VLAN) must be tag, which  is
+                     removed before egress, which exposes the inner (customer) VLAN if one is present.
+
+                     If cvlans is set, only allows packets in the specified customer VLANs.
+
+       A packet will only egress through bridge ports that carry the VLAN of the packet, as described by the rules above.
+
+       vlan_mode: optional string, one of access, dot1q-tunnel, native-tagged, native-untagged, or trunk
+              The VLAN mode of the port, as described above. When this column is empty, a default mode is selected as follows:
+
+              ·      If tag contains a value, the port is an access port. The trunks column should be empty.
+
+              ·      Otherwise, the port is a trunk port. The trunks column value is honored if it is present.
+
+       tag: optional integer, in range 0 to 4,095
+              For an access port, the port's implicitly tagged VLAN. For a native-tagged or native-untagged port, the port's native VLAN. Must be empty if this is a trunk port.
+
+       trunks: set of up to 4,096 integers, in range 0 to 4,095
+              For  a trunk, native-tagged, or native-untagged port, the 802.1Q VLAN or VLANs that this port trunks; if it is empty, then the port trunks all VLANs. Must be empty if this
+              is an access port.
+
+              A native-tagged or native-untagged port always trunks its native VLAN, regardless of whether trunks includes that VLAN.
+
+       cvlans: set of up to 4,096 integers, in range 0 to 4,095
+              For a dot1q-tunnel port, the customer VLANs that this port includes. If this is empty, the port includes all customer VLANs.
+
+              For other kinds of ports, this setting is ignored.
+
+       other_config : qinq-ethtype: optional string, either 802.1ad or 802.1q
+              For a dot1q-tunnel port, this is the TPID for the service tag, that is, for the 802.1Q header that contains the service VLAN ID. Because packets that actually ingress  and
+              egress  a  dot1q-tunnel  port do not include an 802.1Q header for the service VLAN, this does not affect packets on the dot1q-tunnel port itself. Rather, it determines the
+              service VLAN for a packet that ingresses on a dot1q-tunnel port and egresses on a trunk port.
+
+              The value 802.1ad specifies TPID 0x88a8, which is also the default if the setting is omitted. The value 802.1q specifies TPID 0x8100.
+
+              For other kinds of ports, this setting is ignored.
+
+       other_config : priority-tags: optional string, either true or false
+              An 802.1Q header contains two important pieces of information: a VLAN ID and a priority. A frame with a zero VLAN ID, called a ``priority-tagged'' frame, is supposed to be
+              treated the same way as a frame without an 802.1Q header at all (except for the priority).
+
+              However,  some network elements ignore any frame that has 802.1Q header at all, even when the VLAN ID is zero. Therefore, by default Open vSwitch does not output priority-
+              tagged frames, instead omitting the 802.1Q header entirely if the VLAN ID is zero. Set this key to true to enable priority-tagged frames on a port.
+
+              Regardless of this setting, Open vSwitch omits the 802.1Q header on output if both the VLAN ID and priority would be zero.
+
+              All frames output to native-tagged ports have a nonzero VLAN ID, so this setting is not meaningful on native-tagged ports.
+
+     Bonding Configuration:
+
+       A port that has more than one interface is a ``bonded port.'' Bonding allows for load balancing and fail-over.
+
+       The following types of bonding will work with any kind of upstream switch. On the upstream switch, do not configure the interfaces as a bond:
+
+              balance-slb
+                     Balances flows among slaves based on source MAC address and output VLAN, with periodic rebalancing as traffic patterns change.
+
+              active-backup
+                     Assigns all flows to one slave, failing over to a backup slave when the active slave is disabled. This is the only bonding mode in which interfaces may  be  plugged
+                     into different upstream switches.
+
+       The  following  modes  require  the upstream switch to support 802.3ad with successful LACP negotiation. If LACP negotiation fails and other-config:lacp-fallback-ab is true, then
+       active-backup mode is used:
+
+              balance-tcp
+                     Balances flows among slaves based on L3 and L4 protocol information such as IP addresses and TCP/UDP ports.
+
+       These columns apply only to bonded ports. Their values are otherwise ignored.
+
+       bond_mode: optional string, one of active-backup, balance-slb, or balance-tcp
+              The type of bonding used for a bonded port. Defaults to active-backup if unset.
+
+       other_config : bond-hash-basis: optional string, containing an integer
+              An integer hashed along with flows when choosing output slaves in load balanced bonds. When changed, all flows will be assigned  different  hash  values  possibly  causing
+              slave selection decisions to change. Does not affect bonding modes which do not employ load balancing such as active-backup.
+
+     Link Failure Detection:
+
+       An important part of link bonding is detecting that links are down so that they may be disabled. These settings determine how Open vSwitch detects link failure.
+
+       other_config : bond-detect-mode: optional string, either carrier or miimon
+              The  means used to detect link failures. Defaults to carrier which uses each interface's carrier to detect failures. When set to miimon, will check for failures by polling
+              each interface's MII.
+
+       other_config : bond-miimon-interval: optional string, containing an integer
+              The interval, in milliseconds, between successive attempts to poll each interface's MII. Relevant only when other_config:bond-detect-mode is miimon.
+
+       bond_updelay: integer
+              The number of milliseconds for which the link must stay up on an interface before the interface is considered to be up. Specify 0 to enable the interface immediately.
+
+              This setting is honored only when at least one bonded interface is already enabled. When no interfaces are enabled, then the first bond interface to  come  up  is  enabled
+              immediately.
+
+       bond_downdelay: integer
+              The number of milliseconds for which the link must stay down on an interface before the interface is considered to be down. Specify 0 to disable the interface immediately.
+
+     LACP Configuration:
+
+       LACP, the Link Aggregation Control Protocol, is an IEEE standard that allows switches to automatically detect that they are connected by multiple links and aggregate across those
+       links. These settings control LACP behavior.
+
+       lacp: optional string, one of active, off, or passive
+              Configures LACP on this port. LACP allows directly connected switches to negotiate which links may be bonded. LACP may be enabled on non-bonded ports for  the  benefit  of
+              any switches they may be connected to. active ports are allowed to initiate LACP negotiations. passive ports are allowed to participate in LACP negotiations initiated by a
+              remote switch, but not allowed to initiate such negotiations themselves. If LACP is enabled on a port whose partner switch does not support LACP, the  bond  will  be  dis-
+              abled, unless other-config:lacp-fallback-ab is set to true. Defaults to off if unset.
+
+       other_config : lacp-system-id: optional string
+              The  LACP  system  ID of this Port. The system ID of a LACP bond is used to identify itself to its partners. Must be a nonzero MAC address. Defaults to the bridge Ethernet
+              address if unset.
+
+       other_config : lacp-system-priority: optional string, containing an integer, in range 1 to 65,535
+              The LACP system priority of this Port. In LACP negotiations, link status decisions are made by the system with the numerically lower priority.
+
+       other_config : lacp-time: optional string, either fast or slow
+              The LACP timing which should be used on this Port. By default slow is used. When configured to be fast LACP heartbeats are requested at a rate of once per  second  causing
+              connectivity problems to be detected more quickly. In slow mode, heartbeats are requested at a rate of once every 30 seconds.
+
+       other_config : lacp-fallback-ab: optional string, either true or false
+              Determines  the  behavior  of  openvswitch  bond  in  LACP mode. If the partner switch does not support LACP, setting this option to true allows openvswitch to fallback to
+              active-backup. If the option is set to false, the bond will be disabled. In both the cases, once the partner switch is configured to LACP mode, the bond will use LACP.
+
+     Rebalancing Configuration:
+
+       These settings control behavior when a bond is in balance-slb or balance-tcp mode.
+
+       other_config : bond-rebalance-interval: optional string, containing an integer, in range 0 to 10,000
+              For a load balanced bonded port, the number of milliseconds between successive attempts to rebalance the bond, that is, to move flows from one interface  on  the  bond  to
+              another in an attempt to keep usage of each interface roughly equal. If zero, load balancing is disabled on the bond (link failure still cause flows to move). If less than
+              1000ms, the rebalance interval will be 1000ms.
+
+       bond_fake_iface: boolean
+              For a bonded port, whether to create a fake internal interface with the name of the port. Use only for compatibility with legacy software that requires this.
+
+     Spanning Tree Protocol:
+
+       The configuration here is only meaningful, and the status is only populated, when 802.1D-1998 Spanning Tree Protocol is enabled on the port's Bridge with its stp_enable column.
+
+     STP Configuration:
+
+       other_config : stp-enable: optional string, either true or false
+              When STP is enabled on a bridge, it is enabled by default on all of the bridge's ports except bond, internal, and mirror ports (which do not work with STP). If  this  col-
+              umn's value is false, STP is disabled on the port.
+
+       other_config : stp-port-num: optional string, containing an integer, in range 1 to 255
+              The  port number used for the lower 8 bits of the port-id. By default, the numbers will be assigned automatically. If any port's number is manually configured on a bridge,
+              then they must all be.
+
+       other_config : stp-port-priority: optional string, containing an integer, in range 0 to 255
+              The port's relative priority value for determining the root port (the upper 8 bits of the port-id). A port with a lower port-id  will  be  chosen  as  the  root  port.  By
+              default, the priority is 0x80.
+
+       other_config : stp-path-cost: optional string, containing an integer, in range 0 to 65,535
+              Spanning tree path cost for the port. A lower number indicates a faster link. By default, the cost is based on the maximum speed of the link.
+
+     STP Status:
+
+       status : stp_port_id: optional string
+              The port ID used in spanning tree advertisements for this port, as 4 hex digits. Configuring the port ID is described in the stp-port-num and stp-port-priority keys of the
+              other_config section earlier.
+
+       status : stp_state: optional string, one of blocking, disabled, forwarding, learning, or listening
+              STP state of the port.
+
+       status : stp_sec_in_state: optional string, containing an integer, at least 0
+              The amount of time this port has been in the current STP state, in seconds.
+
+       status : stp_role: optional string, one of alternate, designated, or root
+              STP role of the port.
+
+     Rapid Spanning Tree Protocol:
+
+       The configuration here is only meaningful, and the status and statistics are only populated, when 802.1D-1998 Spanning Tree Protocol is enabled on  the  port's  Bridge  with  its
+       stp_enable column.
+
+     RSTP Configuration:
+
+       other_config : rstp-enable: optional string, either true or false
+              When RSTP is enabled on a bridge, it is enabled by default on all of the bridge's ports except bond, internal, and mirror ports (which do not work with RSTP). If this col-
+              umn's value is false, RSTP is disabled on the port.
+
+       other_config : rstp-port-priority: optional string, containing an integer, in range 0 to 240
+              The port's relative priority value for determining the root port, in multiples of 16. By default, the port priority is 0x80 (128). Any value in the lower 4 bits is rounded
+              off. The significant upper 4 bits become the upper 4 bits of the port-id. A port with the lowest port-id is elected as the root.
+
+       other_config : rstp-port-num: optional string, containing an integer, in range 1 to 4,095
+              The local RSTP port number, used as the lower 12 bits of the port-id. By default the port numbers are assigned automatically, and typically may not correspond to the Open-
+              Flow port numbers. A port with the lowest port-id is elected as the root.
+
+       other_config : rstp-port-path-cost: optional string, containing an integer
+              The port path cost. The Port's contribution, when it is the Root Port, to the Root Path Cost for the Bridge. By default the  cost  is  automatically  calculated  from  the
+              port's speed.
+
+       other_config : rstp-port-admin-edge: optional string, either true or false
+              The admin edge port parameter for the Port. Default is false.
+
+       other_config : rstp-port-auto-edge: optional string, either true or false
+              The auto edge port parameter for the Port. Default is true.
+
+       other_config : rstp-port-mcheck: optional string, either true or false
+              The  mcheck port parameter for the Port. Default is false. May be set to force the Port Protocol Migration state machine to transmit RST BPDUs for a MigrateTime period, to
+              test whether all STP Bridges on the attached LAN have been removed and the Port can continue to transmit RSTP BPDUs. Setting mcheck has no effect if the Bridge is  operat-
+              ing in STP Compatibility mode.
+
+              Changing the value from true to false has no effect, but needs to be done if this behavior is to be triggered again by subsequently changing the value from false to true.
+
+     RSTP Status:
+
+       rstp_status : rstp_port_id: optional string
+              The  port  ID used in spanning tree advertisements for this port, as 4 hex digits. Configuring the port ID is described in the rstp-port-num and rstp-port-priority keys of
+              the other_config section earlier.
+
+       rstp_status : rstp_port_role: optional string, one of Alternate, Backup, Designated, Disabled, or Root
+              RSTP role of the port.
+
+       rstp_status : rstp_port_state: optional string, one of Disabled, Discarding, Forwarding, or Learning
+              RSTP state of the port.
+
+       rstp_status : rstp_designated_bridge_id: optional string
+              The port's RSTP designated bridge ID, in the same form as rstp_status:rstp_bridge_id in the Bridge table.
+
+       rstp_status : rstp_designated_port_id: optional string
+              The port's RSTP designated port ID, as 4 hex digits.
+
+       rstp_status : rstp_designated_path_cost: optional string, containing an integer
+              The port's RSTP designated path cost. Lower is better.
+
+     RSTP Statistics:
+
+       rstp_statistics : rstp_tx_count: optional integer
+              Number of RSTP BPDUs transmitted through this port.
+
+       rstp_statistics : rstp_rx_count: optional integer
+              Number of valid RSTP BPDUs received by this port.
+
+       rstp_statistics : rstp_error_count: optional integer
+              Number of invalid RSTP BPDUs received by this port.
+
+       rstp_statistics : rstp_uptime: optional integer
+              The duration covered by the other RSTP statistics, in seconds.
+
+     Multicast Snooping:
+
+       other_config : mcast-snooping-flood: optional string, either true or false
+              If set to true, multicast packets (except Reports) are unconditionally forwarded to the specific port.
+
+       other_config : mcast-snooping-flood-reports: optional string, either true or false
+              If set to true, multicast Reports are unconditionally forwarded to the specific port.
+
+     Other Features:
+
+       qos: optional QoS
+              Quality of Service configuration for this port.
+
+       mac: optional string
+              The MAC address to use for this port for the purpose of choosing the bridge's MAC address. This column does not necessarily reflect the port's actual MAC address, nor will
+              setting it change the port's actual MAC address.
+
+       fake_bridge: boolean
+              Does this port represent a sub-bridge for its tagged VLAN within the Bridge? See ovs-vsctl(8) for more information.
+
+       protected: boolean
+              The protected ports feature allows certain ports to be designated as protected. Traffic between protected ports is blocked. Protected ports can send traffic to unprotected
+              ports. Unprotected ports can send traffic to any port. Default is false.
+
+       external_ids : fake-bridge-id-*: optional string
+              External IDs for a fake bridge (see the fake_bridge column) are defined by prefixing a Bridge external_ids key with fake-bridge-, e.g. fake-bridge-xs-network-uuids.
+
+       other_config : transient: optional string, either true or false
+              If set to true, the port will be removed when ovs-ctl start --delete-transient-ports is used.
+
+       bond_active_slave: optional string
+              For a bonded port, record the mac address of the current active slave.
+
+     Port Statistics:
+
+       Key-value pairs that report port statistics. The update period is controlled by other_config:stats-update-interval in the Open_vSwitch table.
+
+     Statistics: STP transmit and receive counters:
+
+       statistics : stp_tx_count: optional integer
+              Number of STP BPDUs sent on this port by the spanning tree library.
+
+       statistics : stp_rx_count: optional integer
+              Number of STP BPDUs received on this port and accepted by the spanning tree library.
+
+       statistics : stp_error_count: optional integer
+              Number of bad STP BPDUs received on this port. Bad BPDUs include runt packets and those with an unexpected protocol ID.
+
+     Common Columns:
+
+       The overall purpose of these columns is described under Common Columns at the beginning of this document.
+
+       other_config: map of string-string pairs
+
+       external_ids: map of string-string pairs
+

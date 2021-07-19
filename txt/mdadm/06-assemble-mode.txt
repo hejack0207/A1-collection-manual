@@ -1,0 +1,67 @@
+ASSEMBLE MODE
+       Usage: mdadm --assemble md-device options-and-component-devices...
+
+       Usage: mdadm --assemble --scan md-devices-and-options...
+
+       Usage: mdadm --assemble --scan options...
+
+       This usage assembles one or more RAID arrays from pre-existing components.  For each array, mdadm needs to know the md device, the identity of the array, and a number of  compo-
+       nent-devices.  These can be found in a number of ways.
+
+       In  the first usage example (without the --scan) the first device given is the md device.  In the second usage example, all devices listed are treated as md devices and assembly
+       is attempted.  In the third (where no devices are listed) all md devices that are listed in the configuration file are assembled.  If no arrays are described by  the  configura-
+       tion file, then any arrays that can be found on unused devices will be assembled.
+
+       If precisely one device is listed, but --scan is not given, then mdadm acts as though --scan was given and identity information is extracted from the configuration file.
+
+       The  identity  can  be given with the --uuid option, the --name option, or the --super-minor option, will be taken from the md-device record in the config file, or will be taken
+       from the super block of the first component-device listed on the command line.
+
+       Devices can be given on the --assemble command line or in the config file.  Only devices which have an md superblock which contains the right identity will be considered for any
+       array.
+
+       The  config  file  is only used if explicitly named with --config or requested with (a possibly implicit) --scan.  In the later case, /etc/mdadm.conf or /etc/mdadm/mdadm.conf is
+       used.
+
+       If --scan is not given, then the config file will only be used to find the identity of md arrays.
+
+       Normally the array will be started after it is assembled.  However if --scan is not given and not all expected drives were listed, then  the  array  is  not  started  (to  guard
+       against usage errors).  To insist that the array be started in this case (as may work for RAID1, 4, 5, 6, or 10), give the --run flag.
+
+       If  udev  is active, mdadm does not create any entries in /dev but leaves that to udev.  It does record information in /run/mdadm/map which will allow udev to choose the correct
+       name.
+
+       If mdadm detects that udev is not configured, it will create the devices in /dev itself.
+
+       In Linux kernels prior to version 2.6.28 there were two distinctly different types of md devices that could be created: one that could be partitioned using standard partitioning
+       tools  and  one that could not.  Since 2.6.28 that distinction is no longer relevant as both type of devices can be partitioned.  mdadm will normally create the type that origi-
+       nally could not be partitioned as it has a well defined major number (9).
+
+       Prior to 2.6.28, it is important that mdadm chooses the correct type of array device to use.  This can be controlled with the --auto option.  In particular, a value of "mdp"  or
+       "part" or "p" tells mdadm to use a partitionable device rather than the default.
+
+       In the no-udev case, the value given to --auto can be suffixed by a number.  This tells mdadm to create that number of partition devices rather than the default of 4.
+
+       The value given to --auto can also be given in the configuration file as a word starting auto= on the ARRAY line for the relevant array.
+
+   Auto Assembly
+       When --assemble is used with --scan and no devices are listed, mdadm will first attempt to assemble all the arrays listed in the config file.
+
+       If no arrays are listed in the config (other than those marked <ignore>) it will look through the available devices for possible arrays and will try to assemble anything that it
+       finds.  Arrays which are tagged as belonging to the given homehost will be assembled and started normally.  Arrays which do not obviously belong to this  host  are  given  names
+       that are expected not to conflict with anything local, and are started "read-auto" so that nothing is written to any device until the array is written to. i.e.  automatic resync
+       etc is delayed.
+
+       If mdadm finds a consistent set of devices that look like they should comprise an array, and if the superblock is tagged as belonging to the given home host, it  will  automati-
+       cally  choose a device name and try to assemble the array.  If the array uses version-0.90 metadata, then the minor number as recorded in the superblock is used to create a name
+       in /dev/md/ so for example /dev/md/3.  If the array uses version-1 metadata, then the name from the superblock is used to similarly create a name in /dev/md/ (the name will have
+       any 'host' prefix stripped first).
+
+       This behaviour can be modified by the AUTO line in the mdadm.conf configuration file.  This line can indicate that specific metadata type should, or should not, be automatically
+       assembled.  If an array is found which is not listed in mdadm.conf and has a metadata format that is denied by the AUTO line, then it will not be assembled.  The AUTO  line  can
+       also request that all arrays identified as being for this homehost should be assembled regardless of their metadata type.  See mdadm.conf(5) for further details.
+
+       Note:  Auto  assembly cannot be used for assembling and activating some arrays which are undergoing reshape.  In particular as the backup-file cannot be given, any reshape which
+       requires a backup-file to continue cannot be started by auto assembly.  An array which is growing to more devices and has passed the critical  section  can  be  assembled  using
+       auto-assembly.
+

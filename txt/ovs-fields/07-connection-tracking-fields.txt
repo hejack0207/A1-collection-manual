@@ -1,0 +1,292 @@
+CONNECTION TRACKING FIELDS
+   Summary:
+       Name          Bytes   Mask   RW?   Prereqs   NXM/OXM Support
+       ------------  ------  -----  ----  --------  ----------------
+       ct_state      4       yes    no    none      OVS 2.5+
+       ct_zone       2       no     no    none      OVS 2.5+
+       ct_mark       4       yes    yes   none      OVS 2.5+
+       ct_label      16      yes    yes   none      OVS 2.5+
+
+       ct_nw_src     4       yes    no    CT        OVS 2.8+
+       ct_nw_dst     4       yes    no    CT        OVS 2.8+
+       ct_ipv6_src   16      yes    no    CT        OVS 2.8+
+       ct_ipv6_dst   16      yes    no    CT        OVS 2.8+
+       ct_nw_proto   1       no     no    CT        OVS 2.8+
+       ct_tp_src     2       yes    no    CT        OVS 2.8+
+       ct_tp_dst     2       yes    no    CT        OVS 2.8+
+
+       Open  vSwitch  2.5  and  later  support  ``connection tracking,'' which allows bidirectional streams of packets to be statefully grouped into connections. Open vSwitch connection
+       tracking, for example, identifies the patterns of TCP packets that indicates a successfully initiated connection, as well as those that indicate that a connection has  been  torn
+       down. Open vSwitch connection tracking can also identify related connections, such as FTP data connections spawned from FTP control connections.
+
+       An individual packet passing through the pipeline may be in one of two states, ``untracked'' or ``tracked,'' which may be distinguished via the ``trk'' flag in ct_state. A packet
+       is untracked at the beginning of the Open vSwitch pipeline and continues to be untracked until the pipeline invokes the ct action. The connection tracking fields are  all  zeroes
+       in  an  untracked packet. When a flow in the Open vSwitch pipeline invokes the ct action, the action initializes the connection tracking fields and the packet becomes tracked for
+       the remainder of its processing.
+
+       The connection tracker stores connection state in an internal table, but it only adds a new entry to this table when a ct action for a new connection invokes ct with  the  commit
+       parameter.  For  a  given  connection,  when a pipeline has executed ct, but not yet with commit, the connection is said to be uncommitted. State for an uncommitted connection is
+       ephemeral and does not persist past the end of the pipeline, so some features are only available to committed connections. A connection would typically be left uncommitted  as  a
+       way to drop its packets.
+
+       Connection tracking is an Open vSwitch extension to OpenFlow.
+
+       Connection Tracking State Field
+
+       Name:            ct_state
+       Width:           32 bits
+       Format:          ct state
+
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   none
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_STATE (105) since Open vSwitch 2.5
+
+       This field holds several flags that can be used to determine the state of the connection to which the packet belongs.
+
+       Matches on this field are most conveniently written in terms of symbolic names (listed below), each preceded by either + for a flag that must be set, or - for a flag that must be
+       unset, without any other delimiters between the flags. Flags not mentioned are wildcarded. For example, tcp,ct_state=+trk-new matches TCP packets that have been run  through  the
+       connection tracker and do not establish a new connection. Matches can also be written as flags/mask, where flags and mask are 32-bit numbers in decimal or in hexadecimal prefixed
+       by 0x.
+
+       The following flags are defined:
+
+              new (0x01)
+                     A new connection. Set to 1 if this is an uncommitted connection.
+
+              est (0x02)
+                     Part of an existing connection. Set to 1 if this is a committed connection.
+
+              rel (0x04)
+                     Related to an existing connection, e.g. an ICMP ``destination unreachable'' message or an FTP data connections. This flag will only be 1 if the connection to  which
+                     this one is related is committed.
+
+                     Connections  identified as rel are separate from the originating connection and must be committed separately. All packets for a related connection will have the rel
+                     flag set, not just the initial packet.
+
+              rpl (0x08)
+                     This packet is in the reply direction, meaning that it is in the opposite direction from the packet that initiated the connection. This flag will only be 1  if  the
+                     connection is committed.
+
+              inv (0x10)
+                     The  state  is invalid, meaning that the connection tracker couldn't identify the connection. This flag is a catch-all for problems in the connection or the connec-
+                     tion tracker, such as:
+
+                     ·      L3/L4 protocol handler is not loaded/unavailable. With the Linux kernel datapath, this may mean that the nf_conntrack_ipv4 or nf_conntrack_ipv6  modules  are
+                            not loaded.
+
+                     ·      L3/L4 protocol handler determines that the packet is malformed.
+
+                     ·      Packets are unexpected length for protocol.
+
+              trk (0x20)
+                     This  packet  is tracked, meaning that it has previously traversed the connection tracker. If this flag is not set, then no other flags will be set. If this flag is
+                     set, then the packet is tracked and other flags may also be set.
+
+              snat (0x40)
+                     This packet was transformed by source address/port translation by a preceding ct action. Open vSwitch 2.6 added this flag.
+
+              dnat (0x80)
+                     This packet was transformed by destination address/port translation by a preceding ct action. Open vSwitch 2.6 added this flag.
+
+       There are additional constraints on these flags, listed in decreasing order of precedence below:
+
+              1.
+                If trk is unset, no other flags are set.
+
+              2.
+                If trk is set, one or more other flags may be set.
+
+              3.
+                If inv is set, only the trk flag is also set.
+
+              4.
+                new and est are mutually exclusive.
+
+              5.
+                new and rpl are mutually exclusive.
+
+              6.
+                rel may be set in conjunction with any other flags.
+
+       Future versions of Open vSwitch may define new flags.
+
+       Connection Tracking Zone Field
+
+       Name:            ct_zone
+       Width:           16 bits
+       Format:          hexadecimal
+       Masking:         not maskable
+       Prerequisites:   none
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_ZONE (106) since Open vSwitch 2.5
+
+       A connection tracking zone, the zone value passed to the most recent ct action. Each zone is an independent connection tracking context, so tracking the same packet  in  multiple
+       contexts requires using the ct action multiple times.
+
+       Connection Tracking Mark Field
+
+       Name:            ct_mark
+       Width:           32 bits
+       Format:          hexadecimal
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   none
+       Access:          read/write
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_MARK (107) since Open vSwitch 2.5
+
+       The metadata committed, by an action within the exec parameter to the ct action, to the connection to which the current packet belongs.
+
+       Connection Tracking Label Field
+
+       Name:            ct_label
+       Width:           128 bits
+       Format:          hexadecimal
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   none
+       Access:          read/write
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_LABEL (108) since Open vSwitch 2.5
+
+       The label committed, by an action within the exec parameter to the ct action, to the connection to which the current packet belongs.
+
+       Open vSwitch 2.8 introduced the matching support for connection tracker original direction 5-tuple fields.
+
+       For  non-committed  non-related  connections  the conntrack original direction tuple fields always have the same values as the corresponding headers in the packet itself. For any
+       other packets of a committed connection the conntrack original direction tuple fields reflect the values from that initial non-committed non-related packet, and thus may be  dif-
+       ferent  from  the actual packet headers, as the actual packet headers may be in reverse direction (for reply packets), transformed by NAT (when nat option was applied to the con-
+       nection), or be of different protocol (i.e., when an ICMP response is sent to an UDP packet). In case of related connections, e.g., an FTP data connection, the original direction
+       tuple contains the original direction headers from the master connection, e.g., an FTP control connection.
+
+       The  following  fields  are populated by the ct action, and require a match to a valid connection tracking state as a prerequisite, in addition to the IP or IPv6 ethertype match.
+       Examples of valid connection tracking state matches include ct_state=+new, ct_state=+est, ct_state=+rel, and ct_state=+trk-inv.
+
+       Connection Tracking Original Direction IPv4 Source Address Field
+
+       Name:            ct_nw_src
+       Width:           32 bits
+       Format:          IPv4
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   CT
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_NW_SRC (120) since Open vSwitch 2.8
+
+       Matches IPv4 conntrack original direction tuple source address. See the paragraphs above for general description to the conntrack original direction  tuple.  Introduced  in  Open
+       vSwitch 2.8.
+
+       Connection Tracking Original Direction IPv4 Destination Address Field
+
+       Name:            ct_nw_dst
+       Width:           32 bits
+       Format:          IPv4
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   CT
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_NW_DST (121) since Open vSwitch 2.8
+
+       Matches  IPv4  conntrack  original  direction tuple destination address. See the paragraphs above for general description to the conntrack original direction tuple. Introduced in
+       Open vSwitch 2.8.
+
+       Connection Tracking Original Direction IPv6 Source Address Field
+
+       Name:            ct_ipv6_src
+       Width:           128 bits
+       Format:          IPv6
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   CT
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+
+       OXM:             none
+       NXM:             NXM_NX_CT_IPV6_SRC (122) since Open vSwitch 2.8
+
+       Matches IPv6 conntrack original direction tuple source address. See the paragraphs above for general description to the conntrack original direction  tuple.  Introduced  in  Open
+       vSwitch 2.8.
+
+       Connection Tracking Original Direction IPv6 Destination Address Field
+
+       Name:            ct_ipv6_dst
+       Width:           128 bits
+       Format:          IPv6
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   CT
+
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_IPV6_DST (123) since Open vSwitch 2.8
+
+       Matches  IPv6  conntrack  original  direction tuple destination address. See the paragraphs above for general description to the conntrack original direction tuple. Introduced in
+       Open vSwitch 2.8.
+
+       Connection Tracking Original Direction IP Protocol Field
+
+       Name:            ct_nw_proto
+       Width:           8 bits
+
+       Format:          decimal
+       Masking:         not maskable
+       Prerequisites:   CT
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_NW_PROTO (119) since Open vSwitch 2.8
+
+       Matches conntrack original direction tuple IP protocol type, which is specified as a decimal number between 0 and 255, inclusive (e.g. 1 to match ICMP packets or 6 to  match  TCP
+       packets).  In  case of, for example, an ICMP response to an UDP packet, this may be different from the IP protocol type of the packet itself. See the paragraphs above for general
+       description to the conntrack original direction tuple. Introduced in Open vSwitch 2.8.
+
+       Connection Tracking Original Direction Transport Layer Source Port Field
+
+       Name:            ct_tp_src
+       Width:           16 bits
+       Format:          decimal
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   CT
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+       NXM:             NXM_NX_CT_TP_SRC (124) since Open vSwitch 2.8
+
+       Bitwise match on the conntrack original direction tuple transport source, when MFF_CT_NW_PROTO has value 6 for TCP, 17 for UDP, or 132 for SCTP. When MFF_CT_NW_PROTO has value  1
+       for  ICMP,  or  58  for ICMPv6, the lower 8 bits of MFF_CT_TP_SRC matches the conntrack original direction ICMP type. See the paragraphs above for general description to the con-
+       ntrack original direction tuple. Introduced in Open vSwitch 2.8.
+
+       Connection Tracking Original Direction Transport Layer Source Port Field
+
+       Name:            ct_tp_dst
+       Width:           16 bits
+       Format:          decimal
+       Masking:         arbitrary bitwise masks
+       Prerequisites:   CT
+       Access:          read-only
+       OpenFlow 1.0:    not supported
+       OpenFlow 1.1:    not supported
+       OXM:             none
+
+       NXM:             NXM_NX_CT_TP_DST (125) since Open vSwitch 2.8
+
+       Bitwise match on the conntrack original direction tuple transport destination port, when MFF_CT_NW_PROTO has value 6 for TCP, 17 for UDP, or 132 for  SCTP.  When  MFF_CT_NW_PROTO
+       has  value 1 for ICMP, or 58 for ICMPv6, the lower 8 bits of MFF_CT_TP_DST matches the conntrack original direction ICMP code. See the paragraphs above for general description to
+       the conntrack original direction tuple. Introduced in Open vSwitch 2.8.
+
