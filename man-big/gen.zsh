@@ -9,11 +9,11 @@ txtfile=${1:-../man/txt/bash.1.txt}
 name=${$(basename $txtfile)%.?.*}
 
 if test -d $name; then
-	exit 0;
+	rm -rf $name
 fi
 mkdir $name
 
-csplit $txtfile -f "$name/$name-" -b "%02d.txt" '/^[[:alpha:]][[:alpha:][:space:]]\+$/' '{*}'
+csplit $txtfile -f "$name/$name-" -b "%02d.txt" '/^[[:alnum:]][[:alnum:][:space:]]\{1,\}$/' '{*}'
 
 for f in $name/$name-*.txt; do
 	i=${${f%.txt}##$name/$name-}
