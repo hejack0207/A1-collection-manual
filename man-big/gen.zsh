@@ -13,10 +13,12 @@ if test -d $name; then
 fi
 mkdir $name
 
-csplit $txtfile -f "$name/$name-" -b "%02d.txt" '/^[[:alnum:]][[:alnum:][:space:]]\{1,\}$/' '{*}'
+csplit $txtfile -f "$name/$name-" -b "%02d.txt" '/^[^[:space:]][[:print:]]\{1,\}$/' '{*}'
 
 for f in $name/$name-*.txt; do
 	i=${${f%.txt}##$name/$name-}
-	mv $name/$name-$i.txt "$name/$i-$(head -n1 $f | tr 'A-Z ' 'a-z-').txt"
+	nn="$(head -n1 $f | tr 'A-Z /' 'a-z--')"
+	nn=${nn%%--*}
+	mv $name/$name-$i.txt "$name/$i-$nn.txt"
 done
 rm $name/00-*
