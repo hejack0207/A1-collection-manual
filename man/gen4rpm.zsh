@@ -1,5 +1,5 @@
 #!/usr/bin/zsh -il
-set -ex
+set -e
 
 usage() {
     echo "Usage: $0 [-p <package name>] [-s <section num>] -D -h" 1>&2;
