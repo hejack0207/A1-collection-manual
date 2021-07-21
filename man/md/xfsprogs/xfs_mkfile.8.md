@@ -1,0 +1,37 @@
+# xfs_mkfile(8) - create an XFS file
+
+```
+xfs_mkfile [ -v ] [ -n ] [ -p ] size\c [k|b|m|g] filename ...
+xfs_mkfile -V
+```
+
+<a name="description"></a>
+
+# Description
+
+**xfs_mkfile**
+creates one or more files. The file is padded with zeroes by default.
+The default size is in bytes, but it can be
+flagged as kilobytes, blocks, megabytes, or gigabytes with the
+**k**,
+**b**,
+**m**,
+or
+**g**
+suffixes, respectively.
+
+<a name="options"></a>
+
+# Options
+
+
+* **-v**  
+  Verbose. Report the names and sizes of created files.
+* **-n**  
+  No bytes. Create a holey file - that is, do not write out any data, just
+  seek to end of file and write a block.
+* **-p**  
+  Preallocate.  The file is preallocated, then overwritten with zeroes,
+  then truncated to the desired size.
+* **-V**  
+  Prints the version number and exits.
