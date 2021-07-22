@@ -1,0 +1,68 @@
+# ftpusers(5) - list of users that may not log in via the FTP daemon
+
+Linux, 2000-08-27
+
+
+<a name="description"></a>
+
+# Description
+
+The text file
+**ftpusers**
+contains a list of users that may not log in using the
+File Transfer Protocol (FTP) server daemon.
+This file is used not merely for
+system administration purposes but also for improving security within a TCP/IP
+networked environment.
+
+The
+**ftpusers**
+file will typically contain a list of the users that
+either have no business using ftp or have too many privileges to be allowed
+to log in through the FTP server daemon.
+Such users usually include root, daemon, bin, uucp, and news.
+
+If your FTP server daemon doesn't use
+**ftpusers**,
+then it is suggested that you read its documentation to find out how to
+block access for certain users.
+Washington University FTP server Daemon
+(wuftpd) and Professional FTP Daemon (proftpd) are known to make use of
+**ftpusers**.
+
+<a name="format"></a>
+
+### Format
+
+The format of
+**ftpusers**
+is very simple.
+There is one account name (or username) per line.
+Lines starting with a # are ignored.
+
+<a name="files"></a>
+
+# Files
+
+_/etc/ftpusers_
+
+<a name="see-also"></a>
+
+# See Also
+
+**passwd**(5),
+**proftpd**(8),
+**wuftpd**(8)
+
+<a name="colophon"></a>
+
+# Colophon
+
+This page is part of release 4.16 of the Linux
+_man-pages_
+project.
+A description of the project,
+information about reporting bugs,
+and the latest version of this page,
+can be found at
+https://www.kernel.org/doc/man-pages/.

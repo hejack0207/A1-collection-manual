@@ -1,0 +1,76 @@
+# networks(5) - network name information
+
+GNU/Linux, 2008-09-04
+
+
+<a name="description"></a>
+
+# Description
+
+The file
+_/etc/networks_
+is a plain ASCII file that describes known DARPA networks and symbolic
+names for these networks.
+Each line represents a network and has the following structure:
+
+_name number aliases ..._
+
+where the fields are delimited by spaces or tabs.
+Empty lines are ignored.
+The hash character (**#**) indicates the start of a comment:
+this character, and the remaining characters up to
+the end of the current line,
+are ignored by library functions that process the file.
+
+The field descriptions are:
+
+* _name_  
+  The symbolic name for the network.
+  Network names can contain any printable characters except
+  white-space characters or the comment character.
+* _number_  
+  The official number for this network in numbers-and-dots notation (see
+  **inet**(3)).
+  The trailing ".0" (for the host component of the network address) may be omitted.
+* _aliases_  
+  Optional aliases for the network.
+
+
+This file is read by the
+**route**(8)
+and
+**netstat**(8)
+utilities.
+Only Class A, B or C networks are supported, partitioned networks
+(i.e., network/26 or network/28) are not supported by this facility.
+
+<a name="files"></a>
+
+# Files
+
+
+* _/etc/networks_  
+  The networks definition file.
+
+<a name="see-also"></a>
+
+# See Also
+
+**getnetbyaddr**(3),
+**getnetbyname**(3),
+**getnetent**(3),
+**netstat**(8),
+**route**(8)
+
+<a name="colophon"></a>
+
+# Colophon
+
+This page is part of release 4.16 of the Linux
+_man-pages_
+project.
+A description of the project,
+information about reporting bugs,
+and the latest version of this page,
+can be found at
+https://www.kernel.org/doc/man-pages/.
