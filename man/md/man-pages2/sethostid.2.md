@@ -1,0 +1,155 @@
+# gethostid(3) - get or set the unique identifier of the current host
+
+Linux, 2017-09-15
+
+```
+#include <unistd.h> 
+ long gethostid(void);
+int sethostid(long hostid); 
+ .in -4n Feature Test Macro Requirements for glibc (see feature_test_macros(7)): .in 
+
+gethostid(): .RS 4 _BSD_SOURCE || _XOPEN_SOURCE&nbsp;>=&nbsp;500
+</synopsis>
+
+<synopsis>
+.RE sethostid():
+```
+        Since glibc 2.21:
+    
+            _DEFAULT_SOURCE
+        In glibc 2.19 and 2.20:
+            _DEFAULT_SOURCE || (_XOPEN_SOURCE && _XOPEN_SOURCE&nbsp;<&nbsp;500)
+        Up to and including glibc 2.19:
+            _BSD_SOURCE || (_XOPEN_SOURCE && _XOPEN_SOURCE&nbsp;<&nbsp;500)
+
+<a name="description"></a>
+
+# Description
+
+**gethostid**()
+and
+**sethostid**()
+respectively get or set a unique 32-bit identifier for the current machine.
+The 32-bit identifier is intended to be unique among all UNIX systems in
+existence.
+This normally resembles the Internet address for the local
+machine, as returned by
+**gethostbyname**(3),
+and thus usually never needs to be set.
+
+The
+**sethostid**()
+call is restricted to the superuser.
+
+<a name="return-value"></a>
+
+# Return Value
+
+**gethostid**()
+returns the 32-bit identifier for the current host as set by
+**sethostid**().
+
+On success,
+**sethostid**()
+returns 0; on error, -1 is returned, and
+_errno_
+is set to indicate the error.
+
+<a name="errors"></a>
+
+# Errors
+
+**sethostid**()
+can fail with the following errors:
+
+* **EACCES**  
+  The caller did not have permission to write to the file used
+  to store the host ID.
+* **EPERM**  
+  The calling process's effective user or group ID is not the same
+  as its corresponding real ID.
+
+<a name="attributes"></a>
+
+# Attributes
+
+For an explanation of the terms used in this section, see
+**attributes**(7).
+.TS
+allbox;
+lb lb lbw25
+l l l.
+Interface	Attribute	Value
+T{
+**gethostid**()
+T}	Thread safety	MT-Safe hostid env locale
+T{
+**sethostid**()
+T}	Thread safety	MT-Unsafe const:hostid
+.TE
+
+
+<a name="conforming-to"></a>
+
+# Conforming to
+
+4.2BSD; these functions were dropped in 4.4BSD.
+SVr4 includes
+**gethostid**()
+but not
+**sethostid**().
+
+POSIX.1-2001 and POSIX.1-2008 specify
+**gethostid**()
+but not
+**sethostid**().
+
+<a name="notes"></a>
+
+# Notes
+
+In the glibc implementation, the
+_hostid_
+is stored in the file
+_/etc/hostid_.
+(In glibc versions before 2.2, the file
+_/var/adm/hostid_
+was used.)
+
+
+In the glibc implementation, if
+**gethostid**()
+cannot open the file containing the host ID,
+then it obtains the hostname using
+**gethostname**(2),
+passes that hostname to
+**gethostbyname_r**(3)
+in order to obtain the host's IPv4 address,
+and returns a value obtained by bit-twiddling the IPv4 address.
+(This value may not be unique.)
+
+<a name="bugs"></a>
+
+# Bugs
+
+It is impossible to ensure that the identifier is globally unique.
+
+<a name="see-also"></a>
+
+# See Also
+
+**hostid**(1),
+**gethostbyname**(3)
+
+<a name="colophon"></a>
+
+# Colophon
+
+This page is part of release 4.16 of the Linux
+_man-pages_
+project.
+A description of the project,
+information about reporting bugs,
+and the latest version of this page,
+can be found at
+https://www.kernel.org/doc/man-pages/.
