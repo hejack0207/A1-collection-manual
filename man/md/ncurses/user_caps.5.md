@@ -1,0 +1,281 @@
+# user_caps(5)
+
+.ie \n(.g .ds \`\` “
+.el       .ds \`\` \`\`
+.ie \n(.g .ds '' ”
+.el       .ds '' ''
+
+<a name="name"></a>
+
+# Name
+
+user_caps - user-defined terminfo capabilities
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+tic -x, infocmp -x
+```
+
+<a name="description"></a>
+
+# Description
+
+
+<a name="background"></a>
+
+### Background
+
+
+Before ncurses 5.0,
+terminfo databases used a _fixed repertoire_ of terminal
+capabilities designed for the SVr2 terminal database in 1984,
+and extended in stages through SVr4 (1989),
+and standardized in the Single Unix Specification beginning in 1995.
+
+Most of the _extensions_ in this fixed repertoire were additions
+to the tables of boolean, numeric and string capabilities.
+Rather than change the meaning of an existing capability, a new name was added.
+The terminfo database uses a binary format; binary compatibility was
+ensured by using a header which gave the number of items in the
+tables for each type of capability.
+The standardization was incomplete:
+.bP
+The _binary format_ itself is not described
+in the X/Open Curses documentation.
+Only the _source format_ is described.
+
+* Library developers rely upon the SVr4 documentation,
+  and reverse-engineering the compiled terminfo files to match the binary format.
+  .bP
+  Lacking a standard for the binary format, most implementations
+  copy the SVr2 binary format, which uses 16-bit signed integers,
+  and is limited to 4096-byte entries.
+* The format cannot represent very large numeric capabilities,
+  nor can it represent large numbers of special keyboard definitions.
+  .bP
+  The tables of capability names differ between implementations.
+* Although they _may_ provide all of the standard capability names,
+  the position in the tables differs because some features were added as needed,
+  while others were added (out of order) to comply with X/Open Curses.
+* While ncurses' repertoire of predefined capabilities is closest to Solaris,
+  Solaris's terminfo database has a few differences from
+  the list published by X/Open Curses.
+
+During the 1990s, some users were reluctant to use terminfo
+in spite of its performance advantages over termcap:
+.bP
+The fixed repertoire prevented users from adding features
+for unanticipated terminal improvements
+(or required them to reuse existing capabilities as a workaround).
+.bP
+The limitation to 16-bit signed integers was also mentioned.
+Because termcap stores everything as a string,
+it could represent larger numbers.
+
+Although termcap's extensibility was rarely used
+(it was never the _speaker_ who had actually used the feature),
+the criticism had a point.
+ncurses 5.0 provided a way to detect nonstandard capabilities,
+determine their
+type and optionally store and retrieve them in a way which did not interfere
+with other applications.
+These are referred to as _user-defined capabilities_ because no
+modifications to the toolset's predefined capability names are needed.
+
+The ncurses utilities **tic** and **infocmp** have a command-line
+option \`-x\*('' to control whether the nonstandard capabilities
+are stored or retrieved.
+A library function **use\_extended\_names**
+is provided for the same purpose.
+
+When compiling a terminal database, if \`-x\*('' is set,
+**tic** will store a user-defined capability if the capability name is not
+one of the predefined names.
+
+Because ncurses provides a termcap library interface,
+these user-defined capabilities may be visible to termcap applications:
+.bP
+The termcap interface (like all implementations of termcap)
+requires that the capability names are 2-characters.
+
+* When the capability is simple enough for use in a termcap application,
+  it is provided as a 2-character name.
+  .bP
+  There are other
+  user-defined capabilities which refer to features not usable in termcap,
+  e.g., parameterized strings that use more than two parameters
+  or use more than the trivial expression support provided by termcap.
+  For these, the terminfo database should have only capability names with
+  3 or more characters.
+  .bP
+  Some terminals can send distinct strings for special keys (cursor-,
+  keypad- or function-keys) depending on modifier keys (shift, control, etc.).
+  While terminfo and termcap have a set of 60 predefined function-key names,
+  to which a series of keys can be assigned,
+  that is insufficient for more than a dozen keys multiplied by more than
+  a couple of modifier combinations.
+  The ncurses database uses a convention based on **xterm** to
+  provide extended special-key names.
+* Fitting that into termcap's limitation of 2-character names
+  would be pointless.
+  These extended keys are available only with terminfo.
+
+<a name="recognized-capabilities"></a>
+
+### Recognized capabilities
+
+
+The ncurses library uses the user-definable capabilities.
+While the terminfo database may have other extensions,
+ncurses makes explicit checks for these:
+
+* AX  
+  _boolean_, asserts that the terminal interprets SGR 39 and SGR 49
+  by resetting the foreground and background color, respectively, to the default.
+* This is a feature recognized by the **screen** program as well.
+* E3  
+  _string_, tells how to clear the terminal's scrollback buffer.
+  When present, the **clear**(1) program sends this before clearing
+  the terminal.
+* The command \`**tput clear**\*('' does the same thing.
+* RGB  
+  _boolean_, _number_ **or** _string_,
+  to assert that the
+  **set\_a\_foreground** and
+  **set\_a\_background** capabilities correspond to _direct colors_,
+  using an RGB (red/green/blue) convention.
+  This capability allows the **color\_content** function to
+  return appropriate values without requiring the application
+  to initialize colors using **init\_color**.
+* The capability type determines the values which ncurses sees:
+    * _boolean_  
+      implies that the number of bits for red, green and blue are the same.
+      Using the maximum number of colors,
+      ncurses adds two, divides that sum by three, and assigns the result
+      to red, green and blue in that order.
+    * If the number of bits needed for the number of colors is not a multiple
+      of three, the blue (and green) components lose in comparison to red.
+    * _number_  
+      tells ncurses what result to add to red, green and blue.
+      If ncurses runs out of bits,
+      blue (and green) lose just as in the _boolean_ case.
+    * _string_  
+      explicitly list the number of bits used for red, green and blue components
+      as a slash-separated list of decimal integers.
+* Because there are several RGB encodings in use,
+  applications which make assumptions about the number of bits per color
+  are unlikely to work reliably.
+  As a trivial case, for example, one could define **RGB#1**
+  to represent the standard eight ANSI colors, i.e., one bit per color.
+* U8  
+  _number_,
+  asserts that ncurses must use Unicode values for line-drawing characters,
+  and that it should ignore the alternate character set capabilities
+  when the locale uses UTF-8 encoding.
+  For more information, see the discussion of
+  **NCURSES\_NO\_UTF8\_ACS** in **ncurses**(3X).
+* Set this capability to a nonzero value to enable it.
+* XM  
+  _string_,
+  override ncurses's built-in string which
+  enables/disables **xterm** mouse mode.
+
+<a name="extended-key-definitions"></a>
+
+### Extended key-definitions
+
+
+Several terminals provide the ability to send distinct strings for
+combinations of modified special keys.
+There is no standard for what those keys can send.
+
+Since 1999, **xterm** has supported
+_shift_, _control_, _alt_, and _meta_ modifiers which produce
+distinct special-key strings.
+In a terminal description, ncurses has no special knowledge of the
+modifiers used.
+Applications can use the _naming convention_ established for **xterm**
+to find these special keys in the terminal description.
+
+Starting with the curses convention that _key names_ begin with \`k\*(''
+and that shifted special keys are an uppercase name,
+ncurses' terminal database defines these names to which a suffix is added:
+.TS
+tab(/) ;
+l l .
+_Name_/_Description_
+_
+kDC/special form of kdch1 (delete character)
+kDN/special form of kcud1 (cursor down)
+kEND/special form of kend (End)
+kHOM/special form of khome (Home)
+kLFT/special form of kcub1 (cursor-left or cursor-back)
+kNXT/special form of knext (Next, or Page-Down)
+kPRV/special form of kprev (Prev, or Page-Up)
+kRIT/special form of kcuf1 (cursor-right, or cursor-forward)
+kUP/special form of kcuu1 (cursor-up)
+.TE
+
+These are the suffixes used to denote the modifiers:
+.TS
+tab(/) ;
+l l .
+_Value_/_Description_
+_
+2/Shift
+3/Alt
+4/Shift + Alt
+5/Control
+6/Shift + Control
+7/Alt + Control
+8/Shift + Alt + Control
+9/Meta
+10/Meta + Shift
+11/Meta + Alt
+12/Meta + Alt + Shift
+13/Meta + Ctrl
+14/Meta + Ctrl + Shift
+15/Meta + Ctrl + Alt
+16/Meta + Ctrl + Alt + Shift
+.TE
+
+None of these are predefined; terminal descriptions can refer to _names_
+which ncurses will allocate at runtime to _key-codes_.
+To use these keys in an ncurses program, an application could do this:
+.bP
+using a list of extended key _names_,
+ask **tigetstr**(3X) for their values, and
+.bP
+given the list of values,
+ask **key\_defined**(3X) for the _key-code_ which
+would be returned for those keys by **wgetch**(3X).
+
+
+<a name="portability"></a>
+
+# Portability
+
+
+The \`-x\*('' extension feature of **tic** and **infocmp**
+has been adopted in NetBSD curses.
+That implementation stores user-defined capabilities,
+but makes no use of these capabilities itself.
+
+<a name="see-also"></a>
+
+# See Also
+
+
+**tic**(1),
+**infocmp**(1).
+
+<a name="authors"></a>
+
+# Authors
+
+
+Thomas E. Dickey  
+beginning with ncurses 5.0 (1999)
