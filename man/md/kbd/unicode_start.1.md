@@ -1,0 +1,51 @@
+# unicode_start(1) - put keyboard and console in unicode mode
+
+3 Feb 2001
+
+```
+unicode_start [font [umap]]
+```
+
+<a name="description"></a>
+
+# Description
+
+.IX "unicode_start command" "" "\fLunicode\_start command"  
+
+The
+**unicode_start**
+command will put the keyboard and console into Unicode (UTF-8) mode.
+
+For the keyboard this means that one can attach 16-bit U+xxxx values
+to keyboard keys using
+**loadkeys**(1),
+and have these appear as UTF-8 input to user programs.
+Also, that one can type hexadecimal Alt-xxxx using the numeric keypad,
+and again produce UTF-8.
+
+For the console this means that the kernel expects UTF-8 output
+from user programs, and displays the output accordingly.
+
+The parameter
+_font_
+is a font that is loaded. It should have a built-in Unicode map,
+or, if it hasn't, such a map can be given explicitly as second parameter.
+When no font was specified, the current font is kept.
+
+<a name="note"></a>
+
+# Note
+
+Unicode mode is a parameter with a value per virtual console.
+However, usually the font and keymap is common to all consoles.
+
+<a name="see-also"></a>
+
+# See Also
+
+**dumpkeys**(1),
+**kbd_mode**(1),
+**loadkeys**(1),
+**unicode_stop**(1),
+**utf-8(7),**
+**setfont**(8)
