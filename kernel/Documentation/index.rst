@@ -150,9 +150,9 @@ Architecture-specific documentation
 -----------------------------------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
-   arch
+   arch/arch
 
 
 Other documentation
