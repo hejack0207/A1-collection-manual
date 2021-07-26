@@ -1,0 +1,158 @@
+11.14 Route Server
+==================
+
+At an Internet Exchange point, many ISPs are connected to each other by
+external BGP peering.  Normally these external BGP connection are done
+by 'full mesh' method.  As with internal BGP full mesh formation, this
+method has a scaling problem.
+
+   This scaling problem is well known.  Route Server is a method to
+resolve the problem.  Each ISP's BGP router only peers to Route Server.
+Route Server serves as BGP information exchange to other BGP routers.
+By applying this method, numbers of BGP connections is reduced from
+O(n*(n-1)/2) to O(n).
+
+   Unlike normal BGP router, Route Server must have several routing
+tables for managing different routing policies for each BGP speaker.  We
+call the routing tables as different 'view's.  'bgpd' can work as normal
+BGP router or Route Server or both at the same time.
+
+* Menu:
+
+* Multiple instance::           
+* BGP instance and view::       
+* Routing policy::              
+* Viewing the view::            
+
+File: quagga.info,  Node: Multiple instance,  Next: BGP instance and view,  Up: Route Server
+
+11.14.1 Multiple instance
+-------------------------
+
+To enable multiple view function of 'bgpd', you must turn on multiple
+instance feature beforehand.
+
+ -- Command: bgp multiple-instance
+     Enable BGP multiple instance feature.  After this feature is
+     enabled, you can make multiple BGP instances or multiple BGP views.
+
+ -- Command: no bgp multiple-instance
+     Disable BGP multiple instance feature.  You can not disable this
+     feature when BGP multiple instances or views exist.
+
+   When you want to make configuration more Cisco like one,
+
+ -- Command: bgp config-type cisco
+     Cisco compatible BGP configuration output.
+
+   When bgp config-type cisco is specified,
+
+   "no synchronization" is displayed.  "no auto-summary" is displayed.
+
+   "network" and "aggregate-address" argument is displayed as "A.B.C.D
+M.M.M.M"
+
+   Quagga: network 10.0.0.0/8 Cisco: network 10.0.0.0
+
+   Quagga: aggregate-address 192.168.0.0/24 Cisco: aggregate-address
+192.168.0.0 255.255.255.0
+
+   Community attribute handling is also different.  If there is no
+configuration is specified community attribute and extended community
+attribute are sent to neighbor.  When user manually disable the feature
+community attribute is not sent to the neighbor.  In case of 'bgp
+config-type cisco' is specified, community attribute is not sent to the
+neighbor by default.  To send community attribute user has to specify
+'neighbor A.B.C.D send-community' command.
+
+     !
+     router bgp 1
+      neighbor 10.0.0.1 remote-as 1
+      no neighbor 10.0.0.1 send-community
+     !
+     router bgp 1
+      neighbor 10.0.0.1 remote-as 1
+      neighbor 10.0.0.1 send-community
+     !
+
+ -- Command: bgp config-type zebra
+     Quagga style BGP configuration.  This is default.
+
+File: quagga.info,  Node: BGP instance and view,  Next: Routing policy,  Prev: Multiple instance,  Up: Route Server
+
+11.14.2 BGP instance and view
+-----------------------------
+
+BGP instance is a normal BGP process.  The result of route selection
+goes to the kernel routing table.  You can setup different AS at the
+same time when BGP multiple instance feature is enabled.
+
+ -- Command: router bgp AS-NUMBER
+     Make a new BGP instance.  You can use arbitrary word for the NAME.
+
+     bgp multiple-instance
+     !
+     router bgp 1
+      neighbor 10.0.0.1 remote-as 2
+      neighbor 10.0.0.2 remote-as 3
+     !
+     router bgp 2
+      neighbor 10.0.0.3 remote-as 4
+      neighbor 10.0.0.4 remote-as 5
+
+   BGP view is almost same as normal BGP process.  The result of route
+selection does not go to the kernel routing table.  BGP view is only for
+exchanging BGP routing information.
+
+ -- Command: router bgp AS-NUMBER view NAME
+     Make a new BGP view.  You can use arbitrary word for the NAME.
+     This view's route selection result does not go to the kernel
+     routing table.
+
+   With this command, you can setup Route Server like below.
+
+     bgp multiple-instance
+     !
+     router bgp 1 view 1
+      neighbor 10.0.0.1 remote-as 2
+      neighbor 10.0.0.2 remote-as 3
+     !
+     router bgp 2 view 2
+      neighbor 10.0.0.3 remote-as 4
+      neighbor 10.0.0.4 remote-as 5
+
+File: quagga.info,  Node: Routing policy,  Next: Viewing the view,  Prev: BGP instance and view,  Up: Route Server
+
+11.14.3 Routing policy
+----------------------
+
+You can set different routing policy for a peer.  For example, you can
+set different filter for a peer.
+
+     bgp multiple-instance
+     !
+     router bgp 1 view 1
+      neighbor 10.0.0.1 remote-as 2
+      neighbor 10.0.0.1 distribute-list 1 in
+     !
+     router bgp 1 view 2
+      neighbor 10.0.0.1 remote-as 2
+      neighbor 10.0.0.1 distribute-list 2 in
+
+   This means BGP update from a peer 10.0.0.1 goes to both BGP view 1
+and view 2.  When the update is inserted into view 1, distribute-list 1
+is applied.  On the other hand, when the update is inserted into view 2,
+distribute-list 2 is applied.
+
+File: quagga.info,  Node: Viewing the view,  Prev: Routing policy,  Up: Route Server
+
+11.14.4 Viewing the view
+------------------------
+
+To display routing table of BGP view, you must specify view name.
+
+ -- Command: show ip bgp view NAME
+     Display routing table of BGP view NAME.
+
+File: quagga.info,  Node: How to set up a 6-Bone connection,  Next: Dump BGP packets and table,  Prev: Route Server,  Up: BGP
+

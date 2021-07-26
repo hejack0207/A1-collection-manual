@@ -1,0 +1,142 @@
+7.4 OSPF area
+=============
+
+ -- OSPF Command: area A.B.C.D range A.B.C.D/M
+ -- OSPF Command: area <0-4294967295> range A.B.C.D/M
+ -- OSPF Command: no area A.B.C.D range A.B.C.D/M
+ -- OSPF Command: no area <0-4294967295> range A.B.C.D/M
+     Summarize intra area paths from specified area into one Type-3
+     summary-LSA announced to other areas.  This command can be used
+     only in ABR and ONLY router-LSAs (Type-1) and network-LSAs (Type-2)
+     (ie.  LSAs with scope area) can be summarized.  Type-5
+     AS-external-LSAs can't be summarized - their scope is AS.
+     Summarizing Type-7 AS-external-LSAs isn't supported yet by Quagga.
+
+          router ospf
+           network 192.168.1.0/24 area 0.0.0.0
+           network 10.0.0.0/8 area 0.0.0.10
+           area 0.0.0.10 range 10.0.0.0/8
+
+     With configuration above one Type-3 Summary-LSA with routing info
+     10.0.0.0/8 is announced into backbone area if area 0.0.0.10
+     contains at least one intra-area network (ie.  described with
+     router or network LSA) from this range.
+
+ -- OSPF Command: area A.B.C.D range IPV4_PREFIX not-advertise
+ -- OSPF Command: no area A.B.C.D range IPV4_PREFIX not-advertise
+     Instead of summarizing intra area paths filter them - ie.  intra
+     area paths from this range are not advertised into other areas.
+     This command makes sense in ABR only.
+
+ -- OSPF Command: area A.B.C.D range IPV4_PREFIX substitute IPV4_PREFIX
+ -- OSPF Command: no area A.B.C.D range IPV4_PREFIX substitute
+          IPV4_PREFIX
+     Substitute summarized prefix with another prefix.
+
+          router ospf
+           network 192.168.1.0/24 area 0.0.0.0
+           network 10.0.0.0/8 area 0.0.0.10
+           area 0.0.0.10 range 10.0.0.0/8 substitute 11.0.0.0/8
+
+     One Type-3 summary-LSA with routing info 11.0.0.0/8 is announced
+     into backbone area if area 0.0.0.10 contains at least one
+     intra-area network (ie.  described with router-LSA or network-LSA)
+     from range 10.0.0.0/8.  This command makes sense in ABR only.
+
+ -- OSPF Command: area A.B.C.D virtual-link A.B.C.D
+ -- OSPF Command: area <0-4294967295> virtual-link A.B.C.D
+ -- OSPF Command: no area A.B.C.D virtual-link A.B.C.D
+ -- OSPF Command: no area <0-4294967295> virtual-link A.B.C.D
+
+ -- OSPF Command: area A.B.C.D shortcut
+ -- OSPF Command: area <0-4294967295> shortcut
+ -- OSPF Command: no area A.B.C.D shortcut
+ -- OSPF Command: no area <0-4294967295> shortcut
+     Configure the area as Shortcut capable.  See 'RFC3509'.  This
+     requires that the 'abr-type' be set to 'shortcut'.
+
+ -- OSPF Command: area A.B.C.D stub
+ -- OSPF Command: area <0-4294967295> stub
+ -- OSPF Command: no area A.B.C.D stub
+ -- OSPF Command: no area <0-4294967295> stub
+     Configure the area to be a stub area.  That is, an area where no
+     router originates routes external to OSPF and hence an area where
+     all external routes are via the ABR(s).  Hence, ABRs for such an
+     area do not need to pass AS-External LSAs (type-5s) or ASBR-Summary
+     LSAs (type-4) into the area.  They need only pass Network-Summary
+     (type-3) LSAs into such an area, along with a default-route
+     summary.
+
+ -- OSPF Command: area A.B.C.D stub no-summary
+ -- OSPF Command: area <0-4294967295> stub no-summary
+ -- OSPF Command: no area A.B.C.D stub no-summary
+ -- OSPF Command: no area <0-4294967295> stub no-summary
+     Prevents an 'ospfd' ABR from injecting inter-area summaries into
+     the specified stub area.
+
+ -- OSPF Command: area A.B.C.D default-cost <0-16777215>
+ -- OSPF Command: no area A.B.C.D default-cost <0-16777215>
+     Set the cost of default-summary LSAs announced to stubby areas.
+
+ -- OSPF Command: area A.B.C.D export-list NAME
+ -- OSPF Command: area <0-4294967295> export-list NAME
+ -- OSPF Command: no area A.B.C.D export-list NAME
+ -- OSPF Command: no area <0-4294967295> export-list NAME
+     Filter Type-3 summary-LSAs announced to other areas originated from
+     intra- area paths from specified area.
+
+          router ospf
+           network 192.168.1.0/24 area 0.0.0.0
+           network 10.0.0.0/8 area 0.0.0.10
+           area 0.0.0.10 export-list foo
+          !
+          access-list foo permit 10.10.0.0/16
+          access-list foo deny any
+
+     With example above any intra-area paths from area 0.0.0.10 and from
+     range 10.10.0.0/16 (for example 10.10.1.0/24 and 10.10.2.128/30)
+     are announced into other areas as Type-3 summary-LSA's, but any
+     others (for example 10.11.0.0/16 or 10.128.30.16/30) aren't.
+
+     This command is only relevant if the router is an ABR for the
+     specified area.
+
+ -- OSPF Command: area A.B.C.D import-list NAME
+ -- OSPF Command: area <0-4294967295> import-list NAME
+ -- OSPF Command: no area A.B.C.D import-list NAME
+ -- OSPF Command: no area <0-4294967295> import-list NAME
+     Same as export-list, but it applies to paths announced into
+     specified area as Type-3 summary-LSAs.
+
+ -- OSPF Command: area A.B.C.D filter-list prefix NAME in
+ -- OSPF Command: area A.B.C.D filter-list prefix NAME out
+ -- OSPF Command: area <0-4294967295> filter-list prefix NAME in
+ -- OSPF Command: area <0-4294967295> filter-list prefix NAME out
+ -- OSPF Command: no area A.B.C.D filter-list prefix NAME in
+ -- OSPF Command: no area A.B.C.D filter-list prefix NAME out
+ -- OSPF Command: no area <0-4294967295> filter-list prefix NAME in
+ -- OSPF Command: no area <0-4294967295> filter-list prefix NAME out
+     Filtering Type-3 summary-LSAs to/from area using prefix lists.
+     This command makes sense in ABR only.
+
+ -- OSPF Command: area A.B.C.D authentication
+ -- OSPF Command: area <0-4294967295> authentication
+ -- OSPF Command: no area A.B.C.D authentication
+ -- OSPF Command: no area <0-4294967295> authentication
+     Specify that simple password authentication should be used for the
+     given area.
+
+ -- OSPF Command: area A.B.C.D authentication message-digest
+ -- OSPF Command: area <0-4294967295> authentication message-digest
+
+     Specify that OSPF packets must be authenticated with MD5 HMACs
+     within the given area.  Keying material must also be configured on
+     a per-interface basis (*note ip ospf message-digest-key::).
+
+     MD5 authentication may also be configured on a per-interface basis
+     (*note ip ospf authentication message-digest::).  Such
+     per-interface settings will override any per-area authentication
+     setting.
+
+File: quagga.info,  Node: OSPF interface,  Next: Redistribute routes to OSPF,  Prev: OSPF area,  Up: OSPFv2
+

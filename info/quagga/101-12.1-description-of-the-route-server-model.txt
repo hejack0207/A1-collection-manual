@@ -1,0 +1,176 @@
+12.1 Description of the Route Server model
+==========================================
+
+First we are going to describe the normal processing that BGP
+announcements suffer inside a standard BGP speaker, as shown in *note
+Figure 12.1: fig:normal-processing, it consists of three steps:
+
+   * When an announcement is received from some peer, the 'In' filters
+     configured for that peer are applied to the announcement.  These
+     filters can reject the announcement, accept it unmodified, or
+     accept it with some of its attributes modified.
+
+   * The announcements that pass the 'In' filters go into the Best Path
+     Selection process, where they are compared to other announcements
+     referred to the same destination that have been received from
+     different peers (in case such other announcements exist).  For each
+     different destination, the announcement which is selected as the
+     best is inserted into the BGP speaker's Loc-RIB.
+
+   * The routes which are inserted in the Loc-RIB are considered for
+     announcement to all the peers (except the one from which the route
+     came).  This is done by passing the routes in the Loc-RIB through
+     the 'Out' filters corresponding to each peer.  These filters can
+     reject the route, accept it unmodified, or accept it with some of
+     its attributes modified.  Those routes which are accepted by the
+     'Out' filters of a peer are announced to that peer.
+
+
+                  _______________________________
+                 /    _________     _________    \
+From Peer A --->|(A)-|Best     |   |         |-[A]|--->To Peer A
+From Peer B --->|(B)-|Path     |-->|Local-RIB|-[B]|--->To Peer B
+From Peer C --->|(C)-|Selection|   |         |-[C]|--->To Peer C
+From Peer D --->|(D)-|_________|   |_________|-[D]|--->To Peer D
+                 \_______________________________/
+
+Key:  (X) - 'In'  Filter applied to Peer X's announcements
+      [X] - 'Out' Filter applied to announcements to Peer X
+
+Figure 12.1: Announcement processing inside a "normal" BGP speaker
+
+   Of course we want that the routing tables obtained in each of the
+routers are the same when using the route server than when not.  But as
+a consequence of having a single BGP peering (against the route server),
+the BGP speakers can no longer distinguish from/to which peer each
+announce comes/goes.  This means that the routers connected to the route
+server are not able to apply by themselves the same input/output filters
+as in the full mesh scenario, so they have to delegate those functions
+to the route server.
+
+   Even more, the "best path" selection must be also performed inside
+the route server on behalf of its clients.  The reason is that if, after
+applying the filters of the announcer and the (potential) receiver, the
+route server decides to send to some client two or more different
+announcements referred to the same destination, the client will only
+retain the last one, considering it as an implicit withdrawal of the
+previous announcements for the same destination.  This is the expected
+behavior of a BGP speaker as defined in 'RFC1771', and even though there
+are some proposals of mechanisms that permit multiple paths for the same
+destination to be sent through a single BGP peering, none are currently
+supported by most existing BGP implementations.
+
+   As a consequence a route server must maintain additional information
+and perform additional tasks for a RS-client that those necessary for
+common BGP peerings.  Essentially a route server must:
+
+   * Maintain a separated Routing Information Base (Loc-RIB) for each
+     peer configured as RS-client, containing the routes selected as a
+     result of the "Best Path Selection" process that is performed on
+     behalf of that RS-client.
+
+   * Whenever it receives an announcement from a RS-client, it must
+     consider it for the Loc-RIBs of the other RS-clients.
+
+        * This means that for each of them the route server must pass
+          the announcement through the appropriate 'Out' filter of the
+          announcer.
+
+        * Then through the appropriate 'In' filter of the potential
+          receiver.
+
+        * Only if the announcement is accepted by both filters it will
+          be passed to the "Best Path Selection" process.
+
+        * Finally, it might go into the Loc-RIB of the receiver.
+
+   When we talk about the "appropriate" filter, both the announcer and
+the receiver of the route must be taken into account.  Suppose that the
+route server receives an announcement from client A, and the route
+server is considering it for the Loc-RIB of client B. The filters that
+should be applied are the same that would be used in the full mesh
+scenario, i.e., first the 'Out' filter of router A for announcements
+going to router B, and then the 'In' filter of router B for
+announcements coming from router A.
+
+   We call "Export Policy" of a RS-client to the set of 'Out' filters
+that the client would use if there was no route server.  The same
+applies for the "Import Policy" of a RS-client and the set of 'In'
+filters of the client if there was no route server.
+
+   It is also common to demand from a route server that it does not
+modify some BGP attributes (next-hop, as-path and MED) that are usually
+modified by standard BGP speakers before announcing a route.
+
+   The announcement processing model implemented by Quagga is shown in
+*note Figure 12.2: fig:rs-processing.  The figure shows a mixture of
+RS-clients (B, C and D) with normal BGP peers (A). There are some
+details that worth additional comments:
+
+   * Announcements coming from a normal BGP peer are also considered for
+     the Loc-RIBs of all the RS-clients.  But logically they do not pass
+     through any export policy.
+
+   * Those peers that are configured as RS-clients do not receive any
+     announce from the 'Main' Loc-RIB.
+
+   * Apart from import and export policies, 'In' and 'Out' filters can
+     also be set for RS-clients.  'In' filters might be useful when the
+     route server has also normal BGP peers.  On the other hand, 'Out'
+     filters for RS-clients are probably unnecessary, but we decided not
+     to remove them as they do not hurt anybody (they can always be left
+     empty).
+
+From Peer A
+ | From RS-Client B
+ |  | From RS-Client C
+ |  |  | From RS-Client D
+ |  |  |  |
+ |  |  |  |           Main / Normal RIB
+ |  |  |  |      ________________________________
+ |  |  |  |     /    _________     _________     \
+ |  |  |  +--->|(D)-|Best     |   | Main    |     |
+ |  |  +--|--->|(C)-|Path     |-->|Local-RIB|->[A]|--->To Peer A
+ |  +--|--|--->|(B)-|Selection|   |         |     |
+ +--|--|--|--->|(A)-|_________|   |_________|     |
+ |  |  |  |     \________________________________/
+ |  |  |  |
+ |  |  |  |          ________________________________
+ |  |  |  |          /    _________     _________     \
+ |  |  |  +--->*D*->|{B}-|Best     |   |RS-Client|     |
+ |  |  +--|--->*C*->|{B}-|Path     |-->|Local-RIB|->[B]|--->To RS-Client B
+ |  |  |  |         |    |Selection|   |  for B  |     |
+ +--|--|--|-------->|{B}-|_________|   |_________|     |
+ |  |  |  |          \________________________________/
+ |  |  |  |
+ |  |  |  |          ________________________________
+ |  |  |  |          /    _________     _________     \
+ |  |  |  +--->*D*->|{C}-|Best     |   |RS-Client|     |
+ |  |  |  |         |    |Path     |-->|Local-RIB|->[C]|--->To RS-Client C
+ |  +--|--|--->*B*->|{C}-|Selection|   |  for C  |     |
+ +--|--|--|-------->|{C}-|_________|   |_________|     |
+ |  |  |             \________________________________/
+ |  |  |
+ |  |  |              ________________________________
+ |  |  |             /    _________     _________     \
+ |  |  |            |    |Best     |   |RS-Client|     |
+ |  |  +------>*C*->|{D}-|Path     |-->|Local-RIB|->[D]|--->To RS-Client D
+ |  +--------->*B*->|{D}-|Selection|   |  for D  |     |
+ +----------------->|{D}-|_________|   |_________|     |
+                     \________________________________/
+
+
+Key:  (X) - 'In'  Filter applied to Peer X's announcements before
+            considering announcement for the normal main Local-RIB
+      [X] - 'Out' Filter applied to announcements to Peer X
+      *X* - 'Export' Filter of RS-Client X, to apply X's policies
+	    before its routes may be considered for other RS-Clients
+            RIBs.
+      {X} - 'Import' Filter of RS-Client X, to apply X's policies
+            on routes before allowing them into X's RIB.
+
+Figure 12.2: Announcement processing model implemented by the Route
+Server
+
+File: quagga.info,  Node: Commands for configuring a Route Server,  Next: Example of Route Server Configuration,  Prev: Description of the Route Server model,  Up: Configuring Quagga as a Route Server
+

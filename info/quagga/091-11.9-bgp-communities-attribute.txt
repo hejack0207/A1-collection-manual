@@ -1,0 +1,310 @@
+11.9 BGP Communities Attribute
+==============================
+
+BGP communities attribute is widely used for implementing policy
+routing.  Network operators can manipulate BGP communities attribute
+based on their network policy.  BGP communities attribute is defined in
+'RFC1997, BGP Communities Attribute' and 'RFC1998, An Application of the
+BGP Community Attribute in Multi-home Routing'.  It is an optional
+transitive attribute, therefore local policy can travel through
+different autonomous system.
+
+   Communities attribute is a set of communities values.  Each
+communities value is 4 octet long.  The following format is used to
+define communities value.
+
+'AS:VAL'
+     This format represents 4 octet communities value.  'AS' is high
+     order 2 octet in digit format.  'VAL' is low order 2 octet in digit
+     format.  This format is useful to define AS oriented policy value.
+     For example, '7675:80' can be used when AS 7675 wants to pass local
+     policy value 80 to neighboring peer.
+'internet'
+     'internet' represents well-known communities value 0.
+'no-export'
+     'no-export' represents well-known communities value 'NO_EXPORT'
+     (0xFFFFFF01).  All routes carry this value must not be advertised
+     to outside a BGP confederation boundary.  If neighboring BGP peer
+     is part of BGP confederation, the peer is considered as inside a
+     BGP confederation boundary, so the route will be announced to the
+     peer.
+'no-advertise'
+     'no-advertise' represents well-known communities value
+     'NO_ADVERTISE'
+     (0xFFFFFF02).  All routes carry this value must not be advertise to
+     other BGP peers.
+'local-AS'
+     'local-AS' represents well-known communities value
+     'NO_EXPORT_SUBCONFED' (0xFFFFFF03).  All routes carry this value
+     must not be advertised to external BGP peers.  Even if the
+     neighboring router is part of confederation, it is considered as
+     external BGP peer, so the route will not be announced to the peer.
+
+   When BGP communities attribute is received, duplicated communities
+value in the communities attribute is ignored and each communities
+values are sorted in numerical order.
+
+* Menu:
+
+* BGP Community Lists::         
+* Numbered BGP Community Lists::  
+* BGP Community in Route Map::  
+* Display BGP Routes by Community::  
+* Using BGP Communities Attribute::  
+
+File: quagga.info,  Node: BGP Community Lists,  Next: Numbered BGP Community Lists,  Up: BGP Communities Attribute
+
+11.9.1 BGP Community Lists
+--------------------------
+
+BGP community list is a user defined BGP communites attribute list.  BGP
+community list can be used for matching or manipulating BGP communities
+attribute in updates.
+
+   There are two types of community list.  One is standard community
+list and another is expanded community list.  Standard community list
+defines communities attribute.  Expanded community list defines
+communities attribute string with regular expression.  Standard
+community list is compiled into binary format when user define it.
+Standard community list will be directly compared to BGP communities
+attribute in BGP updates.  Therefore the comparison is faster than
+expanded community list.
+
+ -- Command: ip community-list standard NAME {permit|deny} COMMUNITY
+     This command defines a new standard community list.  COMMUNITY is
+     communities value.  The COMMUNITY is compiled into community
+     structure.  We can define multiple community list under same name.
+     In that case match will happen user defined order.  Once the
+     community list matches to communities attribute in BGP updates it
+     return permit or deny by the community list definition.  When there
+     is no matched entry, deny will be returned.  When COMMUNITY is
+     empty it matches to any routes.
+
+ -- Command: ip community-list expanded NAME {permit|deny} LINE
+     This command defines a new expanded community list.  LINE is a
+     string expression of communities attribute.  LINE can include
+     regular expression to match communities attribute in BGP updates.
+
+ -- Command: no ip community-list NAME
+ -- Command: no ip community-list standard NAME
+ -- Command: no ip community-list expanded NAME
+     These commands delete community lists specified by NAME.  All of
+     community lists shares a single name space.  So community lists can
+     be removed simpley specifying community lists name.
+
+ -- Command: show ip community-list
+ -- Command: show ip community-list NAME
+     This command display current community list information.  When NAME
+     is specified the specified community list's information is shown.
+
+          # show ip community-list
+          Named Community standard list CLIST
+              permit 7675:80 7675:100 no-export
+              deny internet
+          Named Community expanded list EXPAND
+              permit :
+
+          # show ip community-list CLIST
+          Named Community standard list CLIST
+              permit 7675:80 7675:100 no-export
+              deny internet
+
+File: quagga.info,  Node: Numbered BGP Community Lists,  Next: BGP Community in Route Map,  Prev: BGP Community Lists,  Up: BGP Communities Attribute
+
+11.9.2 Numbered BGP Community Lists
+-----------------------------------
+
+When number is used for BGP community list name, the number has special
+meanings.  Community list number in the range from 1 and 99 is standard
+community list.  Community list number in the range from 100 to 199 is
+expanded community list.  These community lists are called as numbered
+community lists.  On the other hand normal community lists is called as
+named community lists.
+
+ -- Command: ip community-list <1-99> {permit|deny} COMMUNITY
+     This command defines a new community list.  <1-99> is standard
+     community list number.  Community list name within this range
+     defines standard community list.  When COMMUNITY is empty it
+     matches to any routes.
+
+ -- Command: ip community-list <100-199> {permit|deny} COMMUNITY
+     This command defines a new community list.  <100-199> is expanded
+     community list number.  Community list name within this range
+     defines expanded community list.
+
+ -- Command: ip community-list NAME {permit|deny} COMMUNITY
+     When community list type is not specifed, the community list type
+     is automatically detected.  If COMMUNITY can be compiled into
+     communities attribute, the community list is defined as a standard
+     community list.  Otherwise it is defined as an expanded community
+     list.  This feature is left for backward compability.  Use of this
+     feature is not recommended.
+
+File: quagga.info,  Node: BGP Community in Route Map,  Next: Display BGP Routes by Community,  Prev: Numbered BGP Community Lists,  Up: BGP Communities Attribute
+
+11.9.3 BGP Community in Route Map
+---------------------------------
+
+In Route Map (*note Route Map::), we can match or set BGP communities
+attribute.  Using this feature network operator can implement their
+network policy based on BGP communities attribute.
+
+   Following commands can be used in Route Map.
+
+ -- Route Map: match community WORD
+ -- Route Map: match community WORD exact-match
+     This command perform match to BGP updates using community list
+     WORD.  When the one of BGP communities value match to the one of
+     communities value in community list, it is match.  When
+     'exact-match' keyword is spcified, match happen only when BGP
+     updates have completely same communities value specified in the
+     community list.
+
+ -- Route Map: set community none
+ -- Route Map: set community COMMUNITY
+ -- Route Map: set community COMMUNITY additive
+     This command manipulate communities value in BGP updates.  When
+     'none' is specified as communities value, it removes entire
+     communities attribute from BGP updates.  When COMMUNITY is not
+     'none', specified communities value is set to BGP updates.  If BGP
+     updates already has BGP communities value, the existing BGP
+     communities value is replaced with specified COMMUNITY value.  When
+     'additive' keyword is specified, COMMUNITY is appended to the
+     existing communities value.
+
+ -- Route Map: set comm-list WORD delete
+     This command remove communities value from BGP communities
+     attribute.  The WORD is community list name.  When BGP route's
+     communities value matches to the community list WORD, the
+     communities value is removed.  When all of communities value is
+     removed eventually, the BGP update's communities attribute is
+     completely removed.
+
+File: quagga.info,  Node: Display BGP Routes by Community,  Next: Using BGP Communities Attribute,  Prev: BGP Community in Route Map,  Up: BGP Communities Attribute
+
+11.9.4 Display BGP Routes by Community
+--------------------------------------
+
+To show BGP routes which has specific BGP communities attribute, 'show
+ip bgp' command can be used.  The COMMUNITY value and community list can
+be used for 'show ip bgp' command.
+
+ -- Command: show ip bgp community
+ -- Command: show ip bgp community COMMUNITY
+ -- Command: show ip bgp community COMMUNITY exact-match
+     'show ip bgp community' displays BGP routes which has communities
+     attribute.  When COMMUNITY is specified, BGP routes that matches
+     COMMUNITY value is displayed.  For this command, 'internet' keyword
+     can't be used for COMMUNITY value.  When 'exact-match' is
+     specified, it display only routes that have an exact match.
+
+ -- Command: show ip bgp community-list WORD
+ -- Command: show ip bgp community-list WORD exact-match
+     This commands display BGP routes that matches community list WORD.
+     When 'exact-match' is specified, display only routes that have an
+     exact match.
+
+File: quagga.info,  Node: Using BGP Communities Attribute,  Prev: Display BGP Routes by Community,  Up: BGP Communities Attribute
+
+11.9.5 Using BGP Communities Attribute
+--------------------------------------
+
+Following configuration is the most typical usage of BGP communities
+attribute.  AS 7675 provides upstream Internet connection to AS 100.
+When following configuration exists in AS 7675, AS 100 networks operator
+can set local preference in AS 7675 network by setting BGP communities
+attribute to the updates.
+
+     router bgp 7675
+      neighbor 192.168.0.1 remote-as 100
+      neighbor 192.168.0.1 route-map RMAP in
+     !
+     ip community-list 70 permit 7675:70
+     ip community-list 70 deny
+     ip community-list 80 permit 7675:80
+     ip community-list 80 deny
+     ip community-list 90 permit 7675:90
+     ip community-list 90 deny
+     !
+     route-map RMAP permit 10
+      match community 70
+      set local-preference 70
+     !
+     route-map RMAP permit 20
+      match community 80
+      set local-preference 80
+     !
+     route-map RMAP permit 30
+      match community 90
+      set local-preference 90
+
+   Following configuration announce 10.0.0.0/8 from AS 100 to AS 7675.
+The route has communities value 7675:80 so when above configuration
+exists in AS 7675, announced route's local preference will be set to
+value 80.
+
+     router bgp 100
+      network 10.0.0.0/8
+      neighbor 192.168.0.2 remote-as 7675
+      neighbor 192.168.0.2 route-map RMAP out
+     !
+     ip prefix-list PLIST permit 10.0.0.0/8
+     !
+     route-map RMAP permit 10
+      match ip address prefix-list PLIST
+      set community 7675:80
+
+   Following configuration is an example of BGP route filtering using
+communities attribute.  This configuration only permit BGP routes which
+has BGP communities value 0:80 and 0:90.  Network operator can put
+special internal communities value at BGP border router, then limit the
+BGP routes announcement into the internal network.
+
+     router bgp 7675
+      neighbor 192.168.0.1 remote-as 100
+      neighbor 192.168.0.1 route-map RMAP in
+     !
+     ip community-list 1 permit 0:80 0:90
+     !
+     route-map RMAP permit in
+      match community 1
+
+   Following exmaple filter BGP routes which has communities value 1:1.
+When there is no match community-list returns deny.  To avoid filtering
+all of routes, we need to define permit any at last.
+
+     router bgp 7675
+      neighbor 192.168.0.1 remote-as 100
+      neighbor 192.168.0.1 route-map RMAP in
+     !
+     ip community-list standard FILTER deny 1:1
+     ip community-list standard FILTER permit
+     !
+     route-map RMAP permit 10
+      match community FILTER
+
+   Communities value keyword 'internet' has special meanings in standard
+community lists.  In below example 'internet' act as match any.  It
+matches all of BGP routes even if the route does not have communities
+attribute at all.  So community list 'INTERNET' is same as above
+example's 'FILTER'.
+
+     ip community-list standard INTERNET deny 1:1
+     ip community-list standard INTERNET permit internet
+
+   Following configuration is an example of communities value deletion.
+With this configuration communities value 100:1 and 100:2 is removed
+from BGP updates.  For communities value deletion, only 'permit'
+community-list is used.  'deny' community-list is ignored.
+
+     router bgp 7675
+      neighbor 192.168.0.1 remote-as 100
+      neighbor 192.168.0.1 route-map RMAP in
+     !
+     ip community-list standard DEL permit 100:1 100:2
+     !
+     route-map RMAP permit 10
+      set comm-list DEL delete
+
+File: quagga.info,  Node: BGP Extended Communities Attribute,  Next: Displaying BGP routes,  Prev: BGP Communities Attribute,  Up: BGP
+

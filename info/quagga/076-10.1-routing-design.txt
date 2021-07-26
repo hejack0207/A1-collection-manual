@@ -1,0 +1,40 @@
+10.1 Routing Design
+===================
+
+nhrpd never handles routing of prefixes itself.  You need to run some
+real routing protocol (e.g.  BGP) to advertise routes over the tunnels.
+What nhrpd does it establishes 'shortcut routes' that optimizes the
+routing protocol to avoid going through extra nodes in NBMA GRE mesh.
+
+   nhrpd does route NHRP domain addresses individually using per-host
+prefixes.  This is similar to Cisco FlexVPN; but in contrast to opennhrp
+which uses a generic subnet route.
+
+   To create NBMA GRE tunnel you might use the following (linux terminal
+commands):
+      ip tunnel add gre1 mode gre key 42 ttl 64
+      ip addr add 10.255.255.2/32 dev gre1
+      ip link set gre1 up
+
+   Note that the IP-address is assigned as host prefix to gre1.  nhrpd
+will automatically create additional host routes pointing to gre1 when a
+connection with these hosts is established.
+
+   The gre1 subnet prefix should be announced by routing protocol from
+the hub nodes (e.g.  BGP 'network' announce).  This allows the routing
+protocol to decide which is the closest hub and determine the relay hub
+on prefix basis when direct tunnel is not established.
+
+   nhrpd will redistribute directly connected neighbors to zebra.
+Within hub nodes, these routes should be internally redistributed using
+some routing protocol (e.g.  iBGP) to allow hubs to be able to relay all
+traffic.
+
+   This can be achieved in hubs with the following bgp configuration
+(network command defines the GRE subnet):
+     router bgp 65555
+        network 172.16.0.0/16
+        redistribute nhrp
+
+File: quagga.info,  Node: Configuring NHRP,  Next: Hub Functionality,  Prev: Routing Design,  Up: NHRP
+

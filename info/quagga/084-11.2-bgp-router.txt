@@ -1,0 +1,168 @@
+11.2 BGP router
+===============
+
+First of all you must configure BGP router with 'router bgp' command.
+To configure BGP router, you need AS number.  AS number is an
+identification of autonomous system.  BGP protocol uses the AS number
+for detecting whether the BGP connection is internal one or external
+one.
+
+ -- Command: router bgp ASN
+     Enable a BGP protocol process with the specified ASN.  After this
+     statement you can input any 'BGP Commands'.  You can not create
+     different BGP process under different ASN without specifying
+     'multiple-instance' (*note Multiple instance::).
+
+ -- Command: no router bgp ASN
+     Destroy a BGP protocol process with the specified ASN.
+
+ -- BGP: bgp router-id A.B.C.D
+     This command specifies the router-ID. If 'bgpd' connects to 'zebra'
+     it gets interface and address information.  In that case default
+     router ID value is selected as the largest IP Address of the
+     interfaces.  When 'router zebra' is not enabled 'bgpd' can't get
+     interface information so 'router-id' is set to 0.0.0.0.  So please
+     set router-id by hand.
+
+* Menu:
+
+* BGP distance::                
+* BGP decision process::        
+* BGP route flap dampening::      
+
+File: quagga.info,  Node: BGP distance,  Next: BGP decision process,  Up: BGP router
+
+11.2.1 BGP distance
+-------------------
+
+ -- BGP: distance bgp <1-255> <1-255> <1-255>
+     This command change distance value of BGP. Each argument is
+     distance value for external routes, internal routes and local
+     routes.
+
+     To have this command applied to existing routes requires a hard
+     clear.
+
+ -- BGP: distance <1-255> A.B.C.D/M
+ -- BGP: distance <1-255> A.B.C.D/M WORD
+     This command set distance value to
+
+File: quagga.info,  Node: BGP decision process,  Next: BGP route flap dampening,  Prev: BGP distance,  Up: BGP router
+
+11.2.2 BGP decision process
+---------------------------
+
+The decision process Quagga BGP uses to select routes is as follows:
+
+1. Weight check
+     prefer higher local weight routes to lower routes.
+
+2. Local preference check
+     prefer higher local preference routes to lower.
+
+3. Local route check
+     Prefer local routes (statics, aggregates, redistributed) to
+     received routes.
+
+4. AS path length check
+     Prefer shortest hop-count AS_PATHs.
+
+5. Origin check
+     Prefer the lowest origin type route.  That is, prefer IGP origin
+     routes to EGP, to Incomplete routes.
+
+6. MED check
+     Where routes with a MED were received from the same AS, prefer the
+     route with the lowest MED. *Note BGP MED::.
+
+7. External check
+     Prefer the route received from an external, eBGP peer over routes
+     received from other types of peers.
+
+8. IGP cost check
+     Prefer the route with the lower IGP cost.
+
+9. Multi-path check
+     If multi-pathing is enabled, then check whether the routes not yet
+     distinguished in preference may be considered equal.  If *note bgp
+     bestpath as-path multipath-relax:: is set, all such routes are
+     considered equal, otherwise routes received via iBGP with identical
+     AS_PATHs or routes received from eBGP neighbours in the same AS are
+     considered equal.
+
+10 Already-selected external check
+
+     Where both routes were received from eBGP peers, then prefer the
+     route which is already selected.  Note that this check is not
+     applied if *note bgp bestpath compare-routerid:: is configured.
+     This check can prevent some cases of oscillation.
+
+11. Router-ID check
+     Prefer the route with the lowest router-ID. If the route has an
+     ORIGINATOR_ID attribute, through iBGP reflection, then that router
+     ID is used, otherwise the router-ID of the peer the route was
+     received from is used.
+
+12. Cluster-List length check
+     The route with the shortest cluster-list length is used.  The
+     cluster-list reflects the iBGP reflection path the route has taken.
+
+13. Peer address
+     Prefer the route received from the peer with the higher transport
+     layer address, as a last-resort tie-breaker.
+
+ -- BGP: bgp bestpath as-path confed
+     This command specifies that the length of confederation path sets
+     and sequences should should be taken into account during the BGP
+     best path decision process.
+
+ -- BGP: bgp bestpath as-path multipath-relax
+     This command specifies that BGP decision process should consider
+     paths of equal AS_PATH length candidates for multipath computation.
+     Without the knob, the entire AS_PATH must match for multipath
+     computation.
+
+ -- BGP: bgp bestpath compare-routerid
+
+     Ensure that when comparing routes where both are equal on most
+     metrics, including local-pref, AS_PATH length, IGP cost, MED, that
+     the tie is broken based on router-ID.
+
+     If this option is enabled, then the already-selected check, where
+     already selected eBGP routes are preferred, is skipped.
+
+     If a route has an ORIGINATOR_ID attribute because it has been
+     reflected, that ORIGINATOR_ID will be used.  Otherwise, the
+     router-ID of the peer the route was received from will be used.
+
+     The advantage of this is that the route-selection (at this point)
+     will be more deterministic.  The disadvantage is that a few or even
+     one lowest-ID router may attract all trafic to otherwise-equal
+     paths because of this check.  It may increase the possibility of
+     MED or IGP oscillation, unless other measures were taken to avoid
+     these.  The exact behaviour will be sensitive to the iBGP and
+     reflection topology.
+
+File: quagga.info,  Node: BGP route flap dampening,  Prev: BGP decision process,  Up: BGP router
+
+11.2.3 BGP route flap dampening
+-------------------------------
+
+ -- BGP: bgp dampening <1-45> <1-20000> <1-20000> <1-255>
+     This command enables BGP route-flap dampening and specifies
+     dampening parameters.
+
+     half-life
+          Half-life time for the penalty
+     reuse-threshold
+          Value to start reusing a route
+     suppress-threshold
+          Value to start suppressing a route
+     max-suppress
+          Maximum duration to suppress a stable route
+
+     The route-flap damping algorithm is compatible with 'RFC2439'.  The
+     use of this command is not recommended nowadays, see RIPE-378.
+
+File: quagga.info,  Node: BGP MED,  Next: BGP network,  Prev: BGP router,  Up: BGP
+
