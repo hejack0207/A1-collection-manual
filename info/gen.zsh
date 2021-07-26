@@ -13,7 +13,7 @@ if test -d $name; then
 fi
 
 mkdir $name
-csplit $txtfile -n4 -f "$name/$name-" -b "%03d.txt" '/^[*=]\{8,\}/-1' '{*}'
+csplit $txtfile -n4 -f "$name/$name-" -b "%03d.txt" '/^[*=]\{4,\}/-1' '{*}'
 
 for f in $name/$name-*.txt; do
 	i=${${f%.txt}##$name/$name-}
