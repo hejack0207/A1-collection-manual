@@ -1,0 +1,152 @@
+21.3 How Automake can help in silencing make
+============================================
+
+The tricks and idioms for silencing ‘make’ described in the previous
+section can be useful from time to time, but we’ve seen that they all
+have their serious drawbacks and limitations.  That’s why automake
+provides support for a more advanced and flexible way of obtaining
+quieter output from ‘make’ (for most rules at least).
+
+   To give the gist of what Automake can do in this respect, here is a
+simple comparison between a typical ‘make’ output (where silent rules
+are disabled) and one with silent rules enabled:
+
+     % cat Makefile.am
+     bin_PROGRAMS = foo
+     foo_SOURCES = main.c func.c
+     % cat main.c
+     int main (void) { return func (); }  /* func used undeclared */
+     % cat func.c
+     int func (void) { int i; return i; } /* i used uninitialized */
+
+     The make output is by default very verbose.  This causes warnings
+     from the compiler to be somewhat hidden, and not immediate to spot.
+     % make CFLAGS=-Wall
+     gcc -DPACKAGE_NAME=\"foo\" -DPACKAGE_TARNAME=\"foo\" ...
+     -DPACKAGE_STRING=\"foo\ 1.0\" -DPACKAGE_BUGREPORT=\"\" ...
+     -DPACKAGE=\"foo\" -DVERSION=\"1.0\" -I. -Wall -MT main.o
+     -MD -MP -MF .deps/main.Tpo -c -o main.o main.c
+     main.c: In function ‘main’:
+     main.c:3:3: warning: implicit declaration of function ‘func’
+     mv -f .deps/main.Tpo .deps/main.Po
+     gcc -DPACKAGE_NAME=\"foo\" -DPACKAGE_TARNAME=\"foo\" ...
+     -DPACKAGE_STRING=\"foo\ 1.0\" -DPACKAGE_BUGREPORT=\"\" ...
+     -DPACKAGE=\"foo\" -DVERSION=\"1.0\" -I. -Wall -MT func.o
+     -MD -MP -MF .deps/func.Tpo -c -o func.o func.c
+     func.c: In function ‘func’:
+     func.c:4:3: warning: ‘i’ used uninitialized in this function
+     mv -f .deps/func.Tpo .deps/func.Po
+     gcc -Wall -o foo main.o func.o
+
+     Clean up, so that we we can rebuild everything from scratch.
+     % make clean
+     test -z "foo" || rm -f foo
+     rm -f *.o
+
+     Silent rules enabled: the output is minimal but informative.  In
+     particular, the warnings from the compiler stick out very clearly.
+     % make V=0 CFLAGS=-Wall
+       CC     main.o
+     main.c: In function ‘main’:
+     main.c:3:3: warning: implicit declaration of function ‘func’
+       CC     func.o
+     func.c: In function ‘func’:
+     func.c:4:3: warning: ‘i’ used uninitialized in this function
+       CCLD   foo
+
+   Also, in projects using ‘libtool’, the use of silent rules can
+automatically enable the ‘libtool’’s ‘--silent’ option:
+
+     % cat Makefile.am
+     lib_LTLIBRARIES = libx.la
+
+     % make # Both make and libtool are verbose by default.
+     ...
+     libtool: compile: gcc -DPACKAGE_NAME=\"foo\" ... -DLT_OBJDIR=\".libs/\"
+       -I. -g -O2 -MT libx.lo -MD -MP -MF .deps/libx.Tpo -c libx.c -fPIC
+       -DPIC -o .libs/libx.o
+     mv -f .deps/libx.Tpo .deps/libx.Plo
+     /bin/sh ./libtool --tag=CC --mode=link gcc -g -O2 -o libx.la -rpath
+       /usr/local/lib libx.lo
+     libtool: link: gcc -shared .libs/libx.o -Wl,-soname -Wl,libx.so.0
+       -o .libs/libx.so.0.0.0
+     libtool: link: cd .libs && rm -f libx.so && ln -s libx.so.0.0.0 libx.so
+     ...
+
+     % make V=0
+       CC     libx.lo
+       CCLD   libx.la
+
+   For Automake-generated ‘Makefile’s, the user may influence the
+verbosity at ‘configure’ run time as well as at ‘make’ run time:
+
+   • Passing ‘--enable-silent-rules’ to ‘configure’ will cause build
+     rules to be less verbose; the option ‘--disable-silent-rules’ will
+     cause normal verbose output.
+   • At ‘make’ run time, the default chosen at ‘configure’ time may be
+     overridden: ‘make V=1’ will produce verbose output, ‘make V=0’ less
+     verbose output.
+
+   Note that silent rules are _disabled_ by default; the user must
+enable them explicitly at either ‘configure’ run time or at ‘make’ run
+time.  We think that this is a good policy, since it provides the casual
+user with enough information to prepare a good bug report in case
+anything breaks.
+
+   Still, notwithstanding the rationales above, a developer who really
+wants to make silent rules enabled by default in his own package can do
+so by calling ‘AM_SILENT_RULES([yes])’ in ‘configure.ac’.
+
+   Users who prefer to have silent rules enabled by default can edit
+their ‘config.site’ file to make the variable ‘enable_silent_rules’
+default to ‘yes’.  This should still allow disabling silent rules at
+‘configure’ time and at ‘make’ time.
+
+   For portability to different ‘make’ implementations, package authors
+are advised to not set the variable ‘V’ inside the ‘Makefile.am’ file,
+to allow the user to override the value for subdirectories as well.
+
+   To work at its best, the current implementation of this feature
+normally uses nested variable expansion ‘$(VAR1$(V))’, a ‘Makefile’
+feature that is not required by POSIX 2008 but is widely supported in
+practice.  On the rare ‘make’ implementations that do not support nested
+variable expansion, whether rules are silent is always determined at
+configure time, and cannot be overridden at make time.  Future versions
+of POSIX are likely to require nested variable expansion, so this minor
+limitation should go away with time.
+
+   To extend the silent mode to your own rules, you have few choices:
+
+   • You can use the predefined variable ‘AM_V_GEN’ as a prefix to
+     commands that should output a status line in silent mode, and
+     ‘AM_V_at’ as a prefix to commands that should not output anything
+     in silent mode.  When output is to be verbose, both of these
+     variables will expand to the empty string.
+
+   • You can silence a recipe unconditionally with ‘@’, and then use the
+     predefined variable ‘AM_V_P’ to know whether make is being run in
+     silent or verbose mode, adjust the verbose information your recipe
+     displays accordingly:
+
+          generate-headers:
+                          ... [commands defining a shell variable '$headers'] ...; \
+                  if $(AM_V_P); then set -x; else echo " GEN   [headers]"; fi; \
+                  rm -f $$headers && generate-header --flags $$headers
+
+   • You can add your own variables, so strings of your own choice are
+     shown.  The following snippet shows how you would define your own
+     equivalent of ‘AM_V_GEN’:
+
+          pkg_verbose = $(pkg_verbose_@AM_V@)
+          pkg_verbose_ = $(pkg_verbose_@AM_DEFAULT_V@)
+          pkg_verbose_0 = @echo PKG-GEN $@;
+
+          foo: foo.in
+                  $(pkg_verbose)cp $(srcdir)/foo.in $@
+
+   As a final note, observe that, even when silent rules are enabled,
+the ‘--no-print-directory’ option is still required with GNU ‘make’ if
+the “Entering/Leaving directory ...” messages are to be disabled.
+
+File: automake.info,  Node: Gnits,  Next: Not Enough,  Prev: Silencing Make,  Up: Top
+

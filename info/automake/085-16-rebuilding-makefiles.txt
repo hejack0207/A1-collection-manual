@@ -1,0 +1,76 @@
+16 Rebuilding Makefiles
+***********************
+
+Automake generates rules to automatically rebuild ‘Makefile’s,
+‘configure’, and other derived files like ‘Makefile.in’.
+
+   If you are using ‘AM_MAINTAINER_MODE’ in ‘configure.ac’, then these
+automatic rebuilding rules are only enabled in maintainer mode.
+
+   Sometimes it is convenient to supplement the rebuild rules for
+‘configure’ or ‘config.status’ with additional dependencies.  The
+variables ‘CONFIGURE_DEPENDENCIES’ and ‘CONFIG_STATUS_DEPENDENCIES’ can
+be used to list these extra dependencies.  These variables should be
+defined in all ‘Makefile’s of the tree (because these two rebuild rules
+are output in all them), so it is safer and easier to ‘AC_SUBST’ them
+from ‘configure.ac’.  For instance, the following statement will cause
+‘configure’ to be rerun each time ‘version.sh’ is changed.
+
+     AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/version.sh'])
+
+Note the ‘$(top_srcdir)/’ in the file name.  Since this variable is to
+be used in all ‘Makefile’s, its value must be sensible at any level in
+the build hierarchy.
+
+   Beware not to mistake ‘CONFIGURE_DEPENDENCIES’ for
+‘CONFIG_STATUS_DEPENDENCIES’.
+
+   ‘CONFIGURE_DEPENDENCIES’ adds dependencies to the ‘configure’ rule,
+whose effect is to run ‘autoconf’.  This variable should be seldom used,
+because ‘automake’ already tracks ‘m4_include’d files.  However it can
+be useful when playing tricky games with ‘m4_esyscmd’ or similar
+non-recommendable macros with side effects.  Be also aware that
+interactions of this variable with the *note autom4te cache:
+(autoconf)Autom4te Cache. are quite problematic and can cause subtle
+breakage, so you might want to disable the cache if you want to use
+‘CONFIGURE_DEPENDENCIES’.
+
+   ‘CONFIG_STATUS_DEPENDENCIES’ adds dependencies to the ‘config.status’
+rule, whose effect is to run ‘configure’.  This variable should
+therefore carry any non-standard source that may be read as a side
+effect of running ‘configure’, like ‘version.sh’ in the example above.
+
+   Speaking of ‘version.sh’ scripts, we recommend against them today.
+They are mainly used when the version of a package is updated
+automatically by a script (e.g., in daily builds).  Here is what some
+old-style ‘configure.ac’s may look like:
+
+     AC_INIT
+     . $srcdir/version.sh
+     AM_INIT_AUTOMAKE([name], $VERSION_NUMBER)
+     ...
+
+Here, ‘version.sh’ is a shell fragment that sets ‘VERSION_NUMBER’.  The
+problem with this example is that ‘automake’ cannot track dependencies
+(listing ‘version.sh’ in ‘CONFIG_STATUS_DEPENDENCIES’, and distributing
+this file is up to the user), and that it uses the obsolete form of
+‘AC_INIT’ and ‘AM_INIT_AUTOMAKE’.  Upgrading to the new syntax is not
+straightforward, because shell variables are not allowed in ‘AC_INIT’’s
+arguments.  We recommend that ‘version.sh’ be replaced by an M4 file
+that is included by ‘configure.ac’:
+
+     m4_include([version.m4])
+     AC_INIT([name], VERSION_NUMBER)
+     AM_INIT_AUTOMAKE
+     ...
+
+Here ‘version.m4’ could contain something like
+‘m4_define([VERSION_NUMBER], [1.2])’.  The advantage of this second form
+is that ‘automake’ will take care of the dependencies when defining the
+rebuild rule, and will also distribute the file automatically.  An
+inconvenience is that ‘autoconf’ will now be rerun each time the version
+number is bumped, when only ‘configure’ had to be rerun in the previous
+setup.
+
+File: automake.info,  Node: Options,  Next: Miscellaneous,  Prev: Rebuilding,  Up: Top
+

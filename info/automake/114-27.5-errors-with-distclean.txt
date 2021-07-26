@@ -1,0 +1,117 @@
+27.5 Errors with distclean
+==========================
+
+This is a diagnostic you might encounter while running ‘make distcheck’.
+
+   As explained in *note Checking the Distribution::, ‘make distcheck’
+attempts to build and check your package for errors like this one.
+
+   ‘make distcheck’ will perform a ‘VPATH’ build of your package (*note
+VPATH Builds::), and then call ‘make distclean’.  Files left in the
+build directory after ‘make distclean’ has run are listed after this
+error.
+
+   This diagnostic really covers two kinds of errors:
+
+   • files that are forgotten by distclean;
+   • distributed files that are erroneously rebuilt.
+
+   The former left-over files are not distributed, so the fix is to mark
+them for cleaning (*note Clean::), this is obvious and doesn’t deserve
+more explanations.
+
+   The latter bug is not always easy to understand and fix, so let’s
+proceed with an example.  Suppose our package contains a program for
+which we want to build a man page using ‘help2man’.  GNU ‘help2man’
+produces simple manual pages from the ‘--help’ and ‘--version’ output of
+other commands (*note Overview: (help2man)Top.).  Because we don’t want
+to force our users to install ‘help2man’, we decide to distribute the
+generated man page using the following setup.
+
+     # This Makefile.am is bogus.
+     bin_PROGRAMS = foo
+     foo_SOURCES = foo.c
+     dist_man_MANS = foo.1
+
+     foo.1: foo$(EXEEXT)
+             help2man --output=foo.1 ./foo$(EXEEXT)
+
+   This will effectively distribute the man page.  However, ‘make
+distcheck’ will fail with:
+
+     ERROR: files left in build directory after distclean:
+     ./foo.1
+
+   Why was ‘foo.1’ rebuilt?  Because although distributed, ‘foo.1’
+depends on a non-distributed built file: ‘foo$(EXEEXT)’.  ‘foo$(EXEEXT)’
+is built by the user, so it will always appear to be newer than the
+distributed ‘foo.1’.
+
+   ‘make distcheck’ caught an inconsistency in our package.  Our intent
+was to distribute ‘foo.1’ so users do not need to install ‘help2man’,
+however since this rule causes this file to be always rebuilt, users
+_do_ need ‘help2man’.  Either we should ensure that ‘foo.1’ is not
+rebuilt by users, or there is no point in distributing ‘foo.1’.
+
+   More generally, the rule is that distributed files should never
+depend on non-distributed built files.  If you distribute something
+generated, distribute its sources.
+
+   One way to fix the above example, while still distributing ‘foo.1’ is
+to not depend on ‘foo$(EXEEXT)’.  For instance, assuming ‘foo --version’
+and ‘foo --help’ do not change unless ‘foo.c’ or ‘configure.ac’ change,
+we could write the following ‘Makefile.am’:
+
+     bin_PROGRAMS = foo
+     foo_SOURCES = foo.c
+     dist_man_MANS = foo.1
+
+     foo.1: foo.c $(top_srcdir)/configure.ac
+             $(MAKE) $(AM_MAKEFLAGS) foo$(EXEEXT)
+             help2man --output=foo.1 ./foo$(EXEEXT)
+
+   This way, ‘foo.1’ will not get rebuilt every time ‘foo$(EXEEXT)’
+changes.  The ‘make’ call makes sure ‘foo$(EXEEXT)’ is up-to-date before
+‘help2man’.  Another way to ensure this would be to use separate
+directories for binaries and man pages, and set ‘SUBDIRS’ so that
+binaries are built before man pages.
+
+   We could also decide not to distribute ‘foo.1’.  In this case it’s
+fine to have ‘foo.1’ dependent upon ‘foo$(EXEEXT)’, since both will have
+to be rebuilt.  However it would be impossible to build the package in a
+cross-compilation, because building ‘foo.1’ involves an _execution_ of
+‘foo$(EXEEXT)’.
+
+   Another context where such errors are common is when distributed
+files are built by tools that are built by the package.  The pattern is
+similar:
+
+     distributed-file: built-tools distributed-sources
+             build-command
+
+should be changed to
+
+     distributed-file: distributed-sources
+             $(MAKE) $(AM_MAKEFLAGS) built-tools
+             build-command
+
+or you could choose not to distribute ‘distributed-file’, if
+cross-compilation does not matter.
+
+   The points made through these examples are worth a summary:
+
+   • Distributed files should never depend upon non-distributed built
+     files.
+   • Distributed files should be distributed with all their
+     dependencies.
+   • If a file is _intended_ to be rebuilt by users, then there is no
+     point in distributing it.
+
+   For desperate cases, it’s always possible to disable this check by
+setting ‘distcleancheck_listfiles’ as documented in *note Checking the
+Distribution::.  Make sure you do understand the reason why ‘make
+distcheck’ complains before you do this.  ‘distcleancheck_listfiles’ is
+a way to _hide_ errors, not to fix them.  You can always do better.
+
+File: automake.info,  Node: Flag Variables Ordering,  Next: Renamed Objects,  Prev: Errors with distclean,  Up: FAQ
+

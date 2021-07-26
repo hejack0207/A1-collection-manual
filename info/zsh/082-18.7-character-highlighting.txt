@@ -1,0 +1,206 @@
+18.7 Character Highlighting
+===========================
+
+
+The line editor has the ability to highlight characters or regions of
+the line that have a particular significance.  This is controlled by the
+array parameter zle_highlight, if it has been set by the user.
+
+If the parameter contains the single entry none all highlighting is
+turned off.  Note the parameter is still expected to be an array.
+
+Otherwise each entry of the array should consist of a word indicating a
+context for highlighting, then a colon, then a comma-separated list of
+the types of highlighting to apply in that context.
+
+The contexts available for highlighting are the following:
+
+default
+     Any text within the command line not affected by any other
+     highlighting.  Text outside the editable area of the command line
+     is not affected.
+
+isearch
+     When one of the incremental history search widgets is active, the
+     area of the command line matched by the search string or pattern.
+
+region
+     The currently selected text.  In emacs terminology, this is
+     referred to as the region and is bounded by the cursor (point) and
+     the mark.  The region is only highlighted if it is active, which is
+     the case after the mark is modified with set-mark-command or
+     exchange-point-and-mark.  Note that whether or not the region is
+     active has no effect on its use within emacs style widgets, it
+     simply determines whether it is highlighted.  In vi mode, the
+     region corresponds to selected text in visual mode.
+
+special
+     Individual characters that have no direct printable representation
+     but are shown in a special manner by the line editor.  These
+     characters are described below.
+
+suffix
+     This context is used in completion for characters that are marked
+     as suffixes that will be removed if the completion ends at that
+     point, the most obvious example being a slash (/) after a directory
+     name.  Note that suffix removal is configurable; the circumstances
+     under which the suffix will be removed may differ for different
+     completions.
+
+paste
+     Following a command to paste text, the characters that were
+     inserted.
+
+When region_highlight is set, the contexts that describe a region --
+isearch, region, suffix, and paste -- are applied first, then
+region_highlight is applied, then the remaining zle_highlight contexts
+are applied.  If a particular character is affected by multiple
+specifications, the last specification wins.
+
+zle_highlight may contain additional fields for controlling how terminal
+sequences to change colours are output.  Each of the following is
+followed by a colon and a string in the same form as for key bindings.
+This will not be necessary for the vast majority of terminals as the
+defaults shown in parentheses are widely used.
+
+fg_start_code (\e[3)
+     The start of the escape sequence for the foreground colour.  This
+     is followed by one to three ASCII digits representing the colour.
+     Only used for palette colors, i.e.  not 24-bit colors specified via
+     a color triplet.
+
+fg_default_code (9)
+     The number to use instead of the colour to reset the default
+     foreground colour.
+
+fg_end_code (m)
+     The end of the escape sequence for the foreground colour.
+
+bg_start_code (\e[4)
+     The start of the escape sequence for the background colour.  See
+     fg_start_code above.
+
+bg_default_code (9)
+     The number to use instead of the colour to reset the default
+     background colour.
+
+bg_end_code (m)
+     The end of the escape sequence for the background colour.
+
+The available types of highlighting are the following.  Note that not
+all types of highlighting are available on all terminals:
+
+none
+     No highlighting is applied to the given context.  It is not useful
+     for this to appear with other types of highlighting; it is used to
+     override a default.
+
+fg=COLOUR
+     The foreground colour should be set to COLOUR, a decimal integer,
+     the name of one of the eight most widely-supported colours or as a
+     '#' followed by an RGB triplet in hexadecimal format.
+
+     Not all terminals support this and, of those that do, not all
+     provide facilities to test the support, hence the user should
+     decide based on the terminal type.  Most terminals support the
+     colours black, red, green, yellow, blue, magenta, cyan and white,
+     which can be set by name.  In addition.  default may be used to set
+     the terminal's default foreground colour.  Abbreviations are
+     allowed; b or bl selects black.  Some terminals may generate
+     additional colours if the bold attribute is also present.
+
+     On recent terminals and on systems with an up-to-date terminal
+     database the number of colours supported may be tested by the
+     command 'echotc Co'; if this succeeds, it indicates a limit on the
+     number of colours which will be enforced by the line editor.  The
+     number of colours is in any case limited to 256 (i.e.  the range 0
+     to 255).
+
+     Some modern terminal emulators have support for 24-bit true colour
+     (16 million colours).  In this case, the hex triplet format can be
+     used.  This consists of either a three or six digit hexadecimal
+     number describing the red, green and blue components of the colour.
+     Hex triplets can also be used with 88 and 256 colour terminals via
+     the zsh/nearcolor module (see *note The zsh/nearcolor Module::).
+
+     Colour is also known as color.
+
+bg=COLOUR
+     The background colour should be set to COLOUR.  This works
+     similarly to the foreground colour, except the background is not
+     usually affected by the bold attribute.
+
+bold
+     The characters in the given context are shown in a bold font.  Not
+     all terminals distinguish bold fonts.
+
+standout
+     The characters in the given context are shown in the terminal's
+     standout mode.  The actual effect is specific to the terminal; on
+     many terminals it is inverse video.  On some such terminals, where
+     the cursor does not blink it appears with standout mode negated,
+     making it less than clear where the cursor actually is.  On such
+     terminals one of the other effects may be preferable for
+     highlighting the region and matched search string.
+
+underline
+     The characters in the given context are shown underlined.  Some
+     terminals show the foreground in a different colour instead; in
+     this case whitespace will not be highlighted.
+
+The characters described above as 'special' are as follows.  The
+formatting described here is used irrespective of whether the characters
+are highlighted:
+
+ASCII control characters
+     Control characters in the ASCII range are shown as '^' followed by
+     the base character.
+
+Unprintable multibyte characters
+     This item applies to control characters not in the ASCII range,
+     plus other characters as follows.  If the MULTIBYTE option is in
+     effect, multibyte characters not in the ASCII character set that
+     are reported as having zero width are treated as combining
+     characters when the option COMBINING_CHARS is on.  If the option is
+     off, or if a character appears where a combining character is not
+     valid, the character is treated as unprintable.
+
+     Unprintable multibyte characters are shown as a hexadecimal number
+     between angle brackets.  The number is the code point of the
+     character in the wide character set; this may or may not be
+     Unicode, depending on the operating system.
+
+Invalid multibyte characters
+     If the MULTIBYTE option is in effect, any sequence of one or more
+     bytes that does not form a valid character in the current character
+     set is treated as a series of bytes each shown as a special
+     character.  This case can be distinguished from other unprintable
+     characters as the bytes are represented as two hexadecimal digits
+     between angle brackets, as distinct from the four or eight digits
+     that are used for unprintable characters that are nonetheless valid
+     in the current character set.
+
+     Not all systems support this: for it to work, the system's
+     representation of wide characters must be code values from the
+     Universal Character Set, as defined by IS0 10646 (also known as
+     Unicode).
+
+Wrapped double-width characters
+     When a double-width character appears in the final column of a
+     line, it is instead shown on the next line.  The empty space left
+     in the original position is highlighted as a special character.
+
+If zle_highlight is not set or no value applies to a particular context,
+the defaults applied are equivalent to
+
+     zle_highlight=(region:standout special:standout
+     suffix:bold isearch:underline paste:standout)
+
+i.e.  both the region and special characters are shown in standout mode.
+
+Within widgets, arbitrary regions may be highlighted by setting the
+special array parameter region_highlight; see *note Zle Widgets::.
+
+
+File: zsh.info,  Node: Completion Widgets,  Next: Completion System,  Prev: Zsh Line Editor,  Up: Top
+

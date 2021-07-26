@@ -1,0 +1,119 @@
+19.4 Making `testsuite' Scripts
+===============================
+
+For putting Autotest into movement, you need some configuration and
+makefile machinery.  We recommend, at least if your package uses deep or
+shallow hierarchies, that you use `tests/' as the name of the directory
+holding all your tests and their makefile.  Here is a check list of
+things to do.
+
+   - Make sure to create the file `package.m4', which defines the
+     identity of the package.  It must define `AT_PACKAGE_STRING', the
+     full signature of the package, and `AT_PACKAGE_BUGREPORT', the
+     address to which bug reports should be sent.  For sake of
+     completeness, we suggest that you also define `AT_PACKAGE_NAME',
+     `AT_PACKAGE_TARNAME', `AT_PACKAGE_VERSION', and `AT_PACKAGE_URL'.
+     *Note Initializing configure::, for a description of these
+     variables.  Be sure to distribute `package.m4' and to put it into
+     the source hierarchy: the test suite ought to be shipped!  See
+     below for an example `Makefile' excerpt.
+
+   - Invoke `AC_CONFIG_TESTDIR'.
+
+      -- Macro: AC_CONFIG_TESTDIR (DIRECTORY, [TEST-PATH = `directory'])
+          An Autotest test suite is to be configured in DIRECTORY.  This
+          macro causes `DIRECTORY/atconfig' to be created by
+          `config.status' and sets the default `AUTOTEST_PATH' to
+          TEST-PATH (*note testsuite Invocation::).
+
+   - Still within `configure.ac', as appropriate, ensure that some
+     `AC_CONFIG_FILES' command includes substitution for
+     `tests/atlocal'.
+
+   - The appropriate `Makefile' should be modified so the validation in
+     your package is triggered by `make check'.  An example is provided
+     below.
+
+   With Automake, here is a minimal example for inclusion in
+`tests/Makefile.am', in order to link `make check' with a validation
+suite.
+
+     # The `:;' works around a Bash 3.2 bug when the output is not writable.
+     $(srcdir)/package.m4: $(top_srcdir)/configure.ac
+             :;{ \
+               echo '# Signature of the current package.' && \
+               echo 'm4_define([AT_PACKAGE_NAME],' && \
+               echo '  [$(PACKAGE_NAME)])' && \
+               echo 'm4_define([AT_PACKAGE_TARNAME],' && \
+               echo '  [$(PACKAGE_TARNAME)])' && \
+               echo 'm4_define([AT_PACKAGE_VERSION],' && \
+               echo '  [$(PACKAGE_VERSION)])' && \
+               echo 'm4_define([AT_PACKAGE_STRING],' && \
+               echo '  [$(PACKAGE_STRING)])' && \
+               echo 'm4_define([AT_PACKAGE_BUGREPORT],' && \
+               echo '  [$(PACKAGE_BUGREPORT)])'; \
+               echo 'm4_define([AT_PACKAGE_URL],' && \
+               echo '  [$(PACKAGE_URL)])'; \
+             } >'$(srcdir)/package.m4'
+
+     EXTRA_DIST = testsuite.at $(srcdir)/package.m4 $(TESTSUITE) atlocal.in
+     TESTSUITE = $(srcdir)/testsuite
+
+     check-local: atconfig atlocal $(TESTSUITE)
+             $(SHELL) '$(TESTSUITE)' $(TESTSUITEFLAGS)
+
+     installcheck-local: atconfig atlocal $(TESTSUITE)
+             $(SHELL) '$(TESTSUITE)' AUTOTEST_PATH='$(bindir)' \
+               $(TESTSUITEFLAGS)
+
+     clean-local:
+             test ! -f '$(TESTSUITE)' || \
+              $(SHELL) '$(TESTSUITE)' --clean
+
+     AUTOM4TE = $(SHELL) $(srcdir)/build-aux/missing --run autom4te
+     AUTOTEST = $(AUTOM4TE) --language=autotest
+     $(TESTSUITE): $(srcdir)/testsuite.at $(srcdir)/package.m4
+             $(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+             mv $@.tmp $@
+
+   Note that the built testsuite is distributed; this is necessary
+because users might not have Autoconf installed, and thus would not be
+able to rebuild it.  Likewise, the use of `missing' provides the user
+with a nicer error message if they modify a source file to the
+testsuite, and accidentally trigger the rebuild rules.
+
+   You might want to list explicitly the dependencies, i.e., the list of
+the files `testsuite.at' includes.
+
+   If you don't use Automake, you should include the above example in
+`tests/Makefile.in', along with additional lines inspired from the
+following:
+
+     subdir = tests
+     PACKAGE_NAME = @PACKAGE_NAME@
+     PACKAGE_TARNAME = @PACKAGE_TARNAME@
+     PACKAGE_VERSION = @PACKAGE_VERSION@
+     PACKAGE_STRING = @PACKAGE_STRING@
+     PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+     PACKAGE_URL = @PACKAGE_URL@
+
+     atconfig: $(top_builddir)/config.status
+             cd $(top_builddir) && \
+                $(SHELL) ./config.status $(subdir)/$@
+
+     atlocal: $(srcdir)/atlocal.in $(top_builddir)/config.status
+             cd $(top_builddir) && \
+                $(SHELL) ./config.status $(subdir)/$@
+
+and manage to have `$(EXTRA_DIST)' distributed.  You will also want to
+distribute the file `build-aux/missing' from the Automake project; a
+copy of this file resides in the Autoconf source tree.
+
+   With all this in place, and if you have not initialized
+`TESTSUITEFLAGS' within your makefile, you can fine-tune test suite
+execution with this variable, for example:
+
+     make check TESTSUITEFLAGS='-v -d -x 75 -k AC_PROG_CC CFLAGS=-g'
+
+File: autoconf.info,  Node: FAQ,  Next: History,  Prev: Using Autotest,  Up: Top
+

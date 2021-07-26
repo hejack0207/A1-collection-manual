@@ -1,0 +1,138 @@
+11.6 File System Conventions
+============================
+
+Autoconf uses shell-script processing extensively, so the file names
+that it processes should not contain characters that are special to the
+shell.  Special characters include space, tab, newline, NUL, and the
+following:
+
+     " # $ & ' ( ) * ; < = > ? [ \ ` |
+
+   Also, file names should not begin with `~' or `-', and should
+contain neither `-' immediately after `/' nor `~' immediately after
+`:'.  On Posix-like platforms, directory names should not contain `:',
+as this runs afoul of `:' used as the path separator.
+
+   These restrictions apply not only to the files that you distribute,
+but also to the absolute file names of your source, build, and
+destination directories.
+
+   On some Posix-like platforms, `!' and `^' are special too, so they
+should be avoided.
+
+   Posix lets implementations treat leading `//' specially, but
+requires leading `///' and beyond to be equivalent to `/'.  Most Unix
+variants treat `//' like `/'.  However, some treat `//' as a
+"super-root" that can provide access to files that are not otherwise
+reachable from `/'.  The super-root tradition began with Apollo
+Domain/OS, which died out long ago, but unfortunately Cygwin has
+revived it.
+
+   While `autoconf' and friends are usually run on some Posix variety,
+they can be used on other systems, most notably DOS variants.  This
+impacts several assumptions regarding file names.
+
+For example, the following code:
+
+     case $foo_dir in
+       /*) # Absolute
+          ;;
+       *)
+          foo_dir=$dots$foo_dir ;;
+     esac
+
+fails to properly detect absolute file names on those systems, because
+they can use a drivespec, and usually use a backslash as directory
+separator.  If you want to be portable to DOS variants (at the price of
+rejecting valid but oddball Posix file names like `a:\b'), you can
+check for absolute file names like this:
+
+     case $foo_dir in
+       [\\/]* | ?:[\\/]* ) # Absolute
+          ;;
+       *)
+          foo_dir=$dots$foo_dir ;;
+     esac
+
+Make sure you quote the brackets if appropriate and keep the backslash
+as first character (*note Limitations of Shell Builtins: case.).
+
+   Also, because the colon is used as part of a drivespec, these
+systems don't use it as path separator.  When creating or accessing
+paths, you can use the `PATH_SEPARATOR' output variable instead.
+`configure' sets this to the appropriate value for the build system
+(`:' or `;') when it starts up.
+
+   File names need extra care as well.  While DOS variants that are
+Posixy enough to run `autoconf' (such as DJGPP) are usually able to
+handle long file names properly, there are still limitations that can
+seriously break packages.  Several of these issues can be easily
+detected by the doschk
+(ftp://ftp.gnu.org/gnu/non-gnu/doschk/doschk-1.1.tar.gz) package.
+
+   A short overview follows; problems are marked with SFN/LFN to
+indicate where they apply: SFN means the issues are only relevant to
+plain DOS, not to DOS under Microsoft Windows variants, while LFN
+identifies problems that exist even under Microsoft Windows variants.
+
+No multiple dots (SFN)
+     DOS cannot handle multiple dots in file names.  This is an
+     especially important thing to remember when building a portable
+     configure script, as `autoconf' uses a .in suffix for template
+     files.
+
+     This is perfectly OK on Posix variants:
+
+          AC_CONFIG_HEADERS([config.h])
+          AC_CONFIG_FILES([source.c foo.bar])
+          AC_OUTPUT
+
+     but it causes problems on DOS, as it requires `config.h.in',
+     `source.c.in' and `foo.bar.in'.  To make your package more portable
+     to DOS-based environments, you should use this instead:
+
+          AC_CONFIG_HEADERS([config.h:config.hin])
+          AC_CONFIG_FILES([source.c:source.cin foo.bar:foobar.in])
+          AC_OUTPUT
+
+No leading dot (SFN)
+     DOS cannot handle file names that start with a dot.  This is
+     usually not important for `autoconf'.
+
+Case insensitivity (LFN)
+     DOS is case insensitive, so you cannot, for example, have both a
+     file called `INSTALL' and a directory called `install'.  This also
+     affects `make'; if there's a file called `INSTALL' in the
+     directory, `make install' does nothing (unless the `install'
+     target is marked as PHONY).
+
+The 8+3 limit (SFN)
+     Because the DOS file system only stores the first 8 characters of
+     the file name and the first 3 of the extension, those must be
+     unique.  That means that `foobar-part1.c', `foobar-part2.c' and
+     `foobar-prettybird.c' all resolve to the same file name
+     (`FOOBAR-P.C').  The same goes for `foo.bar' and `foo.bartender'.
+
+     The 8+3 limit is not usually a problem under Microsoft Windows, as
+     it uses numeric tails in the short version of file names to make
+     them unique.  However, a registry setting can turn this behavior
+     off.  While this makes it possible to share file trees containing
+     long file names between SFN and LFN environments, it also means
+     the above problem applies there as well.
+
+Invalid characters (LFN)
+     Some characters are invalid in DOS file names, and should therefore
+     be avoided.  In a LFN environment, these are `/', `\', `?', `*',
+     `:', `<', `>', `|' and `"'.  In a SFN environment, other
+     characters are also invalid.  These include `+', `,', `[' and `]'.
+
+Invalid names (LFN)
+     Some DOS file names are reserved, and cause problems if you try to
+     use files with those names.  These names include `CON', `AUX',
+     `COM1', `COM2', `COM3', `COM4', `LPT1', `LPT2', `LPT3', `NUL', and
+     `PRN'.  File names are case insensitive, so even names like
+     `aux/config.guess' are disallowed.
+
+
+File: autoconf.info,  Node: Shell Pattern Matching,  Next: Shell Substitutions,  Prev: File System Conventions,  Up: Portable Shell
+

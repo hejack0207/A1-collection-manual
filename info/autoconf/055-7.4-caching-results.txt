@@ -1,0 +1,207 @@
+7.4 Caching Results
+===================
+
+To avoid checking for the same features repeatedly in various
+`configure' scripts (or in repeated runs of one script), `configure'
+can optionally save the results of many checks in a "cache file" (*note
+Cache Files::).  If a `configure' script runs with caching enabled and
+finds a cache file, it reads the results of previous runs from the
+cache and avoids rerunning those checks.  As a result, `configure' can
+then run much faster than if it had to perform all of the checks every
+time.
+
+ -- Macro: AC_CACHE_VAL (CACHE-ID, COMMANDS-TO-SET-IT)
+     Ensure that the results of the check identified by CACHE-ID are
+     available.  If the results of the check were in the cache file
+     that was read, and `configure' was not given the `--quiet' or
+     `--silent' option, print a message saying that the result was
+     cached; otherwise, run the shell commands COMMANDS-TO-SET-IT.  If
+     the shell commands are run to determine the value, the value is
+     saved in the cache file just before `configure' creates its output
+     files.  *Note Cache Variable Names::, for how to choose the name
+     of the CACHE-ID variable.
+
+     The COMMANDS-TO-SET-IT _must have no side effects_ except for
+     setting the variable CACHE-ID, see below.
+
+ -- Macro: AC_CACHE_CHECK (MESSAGE, CACHE-ID, COMMANDS-TO-SET-IT)
+     A wrapper for `AC_CACHE_VAL' that takes care of printing the
+     messages.  This macro provides a convenient shorthand for the most
+     common way to use these macros.  It calls `AC_MSG_CHECKING' for
+     MESSAGE, then `AC_CACHE_VAL' with the CACHE-ID and COMMANDS
+     arguments, and `AC_MSG_RESULT' with CACHE-ID.
+
+     The COMMANDS-TO-SET-IT _must have no side effects_ except for
+     setting the variable CACHE-ID, see below.
+
+   It is common to find buggy macros using `AC_CACHE_VAL' or
+`AC_CACHE_CHECK', because people are tempted to call `AC_DEFINE' in the
+COMMANDS-TO-SET-IT.  Instead, the code that _follows_ the call to
+`AC_CACHE_VAL' should call `AC_DEFINE', by examining the value of the
+cache variable.  For instance, the following macro is broken:
+
+     AC_DEFUN([AC_SHELL_TRUE],
+     [AC_CACHE_CHECK([whether true(1) works], [my_cv_shell_true_works],
+                     [my_cv_shell_true_works=no
+                      (true) 2>/dev/null && my_cv_shell_true_works=yes
+                      if test "x$my_cv_shell_true_works" = xyes; then
+                        AC_DEFINE([TRUE_WORKS], [1],
+                                  [Define if `true(1)' works properly.])
+                      fi])
+     ])
+
+This fails if the cache is enabled: the second time this macro is run,
+`TRUE_WORKS' _will not be defined_.  The proper implementation is:
+
+     AC_DEFUN([AC_SHELL_TRUE],
+     [AC_CACHE_CHECK([whether true(1) works], [my_cv_shell_true_works],
+                     [my_cv_shell_true_works=no
+                      (true) 2>/dev/null && my_cv_shell_true_works=yes])
+      if test "x$my_cv_shell_true_works" = xyes; then
+        AC_DEFINE([TRUE_WORKS], [1],
+                  [Define if `true(1)' works properly.])
+      fi
+     ])
+
+   Also, COMMANDS-TO-SET-IT should not print any messages, for example
+with `AC_MSG_CHECKING'; do that before calling `AC_CACHE_VAL', so the
+messages are printed regardless of whether the results of the check are
+retrieved from the cache or determined by running the shell commands.
+
+* Menu:
+
+* Cache Variable Names::        Shell variables used in caches
+* Cache Files::                 Files `configure' uses for caching
+* Cache Checkpointing::         Loading and saving the cache file
+
+File: autoconf.info,  Node: Cache Variable Names,  Next: Cache Files,  Up: Caching Results
+
+7.4.1 Cache Variable Names
+--------------------------
+
+The names of cache variables should have the following format:
+
+     PACKAGE-PREFIX_cv_VALUE-TYPE_SPECIFIC-VALUE_[ADDITIONAL-OPTIONS]
+
+for example, `ac_cv_header_stat_broken' or
+`ac_cv_prog_gcc_traditional'.  The parts of the variable name are:
+
+PACKAGE-PREFIX
+     An abbreviation for your package or organization; the same prefix
+     you begin local Autoconf macros with, except lowercase by
+     convention.  For cache values used by the distributed Autoconf
+     macros, this value is `ac'.
+
+`_cv_'
+     Indicates that this shell variable is a cache value.  This string
+     _must_ be present in the variable name, including the leading
+     underscore.
+
+VALUE-TYPE
+     A convention for classifying cache values, to produce a rational
+     naming system.  The values used in Autoconf are listed in *note
+     Macro Names::.
+
+SPECIFIC-VALUE
+     Which member of the class of cache values this test applies to.
+     For example, which function (`alloca'), program (`gcc'), or output
+     variable (`INSTALL').
+
+ADDITIONAL-OPTIONS
+     Any particular behavior of the specific member that this test
+     applies to.  For example, `broken' or `set'.  This part of the
+     name may be omitted if it does not apply.
+
+   The values assigned to cache variables may not contain newlines.
+Usually, their values are Boolean (`yes' or `no') or the names of files
+or functions; so this is not an important restriction.  *note Cache
+Variable Index:: for an index of cache variables with documented
+semantics.
+
+File: autoconf.info,  Node: Cache Files,  Next: Cache Checkpointing,  Prev: Cache Variable Names,  Up: Caching Results
+
+7.4.2 Cache Files
+-----------------
+
+A cache file is a shell script that caches the results of configure
+tests run on one system so they can be shared between configure scripts
+and configure runs.  It is not useful on other systems.  If its contents
+are invalid for some reason, the user may delete or edit it, or override
+documented cache variables on the `configure' command line.
+
+   By default, `configure' uses no cache file, to avoid problems caused
+by accidental use of stale cache files.
+
+   To enable caching, `configure' accepts `--config-cache' (or `-C') to
+cache results in the file `config.cache'.  Alternatively,
+`--cache-file=FILE' specifies that FILE be the cache file.  The cache
+file is created if it does not exist already.  When `configure' calls
+`configure' scripts in subdirectories, it uses the `--cache-file'
+argument so that they share the same cache.  *Note Subdirectories::,
+for information on configuring subdirectories with the
+`AC_CONFIG_SUBDIRS' macro.
+
+   `config.status' only pays attention to the cache file if it is given
+the `--recheck' option, which makes it rerun `configure'.
+
+   It is wrong to try to distribute cache files for particular system
+types.  There is too much room for error in doing that, and too much
+administrative overhead in maintaining them.  For any features that
+can't be guessed automatically, use the standard method of the canonical
+system type and linking files (*note Manual Configuration::).
+
+   The site initialization script can specify a site-wide cache file to
+use, instead of the usual per-program cache.  In this case, the cache
+file gradually accumulates information whenever someone runs a new
+`configure' script.  (Running `configure' merges the new cache results
+with the existing cache file.)  This may cause problems, however, if
+the system configuration (e.g., the installed libraries or compilers)
+changes and the stale cache file is not deleted.
+
+   If `configure' is interrupted at the right time when it updates a
+cache file outside of the build directory where the `configure' script
+is run, it may leave behind a temporary file named after the cache file
+with digits following it.  You may safely delete such a file.
+
+File: autoconf.info,  Node: Cache Checkpointing,  Prev: Cache Files,  Up: Caching Results
+
+7.4.3 Cache Checkpointing
+-------------------------
+
+If your configure script, or a macro called from `configure.ac', happens
+to abort the configure process, it may be useful to checkpoint the cache
+a few times at key points using `AC_CACHE_SAVE'.  Doing so reduces the
+amount of time it takes to rerun the configure script with (hopefully)
+the error that caused the previous abort corrected.
+
+ -- Macro: AC_CACHE_LOAD
+     Loads values from existing cache file, or creates a new cache file
+     if a cache file is not found.  Called automatically from `AC_INIT'.
+
+ -- Macro: AC_CACHE_SAVE
+     Flushes all cached values to the cache file.  Called automatically
+     from `AC_OUTPUT', but it can be quite useful to call
+     `AC_CACHE_SAVE' at key points in `configure.ac'.
+
+   For instance:
+
+      ... AC_INIT, etc. ...
+     # Checks for programs.
+     AC_PROG_CC
+     AC_PROG_AWK
+      ... more program checks ...
+     AC_CACHE_SAVE
+
+     # Checks for libraries.
+     AC_CHECK_LIB([nsl], [gethostbyname])
+     AC_CHECK_LIB([socket], [connect])
+      ... more lib checks ...
+     AC_CACHE_SAVE
+
+     # Might abort...
+     AM_PATH_GTK([1.0.2], [], [AC_MSG_ERROR([GTK not in path])])
+     AM_PATH_GTKMM([0.9.5], [], [AC_MSG_ERROR([GTK not in path])])
+      ... AC_OUTPUT, etc. ...
+
+File: autoconf.info,  Node: Printing Messages,  Prev: Caching Results,  Up: Results
+

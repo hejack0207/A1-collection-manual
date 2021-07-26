@@ -1,0 +1,192 @@
+7.2 Conditional Subdirectories
+==============================
+
+It is possible to define the ‘SUBDIRS’ variable conditionally if, like
+in the case of GNU Inetutils, you want to only build a subset of the
+entire package.
+
+   To illustrate how this works, let’s assume we have two directories
+‘src/’ and ‘opt/’.  ‘src/’ should always be built, but we want to decide
+in ‘configure’ whether ‘opt/’ will be built or not.  (For this example
+we will assume that ‘opt/’ should be built when the variable ‘$want_opt’
+was set to ‘yes’.)
+
+   Running ‘make’ should thus recurse into ‘src/’ always, and then maybe
+in ‘opt/’.
+
+   However ‘make dist’ should always recurse into both ‘src/’ and
+‘opt/’.  Because ‘opt/’ should be distributed even if it is not needed
+in the current configuration.  This means ‘opt/Makefile’ should be
+created _unconditionally_.
+
+   There are two ways to setup a project like this.  You can use
+Automake conditionals (*note Conditionals::) or use Autoconf ‘AC_SUBST’
+variables (*note Setting Output Variables: (autoconf)Setting Output
+Variables.).  Using Automake conditionals is the preferred solution.
+Before we illustrate these two possibilities, let’s introduce
+‘DIST_SUBDIRS’.
+
+* Menu:
+
+* SUBDIRS vs DIST_SUBDIRS::     Two sets of directories
+* Subdirectories with AM_CONDITIONAL::  Specifying conditional subdirectories
+* Subdirectories with AC_SUBST::  Another way for conditional recursion
+* Unconfigured Subdirectories::  Not even creating a ‘Makefile’
+
+File: automake.info,  Node: SUBDIRS vs DIST_SUBDIRS,  Next: Subdirectories with AM_CONDITIONAL,  Up: Conditional Subdirectories
+
+7.2.1 ‘SUBDIRS’ vs. ‘DIST_SUBDIRS’
+----------------------------------
+
+Automake considers two sets of directories, defined by the variables
+‘SUBDIRS’ and ‘DIST_SUBDIRS’.
+
+   ‘SUBDIRS’ contains the subdirectories of the current directory that
+must be built (*note Subdirectories::).  It must be defined manually;
+Automake will never guess a directory is to be built.  As we will see in
+the next two sections, it is possible to define it conditionally so that
+some directory will be omitted from the build.
+
+   ‘DIST_SUBDIRS’ is used in rules that need to recurse in all
+directories, even those that have been conditionally left out of the
+build.  Recall our example where we may not want to build subdirectory
+‘opt/’, but yet we want to distribute it?  This is where ‘DIST_SUBDIRS’
+comes into play: ‘opt’ may not appear in ‘SUBDIRS’, but it must appear
+in ‘DIST_SUBDIRS’.
+
+   Precisely, ‘DIST_SUBDIRS’ is used by ‘make maintainer-clean’, ‘make
+distclean’ and ‘make dist’.  All other recursive rules use ‘SUBDIRS’.
+
+   If ‘SUBDIRS’ is defined conditionally using Automake conditionals,
+Automake will define ‘DIST_SUBDIRS’ automatically from the possible
+values of ‘SUBDIRS’ in all conditions.
+
+   If ‘SUBDIRS’ contains ‘AC_SUBST’ variables, ‘DIST_SUBDIRS’ will not
+be defined correctly because Automake does not know the possible values
+of these variables.  In this case ‘DIST_SUBDIRS’ needs to be defined
+manually.
+
+File: automake.info,  Node: Subdirectories with AM_CONDITIONAL,  Next: Subdirectories with AC_SUBST,  Prev: SUBDIRS vs DIST_SUBDIRS,  Up: Conditional Subdirectories
+
+7.2.2 Subdirectories with ‘AM_CONDITIONAL’
+------------------------------------------
+
+‘configure’ should output the ‘Makefile’ for each directory and define a
+condition into which ‘opt/’ should be built.
+
+     ...
+     AM_CONDITIONAL([COND_OPT], [test "$want_opt" = yes])
+     AC_CONFIG_FILES([Makefile src/Makefile opt/Makefile])
+     ...
+
+   Then ‘SUBDIRS’ can be defined in the top-level ‘Makefile.am’ as
+follows.
+
+     if COND_OPT
+       MAYBE_OPT = opt
+     endif
+     SUBDIRS = src $(MAYBE_OPT)
+
+   As you can see, running ‘make’ will rightly recurse into ‘src/’ and
+maybe ‘opt/’.
+
+   As you can’t see, running ‘make dist’ will recurse into both ‘src/’
+and ‘opt/’ directories because ‘make dist’, unlike ‘make all’, doesn’t
+use the ‘SUBDIRS’ variable.  It uses the ‘DIST_SUBDIRS’ variable.
+
+   In this case Automake will define ‘DIST_SUBDIRS = src opt’
+automatically because it knows that ‘MAYBE_OPT’ can contain ‘opt’ in
+some condition.
+
+File: automake.info,  Node: Subdirectories with AC_SUBST,  Next: Unconfigured Subdirectories,  Prev: Subdirectories with AM_CONDITIONAL,  Up: Conditional Subdirectories
+
+7.2.3 Subdirectories with ‘AC_SUBST’
+------------------------------------
+
+Another possibility is to define ‘MAYBE_OPT’ from ‘./configure’ using
+‘AC_SUBST’:
+
+     ...
+     if test "$want_opt" = yes; then
+       MAYBE_OPT=opt
+     else
+       MAYBE_OPT=
+     fi
+     AC_SUBST([MAYBE_OPT])
+     AC_CONFIG_FILES([Makefile src/Makefile opt/Makefile])
+     ...
+
+   In this case the top-level ‘Makefile.am’ should look as follows.
+
+     SUBDIRS = src $(MAYBE_OPT)
+     DIST_SUBDIRS = src opt
+
+   The drawback is that since Automake cannot guess what the possible
+values of ‘MAYBE_OPT’ are, it is necessary to define ‘DIST_SUBDIRS’.
+
+File: automake.info,  Node: Unconfigured Subdirectories,  Prev: Subdirectories with AC_SUBST,  Up: Conditional Subdirectories
+
+7.2.4 Unconfigured Subdirectories
+---------------------------------
+
+The semantics of ‘DIST_SUBDIRS’ are often misunderstood by some users
+that try to _configure and build_ subdirectories conditionally.  Here by
+configuring we mean creating the ‘Makefile’ (it might also involve
+running a nested ‘configure’ script: this is a costly operation that
+explains why people want to do it conditionally, but only the ‘Makefile’
+is relevant to the discussion).
+
+   The above examples all assume that every ‘Makefile’ is created, even
+in directories that are not going to be built.  The simple reason is
+that we want ‘make dist’ to distribute even the directories that are not
+being built (e.g., platform-dependent code), hence ‘make dist’ must
+recurse into the subdirectory, hence this directory must be configured
+and appear in ‘DIST_SUBDIRS’.
+
+   Building packages that do not configure every subdirectory is a
+tricky business, and we do not recommend it to the novice as it is easy
+to produce an incomplete tarball by mistake.  We will not discuss this
+topic in depth here, yet for the adventurous here are a few rules to
+remember.
+
+   • ‘SUBDIRS’ should always be a subset of ‘DIST_SUBDIRS’.
+
+     It makes little sense to have a directory in ‘SUBDIRS’ that is not
+     in ‘DIST_SUBDIRS’.  Think of the former as a way to tell which
+     directories listed in the latter should be built.
+   • Any directory listed in ‘DIST_SUBDIRS’ and ‘SUBDIRS’ must be
+     configured.
+
+     I.e., the ‘Makefile’ must exists or the recursive ‘make’ rules will
+     not be able to process the directory.
+   • Any configured directory must be listed in ‘DIST_SUBDIRS’.
+
+     So that the cleaning rules remove the generated ‘Makefile’s.  It
+     would be correct to see ‘DIST_SUBDIRS’ as a variable that lists all
+     the directories that have been configured.
+
+   In order to prevent recursion in some unconfigured directory you must
+therefore ensure that this directory does not appear in ‘DIST_SUBDIRS’
+(and ‘SUBDIRS’).  For instance, if you define ‘SUBDIRS’ conditionally
+using ‘AC_SUBST’ and do not define ‘DIST_SUBDIRS’ explicitly, it will be
+default to ‘$(SUBDIRS)’; another possibility is to force ‘DIST_SUBDIRS =
+$(SUBDIRS)’.
+
+   Of course, directories that are omitted from ‘DIST_SUBDIRS’ will not
+be distributed unless you make other arrangements for this to happen
+(for instance, always running ‘make dist’ in a configuration where all
+directories are known to appear in ‘DIST_SUBDIRS’; or writing a
+‘dist-hook’ target to distribute these directories).
+
+   In few packages, unconfigured directories are not even expected to be
+distributed.  Although these packages do not require the aforementioned
+extra arrangements, there is another pitfall.  If the name of a
+directory appears in ‘SUBDIRS’ or ‘DIST_SUBDIRS’, ‘automake’ will make
+sure the directory exists.  Consequently ‘automake’ cannot be run on
+such a distribution when one directory has been omitted.  One way to
+avoid this check is to use the ‘AC_SUBST’ method to declare conditional
+directories; since ‘automake’ does not know the values of ‘AC_SUBST’
+variables it cannot ensure the corresponding directory exists.
+
+File: automake.info,  Node: Alternative,  Next: Subpackages,  Prev: Conditional Subdirectories,  Up: Directories
+

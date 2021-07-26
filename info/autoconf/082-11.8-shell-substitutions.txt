@@ -1,0 +1,499 @@
+11.8 Shell Substitutions
+========================
+
+Contrary to a persistent urban legend, the Bourne shell does not
+systematically split variables and back-quoted expressions, in
+particular on the right-hand side of assignments and in the argument of
+`case'.  For instance, the following code:
+
+     case "$given_srcdir" in
+     .)  top_srcdir="`echo "$dots" | sed 's|/$||'`" ;;
+     *)  top_srcdir="$dots$given_srcdir" ;;
+     esac
+
+is more readable when written as:
+
+     case $given_srcdir in
+     .)  top_srcdir=`echo "$dots" | sed 's|/$||'` ;;
+     *)  top_srcdir=$dots$given_srcdir ;;
+     esac
+
+and in fact it is even _more_ portable: in the first case of the first
+attempt, the computation of `top_srcdir' is not portable, since not all
+shells properly understand `"`..."..."...`"', for example Solaris 10
+ksh:
+
+     $ foo="`echo " bar" | sed 's, ,,'`"
+     ksh: : cannot execute
+     ksh: bar | sed 's, ,,': cannot execute
+
+Posix does not specify behavior for this sequence.  On the other hand,
+behavior for `"`...\"...\"...`"' is specified by Posix, but in
+practice, not all shells understand it the same way: pdksh 5.2.14
+prints spurious quotes when in Posix mode:
+
+     $ echo "`echo \"hello\"`"
+     hello
+     $ set -o posix
+     $ echo "`echo \"hello\"`"
+     "hello"
+
+There is just no portable way to use double-quoted strings inside
+double-quoted back-quoted expressions (pfew!).
+
+   Bash 4.1 has a bug where quoted empty strings adjacent to unquoted
+parameter expansions are elided during word splitting.  Meanwhile, zsh
+does not perform word splitting except when in Bourne compatibility
+mode.  In the example below, the correct behavior is to have five
+arguments to the function, and exactly two spaces on either side of the
+middle `-', since word splitting collapses multiple spaces in `$f' but
+leaves empty arguments intact.
+
+     $ bash -c 'n() { echo "$#$@"; }; f="  -  "; n - ""$f"" -'
+     3- - -
+     $ ksh -c 'n() { echo "$#$@"; }; f="  -  "; n - ""$f"" -'
+     5-  -  -
+     $ zsh -c 'n() { echo "$#$@"; }; f="  -  "; n - ""$f"" -'
+     3-   -   -
+     $ zsh -c 'emulate sh;
+     > n() { echo "$#$@"; }; f="  -  "; n - ""$f"" -'
+     5-  -  -
+
+You can work around this by doing manual word splitting, such as using
+`"$str" $list' rather than `"$str"$list'.
+
+   There are also portability pitfalls with particular expansions:
+
+`$@'
+     One of the most famous shell-portability issues is related to
+     `"$@"'.  When there are no positional arguments, Posix says that
+     `"$@"' is supposed to be equivalent to nothing, but the original
+     Unix version 7 Bourne shell treated it as equivalent to `""'
+     instead, and this behavior survives in later implementations like
+     Digital Unix 5.0.
+
+     The traditional way to work around this portability problem is to
+     use `${1+"$@"}'.  Unfortunately this method does not work with Zsh
+     (3.x and 4.x), which is used on Mac OS X.  When emulating the
+     Bourne shell, Zsh performs word splitting on `${1+"$@"}':
+
+          zsh $ emulate sh
+          zsh $ for i in "$@"; do echo $i; done
+          Hello World
+          !
+          zsh $ for i in ${1+"$@"}; do echo $i; done
+          Hello
+          World
+          !
+
+     Zsh handles plain `"$@"' properly, but we can't use plain `"$@"'
+     because of the portability problems mentioned above.  One
+     workaround relies on Zsh's "global aliases" to convert `${1+"$@"}'
+     into `"$@"' by itself:
+
+          test "${ZSH_VERSION+set}" = set && alias -g '${1+"$@"}'='"$@"'
+
+     Zsh only recognizes this alias when a shell word matches it
+     exactly; `"foo"${1+"$@"}' remains subject to word splitting.
+     Since this case always yields at least one shell word, use plain
+     `"$@"'.
+
+     A more conservative workaround is to avoid `"$@"' if it is
+     possible that there may be no positional arguments.  For example,
+     instead of:
+
+          cat conftest.c "$@"
+
+     you can use this instead:
+
+          case $# in
+          0) cat conftest.c;;
+          *) cat conftest.c "$@";;
+          esac
+
+     Autoconf macros often use the `set' command to update `$@', so if
+     you are writing shell code intended for `configure' you should not
+     assume that the value of `$@' persists for any length of time.
+
+`${10}'
+     The 10th, 11th, ... positional parameters can be accessed only
+     after a `shift'.  The 7th Edition shell reported an error if given
+     `${10}', and Solaris 10 `/bin/sh' still acts that way:
+
+          $ set 1 2 3 4 5 6 7 8 9 10
+          $ echo ${10}
+          bad substitution
+
+     Conversely, not all shells obey the Posix rule that when braces are
+     omitted, multiple digits beyond a `$' imply the single-digit
+     positional parameter expansion concatenated with the remaining
+     literal digits.  To work around the issue, you must use braces.
+
+          $ bash -c 'set a b c d e f g h i j; echo $10 ${1}0'
+          a0 a0
+          $ dash -c 'set a b c d e f g h i j; echo $10 ${1}0'
+          j a0
+
+`${VAR:-VALUE}'
+     Old BSD shells, including the Ultrix `sh', don't accept the colon
+     for any shell substitution, and complain and die.  Similarly for
+     ${VAR:=VALUE}, ${VAR:?VALUE}, etc.  However, all shells that
+     support functions allow the use of colon in shell substitution,
+     and since m4sh requires functions, you can portably use null
+     variable substitution patterns in configure scripts.
+
+`${VAR+VALUE}'
+     When using `${VAR-VALUE}' or `${VAR-VALUE}' for providing
+     alternate substitutions, VALUE must either be a single shell word,
+     quoted, or in the context of an unquoted here-document.  Solaris
+     `/bin/sh' complains otherwise.
+
+          $ /bin/sh -c 'echo ${a-b c}'
+          /bin/sh: bad substitution
+          $ /bin/sh -c 'echo ${a-'\''b c'\''}'
+          b c
+          $ /bin/sh -c 'echo "${a-b c}"'
+          b c
+          $ /bin/sh -c 'cat <<EOF
+          ${a-b c}
+          EOF
+          b c
+
+     According to Posix, if an expansion occurs inside double quotes,
+     then the use of unquoted double quotes within VALUE is
+     unspecified, and any single quotes become literal characters; in
+     that case, escaping must be done with backslash.  Likewise, the
+     use of unquoted here-documents is a case where double quotes have
+     unspecified results:
+
+          $ /bin/sh -c 'echo "${a-"b  c"}"'
+          /bin/sh: bad substitution
+          $ ksh -c 'echo "${a-"b  c"}"'
+          b c
+          $ bash -c 'echo "${a-"b  c"}"'
+          b  c
+          $ /bin/sh -c 'a=; echo ${a+'\''b  c'\''}'
+          b  c
+          $ /bin/sh -c 'a=; echo "${a+'\''b  c'\''}"'
+          'b  c'
+          $ /bin/sh -c 'a=; echo "${a+\"b  c\"}"'
+          "b  c"
+          $ /bin/sh -c 'a=; echo "${a+b  c}"'
+          b  c
+          $ /bin/sh -c 'cat <<EOF
+          ${a-"b  c"}
+          EOF'
+          "b  c"
+          $ /bin/sh -c 'cat <<EOF
+          ${a-'b  c'}
+          EOF'
+          'b  c'
+          $ bash -c 'cat <<EOF
+          ${a-"b  c"}
+          EOF'
+          b  c
+          $ bash -c 'cat <<EOF
+          ${a-'b  c'}
+          EOF'
+          'b  c'
+
+     Perhaps the easiest way to work around quoting issues in a manner
+     portable to all shells is to place the results in a temporary
+     variable, then use `$t' as the VALUE, rather than trying to inline
+     the expression needing quoting.
+
+          $ /bin/sh -c 't="b  c\"'\''}\\"; echo "${a-$t}"'
+          b  c"'}\
+          $ ksh -c 't="b  c\"'\''}\\"; echo "${a-$t}"'
+          b  c"'}\
+          $ bash -c 't="b  c\"'\''}\\"; echo "${a-$t}"'
+          b  c"'}\
+
+`${VAR=VALUE}'
+     When using `${VAR=VALUE}' to assign a default value to VAR,
+     remember that even though the assignment to VAR does not undergo
+     file name expansion, the result of the variable expansion does
+     unless the expansion occurred within double quotes.  In particular,
+     when using `:' followed by unquoted variable expansion for the
+     side effect of setting a default value, if the final value of
+     `$var' contains any globbing characters (either from VALUE or from
+     prior contents), the shell has to spend time performing file name
+     expansion and field splitting even though those results will not be
+     used.  Therefore, it is a good idea to consider double quotes when
+     performing default initialization; while remembering how this
+     impacts any quoting characters appearing in VALUE.
+
+          $ time bash -c ': "${a=/usr/bin/*}"; echo "$a"'
+          /usr/bin/*
+
+          real	0m0.005s
+          user	0m0.002s
+          sys	0m0.003s
+          $ time bash -c ': ${a=/usr/bin/*}; echo "$a"'
+          /usr/bin/*
+
+          real	0m0.039s
+          user	0m0.026s
+          sys	0m0.009s
+          $ time bash -c 'a=/usr/bin/*; : ${a=noglob}; echo "$a"'
+          /usr/bin/*
+
+          real	0m0.031s
+          user	0m0.020s
+          sys	0m0.010s
+
+          $ time bash -c 'a=/usr/bin/*; : "${a=noglob}"; echo "$a"'
+          /usr/bin/*
+
+          real	0m0.006s
+          user	0m0.002s
+          sys	0m0.003s
+
+     As with `+' and `-', you must use quotes when using `=' if the
+     VALUE contains more than one shell word; either single quotes for
+     just the VALUE, or double quotes around the entire expansion:
+
+          $ : ${var1='Some words'}
+          $ : "${var2=like this}"
+          $ echo $var1 $var2
+          Some words like this
+
+     otherwise some shells, such as Solaris `/bin/sh' or on Digital
+     Unix V 5.0, die because of a "bad substitution".  Meanwhile, Posix
+     requires that with `=', quote removal happens prior to the
+     assignment, and the expansion be the final contents of VAR without
+     quoting (and thus subject to field splitting), in contrast to the
+     behavior with `-' passing the quoting through to the final
+     expansion.  However, `bash' 4.1 does not obey this rule.
+
+          $ ksh -c 'echo ${var-a\ \ b}'
+          a  b
+          $ ksh -c 'echo ${var=a\ \ b}'
+          a b
+          $ bash -c 'echo ${var=a\ \ b}'
+          a  b
+
+     Finally, Posix states that when mixing `${a=b}' with regular
+     commands, it is unspecified whether the assignments affect the
+     parent shell environment.  It is best to perform assignments
+     independently from commands, to avoid the problems demonstrated in
+     this example:
+
+          $ bash -c 'x= y=${x:=b} sh -c "echo +\$x+\$y+";echo -$x-'
+          +b+b+
+          -b-
+          $ /bin/sh -c 'x= y=${x:=b} sh -c "echo +\$x+\$y+";echo -$x-'
+          ++b+
+          --
+          $ ksh -c 'x= y=${x:=b} sh -c "echo +\$x+\$y+";echo -$x-'
+          +b+b+
+          --
+
+`${VAR=VALUE}'
+     Solaris `/bin/sh' has a frightening bug in its handling of literal
+     assignments.  Imagine you need set a variable to a string
+     containing `}'.  This `}' character confuses Solaris `/bin/sh'
+     when the affected variable was already set.  This bug can be
+     exercised by running:
+
+          $ unset foo
+          $ foo=${foo='}'}
+          $ echo $foo
+          }
+          $ foo=${foo='}'   # no error; this hints to what the bug is
+          $ echo $foo
+          }
+          $ foo=${foo='}'}
+          $ echo $foo
+          }}
+           ^ ugh!
+
+     It seems that `}' is interpreted as matching `${', even though it
+     is enclosed in single quotes.  The problem doesn't happen using
+     double quotes, or when using a temporary variable holding the
+     problematic string.
+
+`${VAR=EXPANDED-VALUE}'
+     On Ultrix, running
+
+          default="yu,yaa"
+          : ${var="$default"}
+
+     sets VAR to `M-yM-uM-,M-yM-aM-a', i.e., the 8th bit of each char
+     is set.  You don't observe the phenomenon using a simple `echo
+     $var' since apparently the shell resets the 8th bit when it
+     expands $var.  Here are two means to make this shell confess its
+     sins:
+
+          $ cat -v <<EOF
+          $var
+          EOF
+
+     and
+
+          $ set | grep '^var=' | cat -v
+
+     One classic incarnation of this bug is:
+
+          default="a b c"
+          : ${list="$default"}
+          for c in $list; do
+            echo $c
+          done
+
+     You'll get `a b c' on a single line.  Why?  Because there are no
+     spaces in `$list': there are `M- ', i.e., spaces with the 8th bit
+     set, hence no IFS splitting is performed!!!
+
+     One piece of good news is that Ultrix works fine with `:
+     ${list=$default}'; i.e., if you _don't_ quote.  The bad news is
+     then that QNX 4.25 then sets LIST to the _last_ item of DEFAULT!
+
+     The portable way out consists in using a double assignment, to
+     switch the 8th bit twice on Ultrix:
+
+          list=${list="$default"}
+
+     ...but beware of the `}' bug from Solaris (see above).  For safety,
+     use:
+
+          test "${var+set}" = set || var={VALUE}
+
+`${#VAR}'
+`${VAR%WORD}'
+`${VAR%%WORD}'
+`${VAR#WORD}'
+`${VAR##WORD}'
+     Posix requires support for these usages, but they do not work with
+     many traditional shells, e.g., Solaris 10 `/bin/sh'.
+
+     Also, `pdksh' 5.2.14 mishandles some WORD forms.  For example if
+     `$1' is `a/b' and `$2' is `a', then `${1#$2}' should yield `/b',
+     but with `pdksh' it yields the empty string.
+
+``COMMANDS`'
+     Posix requires shells to trim all trailing newlines from command
+     output before substituting it, so assignments like `dir=`echo
+     "$file" | tr a A`' do not work as expected if `$file' ends in a
+     newline.
+
+     While in general it makes no sense, do not substitute a single
+     builtin with side effects, because Ash 0.2, trying to optimize,
+     does not fork a subshell to perform the command.
+
+     For instance, if you wanted to check that `cd' is silent, do not
+     use `test -z "`cd /`"' because the following can happen:
+
+          $ pwd
+          /tmp
+          $ test -z "`cd /`" && pwd
+          /
+
+     The result of `foo=`exit 1`' is left as an exercise to the reader.
+
+     The MSYS shell leaves a stray byte in the expansion of a
+     double-quoted command substitution of a native program, if the end
+     of the substitution is not aligned with the end of the double
+     quote.  This may be worked around by inserting another pair of
+     quotes:
+
+          $ echo "`printf 'foo\r\n'` bar" > broken
+          $ echo "`printf 'foo\r\n'`"" bar" | cmp - broken
+          - broken differ: char 4, line 1
+
+     Upon interrupt or SIGTERM, some shells may abort a command
+     substitution, replace it with a null string, and wrongly evaluate
+     the enclosing command before entering the trap or ending the
+     script.  This can lead to spurious errors:
+
+          $ sh -c 'if test `sleep 5; echo hi` = hi; then echo yes; fi'
+          $ ^C
+          sh: test: hi: unexpected operator/operand
+
+     You can avoid this by assigning the command substitution to a
+     temporary variable:
+
+          $ sh -c 'res=`sleep 5; echo hi`
+                   if test "x$res" = xhi; then echo yes; fi'
+          $ ^C
+
+`$(COMMANDS)'
+     This construct is meant to replace ``COMMANDS`', and it has most
+     of the problems listed under ``COMMANDS`'.
+
+     This construct can be nested while this is impossible to do
+     portably with back quotes.  Unfortunately it is not yet
+     universally supported.  Most notably, even recent releases of
+     Solaris don't support it:
+
+          $ showrev -c /bin/sh | grep version
+          Command version: SunOS 5.10 Generic 121005-03 Oct 2006
+          $ echo $(echo blah)
+          syntax error: `(' unexpected
+
+     nor does IRIX 6.5's Bourne shell:
+          $ uname -a
+          IRIX firebird-image 6.5 07151432 IP22
+          $ echo $(echo blah)
+          $(echo blah)
+
+     If you do use `$(COMMANDS)', make sure that the commands do not
+     start with a parenthesis, as that would cause confusion with a
+     different notation `$((EXPRESSION))' that in modern shells is an
+     arithmetic expression not a command.  To avoid the confusion,
+     insert a space between the two opening parentheses.
+
+     Avoid COMMANDS that contain unbalanced parentheses in
+     here-documents, comments, or case statement patterns, as many
+     shells mishandle them.  For example, Bash 3.1, `ksh88', `pdksh'
+     5.2.14, and Zsh 4.2.6 all mishandle the following valid command:
+
+          echo $(case x in x) echo hello;; esac)
+
+`$((EXPRESSION))'
+     Arithmetic expansion is not portable as some shells (most notably
+     Solaris 10 `/bin/sh') don't support it.
+
+     Among shells that do support `$(( ))', not all of them obey the
+     Posix rule that octal and hexadecimal constants must be recognized:
+
+          $ bash -c 'echo $(( 010 + 0x10 ))'
+          24
+          $ zsh -c 'echo $(( 010 + 0x10 ))'
+          26
+          $ zsh -c 'emulate sh; echo $(( 010 + 0x10 ))'
+          24
+          $ pdksh -c 'echo $(( 010 + 0x10 ))'
+          pdksh:  010 + 0x10 : bad number `0x10'
+          $ pdksh -c 'echo $(( 010 ))'
+          10
+
+     When it is available, using arithmetic expansion provides a
+     noticeable speedup in script execution; but testing for support
+     requires `eval' to avoid syntax errors.  The following construct
+     is used by `AS_VAR_ARITH' to provide arithmetic computation when
+     all arguments are provided in decimal and without a leading zero,
+     and all operators are properly quoted and appear as distinct
+     arguments:
+
+          if ( eval 'test $(( 1 + 1 )) = 2' ) 2>/dev/null; then
+            eval 'func_arith ()
+            {
+              func_arith_result=$(( $* ))
+            }'
+          else
+            func_arith ()
+            {
+              func_arith_result=`expr "$@"`
+            }
+          fi
+          func_arith 1 + 1
+          foo=$func_arith_result
+
+`^'
+     Always quote `^', otherwise traditional shells such as `/bin/sh'
+     on Solaris 10 treat this like `|'.
+
+
+File: autoconf.info,  Node: Assignments,  Next: Parentheses,  Prev: Shell Substitutions,  Up: Portable Shell
+

@@ -1,0 +1,40 @@
+12.20 Timestamp Resolution and Make
+===================================
+
+Traditionally, file timestamps had 1-second resolution, and `make' used
+those timestamps to determine whether one file was newer than the
+other.  However, many modern file systems have timestamps with
+1-nanosecond resolution.  Some `make' implementations look at the
+entire timestamp; others ignore the fractional part, which can lead to
+incorrect results.  Normally this is not a problem, but in some extreme
+cases you may need to use tricks like `sleep 1' to work around
+timestamp truncation bugs.
+
+   Commands like `cp -p' and `touch -r' typically do not copy file
+timestamps to their full resolutions (*note Limitations of Usual Tools:
+touch.).  Hence you should be wary of rules like this:
+
+     dest: src
+             cp -p src dest
+
+   as `dest' often appears to be older than `src' after the timestamp
+is truncated, and this can cause `make' to do needless rework the next
+time it is invoked.  To work around this problem, you can use a
+timestamp file, e.g.:
+
+     dest-stamp: src
+             cp -p src dest
+             date >dest-stamp
+
+   Apart from timestamp resolution, there are also differences in
+handling equal timestamps.  HP-UX `make' updates targets if it has the
+same time stamp as one of its prerequisites, in violation of Posix
+rules.
+
+   This can cause spurious rebuilds for repeated runs of `make'.  This
+in turn can cause `make' to fail if it tries to rebuild generated files
+in a possibly read-only source tree with tools not present on the
+end-user machine.  Use GNU `make' instead.
+
+File: autoconf.info,  Node: Portable C and C++,  Next: Manual Configuration,  Prev: Portable Make,  Up: Top
+

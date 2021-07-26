@@ -1,0 +1,908 @@
+6.20 Foreign Function Interface
+===============================
+
+The more one hacks in Scheme, the more one realizes that there are
+actually two computational worlds: one which is warm and alive, that
+land of parentheses, and one cold and dead, the land of C and its ilk.
+
+   But yet we as programmers live in both worlds, and Guile itself is
+half implemented in C. So it is that Guile’s living half pays respect to
+its dead counterpart, via a spectrum of interfaces to C ranging from
+dynamic loading of Scheme primitives to dynamic binding of stock C
+library procedures.
+
+* Menu:
+
+* Foreign Libraries::           Dynamically linking to libraries.
+* Foreign Functions::           Simple calls to C procedures.
+* C Extensions::                Extending Guile in C with loadable modules.
+* Modules and Extensions::      Loading C extensions into modules.
+* Foreign Pointers::            Accessing global variables.
+* Dynamic FFI::                 Calling arbitrary C functions.
+
+File: guile.info,  Node: Foreign Libraries,  Next: Foreign Functions,  Up: Foreign Function Interface
+
+6.20.1 Foreign Libraries
+------------------------
+
+Most modern Unices have something called “shared libraries”.  This
+ordinarily means that they have the capability to share the executable
+image of a library between several running programs to save memory and
+disk space.  But generally, shared libraries give a lot of additional
+flexibility compared to the traditional static libraries.  In fact,
+calling them ‘dynamic’ libraries is as correct as calling them ‘shared’.
+
+   Shared libraries really give you a lot of flexibility in addition to
+the memory and disk space savings.  When you link a program against a
+shared library, that library is not closely incorporated into the final
+executable.  Instead, the executable of your program only contains
+enough information to find the needed shared libraries when the program
+is actually run.  Only then, when the program is starting, is the final
+step of the linking process performed.  This means that you need not
+recompile all programs when you install a new, only slightly modified
+version of a shared library.  The programs will pick up the changes
+automatically the next time they are run.
+
+   Now, when all the necessary machinery is there to perform part of the
+linking at run-time, why not take the next step and allow the programmer
+to explicitly take advantage of it from within their program?  Of
+course, many operating systems that support shared libraries do just
+that, and chances are that Guile will allow you to access this feature
+from within your Scheme programs.  As you might have guessed already,
+this feature is called “dynamic linking”.(1)
+
+   We titled this section “foreign libraries” because although the name
+“foreign” doesn’t leak into the API, the world of C really is foreign to
+Scheme – and that estrangement extends to components of foreign
+libraries as well, as we see in future sections.
+
+ -- Scheme Procedure: dynamic-link [library]
+ -- C Function: scm_dynamic_link (library)
+     Find the shared library denoted by LIBRARY (a string) and link it
+     into the running Guile application.  When everything works out,
+     return a Scheme object suitable for representing the linked object
+     file.  Otherwise an error is thrown.  How object files are searched
+     is system dependent.
+
+     Normally, LIBRARY is just the name of some shared library file that
+     will be searched for in the places where shared libraries usually
+     reside, such as in ‘/usr/lib’ and ‘/usr/local/lib’.
+
+     LIBRARY should not contain an extension such as ‘.so’.  The correct
+     file name extension for the host operating system is provided
+     automatically, according to libltdl’s rules (*note lt_dlopenext:
+     (libtool)Libltdl interface.).
+
+     When LIBRARY is omitted, a “global symbol handle” is returned.
+     This handle provides access to the symbols available to the program
+     at run-time, including those exported by the program itself and the
+     shared libraries already loaded.
+
+ -- Scheme Procedure: dynamic-object? obj
+ -- C Function: scm_dynamic_object_p (obj)
+     Return ‘#t’ if OBJ is a dynamic library handle, or ‘#f’ otherwise.
+
+ -- Scheme Procedure: dynamic-unlink dobj
+ -- C Function: scm_dynamic_unlink (dobj)
+     Unlink the indicated object file from the application.  The
+     argument DOBJ must have been obtained by a call to ‘dynamic-link’.
+     After ‘dynamic-unlink’ has been called on DOBJ, its content is no
+     longer accessible.
+
+     (define libgl-obj (dynamic-link "libGL"))
+     libgl-obj
+     ⇒ #<dynamic-object "libGL">
+     (dynamic-unlink libGL-obj)
+     libGL-obj
+     ⇒ #<dynamic-object "libGL" (unlinked)>
+
+   As you can see, after calling ‘dynamic-unlink’ on a dynamically
+linked library, it is marked as ‘(unlinked)’ and you are no longer able
+to use it with ‘dynamic-call’, etc.  Whether the library is really
+removed from you program is system-dependent and will generally not
+happen when some other parts of your program still use it.
+
+   When dynamic linking is disabled or not supported on your system, the
+above functions throw errors, but they are still available.
+
+   ---------- Footnotes ----------
+
+   (1) Some people also refer to the final linking stage at program
+startup as ‘dynamic linking’, so if you want to make yourself perfectly
+clear, it is probably best to use the more technical term “dlopening”,
+as suggested by Gordon Matzigkeit in his libtool documentation.
+
+File: guile.info,  Node: Foreign Functions,  Next: C Extensions,  Prev: Foreign Libraries,  Up: Foreign Function Interface
+
+6.20.2 Foreign Functions
+------------------------
+
+The most natural thing to do with a dynamic library is to grovel around
+in it for a function pointer: a “foreign function”.  ‘dynamic-func’
+exists for that purpose.
+
+ -- Scheme Procedure: dynamic-func name dobj
+ -- C Function: scm_dynamic_func (name, dobj)
+     Return a “handle” for the func NAME in the shared object referred
+     to by DOBJ.  The handle can be passed to ‘dynamic-call’ to actually
+     call the function.
+
+     Regardless whether your C compiler prepends an underscore ‘_’ to
+     the global names in a program, you should *not* include this
+     underscore in NAME since it will be added automatically when
+     necessary.
+
+   Guile has static support for calling functions with no arguments,
+‘dynamic-call’.
+
+ -- Scheme Procedure: dynamic-call func dobj
+ -- C Function: scm_dynamic_call (func, dobj)
+     Call the C function indicated by FUNC and DOBJ.  The function is
+     passed no arguments and its return value is ignored.  When FUNCTION
+     is something returned by ‘dynamic-func’, call that function and
+     ignore DOBJ.  When FUNC is a string , look it up in DYNOBJ; this is
+     equivalent to
+          (dynamic-call (dynamic-func FUNC DOBJ) #f)
+
+   ‘dynamic-call’ is not very powerful.  It is mostly intended to be
+used for calling specially written initialization functions that will
+then add new primitives to Guile.  For example, we do not expect that
+you will dynamically link ‘libX11’ with ‘dynamic-link’ and then
+construct a beautiful graphical user interface just by using
+‘dynamic-call’.  Instead, the usual way would be to write a special
+Guile-to-X11 glue library that has intimate knowledge about both Guile
+and X11 and does whatever is necessary to make them inter-operate
+smoothly.  This glue library could then be dynamically linked into a
+vanilla Guile interpreter and activated by calling its initialization
+function.  That function would add all the new types and primitives to
+the Guile interpreter that it has to offer.
+
+   (There is actually another, better option: simply to create a
+‘libX11’ wrapper in Scheme via the dynamic FFI. *Note Dynamic FFI::, for
+more information.)
+
+   Given some set of C extensions to Guile, the next logical step is to
+integrate these glue libraries into the module system of Guile so that
+you can load new primitives into a running system just as you can load
+new Scheme code.
+
+ -- Scheme Procedure: load-extension lib init
+ -- C Function: scm_load_extension (lib, init)
+     Load and initialize the extension designated by LIB and INIT. When
+     there is no pre-registered function for LIB/INIT, this is
+     equivalent to
+
+          (dynamic-call INIT (dynamic-link LIB))
+
+     When there is a pre-registered function, that function is called
+     instead.
+
+     Normally, there is no pre-registered function.  This option exists
+     only for situations where dynamic linking is unavailable or
+     unwanted.  In that case, you would statically link your program
+     with the desired library, and register its init function right
+     after Guile has been initialized.
+
+     As for ‘dynamic-link’, LIB should not contain any suffix such as
+     ‘.so’ (*note dynamic-link: Foreign Libraries.).  It should also not
+     contain any directory components.  Libraries that implement Guile
+     Extensions should be put into the normal locations for shared
+     libraries.  We recommend to use the naming convention
+     ‘libguile-bla-blum’ for a extension related to a module ‘(bla
+     blum)’.
+
+     The normal way for a extension to be used is to write a small
+     Scheme file that defines a module, and to load the extension into
+     this module.  When the module is auto-loaded, the extension is
+     loaded as well.  For example,
+
+          (define-module (bla blum))
+
+          (load-extension "libguile-bla-blum" "bla_init_blum")
+
+File: guile.info,  Node: C Extensions,  Next: Modules and Extensions,  Prev: Foreign Functions,  Up: Foreign Function Interface
+
+6.20.3 C Extensions
+-------------------
+
+The most interesting application of dynamically linked libraries is
+probably to use them for providing _compiled code modules_ to Scheme
+programs.  As much fun as programming in Scheme is, every now and then
+comes the need to write some low-level C stuff to make Scheme even more
+fun.
+
+   Not only can you put these new primitives into their own module (see
+the previous section), you can even put them into a shared library that
+is only then linked to your running Guile image when it is actually
+needed.
+
+   An example will hopefully make everything clear.  Suppose we want to
+make the Bessel functions of the C library available to Scheme in the
+module ‘(math bessel)’.  First we need to write the appropriate glue
+code to convert the arguments and return values of the functions from
+Scheme to C and back.  Additionally, we need a function that will add
+them to the set of Guile primitives.  Because this is just an example,
+we will only implement this for the ‘j0’ function.
+
+     #include <math.h>
+     #include <libguile.h>
+
+     SCM
+     j0_wrapper (SCM x)
+     {
+       return scm_from_double (j0 (scm_to_double (x, "j0")));
+     }
+
+     void
+     init_math_bessel ()
+     {
+       scm_c_define_gsubr ("j0", 1, 0, 0, j0_wrapper);
+     }
+
+   We can already try to bring this into action by manually calling the
+low level functions for performing dynamic linking.  The C source file
+needs to be compiled into a shared library.  Here is how to do it on
+GNU/Linux, please refer to the ‘libtool’ documentation for how to create
+dynamically linkable libraries portably.
+
+     gcc -shared -o libbessel.so -fPIC bessel.c
+
+   Now fire up Guile:
+
+     (define bessel-lib (dynamic-link "./libbessel.so"))
+     (dynamic-call "init_math_bessel" bessel-lib)
+     (j0 2)
+     ⇒ 0.223890779141236
+
+   The filename ‘./libbessel.so’ should be pointing to the shared
+library produced with the ‘gcc’ command above, of course.  The second
+line of the Guile interaction will call the ‘init_math_bessel’ function
+which in turn will register the C function ‘j0_wrapper’ with the Guile
+interpreter under the name ‘j0’.  This function becomes immediately
+available and we can call it from Scheme.
+
+   Fun, isn’t it?  But we are only half way there.  This is what
+‘apropos’ has to say about ‘j0’:
+
+     (apropos "j0")
+     ⊣ (guile-user): j0     #<primitive-procedure j0>
+
+   As you can see, ‘j0’ is contained in the root module, where all the
+other Guile primitives like ‘display’, etc live.  In general, a
+primitive is put into whatever module is the “current module” at the
+time ‘scm_c_define_gsubr’ is called.
+
+   A compiled module should have a specially named “module init
+function”.  Guile knows about this special name and will call that
+function automatically after having linked in the shared library.  For
+our example, we replace ‘init_math_bessel’ with the following code in
+‘bessel.c’:
+
+     void
+     init_math_bessel (void *unused)
+     {
+       scm_c_define_gsubr ("j0", 1, 0, 0, j0_wrapper);
+       scm_c_export ("j0", NULL);
+     }
+
+     void
+     scm_init_math_bessel_module ()
+     {
+       scm_c_define_module ("math bessel", init_math_bessel, NULL);
+     }
+
+   The general pattern for the name of a module init function is:
+‘scm_init_’, followed by the name of the module where the individual
+hierarchical components are concatenated with underscores, followed by
+‘_module’.
+
+   After ‘libbessel.so’ has been rebuilt, we need to place the shared
+library into the right place.
+
+   Once the module has been correctly installed, it should be possible
+to use it like this:
+
+     guile> (load-extension "./libbessel.so" "scm_init_math_bessel_module")
+     guile> (use-modules (math bessel))
+     guile> (j0 2)
+     0.223890779141236
+     guile> (apropos "j0")
+     ⊣ (math bessel): j0      #<primitive-procedure j0>
+
+   That’s it!
+
+File: guile.info,  Node: Modules and Extensions,  Next: Foreign Pointers,  Prev: C Extensions,  Up: Foreign Function Interface
+
+6.20.4 Modules and Extensions
+-----------------------------
+
+The new primitives that you add to Guile with ‘scm_c_define_gsubr’
+(*note Primitive Procedures::) or with any of the other mechanisms are
+placed into the module that is current when the ‘scm_c_define_gsubr’ is
+executed.  Extensions loaded from the REPL, for example, will be placed
+into the ‘(guile-user)’ module, if the REPL module was not changed.
+
+   To define C primitives within a specific module, the simplest way is:
+
+     (define-module (foo bar))
+     (load-extension "foobar-c-code" "foo_bar_init")
+
+   When loaded with ‘(use-modules (foo bar))’, the ‘load-extension’ call
+looks for the ‘foobar-c-code.so’ (etc) object file in Guile’s
+‘extensiondir’, which is usually a subdirectory of the ‘libdir’.  For
+example, if your libdir is ‘/usr/lib’, the ‘extensiondir’ for the Guile
+2.0.X series will be ‘/usr/lib/guile/2.0/’.
+
+   The extension path includes the major and minor version of Guile (the
+“effective version”), because Guile guarantees compatibility within a
+given effective version.  This allows you to install different versions
+of the same extension for different versions of Guile.
+
+   If the extension is not found in the ‘extensiondir’, Guile will also
+search the standard system locations, such as ‘/usr/lib’ or
+‘/usr/local/lib’.  It is preferable, however, to keep your extension out
+of the system library path, to prevent unintended interference with
+other dynamically-linked C libraries.
+
+   If someone installs your module to a non-standard location then the
+object file won’t be found.  You can address this by inserting the
+install location in the ‘foo/bar.scm’ file.  This is convenient for the
+user and also guarantees the intended object is read, even if stray
+older or newer versions are in the loader’s path.
+
+   The usual way to specify an install location is with a ‘prefix’ at
+the configure stage, for instance ‘./configure prefix=/opt’ results in
+library files as say ‘/opt/lib/foobar-c-code.so’.  When using Autoconf
+(*note Introduction: (autoconf)Top.), the library location is in a
+‘libdir’ variable.  Its value is intended to be expanded by ‘make’, and
+can by substituted into a source file like ‘foo.scm.in’
+
+     (define-module (foo bar))
+     (load-extension "XXextensiondirXX/foobar-c-code" "foo_bar_init")
+
+with the following in a ‘Makefile’, using ‘sed’ (*note Introduction:
+(sed)Top.),
+
+     foo.scm: foo.scm.in
+             sed 's|XXextensiondirXX|$(libdir)/guile/2.0|' <foo.scm.in >foo.scm
+
+   The actual pattern ‘XXextensiondirXX’ is arbitrary, it’s only
+something which doesn’t otherwise occur.  If several modules need the
+value, it can be easier to create one ‘foo/config.scm’ with a define of
+the ‘extensiondir’ location, and use that as required.
+
+     (define-module (foo config))
+     (define-public foo-config-extensiondir "XXextensiondirXX"")
+
+   Such a file might have other locations too, for instance a data
+directory for auxiliary files, or ‘localedir’ if the module has its own
+‘gettext’ message catalogue (*note Internationalization::).
+
+   It will be noted all of the above requires that the Scheme code to be
+found in ‘%load-path’ (*note Load Paths::).  Presently it’s left up to
+the system administrator or each user to augment that path when
+installing Guile modules in non-default locations.  But having reached
+the Scheme code, that code should take care of hitting any of its own
+private files etc.
+
+File: guile.info,  Node: Foreign Pointers,  Next: Dynamic FFI,  Prev: Modules and Extensions,  Up: Foreign Function Interface
+
+6.20.5 Foreign Pointers
+-----------------------
+
+The previous sections have shown how Guile can be extended at runtime by
+loading compiled C extensions.  This approach is all well and good, but
+wouldn’t it be nice if we didn’t have to write any C at all?  This
+section takes up the problem of accessing C values from Scheme, and the
+next discusses C functions.
+
+* Menu:
+
+* Foreign Types::                  Expressing C types in Scheme.
+* Foreign Variables::              Pointers to C symbols.
+* Void Pointers and Byte Access::  Pointers into the ether.
+* Foreign Structs::                Packing and unpacking structs.
+
+File: guile.info,  Node: Foreign Types,  Next: Foreign Variables,  Up: Foreign Pointers
+
+6.20.5.1 Foreign Types
+......................
+
+The first impedance mismatch that one sees between C and Scheme is that
+in C, the storage locations (variables) are typed, but in Scheme types
+are associated with values, not variables.  *Note Values and
+Variables::.
+
+   So when describing a C function or a C structure so that it can be
+accessed from Scheme, the data types of the parameters or fields must be
+passed explicitly.
+
+   These “C type values” may be constructed using the constants and
+procedures from the ‘(system foreign)’ module, which may be loaded like
+this:
+
+     (use-modules (system foreign))
+
+   ‘(system foreign)’ exports a number of values expressing the basic C
+types:
+
+ -- Scheme Variable: int8
+ -- Scheme Variable: uint8
+ -- Scheme Variable: uint16
+ -- Scheme Variable: int16
+ -- Scheme Variable: uint32
+ -- Scheme Variable: int32
+ -- Scheme Variable: uint64
+ -- Scheme Variable: int64
+ -- Scheme Variable: float
+ -- Scheme Variable: double
+     These values represent the C numeric types of the specified sizes
+     and signednesses.
+
+   In addition there are some convenience bindings for indicating types
+of platform-dependent size:
+
+ -- Scheme Variable: int
+ -- Scheme Variable: unsigned-int
+ -- Scheme Variable: long
+ -- Scheme Variable: unsigned-long
+ -- Scheme Variable: size_t
+ -- Scheme Variable: ssize_t
+ -- Scheme Variable: ptrdiff_t
+     Values exported by the ‘(system foreign)’ module, representing C
+     numeric types.  For example, ‘long’ may be ‘equal?’ to ‘int64’ on a
+     64-bit platform.
+
+ -- Scheme Variable: void
+     The ‘void’ type.  It can be used as the first argument to
+     ‘pointer->procedure’ to wrap a C function that returns nothing.
+
+   In addition, the symbol ‘*’ is used by convention to denote pointer
+types.  Procedures detailed in the following sections, such as
+‘pointer->procedure’, accept it as a type descriptor.
+
+File: guile.info,  Node: Foreign Variables,  Next: Void Pointers and Byte Access,  Prev: Foreign Types,  Up: Foreign Pointers
+
+6.20.5.2 Foreign Variables
+..........................
+
+Pointers to variables in the current address space may be looked up
+dynamically using ‘dynamic-pointer’.
+
+ -- Scheme Procedure: dynamic-pointer name dobj
+ -- C Function: scm_dynamic_pointer (name, dobj)
+     Return a “wrapped pointer” for the symbol NAME in the shared object
+     referred to by DOBJ.  The returned pointer points to a C object.
+
+     Regardless whether your C compiler prepends an underscore ‘_’ to
+     the global names in a program, you should *not* include this
+     underscore in NAME since it will be added automatically when
+     necessary.
+
+   For example, currently Guile has a variable, ‘scm_numptob’, as part
+of its API. It is declared as a C ‘long’.  So, to create a handle
+pointing to that foreign value, we do:
+
+     (use-modules (system foreign))
+     (define numptob (dynamic-pointer "scm_numptob" (dynamic-link)))
+     numptob
+     ⇒ #<pointer 0x7fb35b1b4688>
+
+   (The next section discusses ways to dereference pointers.)
+
+   A value returned by ‘dynamic-pointer’ is a Scheme wrapper for a C
+pointer.
+
+ -- Scheme Procedure: pointer-address pointer
+ -- C Function: scm_pointer_address (pointer)
+     Return the numerical value of POINTER.
+
+          (pointer-address numptob)
+          ⇒ 139984413364296 ; YMMV
+
+ -- Scheme Procedure: make-pointer address [finalizer]
+     Return a foreign pointer object pointing to ADDRESS.  If FINALIZER
+     is passed, it should be a pointer to a one-argument C function that
+     will be called when the pointer object becomes unreachable.
+
+ -- Scheme Procedure: pointer? obj
+     Return ‘#t’ if OBJ is a pointer object, ‘#f’ otherwise.
+
+ -- Scheme Variable: %null-pointer
+     A foreign pointer whose value is 0.
+
+ -- Scheme Procedure: null-pointer? pointer
+     Return ‘#t’ if POINTER is the null pointer, ‘#f’ otherwise.
+
+   For the purpose of passing SCM values directly to foreign functions,
+and allowing them to return SCM values, Guile also supports some unsafe
+casting operators.
+
+ -- Scheme Procedure: scm->pointer scm
+     Return a foreign pointer object with the ‘object-address’ of SCM.
+
+ -- Scheme Procedure: pointer->scm pointer
+     Unsafely cast POINTER to a Scheme object.  Cross your fingers!
+
+   Sometimes you want to give C extensions access to the dynamic FFI. At
+that point, the names get confusing, because “pointer” can refer to a
+‘SCM’ object that wraps a pointer, or to a ‘void*’ value.  We will try
+to use “pointer object” to refer to Scheme objects, and “pointer value”
+to refer to ‘void *’ values.
+
+ -- C Function: SCM scm_from_pointer (void *ptr, void (*finalizer)
+          (void*))
+     Create a pointer object from a pointer value.
+
+     If FINALIZER is non-null, Guile arranges to call it on the pointer
+     value at some point after the pointer object becomes collectable.
+
+ -- C Function: void* scm_to_pointer (SCM obj)
+     Unpack the pointer value from a pointer object.
+
+File: guile.info,  Node: Void Pointers and Byte Access,  Next: Foreign Structs,  Prev: Foreign Variables,  Up: Foreign Pointers
+
+6.20.5.3 Void Pointers and Byte Access
+......................................
+
+Wrapped pointers are untyped, so they are essentially equivalent to C
+‘void’ pointers.  As in C, the memory region pointed to by a pointer can
+be accessed at the byte level.  This is achieved using _bytevectors_
+(*note Bytevectors::).  The ‘(rnrs bytevectors)’ module contains
+procedures that can be used to convert byte sequences to Scheme objects
+such as strings, floating point numbers, or integers.
+
+ -- Scheme Procedure: pointer->bytevector pointer len [offset
+          [uvec_type]]
+ -- C Function: scm_pointer_to_bytevector (pointer, len, offset,
+          uvec_type)
+     Return a bytevector aliasing the LEN bytes pointed to by POINTER.
+
+     The user may specify an alternate default interpretation for the
+     memory by passing the UVEC_TYPE argument, to indicate that the
+     memory is an array of elements of that type.  UVEC_TYPE should be
+     something that ‘array-type’ would return, like ‘f32’ or ‘s16’.
+
+     When OFFSET is passed, it specifies the offset in bytes relative to
+     POINTER of the memory region aliased by the returned bytevector.
+
+     Mutating the returned bytevector mutates the memory pointed to by
+     POINTER, so buckle your seatbelts.
+
+ -- Scheme Procedure: bytevector->pointer bv [offset]
+ -- C Function: scm_bytevector_to_pointer (bv, offset)
+     Return a pointer pointer aliasing the memory pointed to by BV or
+     OFFSET bytes after BV when OFFSET is passed.
+
+   In addition to these primitives, convenience procedures are
+available:
+
+ -- Scheme Procedure: dereference-pointer pointer
+     Assuming POINTER points to a memory region that holds a pointer,
+     return this pointer.
+
+ -- Scheme Procedure: string->pointer string [encoding]
+     Return a foreign pointer to a nul-terminated copy of STRING in the
+     given ENCODING, defaulting to the current locale encoding.  The C
+     string is freed when the returned foreign pointer becomes
+     unreachable.
+
+     This is the Scheme equivalent of ‘scm_to_stringn’.
+
+ -- Scheme Procedure: pointer->string pointer [length] [encoding]
+     Return the string representing the C string pointed to by POINTER.
+     If LENGTH is omitted or ‘-1’, the string is assumed to be
+     nul-terminated.  Otherwise LENGTH is the number of bytes in memory
+     pointed to by POINTER.  The C string is assumed to be in the given
+     ENCODING, defaulting to the current locale encoding.
+
+     This is the Scheme equivalent of ‘scm_from_stringn’.
+
+   Most object-oriented C libraries use pointers to specific data
+structures to identify objects.  It is useful in such cases to reify the
+different pointer types as disjoint Scheme types.  The
+‘define-wrapped-pointer-type’ macro simplifies this.
+
+ -- Scheme Syntax: define-wrapped-pointer-type type-name pred wrap
+          unwrap print
+     Define helper procedures to wrap pointer objects into Scheme
+     objects with a disjoint type.  Specifically, this macro defines:
+
+        • PRED, a predicate for the new Scheme type;
+        • WRAP, a procedure that takes a pointer object and returns an
+          object that satisfies PRED;
+        • UNWRAP, which does the reverse.
+
+     WRAP preserves pointer identity, for two pointer objects P1 and P2
+     that are ‘equal?’, ‘(eq? (WRAP P1) (WRAP P2)) ⇒ #t’.
+
+     Finally, PRINT should name a user-defined procedure to print such
+     objects.  The procedure is passed the wrapped object and a port to
+     write to.
+
+     For example, assume we are wrapping a C library that defines a
+     type, ‘bottle_t’, and functions that can be passed ‘bottle_t *’
+     pointers to manipulate them.  We could write:
+
+          (define-wrapped-pointer-type bottle
+            bottle?
+            wrap-bottle unwrap-bottle
+            (lambda (b p)
+              (format p "#<bottle of ~a ~x>"
+                      (bottle-contents b)
+                      (pointer-address (unwrap-bottle b)))))
+
+          (define grab-bottle
+            ;; Wrapper for `bottle_t *grab (void)'.
+            (let ((grab (pointer->procedure '*
+                                            (dynamic-func "grab_bottle" libbottle)
+                                            '())))
+              (lambda ()
+                "Return a new bottle."
+                (wrap-bottle (grab)))))
+
+          (define bottle-contents
+            ;; Wrapper for `const char *bottle_contents (bottle_t *)'.
+            (let ((contents (pointer->procedure '*
+                                                (dynamic-func "bottle_contents"
+                                                               libbottle)
+                                                '(*))))
+              (lambda (b)
+                "Return the contents of B."
+                (pointer->string (contents (unwrap-bottle b))))))
+
+          (write (grab-bottle))
+          ⇒ #<bottle of Château Haut-Brion 803d36>
+
+     In this example, ‘grab-bottle’ is guaranteed to return a genuine
+     ‘bottle’ object satisfying ‘bottle?’.  Likewise, ‘bottle-contents’
+     errors out when its argument is not a genuine ‘bottle’ object.
+
+   Going back to the ‘scm_numptob’ example above, here is how we can
+read its value as a C ‘long’ integer:
+
+     (use-modules (rnrs bytevectors))
+
+     (bytevector-uint-ref (pointer->bytevector numptob (sizeof long))
+                          0 (native-endianness)
+                          (sizeof long))
+     ⇒ 8
+
+   If we wanted to corrupt Guile’s internal state, we could set
+‘scm_numptob’ to another value; but we shouldn’t, because that variable
+is not meant to be set.  Indeed this point applies more widely: the C
+API is a dangerous place to be.  Not only might setting a value crash
+your program, simply accessing the data pointed to by a dangling pointer
+or similar can prove equally disastrous.
+
+File: guile.info,  Node: Foreign Structs,  Prev: Void Pointers and Byte Access,  Up: Foreign Pointers
+
+6.20.5.4 Foreign Structs
+........................
+
+Finally, one last note on foreign values before moving on to actually
+calling foreign functions.  Sometimes you need to deal with C structs,
+which requires interpreting each element of the struct according to the
+its type, offset, and alignment.  Guile has some primitives to support
+this.
+
+ -- Scheme Procedure: sizeof type
+ -- C Function: scm_sizeof (type)
+     Return the size of TYPE, in bytes.
+
+     TYPE should be a valid C type, like ‘int’.  Alternately TYPE may be
+     the symbol ‘*’, in which case the size of a pointer is returned.
+     TYPE may also be a list of types, in which case the size of a
+     ‘struct’ with ABI-conventional packing is returned.
+
+ -- Scheme Procedure: alignof type
+ -- C Function: scm_alignof (type)
+     Return the alignment of TYPE, in bytes.
+
+     TYPE should be a valid C type, like ‘int’.  Alternately TYPE may be
+     the symbol ‘*’, in which case the alignment of a pointer is
+     returned.  TYPE may also be a list of types, in which case the
+     alignment of a ‘struct’ with ABI-conventional packing is returned.
+
+   Guile also provides some convenience methods to pack and unpack
+foreign pointers wrapping C structs.
+
+ -- Scheme Procedure: make-c-struct types vals
+     Create a foreign pointer to a C struct containing VALS with types
+     ‘types’.
+
+     VALS and ‘types’ should be lists of the same length.
+
+ -- Scheme Procedure: parse-c-struct foreign types
+     Parse a foreign pointer to a C struct, returning a list of values.
+
+     ‘types’ should be a list of C types.
+
+   For example, to create and parse the equivalent of a ‘struct {
+int64_t a; uint8_t b; }’:
+
+     (parse-c-struct (make-c-struct (list int64 uint8)
+                                    (list 300 43))
+                     (list int64 uint8))
+     ⇒ (300 43)
+
+   As yet, Guile only has convenience routines to support
+conventionally-packed structs.  But given the ‘bytevector->pointer’ and
+‘pointer->bytevector’ routines, one can create and parse tightly packed
+structs and unions by hand.  See the code for ‘(system foreign)’ for
+details.
+
+File: guile.info,  Node: Dynamic FFI,  Prev: Foreign Pointers,  Up: Foreign Function Interface
+
+6.20.6 Dynamic FFI
+------------------
+
+Of course, the land of C is not all nouns and no verbs: there are
+functions too, and Guile allows you to call them.
+
+ -- Scheme Procedure: pointer->procedure return_type func_ptr arg_types
+          [#:return-errno?=#f]
+ -- C Function: scm_pointer_to_procedure (return_type, func_ptr,
+          arg_types)
+ -- C Function: scm_pointer_to_procedure_with_errno (return_type,
+          func_ptr, arg_types)
+
+     Make a foreign function.
+
+     Given the foreign void pointer FUNC_PTR, its argument and return
+     types ARG_TYPES and RETURN_TYPE, return a procedure that will pass
+     arguments to the foreign function and return appropriate values.
+
+     ARG_TYPES should be a list of foreign types.  ‘return_type’ should
+     be a foreign type.  *Note Foreign Types::, for more information on
+     foreign types.
+
+     If RETURN-ERRNO? is true, or when calling
+     ‘scm_pointer_to_procedure_with_errno’, the returned procedure will
+     return two values, with ‘errno’ as the second value.
+
+   Here is a better definition of ‘(math bessel)’:
+
+     (define-module (math bessel)
+       #:use-module (system foreign)
+       #:export (j0))
+
+     (define libm (dynamic-link "libm"))
+
+     (define j0
+       (pointer->procedure double
+                           (dynamic-func "j0" libm)
+                           (list double)))
+
+   That’s it!  No C at all.
+
+   Numeric arguments and return values from foreign functions are
+represented as Scheme values.  For example, ‘j0’ in the above example
+takes a Scheme number as its argument, and returns a Scheme number.
+
+   Pointers may be passed to and returned from foreign functions as
+well.  In that case the type of the argument or return value should be
+the symbol ‘*’, indicating a pointer.  For example, the following code
+makes ‘memcpy’ available to Scheme:
+
+     (define memcpy
+       (let ((this (dynamic-link)))
+         (pointer->procedure '*
+                             (dynamic-func "memcpy" this)
+                             (list '* '* size_t))))
+
+   To invoke ‘memcpy’, one must pass it foreign pointers:
+
+     (use-modules (rnrs bytevectors))
+
+     (define src-bits
+       (u8-list->bytevector '(0 1 2 3 4 5 6 7)))
+     (define src
+       (bytevector->pointer src-bits))
+     (define dest
+       (bytevector->pointer (make-bytevector 16 0)))
+
+     (memcpy dest src (bytevector-length src-bits))
+
+     (bytevector->u8-list (pointer->bytevector dest 16))
+     ⇒ (0 1 2 3 4 5 6 7 0 0 0 0 0 0 0 0)
+
+   One may also pass structs as values, passing structs as foreign
+pointers.  *Note Foreign Structs::, for more information on how to
+express struct types and struct values.
+
+   “Out” arguments are passed as foreign pointers.  The memory pointed
+to by the foreign pointer is mutated in place.
+
+     ;; struct timeval {
+     ;;      time_t      tv_sec;     /* seconds */
+     ;;      suseconds_t tv_usec;    /* microseconds */
+     ;; };
+     ;; assuming fields are of type "long"
+
+     (define gettimeofday
+       (let ((f (pointer->procedure
+                 int
+                 (dynamic-func "gettimeofday" (dynamic-link))
+                 (list '* '*)))
+             (tv-type (list long long)))
+         (lambda ()
+           (let* ((timeval (make-c-struct tv-type (list 0 0)))
+                  (ret (f timeval %null-pointer)))
+             (if (zero? ret)
+                 (apply values (parse-c-struct timeval tv-type))
+                 (error "gettimeofday returned an error" ret))))))
+
+     (gettimeofday)
+     ⇒ 1270587589
+     ⇒ 499553
+
+   As you can see, this interface to foreign functions is at a very low,
+somewhat dangerous level(1).
+
+   The FFI can also work in the opposite direction: making Scheme
+procedures callable from C. This makes it possible to use Scheme
+procedures as “callbacks” expected by C function.
+
+ -- Scheme Procedure: procedure->pointer return-type proc arg-types
+ -- C Function: scm_procedure_to_pointer (return_type, proc, arg_types)
+     Return a pointer to a C function of type RETURN-TYPE taking
+     arguments of types ARG-TYPES (a list) and behaving as a proxy to
+     procedure PROC.  Thus PROC’s arity, supported argument types, and
+     return type should match RETURN-TYPE and ARG-TYPES.
+
+   As an example, here’s how the C library’s ‘qsort’ array sorting
+function can be made accessible to Scheme (*note ‘qsort’: (libc)Array
+Sort Function.):
+
+     (define qsort!
+       (let ((qsort (pointer->procedure void
+                                        (dynamic-func "qsort"
+                                                      (dynamic-link))
+                                        (list '* size_t size_t '*))))
+         (lambda (bv compare)
+           ;; Sort bytevector BV in-place according to comparison
+           ;; procedure COMPARE.
+           (let ((ptr (procedure->pointer int
+                                          (lambda (x y)
+                                            ;; X and Y are pointers so,
+                                            ;; for convenience, dereference
+                                            ;; them before calling COMPARE.
+                                            (compare (dereference-uint8* x)
+                                                     (dereference-uint8* y)))
+                                          (list '* '*))))
+             (qsort (bytevector->pointer bv)
+                    (bytevector-length bv) 1 ;; we're sorting bytes
+                    ptr)))))
+
+     (define (dereference-uint8* ptr)
+       ;; Helper function: dereference the byte pointed to by PTR.
+       (let ((b (pointer->bytevector ptr 1)))
+         (bytevector-u8-ref b 0)))
+
+     (define bv
+       ;; An unsorted array of bytes.
+       (u8-list->bytevector '(7 1 127 3 5 4 77 2 9 0)))
+
+     ;; Sort BV.
+     (qsort! bv (lambda (x y) (- x y)))
+
+     ;; Let's see what the sorted array looks like:
+     (bytevector->u8-list bv)
+     ⇒ (0 1 2 3 4 5 7 9 77 127)
+
+   And voilà!
+
+   Note that ‘procedure->pointer’ is not supported (and not defined) on
+a few exotic architectures.  Thus, user code may need to check
+‘(defined? 'procedure->pointer)’.  Nevertheless, it is available on many
+architectures, including (as of libffi 3.0.9) x86, ia64, SPARC, PowerPC,
+ARM, and MIPS, to name a few.
+
+   ---------- Footnotes ----------
+
+   (1) A contribution to Guile in the form of a high-level FFI would be
+most welcome.
+
+File: guile.info,  Node: Scheduling,  Next: Options and Config,  Prev: Foreign Function Interface,  Up: API Reference
+

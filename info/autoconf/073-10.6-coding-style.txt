@@ -1,0 +1,187 @@
+10.6 Coding Style
+=================
+
+The Autoconf macros follow a strict coding style.  You are encouraged to
+follow this style, especially if you intend to distribute your macro,
+either by contributing it to Autoconf itself or the Autoconf Macro
+Archive (http://www.gnu.org/software/autoconf-archive/), or by other
+means.
+
+   The first requirement is to pay great attention to the quotation.
+For more details, see *note Autoconf Language::, and *note M4
+Quotation::.
+
+   Do not try to invent new interfaces.  It is likely that there is a
+macro in Autoconf that resembles the macro you are defining: try to
+stick to this existing interface (order of arguments, default values,
+etc.).  We _are_ conscious that some of these interfaces are not
+perfect; nevertheless, when harmless, homogeneity should be preferred
+over creativity.
+
+   Be careful about clashes both between M4 symbols and between shell
+variables.
+
+   If you stick to the suggested M4 naming scheme (*note Macro Names::),
+you are unlikely to generate conflicts.  Nevertheless, when you need to
+set a special value, _avoid using a regular macro name_; rather, use an
+"impossible" name.  For instance, up to version 2.13, the macro
+`AC_SUBST' used to remember what SYMBOL macros were already defined by
+setting `AC_SUBST_SYMBOL', which is a regular macro name.  But since
+there is a macro named `AC_SUBST_FILE', it was just impossible to
+`AC_SUBST(FILE)'!  In this case, `AC_SUBST(SYMBOL)' or
+`_AC_SUBST(SYMBOL)' should have been used (yes, with the parentheses).
+
+   No Autoconf macro should ever enter the user-variable name space;
+i.e., except for the variables that are the actual result of running the
+macro, all shell variables should start with `ac_'.  In addition, small
+macros or any macro that is likely to be embedded in other macros
+should be careful not to use obvious names.
+
+   Do not use `dnl' to introduce comments: most of the comments you are
+likely to write are either header comments which are not output anyway,
+or comments that should make their way into `configure'.  There are
+exceptional cases where you do want to comment special M4 constructs,
+in which case `dnl' is right, but keep in mind that it is unlikely.
+
+   M4 ignores the leading blanks and newlines before each argument.
+Use this feature to indent in such a way that arguments are (more or
+less) aligned with the opening parenthesis of the macro being called.
+For instance, instead of
+
+     AC_CACHE_CHECK(for EMX OS/2 environment,
+     ac_cv_emxos2,
+     [AC_COMPILE_IFELSE([AC_LANG_PROGRAM(, [return __EMX__;])],
+     [ac_cv_emxos2=yes], [ac_cv_emxos2=no])])
+
+write
+
+     AC_CACHE_CHECK([for EMX OS/2 environment], [ac_cv_emxos2],
+     [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [return __EMX__;])],
+                        [ac_cv_emxos2=yes],
+                        [ac_cv_emxos2=no])])
+
+or even
+
+     AC_CACHE_CHECK([for EMX OS/2 environment],
+                    [ac_cv_emxos2],
+                    [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],
+                                                        [return __EMX__;])],
+                                       [ac_cv_emxos2=yes],
+                                       [ac_cv_emxos2=no])])
+
+   When using `AC_RUN_IFELSE' or any macro that cannot work when
+cross-compiling, provide a pessimistic value (typically `no').
+
+   Feel free to use various tricks to prevent auxiliary tools, such as
+syntax-highlighting editors, from behaving improperly.  For instance,
+instead of:
+
+     m4_bpatsubst([$1], [$"])
+
+use
+
+     m4_bpatsubst([$1], [$""])
+
+so that Emacsen do not open an endless "string" at the first quote.
+For the same reasons, avoid:
+
+     test $[#] != 0
+
+and use:
+
+     test $[@%:@] != 0
+
+Otherwise, the closing bracket would be hidden inside a `#'-comment,
+breaking the bracket-matching highlighting from Emacsen.  Note the
+preferred style to escape from M4: `$[1]', `$[@]', etc.  Do not escape
+when it is unnecessary.  Common examples of useless quotation are
+`[$]$1' (write `$$1'), `[$]var' (use `$var'), etc.  If you add
+portability issues to the picture, you'll prefer `${1+"$[@]"}' to
+`"[$]@"', and you'll prefer do something better than hacking Autoconf
+`:-)'.
+
+   When using `sed', don't use `-e' except for indenting purposes.
+With the `s' and `y' commands, the preferred separator is `/' unless
+`/' itself might appear in the pattern or replacement, in which case
+you should use `|', or optionally `,' if you know the pattern and
+replacement cannot contain a file name.  If none of these characters
+will do, choose a printable character that cannot appear in the pattern
+or replacement.  Characters from the set `"#$&'()*;<=>?`|~' are good
+choices if the pattern or replacement might contain a file name, since
+they have special meaning to the shell and are less likely to occur in
+file names.
+
+   *Note Macro Definitions::, for details on how to define a macro.  If
+a macro doesn't use `AC_REQUIRE', is expected to never be the object of
+an `AC_REQUIRE' directive, and macros required by other macros inside
+arguments do not need to be expanded before this macro, then use
+`m4_define'.  In case of doubt, use `AC_DEFUN'.  Also take into account
+that public third-party macros need to use `AC_DEFUN' in order to be
+found by `aclocal' (*note Extending aclocal: (automake)Extending
+aclocal.).  All the `AC_REQUIRE' statements should be at the beginning
+of the macro, and each statement should be followed by `dnl'.
+
+   You should not rely on the number of arguments: instead of checking
+whether an argument is missing, test that it is not empty.  It provides
+both a simpler and a more predictable interface to the user, and saves
+room for further arguments.
+
+   Unless the macro is short, try to leave the closing `])' at the
+beginning of a line, followed by a comment that repeats the name of the
+macro being defined.  This introduces an additional newline in
+`configure'; normally, that is not a problem, but if you want to remove
+it you can use `[]dnl' on the last line.  You can similarly use `[]dnl'
+after a macro call to remove its newline.  `[]dnl' is recommended
+instead of `dnl' to ensure that M4 does not interpret the `dnl' as
+being attached to the preceding text or macro output.  For example,
+instead of:
+
+     AC_DEFUN([AC_PATH_X],
+     [AC_MSG_CHECKING([for X])
+     AC_REQUIRE_CPP()
+     # ...omitted...
+       AC_MSG_RESULT([libraries $x_libraries, headers $x_includes])
+     fi])
+
+you would write:
+
+     AC_DEFUN([AC_PATH_X],
+     [AC_REQUIRE_CPP()[]dnl
+     AC_MSG_CHECKING([for X])
+     # ...omitted...
+       AC_MSG_RESULT([libraries $x_libraries, headers $x_includes])
+     fi[]dnl
+     ])# AC_PATH_X
+
+   If the macro is long, try to split it into logical chunks.
+Typically, macros that check for a bug in a function and prepare its
+`AC_LIBOBJ' replacement should have an auxiliary macro to perform this
+setup.  Do not hesitate to introduce auxiliary macros to factor your
+code.
+
+   In order to highlight the recommended coding style, here is a macro
+written the old way:
+
+     dnl Check for EMX on OS/2.
+     dnl _AC_EMXOS2
+     AC_DEFUN(_AC_EMXOS2,
+     [AC_CACHE_CHECK(for EMX OS/2 environment, ac_cv_emxos2,
+     [AC_COMPILE_IFELSE([AC_LANG_PROGRAM(, return __EMX__;)],
+     ac_cv_emxos2=yes, ac_cv_emxos2=no)])
+     test "x$ac_cv_emxos2" = xyes && EMXOS2=yes])
+
+and the new way:
+
+     # _AC_EMXOS2
+     # ----------
+     # Check for EMX on OS/2.
+     m4_define([_AC_EMXOS2],
+     [AC_CACHE_CHECK([for EMX OS/2 environment], [ac_cv_emxos2],
+     [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [return __EMX__;])],
+                        [ac_cv_emxos2=yes],
+                        [ac_cv_emxos2=no])])
+     test "x$ac_cv_emxos2" = xyes && EMXOS2=yes[]dnl
+     ])# _AC_EMXOS2
+
+File: autoconf.info,  Node: Portable Shell,  Next: Portable Make,  Prev: Writing Autoconf Macros,  Up: Top
+

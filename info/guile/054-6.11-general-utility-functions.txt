@@ -1,0 +1,683 @@
+6.11 General Utility Functions
+==============================
+
+This chapter contains information about procedures which are not cleanly
+tied to a specific data type.  Because of their wide range of
+applications, they are collected in a “utility” chapter.
+
+* Menu:
+
+* Equality::                    When are two values ‘the same’?
+* Object Properties::           A modern interface to object properties.
+* Sorting::                     Sort utility procedures.
+* Copying::                     Copying deep structures.
+* General Conversion::          Converting objects to strings.
+* Hooks::                       User-customizable event lists.
+
+File: guile.info,  Node: Equality,  Next: Object Properties,  Up: Utility Functions
+
+6.11.1 Equality
+---------------
+
+There are three kinds of core equality predicates in Scheme, described
+below.  The same kinds of comparisons arise in other functions, like
+‘memq’ and friends (*note List Searching::).
+
+   For all three tests, objects of different types are never equal.  So
+for instance a list and a vector are not ‘equal?’, even if their
+contents are the same.  Exact and inexact numbers are considered
+different types too, and are hence not equal even if their values are
+the same.
+
+   ‘eq?’ tests just for the same object (essentially a pointer
+comparison).  This is fast, and can be used when searching for a
+particular object, or when working with symbols or keywords (which are
+always unique objects).
+
+   ‘eqv?’ extends ‘eq?’ to look at the value of numbers and characters.
+It can for instance be used somewhat like ‘=’ (*note Comparison::) but
+without an error if one operand isn’t a number.
+
+   ‘equal?’ goes further, it looks (recursively) into the contents of
+lists, vectors, etc.  This is good for instance on lists that have been
+read or calculated in various places and are the same, just not made up
+of the same pairs.  Such lists look the same (when printed), and
+‘equal?’ will consider them the same.
+
+
+ -- Scheme Procedure: eq? x y
+ -- C Function: scm_eq_p (x, y)
+     Return ‘#t’ if X and Y are the same object, except for numbers and
+     characters.  For example,
+
+          (define x (vector 1 2 3))
+          (define y (vector 1 2 3))
+
+          (eq? x x)  ⇒ #t
+          (eq? x y)  ⇒ #f
+
+     Numbers and characters are not equal to any other object, but the
+     problem is they’re not necessarily ‘eq?’ to themselves either.
+     This is even so when the number comes directly from a variable,
+
+          (let ((n (+ 2 3)))
+            (eq? n n))       ⇒ *unspecified*
+
+     Generally ‘eqv?’ below should be used when comparing numbers or
+     characters.  ‘=’ (*note Comparison::) or ‘char=?’ (*note
+     Characters::) can be used too.
+
+     It’s worth noting that end-of-list ‘()’, ‘#t’, ‘#f’, a symbol of a
+     given name, and a keyword of a given name, are unique objects.
+     There’s just one of each, so for instance no matter how ‘()’ arises
+     in a program, it’s the same object and can be compared with ‘eq?’,
+
+          (define x (cdr '(123)))
+          (define y (cdr '(456)))
+          (eq? x y) ⇒ #t
+
+          (define x (string->symbol "foo"))
+          (eq? x 'foo) ⇒ #t
+
+ -- C Function: int scm_is_eq (SCM x, SCM y)
+     Return ‘1’ when X and Y are equal in the sense of ‘eq?’, otherwise
+     return ‘0’.
+
+     The ‘==’ operator should not be used on ‘SCM’ values, an ‘SCM’ is a
+     C type which cannot necessarily be compared using ‘==’ (*note The
+     SCM Type::).
+
+
+ -- Scheme Procedure: eqv? x y
+ -- C Function: scm_eqv_p (x, y)
+     Return ‘#t’ if X and Y are the same object, or for characters and
+     numbers the same value.
+
+     On objects except characters and numbers, ‘eqv?’ is the same as
+     ‘eq?’ above, it’s true if X and Y are the same object.
+
+     If X and Y are numbers or characters, ‘eqv?’ compares their type
+     and value.  An exact number is not ‘eqv?’ to an inexact number
+     (even if their value is the same).
+
+          (eqv? 3 (+ 1 2)) ⇒ #t
+          (eqv? 1 1.0)     ⇒ #f
+
+
+ -- Scheme Procedure: equal? x y
+ -- C Function: scm_equal_p (x, y)
+     Return ‘#t’ if X and Y are the same type, and their contents or
+     value are equal.
+
+     For a pair, string, vector, array or structure, ‘equal?’ compares
+     the contents, and does so using the same ‘equal?’ recursively, so a
+     deep structure can be traversed.
+
+          (equal? (list 1 2 3) (list 1 2 3))   ⇒ #t
+          (equal? (list 1 2 3) (vector 1 2 3)) ⇒ #f
+
+     For other objects, ‘equal?’ compares as per ‘eqv?’ above, which
+     means characters and numbers are compared by type and value (and
+     like ‘eqv?’, exact and inexact numbers are not ‘equal?’, even if
+     their value is the same).
+
+          (equal? 3 (+ 1 2)) ⇒ #t
+          (equal? 1 1.0)     ⇒ #f
+
+     Hash tables are currently only compared as per ‘eq?’, so two
+     different tables are not ‘equal?’, even if their contents are the
+     same.
+
+     ‘equal?’ does not support circular data structures, it may go into
+     an infinite loop if asked to compare two circular lists or similar.
+
+     New application-defined object types (*note Defining New Types
+     (Smobs)::) have an ‘equalp’ handler which is called by ‘equal?’.
+     This lets an application traverse the contents or control what is
+     considered ‘equal?’ for two objects of such a type.  If there’s no
+     such handler, the default is to just compare as per ‘eq?’.
+
+File: guile.info,  Node: Object Properties,  Next: Sorting,  Prev: Equality,  Up: Utility Functions
+
+6.11.2 Object Properties
+------------------------
+
+It’s often useful to associate a piece of additional information with a
+Scheme object even though that object does not have a dedicated slot
+available in which the additional information could be stored.  Object
+properties allow you to do just that.
+
+   Guile’s representation of an object property is a
+procedure-with-setter (*note Procedures with Setters::) that can be used
+with the generalized form of ‘set!’ (REFFIXME) to set and retrieve that
+property for any Scheme object.  So, setting a property looks like this:
+
+     (set! (my-property obj1) value-for-obj1)
+     (set! (my-property obj2) value-for-obj2)
+
+And retrieving values of the same property looks like this:
+
+     (my-property obj1)
+     ⇒
+     value-for-obj1
+
+     (my-property obj2)
+     ⇒
+     value-for-obj2
+
+   To create an object property in the first place, use the
+‘make-object-property’ procedure:
+
+     (define my-property (make-object-property))
+
+ -- Scheme Procedure: make-object-property
+     Create and return an object property.  An object property is a
+     procedure-with-setter that can be called in two ways.  ‘(set!
+     (PROPERTY OBJ) VAL)’ sets OBJ’s PROPERTY to VAL.  ‘(PROPERTY OBJ)’
+     returns the current setting of OBJ’s PROPERTY.
+
+   A single object property created by ‘make-object-property’ can
+associate distinct property values with all Scheme values that are
+distinguishable by ‘eq?’ (ruling out numeric values).
+
+   Internally, object properties are implemented using a weak key hash
+table.  This means that, as long as a Scheme value with property values
+is protected from garbage collection, its property values are also
+protected.  When the Scheme value is collected, its entry in the
+property table is removed and so the (ex-) property values are no longer
+protected by the table.
+
+   Guile also implements a more traditional Lispy interface to
+properties, in which each object has an list of key-value pairs
+associated with it.  Properties in that list are keyed by symbols.  This
+is a legacy interface; you should use weak hash tables or object
+properties instead.
+
+ -- Scheme Procedure: object-properties obj
+ -- C Function: scm_object_properties (obj)
+     Return OBJ’s property list.
+
+ -- Scheme Procedure: set-object-properties! obj alist
+ -- C Function: scm_set_object_properties_x (obj, alist)
+     Set OBJ’s property list to ALIST.
+
+ -- Scheme Procedure: object-property obj key
+ -- C Function: scm_object_property (obj, key)
+     Return the property of OBJ with name KEY.
+
+ -- Scheme Procedure: set-object-property! obj key value
+ -- C Function: scm_set_object_property_x (obj, key, value)
+     In OBJ’s property list, set the property named KEY to VALUE.
+
+File: guile.info,  Node: Sorting,  Next: Copying,  Prev: Object Properties,  Up: Utility Functions
+
+6.11.3 Sorting
+--------------
+
+Sorting is very important in computer programs.  Therefore, Guile comes
+with several sorting procedures built-in.  As always, procedures with
+names ending in ‘!’ are side-effecting, that means that they may modify
+their parameters in order to produce their results.
+
+   The first group of procedures can be used to merge two lists (which
+must be already sorted on their own) and produce sorted lists containing
+all elements of the input lists.
+
+ -- Scheme Procedure: merge alist blist less
+ -- C Function: scm_merge (alist, blist, less)
+     Merge two already sorted lists into one.  Given two lists ALIST and
+     BLIST, such that ‘(sorted? alist less?)’ and ‘(sorted? blist
+     less?)’, return a new list in which the elements of ALIST and BLIST
+     have been stably interleaved so that ‘(sorted? (merge alist blist
+     less?) less?)’.  Note: this does _not_ accept vectors.
+
+ -- Scheme Procedure: merge! alist blist less
+ -- C Function: scm_merge_x (alist, blist, less)
+     Takes two lists ALIST and BLIST such that ‘(sorted? alist less?)’
+     and ‘(sorted? blist less?)’ and returns a new list in which the
+     elements of ALIST and BLIST have been stably interleaved so that
+     ‘(sorted? (merge alist blist less?) less?)’.  This is the
+     destructive variant of ‘merge’ Note: this does _not_ accept
+     vectors.
+
+   The following procedures can operate on sequences which are either
+vectors or list.  According to the given arguments, they return sorted
+vectors or lists, respectively.  The first of the following procedures
+determines whether a sequence is already sorted, the other sort a given
+sequence.  The variants with names starting with ‘stable-’ are special
+in that they maintain a special property of the input sequences: If two
+or more elements are the same according to the comparison predicate,
+they are left in the same order as they appeared in the input.
+
+ -- Scheme Procedure: sorted? items less
+ -- C Function: scm_sorted_p (items, less)
+     Return ‘#t’ if ITEMS is a list or vector such that, for each
+     element X and the next element Y of ITEMS, ‘(LESS Y X)’ returns
+     ‘#f’.  Otherwise return ‘#f’.
+
+ -- Scheme Procedure: sort items less
+ -- C Function: scm_sort (items, less)
+     Sort the sequence ITEMS, which may be a list or a vector.  LESS is
+     used for comparing the sequence elements.  This is not a stable
+     sort.
+
+ -- Scheme Procedure: sort! items less
+ -- C Function: scm_sort_x (items, less)
+     Sort the sequence ITEMS, which may be a list or a vector.  LESS is
+     used for comparing the sequence elements.  The sorting is
+     destructive, that means that the input sequence is modified to
+     produce the sorted result.  This is not a stable sort.
+
+ -- Scheme Procedure: stable-sort items less
+ -- C Function: scm_stable_sort (items, less)
+     Sort the sequence ITEMS, which may be a list or a vector.  LESS is
+     used for comparing the sequence elements.  This is a stable sort.
+
+ -- Scheme Procedure: stable-sort! items less
+ -- C Function: scm_stable_sort_x (items, less)
+     Sort the sequence ITEMS, which may be a list or a vector.  LESS is
+     used for comparing the sequence elements.  The sorting is
+     destructive, that means that the input sequence is modified to
+     produce the sorted result.  This is a stable sort.
+
+   The procedures in the last group only accept lists or vectors as
+input, as their names indicate.
+
+ -- Scheme Procedure: sort-list items less
+ -- C Function: scm_sort_list (items, less)
+     Sort the list ITEMS, using LESS for comparing the list elements.
+     This is a stable sort.
+
+ -- Scheme Procedure: sort-list! items less
+ -- C Function: scm_sort_list_x (items, less)
+     Sort the list ITEMS, using LESS for comparing the list elements.
+     The sorting is destructive, that means that the input list is
+     modified to produce the sorted result.  This is a stable sort.
+
+ -- Scheme Procedure: restricted-vector-sort! vec less startpos endpos
+ -- C Function: scm_restricted_vector_sort_x (vec, less, startpos,
+          endpos)
+     Sort the vector VEC, using LESS for comparing the vector elements.
+     STARTPOS (inclusively) and ENDPOS (exclusively) delimit the range
+     of the vector which gets sorted.  The return value is not
+     specified.
+
+File: guile.info,  Node: Copying,  Next: General Conversion,  Prev: Sorting,  Up: Utility Functions
+
+6.11.4 Copying Deep Structures
+------------------------------
+
+The procedures for copying lists (*note Lists::) only produce a flat
+copy of the input list, and currently Guile does not even contain
+procedures for copying vectors.  ‘copy-tree’ can be used for these
+application, as it does not only copy the spine of a list, but also
+copies any pairs in the cars of the input lists.
+
+ -- Scheme Procedure: copy-tree obj
+ -- C Function: scm_copy_tree (obj)
+     Recursively copy the data tree that is bound to OBJ, and return the
+     new data structure.  ‘copy-tree’ recurses down the contents of both
+     pairs and vectors (since both cons cells and vector cells may point
+     to arbitrary objects), and stops recursing when it hits any other
+     object.
+
+File: guile.info,  Node: General Conversion,  Next: Hooks,  Prev: Copying,  Up: Utility Functions
+
+6.11.5 General String Conversion
+--------------------------------
+
+When debugging Scheme programs, but also for providing a human-friendly
+interface, a procedure for converting any Scheme object into string
+format is very useful.  Conversion from/to strings can of course be done
+with specialized procedures when the data type of the object to convert
+is known, but with this procedure, it is often more comfortable.
+
+   ‘object->string’ converts an object by using a print procedure for
+writing to a string port, and then returning the resulting string.
+Converting an object back from the string is only possible if the object
+type has a read syntax and the read syntax is preserved by the printing
+procedure.
+
+ -- Scheme Procedure: object->string obj [printer]
+ -- C Function: scm_object_to_string (obj, printer)
+     Return a Scheme string obtained by printing OBJ.  Printing function
+     can be specified by the optional second argument PRINTER (default:
+     ‘write’).
+
+File: guile.info,  Node: Hooks,  Prev: General Conversion,  Up: Utility Functions
+
+6.11.6 Hooks
+------------
+
+A hook is a list of procedures to be called at well defined points in
+time.  Typically, an application provides a hook H and promises its
+users that it will call all of the procedures in H at a defined point in
+the application’s processing.  By adding its own procedure to H, an
+application user can tap into or even influence the progress of the
+application.
+
+   Guile itself provides several such hooks for debugging and
+customization purposes: these are listed in a subsection below.
+
+   When an application first creates a hook, it needs to know how many
+arguments will be passed to the hook’s procedures when the hook is run.
+The chosen number of arguments (which may be none) is declared when the
+hook is created, and all the procedures that are added to that hook must
+be capable of accepting that number of arguments.
+
+   A hook is created using ‘make-hook’.  A procedure can be added to or
+removed from a hook using ‘add-hook!’ or ‘remove-hook!’, and all of a
+hook’s procedures can be removed together using ‘reset-hook!’.  When an
+application wants to run a hook, it does so using ‘run-hook’.
+
+* Menu:
+
+* Hook Example::                Hook usage by example.
+* Hook Reference::              Reference of all hook procedures.
+* C Hooks::                     Hooks for use from C code.
+* GC Hooks::                    Garbage collection hooks.
+* REPL Hooks::                  Hooks into the Guile REPL.
+
+File: guile.info,  Node: Hook Example,  Next: Hook Reference,  Up: Hooks
+
+6.11.6.1 Hook Usage by Example
+..............................
+
+Hook usage is shown by some examples in this section.  First, we will
+define a hook of arity 2 — that is, the procedures stored in the hook
+will have to accept two arguments.
+
+     (define hook (make-hook 2))
+     hook
+     ⇒ #<hook 2 40286c90>
+
+   Now we are ready to add some procedures to the newly created hook
+with ‘add-hook!’.  In the following example, two procedures are added,
+which print different messages and do different things with their
+arguments.
+
+     (add-hook! hook (lambda (x y)
+                         (display "Foo: ")
+                         (display (+ x y))
+                         (newline)))
+     (add-hook! hook (lambda (x y)
+                         (display "Bar: ")
+                         (display (* x y))
+                         (newline)))
+
+   Once the procedures have been added, we can invoke the hook using
+‘run-hook’.
+
+     (run-hook hook 3 4)
+     ⊣ Bar: 12
+     ⊣ Foo: 7
+
+   Note that the procedures are called in the reverse of the order with
+which they were added.  This is because the default behaviour of
+‘add-hook!’ is to add its procedure to the _front_ of the hook’s
+procedure list.  You can force ‘add-hook!’ to add its procedure to the
+_end_ of the list instead by providing a third ‘#t’ argument on the
+second call to ‘add-hook!’.
+
+     (add-hook! hook (lambda (x y)
+                         (display "Foo: ")
+                         (display (+ x y))
+                         (newline)))
+     (add-hook! hook (lambda (x y)
+                         (display "Bar: ")
+                         (display (* x y))
+                         (newline))
+                         #t)             ; <- Change here!
+
+     (run-hook hook 3 4)
+     ⊣ Foo: 7
+     ⊣ Bar: 12
+
+File: guile.info,  Node: Hook Reference,  Next: C Hooks,  Prev: Hook Example,  Up: Hooks
+
+6.11.6.2 Hook Reference
+.......................
+
+When you create a hook with ‘make-hook’, you must specify the arity of
+the procedures which can be added to the hook.  If the arity is not
+given explicitly as an argument to ‘make-hook’, it defaults to zero.
+All procedures of a given hook must have the same arity, and when the
+procedures are invoked using ‘run-hook’, the number of arguments passed
+must match the arity specified at hook creation time.
+
+   The order in which procedures are added to a hook matters.  If the
+third parameter to ‘add-hook!’ is omitted or is equal to ‘#f’, the
+procedure is added in front of the procedures which might already be on
+that hook, otherwise the procedure is added at the end.  The procedures
+are always called from the front to the end of the list when they are
+invoked via ‘run-hook’.
+
+   The ordering of the list of procedures returned by ‘hook->list’
+matches the order in which those procedures would be called if the hook
+was run using ‘run-hook’.
+
+   Note that the C functions in the following entries are for handling
+“Scheme-level” hooks in C. There are also “C-level” hooks which have
+their own interface (*note C Hooks::).
+
+ -- Scheme Procedure: make-hook [n_args]
+ -- C Function: scm_make_hook (n_args)
+     Create a hook for storing procedure of arity N_ARGS.  N_ARGS
+     defaults to zero.  The returned value is a hook object to be used
+     with the other hook procedures.
+
+ -- Scheme Procedure: hook? x
+ -- C Function: scm_hook_p (x)
+     Return ‘#t’ if X is a hook, ‘#f’ otherwise.
+
+ -- Scheme Procedure: hook-empty? hook
+ -- C Function: scm_hook_empty_p (hook)
+     Return ‘#t’ if HOOK is an empty hook, ‘#f’ otherwise.
+
+ -- Scheme Procedure: add-hook! hook proc [append_p]
+ -- C Function: scm_add_hook_x (hook, proc, append_p)
+     Add the procedure PROC to the hook HOOK.  The procedure is added to
+     the end if APPEND_P is true, otherwise it is added to the front.
+     The return value of this procedure is not specified.
+
+ -- Scheme Procedure: remove-hook! hook proc
+ -- C Function: scm_remove_hook_x (hook, proc)
+     Remove the procedure PROC from the hook HOOK.  The return value of
+     this procedure is not specified.
+
+ -- Scheme Procedure: reset-hook! hook
+ -- C Function: scm_reset_hook_x (hook)
+     Remove all procedures from the hook HOOK.  The return value of this
+     procedure is not specified.
+
+ -- Scheme Procedure: hook->list hook
+ -- C Function: scm_hook_to_list (hook)
+     Convert the procedure list of HOOK to a list.
+
+ -- Scheme Procedure: run-hook hook arg ...
+ -- C Function: scm_run_hook (hook, args)
+     Apply all procedures from the hook HOOK to the arguments ARG ....
+     The order of the procedure application is first to last.  The
+     return value of this procedure is not specified.
+
+   If, in C code, you are certain that you have a hook object and well
+formed argument list for that hook, you can also use ‘scm_c_run_hook’,
+which is identical to ‘scm_run_hook’ but does no type checking.
+
+ -- C Function: void scm_c_run_hook (SCM hook, SCM args)
+     The same as ‘scm_run_hook’ but without any type checking to confirm
+     that HOOK is actually a hook object and that ARGS is a well-formed
+     list matching the arity of the hook.
+
+   For C code, ‘SCM_HOOKP’ is a faster alternative to ‘scm_hook_p’:
+
+ -- C Macro: int SCM_HOOKP (x)
+     Return 1 if X is a Scheme-level hook, 0 otherwise.
+
+6.11.6.3 Handling Scheme-level hooks from C code
+................................................
+
+Here is an example of how to handle Scheme-level hooks from C code using
+the above functions.
+
+     if (scm_is_true (scm_hook_p (obj)))
+       /* handle Scheme-level hook using C functions */
+       scm_reset_hook_x (obj);
+     else
+       /* do something else (obj is not a hook) */
+
+File: guile.info,  Node: C Hooks,  Next: GC Hooks,  Prev: Hook Reference,  Up: Hooks
+
+6.11.6.4 Hooks For C Code.
+..........................
+
+The hooks already described are intended to be populated by Scheme-level
+procedures.  In addition to this, the Guile library provides an
+independent set of interfaces for the creation and manipulation of hooks
+that are designed to be populated by functions implemented in C.
+
+   The original motivation here was to provide a kind of hook that could
+safely be invoked at various points during garbage collection.
+Scheme-level hooks are unsuitable for this purpose as running them could
+itself require memory allocation, which would then invoke garbage
+collection recursively ... However, it is also the case that these hooks
+are easier to work with than the Scheme-level ones if you only want to
+register C functions with them.  So if that is mainly what your code
+needs to do, you may prefer to use this interface.
+
+   To create a C hook, you should allocate storage for a structure of
+type ‘scm_t_c_hook’ and then initialize it using ‘scm_c_hook_init’.
+
+ -- C Type: scm_t_c_hook
+     Data type for a C hook.  The internals of this type should be
+     treated as opaque.
+
+ -- C Enum: scm_t_c_hook_type
+     Enumeration of possible hook types, which are:
+
+     ‘SCM_C_HOOK_NORMAL’
+          Type of hook for which all the registered functions will
+          always be called.
+     ‘SCM_C_HOOK_OR’
+          Type of hook for which the sequence of registered functions
+          will be called only until one of them returns C true (a
+          non-NULL pointer).
+     ‘SCM_C_HOOK_AND’
+          Type of hook for which the sequence of registered functions
+          will be called only until one of them returns C false (a NULL
+          pointer).
+
+ -- C Function: void scm_c_hook_init (scm_t_c_hook *hook, void
+          *hook_data, scm_t_c_hook_type type)
+     Initialize the C hook at memory pointed to by HOOK.  TYPE should be
+     one of the values of the ‘scm_t_c_hook_type’ enumeration, and
+     controls how the hook functions will be called.  HOOK_DATA is a
+     closure parameter that will be passed to all registered hook
+     functions when they are called.
+
+   To add or remove a C function from a C hook, use ‘scm_c_hook_add’ or
+‘scm_c_hook_remove’.  A hook function must expect three ‘void *’
+parameters which are, respectively:
+
+HOOK_DATA
+     The hook closure data that was specified at the time the hook was
+     initialized by ‘scm_c_hook_init’.
+
+FUNC_DATA
+     The function closure data that was specified at the time that that
+     function was registered with the hook by ‘scm_c_hook_add’.
+
+DATA
+     The call closure data specified by the ‘scm_c_hook_run’ call that
+     runs the hook.
+
+ -- C Type: scm_t_c_hook_function
+     Function type for a C hook function: takes three ‘void *’
+     parameters and returns a ‘void *’ result.
+
+ -- C Function: void scm_c_hook_add (scm_t_c_hook *hook,
+          scm_t_c_hook_function func, void *func_data, int appendp)
+     Add function FUNC, with function closure data FUNC_DATA, to the C
+     hook HOOK.  The new function is appended to the hook’s list of
+     functions if APPENDP is non-zero, otherwise prepended.
+
+ -- C Function: void scm_c_hook_remove (scm_t_c_hook *hook,
+          scm_t_c_hook_function func, void *func_data)
+     Remove function FUNC, with function closure data FUNC_DATA, from
+     the C hook HOOK.  ‘scm_c_hook_remove’ checks both FUNC and
+     FUNC_DATA so as to allow for the same FUNC being registered
+     multiple times with different closure data.
+
+   Finally, to invoke a C hook, call the ‘scm_c_hook_run’ function
+specifying the hook and the call closure data for this run:
+
+ -- C Function: void * scm_c_hook_run (scm_t_c_hook *hook, void *data)
+     Run the C hook HOOK will call closure data DATA.  Subject to the
+     variations for hook types ‘SCM_C_HOOK_OR’ and ‘SCM_C_HOOK_AND’,
+     ‘scm_c_hook_run’ calls HOOK’s registered functions in turn, passing
+     them the hook’s closure data, each function’s closure data, and the
+     call closure data.
+
+     ‘scm_c_hook_run’’s return value is the return value of the last
+     function to be called.
+
+File: guile.info,  Node: GC Hooks,  Next: REPL Hooks,  Prev: C Hooks,  Up: Hooks
+
+6.11.6.5 Hooks for Garbage Collection
+.....................................
+
+Whenever Guile performs a garbage collection, it calls the following
+hooks in the order shown.
+
+ -- C Hook: scm_before_gc_c_hook
+     C hook called at the very start of a garbage collection, after
+     setting ‘scm_gc_running_p’ to 1, but before entering the GC
+     critical section.
+
+     If garbage collection is blocked because ‘scm_block_gc’ is
+     non-zero, GC exits early soon after calling this hook, and no
+     further hooks will be called.
+
+ -- C Hook: scm_before_mark_c_hook
+     C hook called before beginning the mark phase of garbage
+     collection, after the GC thread has entered a critical section.
+
+ -- C Hook: scm_before_sweep_c_hook
+     C hook called before beginning the sweep phase of garbage
+     collection.  This is the same as at the end of the mark phase,
+     since nothing else happens between marking and sweeping.
+
+ -- C Hook: scm_after_sweep_c_hook
+     C hook called after the end of the sweep phase of garbage
+     collection, but while the GC thread is still inside its critical
+     section.
+
+ -- C Hook: scm_after_gc_c_hook
+     C hook called at the very end of a garbage collection, after the GC
+     thread has left its critical section.
+
+ -- Scheme Hook: after-gc-hook
+     Scheme hook with arity 0.  This hook is run asynchronously (*note
+     Asyncs::) soon after the GC has completed and any other events that
+     were deferred during garbage collection have been processed.  (Also
+     accessible from C with the name ‘scm_after_gc_hook’.)
+
+   All the C hooks listed here have type ‘SCM_C_HOOK_NORMAL’, are
+initialized with hook closure data NULL, are invoked by ‘scm_c_hook_run’
+with call closure data NULL.
+
+   The Scheme hook ‘after-gc-hook’ is particularly useful in conjunction
+with guardians (*note Guardians::).  Typically, if you are using a
+guardian, you want to call the guardian after garbage collection to see
+if any of the objects added to the guardian have been collected.  By
+adding a thunk that performs this call to ‘after-gc-hook’, you can
+ensure that your guardian is tested after every garbage collection
+cycle.
+
+File: guile.info,  Node: REPL Hooks,  Prev: GC Hooks,  Up: Hooks
+
+6.11.6.6 Hooks into the Guile REPL
+..................................
+
+File: guile.info,  Node: Binding Constructs,  Next: Control Mechanisms,  Prev: Utility Functions,  Up: API Reference
+

@@ -1,0 +1,72 @@
+7.12 Counting Characters
+========================
+
+This script shows another way to do arithmetic with 'sed'.  In this case
+we have to add possibly large numbers, so implementing this by
+successive increments would not be feasible (and possibly even more
+complicated to contrive than this script).
+
+   The approach is to map numbers to letters, kind of an abacus
+implemented with 'sed'.  'a's are units, 'b's are tens and so on: we
+simply add the number of characters on the current line as units, and
+then propagate the carry to tens, hundreds, and so on.
+
+   As usual, running totals are kept in hold space.
+
+   On the last line, we convert the abacus form back to decimal.  For
+the sake of variety, this is done with a loop rather than with some 80
+'s' commands(1): first we convert units, removing 'a's from the number;
+then we rotate letters so that tens become 'a's, and so on until no more
+letters remain.
+
+     #!/usr/bin/sed -nf
+
+     # Add n+1 a's to hold space (+1 is for the newline)
+     s/./a/g
+     H
+     x
+     s/\n/a/
+
+     # Do the carry.  The t's and b's are not necessary,
+     # but they do speed up the thing
+     t a
+     : a;  s/aaaaaaaaaa/b/g; t b; b done
+     : b;  s/bbbbbbbbbb/c/g; t c; b done
+     : c;  s/cccccccccc/d/g; t d; b done
+     : d;  s/dddddddddd/e/g; t e; b done
+     : e;  s/eeeeeeeeee/f/g; t f; b done
+     : f;  s/ffffffffff/g/g; t g; b done
+     : g;  s/gggggggggg/h/g; t h; b done
+     : h;  s/hhhhhhhhhh//g
+
+     : done
+     $! {
+       h
+       b
+     }
+
+     # On the last line, convert back to decimal
+
+     : loop
+     /a/! s/[b-h]*/&0/
+     s/aaaaaaaaa/9/
+     s/aaaaaaaa/8/
+     s/aaaaaaa/7/
+     s/aaaaaa/6/
+     s/aaaaa/5/
+     s/aaaa/4/
+     s/aaa/3/
+     s/aa/2/
+     s/a/1/
+
+     : next
+     y/bcdefgh/abcdefg/
+     /[a-h]/ b loop
+     p
+
+   ---------- Footnotes ----------
+
+   (1) Some implementations have a limit of 199 commands per script
+
+File: sed.info,  Node: wc -w,  Next: wc -l,  Prev: wc -c,  Up: Examples
+

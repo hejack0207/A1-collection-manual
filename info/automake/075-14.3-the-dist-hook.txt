@@ -1,0 +1,51 @@
+14.3 The dist Hook
+==================
+
+Occasionally it is useful to be able to change the distribution before
+it is packaged up.  If the ‘dist-hook’ rule exists, it is run after the
+distribution directory is filled, but before the actual distribution
+archives are created.  One way to use this is for removing unnecessary
+files that get recursively included by specifying a directory in
+‘EXTRA_DIST’:
+
+     EXTRA_DIST = doc
+     dist-hook:
+             rm -rf `find $(distdir)/doc -type d -name .svn`
+
+Note that the ‘dist-hook’ recipe shouldn’t assume that the regular files
+in the distribution directory are writable; this might not be the case
+if one is packaging from a read-only source tree, or when a ‘make
+distcheck’ is being done.  For similar reasons, the recipe shouldn’t
+assume that the subdirectories put into the distribution directory as
+effect of having them listed in ‘EXTRA_DIST’ are writable.  So, if the
+‘dist-hook’ recipe wants to modify the content of an existing file (or
+‘EXTRA_DIST’ subdirectory) in the distribution directory, it should
+explicitly to make it writable first:
+
+     EXTRA_DIST = README doc
+     dist-hook:
+             chmod u+w $(distdir)/README $(distdir)/doc
+             echo "Distribution date: `date`" >> README
+             rm -f $(distdir)/doc/HACKING
+
+   Two variables that come handy when writing ‘dist-hook’ rules are
+‘$(distdir)’ and ‘$(top_distdir)’.
+
+   ‘$(distdir)’ points to the directory where the ‘dist’ rule will copy
+files from the current directory before creating the tarball.  If you
+are at the top-level directory, then ‘distdir = $(PACKAGE)-$(VERSION)’.
+When used from subdirectory named ‘foo/’, then ‘distdir =
+../$(PACKAGE)-$(VERSION)/foo’.  ‘$(distdir)’ can be a relative or
+absolute path, do not assume any form.
+
+   ‘$(top_distdir)’ always points to the root directory of the
+distributed tree.  At the top-level it’s equal to ‘$(distdir)’.  In the
+‘foo/’ subdirectory ‘top_distdir = ../$(PACKAGE)-$(VERSION)’.
+‘$(top_distdir)’ too can be a relative or absolute path.
+
+   Note that when packages are nested using ‘AC_CONFIG_SUBDIRS’ (*note
+Subpackages::), then ‘$(distdir)’ and ‘$(top_distdir)’ are relative to
+the package where ‘make dist’ was run, not to any sub-packages involved.
+
+File: automake.info,  Node: Checking the Distribution,  Next: The Types of Distributions,  Prev: The dist Hook,  Up: Dist
+

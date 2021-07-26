@@ -1,0 +1,87 @@
+7.4 Nesting Packages
+====================
+
+In the GNU Build System, packages can be nested to arbitrary depth.
+This means that a package can embed other packages with their own
+‘configure’, ‘Makefile’s, etc.
+
+   These other packages should just appear as subdirectories of their
+parent package.  They must be listed in ‘SUBDIRS’ like other ordinary
+directories.  However the subpackage’s ‘Makefile’s should be output by
+its own ‘configure’ script, not by the parent’s ‘configure’.  This is
+achieved using the ‘AC_CONFIG_SUBDIRS’ Autoconf macro (*note
+AC_CONFIG_SUBDIRS: (autoconf)Subdirectories.).
+
+   Here is an example package for an ‘arm’ program that links with a
+‘hand’ library that is a nested package in subdirectory ‘hand/’.
+
+   ‘arm’’s ‘configure.ac’:
+
+     AC_INIT([arm], [1.0])
+     AC_CONFIG_AUX_DIR([.])
+     AM_INIT_AUTOMAKE
+     AC_PROG_CC
+     AC_CONFIG_FILES([Makefile])
+     # Call hand's ./configure script recursively.
+     AC_CONFIG_SUBDIRS([hand])
+     AC_OUTPUT
+
+   ‘arm’’s ‘Makefile.am’:
+
+     # Build the library in the hand subdirectory first.
+     SUBDIRS = hand
+
+     # Include hand's header when compiling this directory.
+     AM_CPPFLAGS = -I$(srcdir)/hand
+
+     bin_PROGRAMS = arm
+     arm_SOURCES = arm.c
+     # link with the hand library.
+     arm_LDADD = hand/libhand.a
+
+   Now here is ‘hand’’s ‘hand/configure.ac’:
+
+     AC_INIT([hand], [1.2])
+     AC_CONFIG_AUX_DIR([.])
+     AM_INIT_AUTOMAKE
+     AC_PROG_CC
+     AM_PROG_AR
+     AC_PROG_RANLIB
+     AC_CONFIG_FILES([Makefile])
+     AC_OUTPUT
+
+and its ‘hand/Makefile.am’:
+
+     lib_LIBRARIES = libhand.a
+     libhand_a_SOURCES = hand.c
+
+   When ‘make dist’ is run from the top-level directory it will create
+an archive ‘arm-1.0.tar.gz’ that contains the ‘arm’ code as well as the
+‘hand’ subdirectory.  This package can be built and installed like any
+ordinary package, with the usual ‘./configure && make && make install’
+sequence (the ‘hand’ subpackage will be built and installed by the
+process).
+
+   When ‘make dist’ is run from the hand directory, it will create a
+self-contained ‘hand-1.2.tar.gz’ archive.  So although it appears to be
+embedded in another package, it can still be used separately.
+
+   The purpose of the ‘AC_CONFIG_AUX_DIR([.])’ instruction is to force
+Automake and Autoconf to search for auxiliary scripts in the current
+directory.  For instance, this means that there will be two copies of
+‘install-sh’: one in the top-level of the ‘arm’ package, and another one
+in the ‘hand/’ subdirectory for the ‘hand’ package.
+
+   The historical default is to search for these auxiliary scripts in
+the parent directory and the grandparent directory.  So if the
+‘AC_CONFIG_AUX_DIR([.])’ line was removed from ‘hand/configure.ac’, that
+subpackage would share the auxiliary script of the ‘arm’ package.  This
+may looks like a gain in size (a few kilobytes), but it is actually a
+loss of modularity as the ‘hand’ subpackage is no longer self-contained
+(‘make dist’ in the subdirectory will not work anymore).
+
+   Packages that do not use Automake need more work to be integrated
+this way.  *Note Third-Party Makefiles::.
+
+File: automake.info,  Node: Programs,  Next: Other Objects,  Prev: Directories,  Up: Top
+

@@ -1,0 +1,132 @@
+15.2 Working With External Software
+===================================
+
+Some packages require, or can optionally use, other software packages
+that are already installed.  The user can give `configure' command line
+options to specify which such external software to use.  The options
+have one of these forms:
+
+     --with-PACKAGE[=ARG]
+     --without-PACKAGE
+
+   For example, `--with-gnu-ld' means work with the GNU linker instead
+of some other linker.  `--with-x' means work with The X Window System.
+
+   The user can give an argument by following the package name with `='
+and the argument.  Giving an argument of `no' is for packages that are
+used by default; it says to _not_ use the package.  An argument that is
+neither `yes' nor `no' could include a name or number of a version of
+the other package, to specify more precisely which other package this
+program is supposed to work with.  If no argument is given, it defaults
+to `yes'.  `--without-PACKAGE' is equivalent to `--with-PACKAGE=no'.
+
+   Normally `configure' scripts complain about `--with-PACKAGE' options
+that they do not support.  *Note Option Checking::, for details, and
+for how to override the defaults.
+
+   For each external software package that may be used, `configure.ac'
+should call `AC_ARG_WITH' to detect whether the `configure' user asked
+to use it.  Whether each package is used or not by default, and which
+arguments are valid, is up to you.
+
+ -- Macro: AC_ARG_WITH (PACKAGE, HELP-STRING, [ACTION-IF-GIVEN],
+          [ACTION-IF-NOT-GIVEN])
+     If the user gave `configure' the option `--with-PACKAGE' or
+     `--without-PACKAGE', run shell commands ACTION-IF-GIVEN.  If
+     neither option was given, run shell commands ACTION-IF-NOT-GIVEN.
+     The name PACKAGE indicates another software package that this
+     program should work with.  It should consist only of alphanumeric
+     characters, dashes, plus signs, and dots.
+
+     The option's argument is available to the shell commands
+     ACTION-IF-GIVEN in the shell variable `withval', which is actually
+     just the value of the shell variable named `with_PACKAGE', with
+     any non-alphanumeric characters in PACKAGE changed into `_'.  You
+     may use that variable instead, if you wish.
+
+     The argument HELP-STRING is a description of the option that looks
+     like this:
+            --with-readline         support fancy command line editing
+
+     HELP-STRING may be more than one line long, if more detail is
+     needed.  Just make sure the columns line up in `configure --help'.
+     Avoid tabs in the help string.  The easiest way to provide the
+     proper leading whitespace is to format your HELP-STRING with the
+     macro `AS_HELP_STRING' (*note Pretty Help Strings::).
+
+     The following example shows how to use the `AC_ARG_WITH' macro in
+     a common situation.  You want to let the user decide whether to
+     enable support for an external library (e.g., the readline
+     library); if the user specified neither `--with-readline' nor
+     `--without-readline', you want to enable support for readline only
+     if the library is available on the system.
+
+          AC_ARG_WITH([readline],
+            [AS_HELP_STRING([--with-readline],
+              [support fancy command line editing @<:@default=check@:>@])],
+            [],
+            [with_readline=check])
+
+          LIBREADLINE=
+          AS_IF([test "x$with_readline" != xno],
+            [AC_CHECK_LIB([readline], [main],
+              [AC_SUBST([LIBREADLINE], ["-lreadline -lncurses"])
+               AC_DEFINE([HAVE_LIBREADLINE], [1],
+                         [Define if you have libreadline])
+              ],
+              [if test "x$with_readline" != xcheck; then
+                 AC_MSG_FAILURE(
+                   [--with-readline was given, but test for readline failed])
+               fi
+              ], -lncurses)])
+
+     The next example shows how to use `AC_ARG_WITH' to give the user
+     the possibility to enable support for the readline library, in
+     case it is still experimental and not well tested, and is
+     therefore disabled by default.
+
+          AC_ARG_WITH([readline],
+            [AS_HELP_STRING([--with-readline],
+              [enable experimental support for readline])],
+            [],
+            [with_readline=no])
+
+          LIBREADLINE=
+          AS_IF([test "x$with_readline" != xno],
+            [AC_CHECK_LIB([readline], [main],
+              [AC_SUBST([LIBREADLINE], ["-lreadline -lncurses"])
+               AC_DEFINE([HAVE_LIBREADLINE], [1],
+                         [Define if you have libreadline])
+              ],
+              [AC_MSG_FAILURE(
+                 [--with-readline was given, but test for readline failed])],
+              [-lncurses])])
+
+     The last example shows how to use `AC_ARG_WITH' to give the user
+     the possibility to disable support for the readline library, given
+     that it is an important feature and that it should be enabled by
+     default.
+
+          AC_ARG_WITH([readline],
+            [AS_HELP_STRING([--without-readline],
+              [disable support for readline])],
+            [],
+            [with_readline=yes])
+
+          LIBREADLINE=
+          AS_IF([test "x$with_readline" != xno],
+            [AC_CHECK_LIB([readline], [main],
+              [AC_SUBST([LIBREADLINE], ["-lreadline -lncurses"])
+               AC_DEFINE([HAVE_LIBREADLINE], [1],
+                         [Define if you have libreadline])
+              ],
+              [AC_MSG_FAILURE(
+                 [readline test failed (--without-readline to disable)])],
+              [-lncurses])])
+
+     These three examples can be easily adapted to the case where
+     `AC_ARG_ENABLE' should be preferred to `AC_ARG_WITH' (see *note
+     Package Options::).
+
+File: autoconf.info,  Node: Package Options,  Next: Pretty Help Strings,  Prev: External Software,  Up: Site Configuration
+

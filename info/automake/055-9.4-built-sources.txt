@@ -1,0 +1,240 @@
+9.4 Built Sources
+=================
+
+Because Automake’s automatic dependency tracking works as a side-effect
+of compilation (*note Dependencies::) there is a bootstrap issue: a
+target should not be compiled before its dependencies are made, but
+these dependencies are unknown until the target is first compiled.
+
+   Ordinarily this is not a problem, because dependencies are
+distributed sources: they preexist and do not need to be built.  Suppose
+that ‘foo.c’ includes ‘foo.h’.  When it first compiles ‘foo.o’, ‘make’
+only knows that ‘foo.o’ depends on ‘foo.c’.  As a side-effect of this
+compilation ‘depcomp’ records the ‘foo.h’ dependency so that following
+invocations of ‘make’ will honor it.  In these conditions, it’s clear
+there is no problem: either ‘foo.o’ doesn’t exist and has to be built
+(regardless of the dependencies), or accurate dependencies exist and
+they can be used to decide whether ‘foo.o’ should be rebuilt.
+
+   It’s a different story if ‘foo.h’ doesn’t exist by the first ‘make’
+run.  For instance, there might be a rule to build ‘foo.h’.  This time
+‘file.o’’s build will fail because the compiler can’t find ‘foo.h’.
+‘make’ failed to trigger the rule to build ‘foo.h’ first by lack of
+dependency information.
+
+   The ‘BUILT_SOURCES’ variable is a workaround for this problem.  A
+source file listed in ‘BUILT_SOURCES’ is made on ‘make all’ or ‘make
+check’ (or even ‘make install’) before other targets are processed.
+However, such a source file is not _compiled_ unless explicitly
+requested by mentioning it in some other ‘_SOURCES’ variable.
+
+   So, to conclude our introductory example, we could use ‘BUILT_SOURCES
+= foo.h’ to ensure ‘foo.h’ gets built before any other target (including
+‘foo.o’) during ‘make all’ or ‘make check’.
+
+   ‘BUILT_SOURCES’ is actually a bit of a misnomer, as any file which
+must be created early in the build process can be listed in this
+variable.  Moreover, all built sources do not necessarily have to be
+listed in ‘BUILT_SOURCES’.  For instance, a generated ‘.c’ file doesn’t
+need to appear in ‘BUILT_SOURCES’ (unless it is included by another
+source), because it’s a known dependency of the associated object.
+
+   It might be important to emphasize that ‘BUILT_SOURCES’ is honored
+only by ‘make all’, ‘make check’ and ‘make install’.  This means you
+cannot build a specific target (e.g., ‘make foo’) in a clean tree if it
+depends on a built source.  However it will succeed if you have run
+‘make all’ earlier, because accurate dependencies are already available.
+
+   The next section illustrates and discusses the handling of built
+sources on a toy example.
+
+* Menu:
+
+* Built Sources Example::       Several ways to handle built sources.
+
+File: automake.info,  Node: Built Sources Example,  Up: Sources
+
+9.4.1 Built Sources Example
+---------------------------
+
+Suppose that ‘foo.c’ includes ‘bindir.h’, which is
+installation-dependent and not distributed: it needs to be built.  Here
+‘bindir.h’ defines the preprocessor macro ‘bindir’ to the value of the
+‘make’ variable ‘bindir’ (inherited from ‘configure’).
+
+   We suggest several implementations below.  It’s not meant to be an
+exhaustive listing of all ways to handle built sources, but it will give
+you a few ideas if you encounter this issue.
+
+First Try
+.........
+
+This first implementation will illustrate the bootstrap issue mentioned
+in the previous section (*note Sources::).
+
+   Here is a tentative ‘Makefile.am’.
+
+     # This won't work.
+     bin_PROGRAMS = foo
+     foo_SOURCES = foo.c
+     nodist_foo_SOURCES = bindir.h
+     CLEANFILES = bindir.h
+     bindir.h: Makefile
+             echo '#define bindir "$(bindir)"' >$@
+
+   This setup doesn’t work, because Automake doesn’t know that ‘foo.c’
+includes ‘bindir.h’.  Remember, automatic dependency tracking works as a
+side-effect of compilation, so the dependencies of ‘foo.o’ will be known
+only after ‘foo.o’ has been compiled (*note Dependencies::).  The
+symptom is as follows.
+
+     % make
+     source='foo.c' object='foo.o' libtool=no \
+     depfile='.deps/foo.Po' tmpdepfile='.deps/foo.TPo' \
+     depmode=gcc /bin/sh ./depcomp \
+     gcc -I. -I. -g -O2 -c `test -f 'foo.c' || echo './'`foo.c
+     foo.c:2: bindir.h: No such file or directory
+     make: *** [foo.o] Error 1
+
+   In this example ‘bindir.h’ is not distributed nor installed, and it
+is not even being built on-time.  One may wonder if the
+‘nodist_foo_SOURCES = bindir.h’ line has any use at all.  This line
+simply states that ‘bindir.h’ is a source of ‘foo’, so for instance, it
+should be inspected while generating tags (*note Tags::).  In other
+words, it does not help our present problem, and the build would fail
+identically without it.
+
+Using ‘BUILT_SOURCES’
+.....................
+
+A solution is to require ‘bindir.h’ to be built before anything else.
+This is what ‘BUILT_SOURCES’ is meant for (*note Sources::).
+
+     bin_PROGRAMS = foo
+     foo_SOURCES = foo.c
+     nodist_foo_SOURCES = bindir.h
+     BUILT_SOURCES = bindir.h
+     CLEANFILES = bindir.h
+     bindir.h: Makefile
+             echo '#define bindir "$(bindir)"' >$@
+
+   See how ‘bindir.h’ gets built first:
+
+     % make
+     echo '#define bindir "/usr/local/bin"' >bindir.h
+     make  all-am
+     make[1]: Entering directory `/home/adl/tmp'
+     source='foo.c' object='foo.o' libtool=no \
+     depfile='.deps/foo.Po' tmpdepfile='.deps/foo.TPo' \
+     depmode=gcc /bin/sh ./depcomp \
+     gcc -I. -I. -g -O2 -c `test -f 'foo.c' || echo './'`foo.c
+     gcc  -g -O2   -o foo  foo.o
+     make[1]: Leaving directory `/home/adl/tmp'
+
+   However, as said earlier, ‘BUILT_SOURCES’ applies only to the ‘all’,
+‘check’, and ‘install’ targets.  It still fails if you try to run ‘make
+foo’ explicitly:
+
+     % make clean
+     test -z "bindir.h" || rm -f bindir.h
+     test -z "foo" || rm -f foo
+     rm -f *.o
+     % : > .deps/foo.Po # Suppress previously recorded dependencies
+     % make foo
+     source='foo.c' object='foo.o' libtool=no \
+     depfile='.deps/foo.Po' tmpdepfile='.deps/foo.TPo' \
+     depmode=gcc /bin/sh ./depcomp \
+     gcc -I. -I. -g -O2 -c `test -f 'foo.c' || echo './'`foo.c
+     foo.c:2: bindir.h: No such file or directory
+     make: *** [foo.o] Error 1
+
+Recording Dependencies manually
+...............................
+
+Usually people are happy enough with ‘BUILT_SOURCES’ because they never
+build targets such as ‘make foo’ before ‘make all’, as in the previous
+example.  However if this matters to you, you can avoid ‘BUILT_SOURCES’
+and record such dependencies explicitly in the ‘Makefile.am’.
+
+     bin_PROGRAMS = foo
+     foo_SOURCES = foo.c
+     nodist_foo_SOURCES = bindir.h
+     foo.$(OBJEXT): bindir.h
+     CLEANFILES = bindir.h
+     bindir.h: Makefile
+             echo '#define bindir "$(bindir)"' >$@
+
+   You don’t have to list _all_ the dependencies of ‘foo.o’ explicitly,
+only those that might need to be built.  If a dependency already exists,
+it will not hinder the first compilation and will be recorded by the
+normal dependency tracking code.  (Note that after this first
+compilation the dependency tracking code will also have recorded the
+dependency between ‘foo.o’ and ‘bindir.h’; so our explicit dependency is
+really useful to the first build only.)
+
+   Adding explicit dependencies like this can be a bit dangerous if you
+are not careful enough.  This is due to the way Automake tries not to
+overwrite your rules (it assumes you know better than it).
+‘foo.$(OBJEXT): bindir.h’ supersedes any rule Automake may want to
+output to build ‘foo.$(OBJEXT)’.  It happens to work in this case
+because Automake doesn’t have to output any ‘foo.$(OBJEXT):’ target: it
+relies on a suffix rule instead (i.e., ‘.c.$(OBJEXT):’).  Always check
+the generated ‘Makefile.in’ if you do this.
+
+Build ‘bindir.h’ from ‘configure’
+.................................
+
+It’s possible to define this preprocessor macro from ‘configure’, either
+in ‘config.h’ (*note Defining Directories: (autoconf)Defining
+Directories.), or by processing a ‘bindir.h.in’ file using
+‘AC_CONFIG_FILES’ (*note Configuration Actions: (autoconf)Configuration
+Actions.).
+
+   At this point it should be clear that building ‘bindir.h’ from
+‘configure’ works well for this example.  ‘bindir.h’ will exist before
+you build any target, hence will not cause any dependency issue.
+
+   The Makefile can be shrunk as follows.  We do not even have to
+mention ‘bindir.h’.
+
+     bin_PROGRAMS = foo
+     foo_SOURCES = foo.c
+
+   However, it’s not always possible to build sources from ‘configure’,
+especially when these sources are generated by a tool that needs to be
+built first.
+
+Build ‘bindir.c’, not ‘bindir.h’.
+.................................
+
+Another attractive idea is to define ‘bindir’ as a variable or function
+exported from ‘bindir.o’, and build ‘bindir.c’ instead of ‘bindir.h’.
+
+     noinst_PROGRAMS = foo
+     foo_SOURCES = foo.c bindir.h
+     nodist_foo_SOURCES = bindir.c
+     CLEANFILES = bindir.c
+     bindir.c: Makefile
+             echo 'const char bindir[] = "$(bindir)";' >$@
+
+   ‘bindir.h’ contains just the variable’s declaration and doesn’t need
+to be built, so it won’t cause any trouble.  ‘bindir.o’ is always
+dependent on ‘bindir.c’, so ‘bindir.c’ will get built first.
+
+Which is best?
+..............
+
+There is no panacea, of course.  Each solution has its merits and
+drawbacks.
+
+   You cannot use ‘BUILT_SOURCES’ if the ability to run ‘make foo’ on a
+clean tree is important to you.
+
+   You won’t add explicit dependencies if you are leery of overriding an
+Automake rule by mistake.
+
+   Building files from ‘./configure’ is not always possible, neither is
+converting ‘.h’ files into ‘.c’ files.
+
+File: automake.info,  Node: Other GNU Tools,  Next: Documentation,  Prev: Other Objects,  Up: Top
+

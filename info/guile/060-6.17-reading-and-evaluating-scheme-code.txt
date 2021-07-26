@@ -1,0 +1,1163 @@
+6.17 Reading and Evaluating Scheme Code
+=======================================
+
+This chapter describes Guile functions that are concerned with reading,
+loading, evaluating, and compiling Scheme code at run time.
+
+* Menu:
+
+* Scheme Syntax::               Standard and extended Scheme syntax.
+* Scheme Read::                 Reading Scheme code.
+* Scheme Write::                Writing Scheme values to a port.
+* Fly Evaluation::              Procedures for on the fly evaluation.
+* Compilation::                 How to compile Scheme files and procedures.
+* Loading::                     Loading Scheme code from file.
+* Load Paths::                  Where Guile looks for code.
+* Character Encoding of Source Files:: Loading non-ASCII Scheme code from file.
+* Delayed Evaluation::          Postponing evaluation until it is needed.
+* Local Evaluation::            Evaluation in a local lexical environment.
+* Local Inclusion::             Compile-time inclusion of one file in another.
+* REPL Servers::                Serving a REPL over a socket.
+* Cooperative REPL Servers::    REPL server for single-threaded applications.
+
+File: guile.info,  Node: Scheme Syntax,  Next: Scheme Read,  Up: Read/Load/Eval/Compile
+
+6.17.1 Scheme Syntax: Standard and Guile Extensions
+---------------------------------------------------
+
+* Menu:
+
+* Expression Syntax::
+* Comments::
+* Block Comments::
+* Case Sensitivity::
+* Keyword Syntax::
+* Reader Extensions::
+
+File: guile.info,  Node: Expression Syntax,  Next: Comments,  Up: Scheme Syntax
+
+6.17.1.1 Expression Syntax
+..........................
+
+An expression to be evaluated takes one of the following forms.
+
+SYMBOL
+     A symbol is evaluated by dereferencing.  A binding of that symbol
+     is sought and the value there used.  For example,
+
+          (define x 123)
+          x ⇒ 123
+
+(PROC ARGS...)
+     A parenthesised expression is a function call.  PROC and each
+     argument are evaluated, then the function (which PROC evaluated to)
+     is called with those arguments.
+
+     The order in which PROC and the arguments are evaluated is
+     unspecified, so be careful when using expressions with side
+     effects.
+
+          (max 1 2 3) ⇒ 3
+
+          (define (get-some-proc)  min)
+          ((get-some-proc) 1 2 3) ⇒ 1
+
+     The same sort of parenthesised form is used for a macro invocation,
+     but in that case the arguments are not evaluated.  See the
+     descriptions of macros for more on this (*note Macros::, and *note
+     Syntax Rules::).
+
+CONSTANT
+     Number, string, character and boolean constants evaluate “to
+     themselves”, so can appear as literals.
+
+          123     ⇒ 123
+          99.9    ⇒ 99.9
+          "hello" ⇒ "hello"
+          #\z     ⇒ #\z
+          #t      ⇒ #t
+
+     Note that an application must not attempt to modify literal
+     strings, since they may be in read-only memory.
+
+(quote DATA)
+’DATA
+     Quoting is used to obtain a literal symbol (instead of a variable
+     reference), a literal list (instead of a function call), or a
+     literal vector.  ’ is simply a shorthand for a ‘quote’ form.  For
+     example,
+
+          'x                   ⇒ x
+          '(1 2 3)             ⇒ (1 2 3)
+          '#(1 (2 3) 4)        ⇒ #(1 (2 3) 4)
+          (quote x)            ⇒ x
+          (quote (1 2 3))      ⇒ (1 2 3)
+          (quote #(1 (2 3) 4)) ⇒ #(1 (2 3) 4)
+
+     Note that an application must not attempt to modify literal lists
+     or vectors obtained from a ‘quote’ form, since they may be in
+     read-only memory.
+
+(quasiquote DATA)
+‘DATA
+     Backquote quasi-quotation is like ‘quote’, but selected
+     sub-expressions are evaluated.  This is a convenient way to
+     construct a list or vector structure most of which is constant, but
+     at certain points should have expressions substituted.
+
+     The same effect can always be had with suitable ‘list’, ‘cons’ or
+     ‘vector’ calls, but quasi-quoting is often easier.
+
+     (unquote EXPR)
+     ,EXPR
+          Within the quasiquote DATA, ‘unquote’ or ‘,’ indicates an
+          expression to be evaluated and inserted.  The comma syntax ‘,’
+          is simply a shorthand for an ‘unquote’ form.  For example,
+
+               `(1 2 (* 9 9) 3 4)       ⇒ (1 2 (* 9 9) 3 4)
+               `(1 2 ,(* 9 9) 3 4)      ⇒ (1 2 81 3 4)
+               `(1 (unquote (+ 1 1)) 3) ⇒ (1 2 3)
+               `#(1 ,(/ 12 2))          ⇒ #(1 6)
+
+     (unquote-splicing EXPR)
+     ,@EXPR
+          Within the quasiquote DATA, ‘unquote-splicing’ or ‘,@’
+          indicates an expression to be evaluated and the elements of
+          the returned list inserted.  EXPR must evaluate to a list.
+          The “comma-at” syntax ‘,@’ is simply a shorthand for an
+          ‘unquote-splicing’ form.
+
+               (define x '(2 3))
+               `(1 ,x 4)                           ⇒ (1 (2 3) 4)
+               `(1 ,@x 4)                         ⇒ (1 2 3 4)
+               `(1 (unquote-splicing (map 1+ x)))  ⇒ (1 3 4)
+               `#(9 ,@x 9)                        ⇒ #(9 2 3 9)
+
+          Notice ‘,@’ differs from plain ‘,’ in the way one level of
+          nesting is stripped.  For ‘,@’ the elements of a returned list
+          are inserted, whereas with ‘,’ it would be the list itself
+          inserted.
+
+File: guile.info,  Node: Comments,  Next: Block Comments,  Prev: Expression Syntax,  Up: Scheme Syntax
+
+6.17.1.2 Comments
+.................
+
+Comments in Scheme source files are written by starting them with a
+semicolon character (‘;’).  The comment then reaches up to the end of
+the line.  Comments can begin at any column, and the may be inserted on
+the same line as Scheme code.
+
+     ; Comment
+     ;; Comment too
+     (define x 1)        ; Comment after expression
+     (let ((y 1))
+       ;; Display something.
+       (display y)
+     ;;; Comment at left margin.
+       (display (+ y 1)))
+
+   It is common to use a single semicolon for comments following
+expressions on a line, to use two semicolons for comments which are
+indented like code, and three semicolons for comments which start at
+column 0, even if they are inside an indented code block.  This
+convention is used when indenting code in Emacs’ Scheme mode.
+
+File: guile.info,  Node: Block Comments,  Next: Case Sensitivity,  Prev: Comments,  Up: Scheme Syntax
+
+6.17.1.3 Block Comments
+.......................
+
+In addition to the standard line comments defined by R5RS, Guile has
+another comment type for multiline comments, called “block comments”.
+This type of comment begins with the character sequence ‘#!’ and ends
+with the characters ‘!#’.
+
+   These comments are compatible with the block comments in the Scheme
+Shell ‘scsh’ (*note The Scheme shell (scsh)::).  The characters ‘#!’
+were chosen because they are the magic characters used in shell scripts
+for indicating that the name of the program for executing the script
+follows on the same line.
+
+   Thus a Guile script often starts like this.
+
+     #! /usr/local/bin/guile -s
+     !#
+
+   More details on Guile scripting can be found in the scripting section
+(*note Guile Scripting::).
+
+   Similarly, Guile (starting from version 2.0) supports nested block
+comments as specified by R6RS and SRFI-30
+(http://srfi.schemers.org/srfi-30/srfi-30.html):
+
+     (+ 1 #| this is a #| nested |# block comment |# 2)
+     ⇒ 3
+
+   For backward compatibility, this syntax can be overridden with
+‘read-hash-extend’ (*note ‘read-hash-extend’: Reader Extensions.).
+
+   There is one special case where the contents of a comment can
+actually affect the interpretation of code.  When a character encoding
+declaration, such as ‘coding: utf-8’ appears in one of the first few
+lines of a source file, it indicates to Guile’s default reader that this
+source code file is not ASCII. For details see *note Character Encoding
+of Source Files::.
+
+File: guile.info,  Node: Case Sensitivity,  Next: Keyword Syntax,  Prev: Block Comments,  Up: Scheme Syntax
+
+6.17.1.4 Case Sensitivity
+.........................
+
+Scheme as defined in R5RS is not case sensitive when reading symbols.
+Guile, on the contrary is case sensitive by default, so the identifiers
+
+     guile-whuzzy
+     Guile-Whuzzy
+
+   are the same in R5RS Scheme, but are different in Guile.
+
+   It is possible to turn off case sensitivity in Guile by setting the
+reader option ‘case-insensitive’.  For more information on reader
+options, *Note Scheme Read::.
+
+     (read-enable 'case-insensitive)
+
+   It is also possible to disable (or enable) case sensitivity within a
+single file by placing the reader directives ‘#!fold-case’ (or
+‘#!no-fold-case’) within the file itself.
+
+File: guile.info,  Node: Keyword Syntax,  Next: Reader Extensions,  Prev: Case Sensitivity,  Up: Scheme Syntax
+
+6.17.1.5 Keyword Syntax
+.......................
+
+File: guile.info,  Node: Reader Extensions,  Prev: Keyword Syntax,  Up: Scheme Syntax
+
+6.17.1.6 Reader Extensions
+..........................
+
+ -- Scheme Procedure: read-hash-extend chr proc
+ -- C Function: scm_read_hash_extend (chr, proc)
+     Install the procedure PROC for reading expressions starting with
+     the character sequence ‘#’ and CHR.  PROC will be called with two
+     arguments: the character CHR and the port to read further data
+     from.  The object returned will be the return value of ‘read’.
+     Passing ‘#f’ for PROC will remove a previous setting.
+
+File: guile.info,  Node: Scheme Read,  Next: Scheme Write,  Prev: Scheme Syntax,  Up: Read/Load/Eval/Compile
+
+6.17.2 Reading Scheme Code
+--------------------------
+
+ -- Scheme Procedure: read [port]
+ -- C Function: scm_read (port)
+     Read an s-expression from the input port PORT, or from the current
+     input port if PORT is not specified.  Any whitespace before the
+     next token is discarded.
+
+   The behaviour of Guile’s Scheme reader can be modified by
+manipulating its read options.
+
+ -- Scheme Procedure: read-options [setting]
+     Display the current settings of the global read options.  If
+     SETTING is omitted, only a short form of the current read options
+     is printed.  Otherwise if SETTING is the symbol ‘help’, a complete
+     options description is displayed.
+
+   The set of available options, and their default values, may be had by
+invoking ‘read-options’ at the prompt.
+
+     scheme@(guile-user)> (read-options)
+     (square-brackets keywords #f positions)
+     scheme@(guile-user)> (read-options 'help)
+     copy              no    Copy source code expressions.
+     positions         yes   Record positions of source code expressions.
+     case-insensitive  no    Convert symbols to lower case.
+     keywords          #f    Style of keyword recognition: #f, 'prefix or 'postfix.
+     r6rs-hex-escapes  no    Use R6RS variable-length character and string hex escapes.
+     square-brackets   yes   Treat `[' and `]' as parentheses, for R6RS compatibility.
+     hungry-eol-escapes no   In strings, consume leading whitespace after an
+                             escaped end-of-line.
+     curly-infix       no    Support SRFI-105 curly infix expressions.
+     r7rs-symbols      no    Support R7RS |...| symbol notation.
+
+   Note that Guile also includes a preliminary mechanism for setting
+read options on a per-port basis.  For instance, the ‘case-insensitive’
+read option is set (or unset) on the port when the reader encounters the
+‘#!fold-case’ or ‘#!no-fold-case’ reader directives.  Similarly, the
+‘#!curly-infix’ reader directive sets the ‘curly-infix’ read option on
+the port, and ‘#!curly-infix-and-bracket-lists’ sets ‘curly-infix’ and
+unsets ‘square-brackets’ on the port (*note SRFI-105::).  There is
+currently no other way to access or set the per-port read options.
+
+   The boolean options may be toggled with ‘read-enable’ and
+‘read-disable’.  The non-boolean ‘keywords’ option must be set using
+‘read-set!’.
+
+ -- Scheme Procedure: read-enable option-name
+ -- Scheme Procedure: read-disable option-name
+ -- Scheme Syntax: read-set! option-name value
+     Modify the read options.  ‘read-enable’ should be used with boolean
+     options and switches them on, ‘read-disable’ switches them off.
+
+     ‘read-set!’ can be used to set an option to a specific value.  Due
+     to historical oddities, it is a macro that expects an unquoted
+     option name.
+
+   For example, to make ‘read’ fold all symbols to their lower case
+(perhaps for compatibility with older Scheme code), you can enter:
+
+     (read-enable 'case-insensitive)
+
+   For more information on the effect of the ‘r6rs-hex-escapes’ and
+‘hungry-eol-escapes’ options, see (*note String Syntax::).
+
+   For more information on the ‘r7rs-symbols’ option, see (*note Symbol
+Read Syntax::).
+
+File: guile.info,  Node: Scheme Write,  Next: Fly Evaluation,  Prev: Scheme Read,  Up: Read/Load/Eval/Compile
+
+6.17.3 Writing Scheme Values
+----------------------------
+
+Any scheme value may be written to a port.  Not all values may be read
+back in (*note Scheme Read::), however.
+
+ -- Scheme Procedure: write obj [port]
+     Send a representation of OBJ to PORT or to the current output port
+     if not given.
+
+     The output is designed to be machine readable, and can be read back
+     with ‘read’ (*note Scheme Read::).  Strings are printed in double
+     quotes, with escapes if necessary, and characters are printed in
+     ‘#\’ notation.
+
+ -- Scheme Procedure: display obj [port]
+     Send a representation of OBJ to PORT or to the current output port
+     if not given.
+
+     The output is designed for human readability, it differs from
+     ‘write’ in that strings are printed without double quotes and
+     escapes, and characters are printed as per ‘write-char’, not in
+     ‘#\’ form.
+
+   As was the case with the Scheme reader, there are a few options that
+affect the behavior of the Scheme printer.
+
+ -- Scheme Procedure: print-options [setting]
+     Display the current settings of the read options.  If SETTING is
+     omitted, only a short form of the current read options is printed.
+     Otherwise if SETTING is the symbol ‘help’, a complete options
+     description is displayed.
+
+   The set of available options, and their default values, may be had by
+invoking ‘print-options’ at the prompt.
+
+     scheme@(guile-user)> (print-options)
+     (quote-keywordish-symbols reader highlight-suffix "}" highlight-prefix "{")
+     scheme@(guile-user)> (print-options 'help)
+     highlight-prefix          {       The string to print before highlighted values.
+     highlight-suffix          }       The string to print after highlighted values.
+     quote-keywordish-symbols  reader  How to print symbols that have a colon
+                                       as their first or last character. The
+                                       value '#f' does not quote the colons;
+                                       '#t' quotes them; 'reader' quotes them
+                                       when the reader option 'keywords' is
+                                       not '#f'.
+     escape-newlines           yes     Render newlines as \n when printing
+                                       using `write'.
+     r7rs-symbols              no      Escape symbols using R7RS |...| symbol
+                                       notation.
+
+   These options may be modified with the print-set!  syntax.
+
+ -- Scheme Syntax: print-set! option-name value
+     Modify the print options.  Due to historical oddities, ‘print-set!’
+     is a macro that expects an unquoted option name.
+
+File: guile.info,  Node: Fly Evaluation,  Next: Compilation,  Prev: Scheme Write,  Up: Read/Load/Eval/Compile
+
+6.17.4 Procedures for On the Fly Evaluation
+-------------------------------------------
+
+Scheme has the lovely property that its expressions may be represented
+as data.  The ‘eval’ procedure takes a Scheme datum and evaluates it as
+code.
+
+ -- Scheme Procedure: eval exp module_or_state
+ -- C Function: scm_eval (exp, module_or_state)
+     Evaluate EXP, a list representing a Scheme expression, in the
+     top-level environment specified by MODULE_OR_STATE.  While EXP is
+     evaluated (using ‘primitive-eval’), MODULE_OR_STATE is made the
+     current module.  The current module is reset to its previous value
+     when ‘eval’ returns.  XXX - dynamic states.  Example: (eval ’(+ 1
+     2) (interaction-environment))
+
+ -- Scheme Procedure: interaction-environment
+ -- C Function: scm_interaction_environment ()
+     Return a specifier for the environment that contains
+     implementation–defined bindings, typically a superset of those
+     listed in the report.  The intent is that this procedure will
+     return the environment in which the implementation would evaluate
+     expressions dynamically typed by the user.
+
+   *Note Environments::, for other environments.
+
+   One does not always receive code as Scheme data, of course, and this
+is especially the case for Guile’s other language implementations (*note
+Other Languages::).  For the case in which all you have is a string, we
+have ‘eval-string’.  There is a legacy version of this procedure in the
+default environment, but you really want the one from ‘(ice-9
+eval-string)’, so load it up:
+
+     (use-modules (ice-9 eval-string))
+
+ -- Scheme Procedure: eval-string string [#:module=#f] [#:file=#f]
+          [#:line=#f] [#:column=#f] [#:lang=(current-language)]
+          [#:compile?=#f]
+     Parse STRING according to the current language, normally Scheme.
+     Evaluate or compile the expressions it contains, in order,
+     returning the last expression.
+
+     If the MODULE keyword argument is set, save a module excursion
+     (*note Module System Reflection::) and set the current module to
+     MODULE before evaluation.
+
+     The FILE, LINE, and COLUMN keyword arguments can be used to
+     indicate that the source string begins at a particular source
+     location.
+
+     Finally, LANG is a language, defaulting to the current language,
+     and the expression is compiled if COMPILE? is true or there is no
+     evaluator for the given language.
+
+ -- C Function: scm_eval_string (string)
+ -- C Function: scm_eval_string_in_module (string, module)
+     These C bindings call ‘eval-string’ from ‘(ice-9 eval-string)’,
+     evaluating within MODULE or the current module.
+
+ -- C Function: SCM scm_c_eval_string (const char *string)
+     ‘scm_eval_string’, but taking a C string in locale encoding instead
+     of an ‘SCM’.
+
+ -- Scheme Procedure: apply proc arg ... arglst
+ -- C Function: scm_apply_0 (proc, arglst)
+ -- C Function: scm_apply_1 (proc, arg1, arglst)
+ -- C Function: scm_apply_2 (proc, arg1, arg2, arglst)
+ -- C Function: scm_apply_3 (proc, arg1, arg2, arg3, arglst)
+ -- C Function: scm_apply (proc, arg, rest)
+     Call PROC with arguments ARG ... and the elements of the ARGLST
+     list.
+
+     ‘scm_apply’ takes parameters corresponding to a Scheme level
+     ‘(lambda (proc arg1 . rest) ...)’.  So ARG1 and all but the last
+     element of the REST list make up ARG ..., and the last element of
+     REST is the ARGLST list.  Or if REST is the empty list ‘SCM_EOL’
+     then there’s no ARG ..., and (ARG1) is the ARGLST.
+
+     ARGLST is not modified, but the REST list passed to ‘scm_apply’ is
+     modified.
+
+ -- C Function: scm_call_0 (proc)
+ -- C Function: scm_call_1 (proc, arg1)
+ -- C Function: scm_call_2 (proc, arg1, arg2)
+ -- C Function: scm_call_3 (proc, arg1, arg2, arg3)
+ -- C Function: scm_call_4 (proc, arg1, arg2, arg3, arg4)
+ -- C Function: scm_call_5 (proc, arg1, arg2, arg3, arg4, arg5)
+ -- C Function: scm_call_6 (proc, arg1, arg2, arg3, arg4, arg5, arg6)
+ -- C Function: scm_call_7 (proc, arg1, arg2, arg3, arg4, arg5, arg6,
+          arg7)
+ -- C Function: scm_call_8 (proc, arg1, arg2, arg3, arg4, arg5, arg6,
+          arg7, arg8)
+ -- C Function: scm_call_9 (proc, arg1, arg2, arg3, arg4, arg5, arg6,
+          arg7, arg8, arg9)
+     Call PROC with the given arguments.
+
+ -- C Function: scm_call (proc, ...)
+     Call PROC with any number of arguments.  The argument list must be
+     terminated by ‘SCM_UNDEFINED’.  For example:
+
+          scm_call (scm_c_public_ref ("guile", "+"),
+                    scm_from_int (1),
+                    scm_from_int (2),
+                    SCM_UNDEFINED);
+
+ -- C Function: scm_call_n (proc, argv, nargs)
+     Call PROC with the array of arguments ARGV, as a ‘SCM*’.  The
+     length of the arguments should be passed in NARGS, as a ‘size_t’.
+
+ -- Scheme Procedure: apply:nconc2last lst
+ -- C Function: scm_nconc2last (lst)
+     LST should be a list (ARG1 ... ARGN ARGLST), with ARGLST being a
+     list.  This function returns a list comprising ARG1 to ARGN plus
+     the elements of ARGLST.  LST is modified to form the return.
+     ARGLST is not modified, though the return does share structure with
+     it.
+
+     This operation collects up the arguments from a list which is
+     ‘apply’ style parameters.
+
+ -- Scheme Procedure: primitive-eval exp
+ -- C Function: scm_primitive_eval (exp)
+     Evaluate EXP in the top-level environment specified by the current
+     module.
+
+File: guile.info,  Node: Compilation,  Next: Loading,  Prev: Fly Evaluation,  Up: Read/Load/Eval/Compile
+
+6.17.5 Compiling Scheme Code
+----------------------------
+
+The ‘eval’ procedure directly interprets the S-expression representation
+of Scheme.  An alternate strategy for evaluation is to determine ahead
+of time what computations will be necessary to evaluate the expression,
+and then use that recipe to produce the desired results.  This is known
+as “compilation”.
+
+   While it is possible to compile simple Scheme expressions such as ‘(+
+2 2)’ or even ‘"Hello world!"’, compilation is most interesting in the
+context of procedures.  Compiling a lambda expression produces a
+compiled procedure, which is just like a normal procedure except
+typically much faster, because it can bypass the generic interpreter.
+
+   Functions from system modules in a Guile installation are normally
+compiled already, so they load and run quickly.
+
+   Note that well-written Scheme programs will not typically call the
+procedures in this section, for the same reason that it is often bad
+taste to use ‘eval’.  By default, Guile automatically compiles any files
+it encounters that have not been compiled yet (*note ‘--auto-compile’:
+Invoking Guile.).  The compiler can also be invoked explicitly from the
+shell as ‘guild compile foo.scm’.
+
+   (Why are calls to ‘eval’ and ‘compile’ usually in bad taste?  Because
+they are limited, in that they can only really make sense for top-level
+expressions.  Also, most needs for “compile-time” computation are
+fulfilled by macros and closures.  Of course one good counterexample is
+the REPL itself, or any code that reads expressions from a port.)
+
+   Automatic compilation generally works transparently, without any need
+for user intervention.  However Guile does not yet do proper dependency
+tracking, so that if file ‘A.scm’ uses macros from ‘B.scm’, and B.SCM
+changes, ‘A.scm’ would not be automatically recompiled.  To forcibly
+invalidate the auto-compilation cache, pass the ‘--fresh-auto-compile’
+option to Guile, or set the ‘GUILE_AUTO_COMPILE’ environment variable to
+‘fresh’ (instead of to ‘0’ or ‘1’).
+
+   For more information on the compiler itself, see *note Compiling to
+the Virtual Machine::.  For information on the virtual machine, see
+*note A Virtual Machine for Guile::.
+
+   The command-line interface to Guile’s compiler is the ‘guild compile’
+command:
+
+ -- Command: guild compile [‘option’...] FILE...
+     Compile FILE, a source file, and store bytecode in the compilation
+     cache or in the file specified by the ‘-o’ option.  The following
+     options are available:
+
+     ‘-L DIR’
+     ‘--load-path=DIR’
+          Add DIR to the front of the module load path.
+
+     ‘-o OFILE’
+     ‘--output=OFILE’
+          Write output bytecode to OFILE.  By convention, bytecode file
+          names end in ‘.go’.  When ‘-o’ is omitted, the output file
+          name is as for ‘compile-file’ (see below).
+
+     ‘-W WARNING’
+     ‘--warn=WARNING’
+          Emit warnings of type WARNING; use ‘--warn=help’ for a list of
+          available warnings and their description.  Currently
+          recognized warnings include ‘unused-variable’,
+          ‘unused-toplevel’, ‘unbound-variable’, ‘arity-mismatch’,
+          ‘format’, ‘duplicate-case-datum’, and ‘bad-case-datum’.
+
+     ‘-f LANG’
+     ‘--from=LANG’
+          Use LANG as the source language of FILE.  If this option is
+          omitted, ‘scheme’ is assumed.
+
+     ‘-t LANG’
+     ‘--to=LANG’
+          Use LANG as the target language of FILE.  If this option is
+          omitted, ‘objcode’ is assumed.
+
+     ‘-T TARGET’
+     ‘--target=TARGET’
+          Produce bytecode for TARGET instead of %HOST-TYPE (*note
+          %host-type: Build Config.).  Target must be a valid GNU
+          triplet, such as ‘armv5tel-unknown-linux-gnueabi’ (*note
+          (autoconf)Specifying Target Triplets::).
+
+     Each FILE is assumed to be UTF-8-encoded, unless it contains a
+     coding declaration as recognized by ‘file-encoding’ (*note
+     Character Encoding of Source Files::).
+
+   The compiler can also be invoked directly by Scheme code using the
+procedures below:
+
+ -- Scheme Procedure: compile exp [#:env=#f] [#:from=(current-language)]
+          [#:to=value] [#:opts=()]
+     Compile the expression EXP in the environment ENV.  If EXP is a
+     procedure, the result will be a compiled procedure; otherwise
+     ‘compile’ is mostly equivalent to ‘eval’.
+
+     For a discussion of languages and compiler options, *Note Compiling
+     to the Virtual Machine::.
+
+ -- Scheme Procedure: compile-file file [#:output-file=#f]
+          [#:from=(current-language)] [#:to='objcode]
+          [#:env=(default-environment from)] [#:opts='()]
+          [#:canonicalization='relative]
+     Compile the file named FILE.
+
+     Output will be written to a OUTPUT-FILE.  If you do not supply an
+     output file name, output is written to a file in the cache
+     directory, as computed by ‘(compiled-file-name FILE)’.
+
+     FROM and TO specify the source and target languages.  *Note
+     Compiling to the Virtual Machine::, for more information on these
+     options, and on ENV and OPTS.
+
+     As with ‘guild compile’, FILE is assumed to be UTF-8-encoded unless
+     it contains a coding declaration.
+
+ -- Scheme Procedure: compiled-file-name file
+     Compute a cached location for a compiled version of a Scheme file
+     named FILE.
+
+     This file will usually be below the ‘$HOME/.cache/guile/ccache’
+     directory, depending on the value of the ‘XDG_CACHE_HOME’
+     environment variable.  The intention is that ‘compiled-file-name’
+     provides a fallback location for caching auto-compiled files.  If
+     you want to place a compile file in the ‘%load-compiled-path’, you
+     should pass the OUTPUT-FILE option to ‘compile-file’, explicitly.
+
+ -- Scheme Variable: %auto-compilation-options
+     This variable contains the options passed to the ‘compile-file’
+     procedure when auto-compiling source files.  By default, it enables
+     useful compilation warnings.  It can be customized from ‘~/.guile’.
+
+File: guile.info,  Node: Loading,  Next: Load Paths,  Prev: Compilation,  Up: Read/Load/Eval/Compile
+
+6.17.6 Loading Scheme Code from File
+------------------------------------
+
+ -- Scheme Procedure: load filename [reader]
+     Load FILENAME and evaluate its contents in the top-level
+     environment.
+
+     READER if provided should be either ‘#f’, or a procedure with the
+     signature ‘(lambda (port) ...)’ which reads the next expression
+     from PORT.  If READER is ‘#f’ or absent, Guile’s built-in ‘read’
+     procedure is used (*note Scheme Read::).
+
+     The READER argument takes effect by setting the value of the
+     ‘current-reader’ fluid (see below) before loading the file, and
+     restoring its previous value when loading is complete.  The Scheme
+     code inside FILENAME can itself change the current reader procedure
+     on the fly by setting ‘current-reader’ fluid.
+
+     If the variable ‘%load-hook’ is defined, it should be bound to a
+     procedure that will be called before any code is loaded.  See
+     documentation for ‘%load-hook’ later in this section.
+
+ -- Scheme Procedure: load-compiled filename
+     Load the compiled file named FILENAME.
+
+     Compiling a source file (*note Read/Load/Eval/Compile::) and then
+     calling ‘load-compiled’ on the resulting file is equivalent to
+     calling ‘load’ on the source file.
+
+ -- Scheme Procedure: primitive-load filename
+ -- C Function: scm_primitive_load (filename)
+     Load the file named FILENAME and evaluate its contents in the
+     top-level environment.  FILENAME must either be a full pathname or
+     be a pathname relative to the current directory.  If the variable
+     ‘%load-hook’ is defined, it should be bound to a procedure that
+     will be called before any code is loaded.  See the documentation
+     for ‘%load-hook’ later in this section.
+
+ -- C Function: SCM scm_c_primitive_load (const char *filename)
+     ‘scm_primitive_load’, but taking a C string instead of an ‘SCM’.
+
+ -- Variable: current-reader
+     ‘current-reader’ holds the read procedure that is currently being
+     used by the above loading procedures to read expressions (from the
+     file that they are loading).  ‘current-reader’ is a fluid, so it
+     has an independent value in each dynamic root and should be read
+     and set using ‘fluid-ref’ and ‘fluid-set!’ (*note Fluids and
+     Dynamic States::).
+
+     Changing ‘current-reader’ is typically useful to introduce local
+     syntactic changes, such that code following the ‘fluid-set!’ call
+     is read using the newly installed reader.  The ‘current-reader’
+     change should take place at evaluation time when the code is
+     evaluated, or at compilation time when the code is compiled:
+
+          (eval-when (compile eval)
+            (fluid-set! current-reader my-own-reader))
+
+     The ‘eval-when’ form above ensures that the ‘current-reader’ change
+     occurs at the right time.
+
+ -- Variable: %load-hook
+     A procedure to be called ‘(%load-hook FILENAME)’ whenever a file is
+     loaded, or ‘#f’ for no such call.  ‘%load-hook’ is used by all of
+     the loading functions (‘load’ and ‘primitive-load’, and
+     ‘load-from-path’ and ‘primitive-load-path’ documented in the next
+     section).
+
+     For example an application can set this to show what’s loaded,
+
+          (set! %load-hook (lambda (filename)
+                             (format #t "Loading ~a ...\n" filename)))
+          (load-from-path "foo.scm")
+          ⊣ Loading /usr/local/share/guile/site/foo.scm ...
+
+ -- Scheme Procedure: current-load-port
+ -- C Function: scm_current_load_port ()
+     Return the current-load-port.  The load port is used internally by
+     ‘primitive-load’.
+
+File: guile.info,  Node: Load Paths,  Next: Character Encoding of Source Files,  Prev: Loading,  Up: Read/Load/Eval/Compile
+
+6.17.7 Load Paths
+-----------------
+
+The procedure in the previous section look for Scheme code in the file
+system at specific location.  Guile also has some procedures to search
+the load path for code.
+
+ -- Variable: %load-path
+     List of directories which should be searched for Scheme modules and
+     libraries.  When Guile starts up, ‘%load-path’ is initialized to
+     the default load path ‘(list (%library-dir) (%site-dir)
+     (%global-site-dir) (%package-data-dir))’.  The ‘GUILE_LOAD_PATH’
+     environment variable can be used to prepend or append additional
+     directories (*note Environment Variables::).
+
+     *Note Build Config::, for more on ‘%site-dir’ and related
+     procedures.
+
+ -- Scheme Procedure: load-from-path filename
+     Similar to ‘load’, but searches for FILENAME in the load paths.
+     Preferentially loads a compiled version of the file, if it is
+     available and up-to-date.
+
+   A user can extend the load path by calling ‘add-to-load-path’.
+
+ -- Scheme Syntax: add-to-load-path dir
+     Add DIR to the load path.
+
+   For example, a script might include this form to add the directory
+that it is in to the load path:
+
+     (add-to-load-path (dirname (current-filename)))
+
+   It’s better to use ‘add-to-load-path’ than to modify ‘%load-path’
+directly, because ‘add-to-load-path’ takes care of modifying the path
+both at compile-time and at run-time.
+
+ -- Scheme Procedure: primitive-load-path filename
+          [exception-on-not-found]
+ -- C Function: scm_primitive_load_path (filename)
+     Search ‘%load-path’ for the file named FILENAME and load it into
+     the top-level environment.  If FILENAME is a relative pathname and
+     is not found in the list of search paths, an error is signalled.
+     Preferentially loads a compiled version of the file, if it is
+     available and up-to-date.
+
+     If FILENAME is a relative pathname and is not found in the list of
+     search paths, one of three things may happen, depending on the
+     optional second argument, EXCEPTION-ON-NOT-FOUND.  If it is ‘#f’,
+     ‘#f’ will be returned.  If it is a procedure, it will be called
+     with no arguments.  (This allows a distinction to be made between
+     exceptions raised by loading a file, and exceptions related to the
+     loader itself.)  Otherwise an error is signalled.
+
+     For compatibility with Guile 1.8 and earlier, the C function takes
+     only one argument, which can be either a string (the file name) or
+     an argument list.
+
+ -- Scheme Procedure: %search-load-path filename
+ -- C Function: scm_sys_search_load_path (filename)
+     Search ‘%load-path’ for the file named FILENAME, which must be
+     readable by the current user.  If FILENAME is found in the list of
+     paths to search or is an absolute pathname, return its full
+     pathname.  Otherwise, return ‘#f’.  Filenames may have any of the
+     optional extensions in the ‘%load-extensions’ list;
+     ‘%search-load-path’ will try each extension automatically.
+
+ -- Variable: %load-extensions
+     A list of default file extensions for files containing Scheme code.
+     ‘%search-load-path’ tries each of these extensions when looking for
+     a file to load.  By default, ‘%load-extensions’ is bound to the
+     list ‘("" ".scm")’.
+
+   As mentioned above, when Guile searches the ‘%load-path’ for a source
+file, it will also search the ‘%load-compiled-path’ for a corresponding
+compiled file.  If the compiled file is as new or newer than the source
+file, it will be loaded instead of the source file, using
+‘load-compiled’.
+
+ -- Variable: %load-compiled-path
+     Like ‘%load-path’, but for compiled files.  By default, this path
+     has two entries: one for compiled files from Guile itself, and one
+     for site packages.  The ‘GUILE_LOAD_COMPILED_PATH’ environment
+     variable can be used to prepend or append additional directories
+     (*note Environment Variables::).
+
+   When ‘primitive-load-path’ searches the ‘%load-compiled-path’ for a
+corresponding compiled file for a relative path it does so by appending
+‘.go’ to the relative path.  For example, searching for ‘ice-9/popen’
+could find ‘/usr/lib/guile/2.0/ccache/ice-9/popen.go’, and use it
+instead of ‘/usr/share/guile/2.0/ice-9/popen.scm’.
+
+   If ‘primitive-load-path’ does not find a corresponding ‘.go’ file in
+the ‘%load-compiled-path’, or the ‘.go’ file is out of date, it will
+search for a corresponding auto-compiled file in the fallback path,
+possibly creating one if one does not exist.
+
+   *Note Installing Site Packages::, for more on how to correctly
+install site packages.  *Note Modules and the File System::, for more on
+the relationship between load paths and modules.  *Note Compilation::,
+for more on the fallback path and auto-compilation.
+
+   Finally, there are a couple of helper procedures for general path
+manipulation.
+
+ -- Scheme Procedure: parse-path path [tail]
+ -- C Function: scm_parse_path (path, tail)
+     Parse PATH, which is expected to be a colon-separated string, into
+     a list and return the resulting list with TAIL appended.  If PATH
+     is ‘#f’, TAIL is returned.
+
+ -- Scheme Procedure: parse-path-with-ellipsis path base
+ -- C Function: scm_parse_path_with_ellipsis (path, base)
+     Parse PATH, which is expected to be a colon-separated string, into
+     a list and return the resulting list with BASE (a list) spliced in
+     place of the ‘...’ path component, if present, or else BASE is
+     added to the end.  If PATH is ‘#f’, BASE is returned.
+
+ -- Scheme Procedure: search-path path filename [extensions
+          [require-exts?]]
+ -- C Function: scm_search_path (path, filename, rest)
+     Search PATH for a directory containing a file named FILENAME.  The
+     file must be readable, and not a directory.  If we find one, return
+     its full filename; otherwise, return ‘#f’.  If FILENAME is
+     absolute, return it unchanged.  If given, EXTENSIONS is a list of
+     strings; for each directory in PATH, we search for FILENAME
+     concatenated with each EXTENSION.  If REQUIRE-EXTS? is true,
+     require that the returned file name have one of the given
+     extensions; if REQUIRE-EXTS? is not given, it defaults to ‘#f’.
+
+     For compatibility with Guile 1.8 and earlier, the C function takes
+     only three arguments.
+
+File: guile.info,  Node: Character Encoding of Source Files,  Next: Delayed Evaluation,  Prev: Load Paths,  Up: Read/Load/Eval/Compile
+
+6.17.8 Character Encoding of Source Files
+-----------------------------------------
+
+Scheme source code files are usually encoded in ASCII or UTF-8, but the
+built-in reader can interpret other character encodings as well.  When
+Guile loads Scheme source code, it uses the ‘file-encoding’ procedure
+(described below) to try to guess the encoding of the file.  In the
+absence of any hints, UTF-8 is assumed.  One way to provide a hint about
+the encoding of a source file is to place a coding declaration in the
+top 500 characters of the file.
+
+   A coding declaration has the form ‘coding: XXXXXX’, where ‘XXXXXX’ is
+the name of a character encoding in which the source code file has been
+encoded.  The coding declaration must appear in a scheme comment.  It
+can either be a semicolon-initiated comment, or the first block ‘#!’
+comment in the file.
+
+   The name of the character encoding in the coding declaration is
+typically lower case and containing only letters, numbers, and hyphens,
+as recognized by ‘set-port-encoding!’ (*note ‘set-port-encoding!’:
+Ports.).  Common examples of character encoding names are ‘utf-8’ and
+‘iso-8859-1’, as defined by IANA
+(http://www.iana.org/assignments/character-sets).  Thus, the coding
+declaration is mostly compatible with Emacs.
+
+   However, there are some differences in encoding names recognized by
+Emacs and encoding names defined by IANA, the latter being essentially a
+subset of the former.  For instance, ‘latin-1’ is a valid encoding name
+for Emacs, but it’s not according to the IANA standard, which Guile
+follows; instead, you should use ‘iso-8859-1’, which is both understood
+by Emacs and dubbed by IANA (IANA writes it uppercase but Emacs wants it
+lowercase and Guile is case insensitive.)
+
+   For source code, only a subset of all possible character encodings
+can be interpreted by the built-in source code reader.  Only those
+character encodings in which ASCII text appears unmodified can be used.
+This includes ‘UTF-8’ and ‘ISO-8859-1’ through ‘ISO-8859-15’.  The
+multi-byte character encodings ‘UTF-16’ and ‘UTF-32’ may not be used
+because they are not compatible with ASCII.
+
+   There might be a scenario in which one would want to read non-ASCII
+code from a port, such as with the function ‘read’, instead of with
+‘load’.  If the port’s character encoding is the same as the encoding of
+the code to be read by the port, not other special handling is
+necessary.  The port will automatically do the character encoding
+conversion.  The functions ‘setlocale’ or by ‘set-port-encoding!’ are
+used to set port encodings (*note Ports::).
+
+   If a port is used to read code of unknown character encoding, it can
+accomplish this in three steps.  First, the character encoding of the
+port should be set to ISO-8859-1 using ‘set-port-encoding!’.  Then, the
+procedure ‘file-encoding’, described below, is used to scan for a coding
+declaration when reading from the port.  As a side effect, it rewinds
+the port after its scan is complete.  After that, the port’s character
+encoding should be set to the encoding returned by ‘file-encoding’, if
+any, again by using ‘set-port-encoding!’.  Then the code can be read as
+normal.
+
+   Alternatively, one can use the ‘#:guess-encoding’ keyword argument of
+‘open-file’ and related procedures.  *Note File Ports::.
+
+ -- Scheme Procedure: file-encoding port
+ -- C Function: scm_file_encoding (port)
+     Attempt to scan the first few hundred bytes from the PORT for hints
+     about its character encoding.  Return a string containing the
+     encoding name or ‘#f’ if the encoding cannot be determined.  The
+     port is rewound.
+
+     Currently, the only supported method is to look for an Emacs-like
+     character coding declaration (*note how Emacs recognizes file
+     encoding: (emacs)Recognize Coding.).  The coding declaration is of
+     the form ‘coding: XXXXX’ and must appear in a Scheme comment.
+     Additional heuristics may be added in the future.
+
+File: guile.info,  Node: Delayed Evaluation,  Next: Local Evaluation,  Prev: Character Encoding of Source Files,  Up: Read/Load/Eval/Compile
+
+6.17.9 Delayed Evaluation
+-------------------------
+
+Promises are a convenient way to defer a calculation until its result is
+actually needed, and to run such a calculation only once.  Also *note
+SRFI-45::.
+
+ -- syntax: delay expr
+     Return a promise object which holds the given EXPR expression,
+     ready to be evaluated by a later ‘force’.
+
+ -- Scheme Procedure: promise? obj
+ -- C Function: scm_promise_p (obj)
+     Return true if OBJ is a promise.
+
+ -- Scheme Procedure: force p
+ -- C Function: scm_force (p)
+     Return the value obtained from evaluating the EXPR in the given
+     promise P.  If P has previously been forced then its EXPR is not
+     evaluated again, instead the value obtained at that time is simply
+     returned.
+
+     During a ‘force’, an EXPR can call ‘force’ again on its own
+     promise, resulting in a recursive evaluation of that EXPR.  The
+     first evaluation to return gives the value for the promise.  Higher
+     evaluations run to completion in the normal way, but their results
+     are ignored, ‘force’ always returns the first value.
+
+File: guile.info,  Node: Local Evaluation,  Next: Local Inclusion,  Prev: Delayed Evaluation,  Up: Read/Load/Eval/Compile
+
+6.17.10 Local Evaluation
+------------------------
+
+Guile includes a facility to capture a lexical environment, and later
+evaluate a new expression within that environment.  This code is
+implemented in a module.
+
+     (use-modules (ice-9 local-eval))
+
+ -- syntax: the-environment
+     Captures and returns a lexical environment for use with
+     ‘local-eval’ or ‘local-compile’.
+
+ -- Scheme Procedure: local-eval exp env
+ -- C Function: scm_local_eval (exp, env)
+ -- Scheme Procedure: local-compile exp env [opts=()]
+     Evaluate or compile the expression EXP in the lexical environment
+     ENV.
+
+   Here is a simple example, illustrating that it is the variable that
+gets captured, not just its value at one point in time.
+
+     (define e (let ((x 100)) (the-environment)))
+     (define fetch-x (local-eval '(lambda () x) e))
+     (fetch-x)
+     ⇒ 100
+     (local-eval '(set! x 42) e)
+     (fetch-x)
+     ⇒ 42
+
+   While EXP is evaluated within the lexical environment of
+‘(the-environment)’, it has the dynamic environment of the call to
+‘local-eval’.
+
+   ‘local-eval’ and ‘local-compile’ can only evaluate expressions, not
+definitions.
+
+     (local-eval '(define foo 42)
+                 (let ((x 100)) (the-environment)))
+     ⇒ syntax error: definition in expression context
+
+   Note that the current implementation of ‘(the-environment)’ only
+captures “normal” lexical bindings, and pattern variables bound by
+‘syntax-case’.  It does not currently capture local syntax transformers
+bound by ‘let-syntax’, ‘letrec-syntax’ or non-top-level ‘define-syntax’
+forms.  Any attempt to reference such captured syntactic keywords via
+‘local-eval’ or ‘local-compile’ produces an error.
+
+File: guile.info,  Node: Local Inclusion,  Next: REPL Servers,  Prev: Local Evaluation,  Up: Read/Load/Eval/Compile
+
+6.17.11 Local Inclusion
+-----------------------
+
+This section has discussed various means of linking Scheme code
+together: fundamentally, loading up files at run-time using ‘load’ and
+‘load-compiled’.  Guile provides another option to compose parts of
+programs together at expansion-time instead of at run-time.
+
+ -- Scheme Syntax: include file-name
+     Open FILE-NAME, at expansion-time, and read the Scheme forms that
+     it contains, splicing them into the location of the ‘include’,
+     within a ‘begin’.
+
+     If FILE-NAME is a relative path, it is searched for relative to the
+     path that contains the file that the ‘include’ for appears in.
+
+   If you are a C programmer, if ‘load’ in Scheme is like ‘dlopen’ in C,
+consider ‘include’ to be like the C preprocessor’s ‘#include’.  When you
+use ‘include’, it is as if the contents of the included file were typed
+in instead of the ‘include’ form.
+
+   Because the code is included at compile-time, it is available to the
+macroexpander.  Syntax definitions in the included file are available to
+later code in the form in which the ‘include’ appears, without the need
+for ‘eval-when’.  (*Note Eval When::.)
+
+   For the same reason, compiling a form that uses ‘include’ results in
+one compilation unit, composed of multiple files.  Loading the compiled
+file is one ‘stat’ operation for the compilation unit, instead of ‘2*N’
+in the case of ‘load’ (once for each loaded source file, and once each
+corresponding compiled file, in the best case).
+
+   Unlike ‘load’, ‘include’ also works within nested lexical contexts.
+It so happens that the optimizer works best within a lexical context,
+because all of the uses of bindings in a lexical context are visible, so
+composing files by including them within a ‘(let () ...)’ can sometimes
+lead to important speed improvements.
+
+   On the other hand, ‘include’ does have all the disadvantages of early
+binding: once the code with the ‘include’ is compiled, no change to the
+included file is reflected in the future behavior of the including form.
+
+   Also, the particular form of ‘include’, which requires an absolute
+path, or a path relative to the current directory at compile-time, is
+not very amenable to compiling the source in one place, but then
+installing the source to another place.  For this reason, Guile provides
+another form, ‘include-from-path’, which looks for the source file to
+include within a load path.
+
+ -- Scheme Syntax: include-from-path file-name
+     Like ‘include’, but instead of expecting ‘file-name’ to be an
+     absolute file name, it is expected to be a relative path to search
+     in the ‘%load-path’.
+
+   ‘include-from-path’ is more useful when you want to install all of
+the source files for a package (as you should!).  It makes it possible
+to evaluate an installed file from source, instead of relying on the
+‘.go’ file being up to date.
+
+File: guile.info,  Node: REPL Servers,  Next: Cooperative REPL Servers,  Prev: Local Inclusion,  Up: Read/Load/Eval/Compile
+
+6.17.12 REPL Servers
+--------------------
+
+The procedures in this section are provided by
+     (use-modules (system repl server))
+
+   When an application is written in Guile, it is often convenient to
+allow the user to be able to interact with it by evaluating Scheme
+expressions in a REPL.
+
+   The procedures of this module allow you to spawn a “REPL server”,
+which permits interaction over a local or TCP connection.  Guile itself
+uses them internally to implement the ‘--listen’ switch, *note
+Command-line Options::.
+
+ -- Scheme Procedure: make-tcp-server-socket [#:host=#f] [#:addr]
+          [#:port=37146]
+     Return a stream socket bound to a given address ADDR and port
+     number PORT.  If the HOST is given, and ADDR is not, then the HOST
+     string is converted to an address.  If neither is given, we use the
+     loopback address.
+
+ -- Scheme Procedure: make-unix-domain-server-socket
+          [#:path="/tmp/guile-socket"]
+     Return a UNIX domain socket, bound to a given PATH.
+
+ -- Scheme Procedure: run-server [server-socket]
+ -- Scheme Procedure: spawn-server [server-socket]
+     Create and run a REPL, making it available over the given
+     SERVER-SOCKET.  If SERVER-SOCKET is not provided, it defaults to
+     the socket created by calling ‘make-tcp-server-socket’ with no
+     arguments.
+
+     ‘run-server’ runs the server in the current thread, whereas
+     ‘spawn-server’ runs the server in a new thread.
+
+ -- Scheme Procedure: stop-server-and-clients!
+     Closes the connection on all running server sockets.
+
+     Please note that in the current implementation, the REPL threads
+     are cancelled without unwinding their stacks.  If any of them are
+     holding mutexes or are within a critical section, the results are
+     unspecified.
+
+File: guile.info,  Node: Cooperative REPL Servers,  Prev: REPL Servers,  Up: Read/Load/Eval/Compile
+
+6.17.13 Cooperative REPL Servers
+--------------------------------
+
+The procedures in this section are provided by
+     (use-modules (system repl coop-server))
+
+   Whereas ordinary REPL servers run in their own threads (*note REPL
+Servers::), sometimes it is more convenient to provide REPLs that run at
+specified times within an existing thread, for example in programs
+utilizing an event loop or in single-threaded programs.  This allows for
+safe access and mutation of a program’s data structures from the REPL,
+without concern for thread synchronization.
+
+   Although the REPLs are run in the thread that calls
+‘spawn-coop-repl-server’ and ‘poll-coop-repl-server’, dedicated threads
+are spawned so that the calling thread is not blocked.  The spawned
+threads read input for the REPLs and to listen for new connections.
+
+   Cooperative REPL servers must be polled periodically to evaluate any
+pending expressions by calling ‘poll-coop-repl-server’ with the object
+returned from ‘spawn-coop-repl-server’.  The thread that calls
+‘poll-coop-repl-server’ will be blocked for as long as the expression
+takes to be evaluated or if the debugger is entered.
+
+ -- Scheme Procedure: spawn-coop-repl-server [server-socket]
+     Create and return a new cooperative REPL server object, and spawn a
+     new thread to listen for connections on SERVER-SOCKET.  Proper
+     functioning of the REPL server requires that
+     ‘poll-coop-repl-server’ be called periodically on the returned
+     server object.
+
+ -- Scheme Procedure: poll-coop-repl-server coop-server
+     Poll the cooperative REPL server COOP-SERVER and apply a pending
+     operation if there is one, such as evaluating an expression typed
+     at the REPL prompt.  This procedure must be called from the same
+     thread that called ‘spawn-coop-repl-server’.
+
+File: guile.info,  Node: Memory Management,  Next: Modules,  Prev: Read/Load/Eval/Compile,  Up: API Reference
+

@@ -1,0 +1,282 @@
+27.9 Handling Tools that Produce Many Outputs
+=============================================
+
+This section describes a ‘make’ idiom that can be used when a tool
+produces multiple output files.  It is not specific to Automake and can
+be used in ordinary ‘Makefile’s.
+
+   Suppose we have a program called ‘foo’ that will read one file called
+‘data.foo’ and produce two files named ‘data.c’ and ‘data.h’.  We want
+to write a ‘Makefile’ rule that captures this one-to-two dependency.
+
+   The naive rule is incorrect:
+
+     # This is incorrect.
+     data.c data.h: data.foo
+             foo data.foo
+
+What the above rule really says is that ‘data.c’ and ‘data.h’ each
+depend on ‘data.foo’, and can each be built by running ‘foo data.foo’.
+In other words it is equivalent to:
+
+     # We do not want this.
+     data.c: data.foo
+             foo data.foo
+     data.h: data.foo
+             foo data.foo
+
+which means that ‘foo’ can be run twice.  Usually it will not be run
+twice, because ‘make’ implementations are smart enough to check for the
+existence of the second file after the first one has been built; they
+will therefore detect that it already exists.  However there are a few
+situations where it can run twice anyway:
+
+   • The most worrying case is when running a parallel ‘make’.  If
+     ‘data.c’ and ‘data.h’ are built in parallel, two ‘foo data.foo’
+     commands will run concurrently.  This is harmful.
+   • Another case is when the dependency (here ‘data.foo’) is (or
+     depends upon) a phony target.
+
+   A solution that works with parallel ‘make’ but not with phony
+dependencies is the following:
+
+     data.c data.h: data.foo
+             foo data.foo
+     data.h: data.c
+
+The above rules are equivalent to
+
+     data.c: data.foo
+             foo data.foo
+     data.h: data.foo data.c
+             foo data.foo
+
+therefore a parallel ‘make’ will have to serialize the builds of
+‘data.c’ and ‘data.h’, and will detect that the second is no longer
+needed once the first is over.
+
+   Using this pattern is probably enough for most cases.  However it
+does not scale easily to more output files (in this scheme all output
+files must be totally ordered by the dependency relation), so we will
+explore a more complicated solution.
+
+   Another idea is to write the following:
+
+     # There is still a problem with this one.
+     data.c: data.foo
+             foo data.foo
+     data.h: data.c
+
+The idea is that ‘foo data.foo’ is run only when ‘data.c’ needs to be
+updated, but we further state that ‘data.h’ depends upon ‘data.c’.  That
+way, if ‘data.h’ is required and ‘data.foo’ is out of date, the
+dependency on ‘data.c’ will trigger the build.
+
+   This is almost perfect, but suppose we have built ‘data.h’ and
+‘data.c’, and then we erase ‘data.h’.  Then, running ‘make data.h’ will
+not rebuild ‘data.h’.  The above rules just state that ‘data.c’ must be
+up-to-date with respect to ‘data.foo’, and this is already the case.
+
+   What we need is a rule that forces a rebuild when ‘data.h’ is
+missing.  Here it is:
+
+     data.c: data.foo
+             foo data.foo
+     data.h: data.c
+     ## Recover from the removal of $@
+             @if test -f $@; then :; else \
+               rm -f data.c; \
+               $(MAKE) $(AM_MAKEFLAGS) data.c; \
+             fi
+
+   The above scheme can be extended to handle more outputs and more
+inputs.  One of the outputs is selected to serve as a witness to the
+successful completion of the command, it depends upon all inputs, and
+all other outputs depend upon it.  For instance, if ‘foo’ should
+additionally read ‘data.bar’ and also produce ‘data.w’ and ‘data.x’, we
+would write:
+
+     data.c: data.foo data.bar
+             foo data.foo data.bar
+     data.h data.w data.x: data.c
+     ## Recover from the removal of $@
+             @if test -f $@; then :; else \
+               rm -f data.c; \
+               $(MAKE) $(AM_MAKEFLAGS) data.c; \
+             fi
+
+   However there are now three minor problems in this setup.  One is
+related to the timestamp ordering of ‘data.h’, ‘data.w’, ‘data.x’, and
+‘data.c’.  Another one is a race condition if a parallel ‘make’ attempts
+to run multiple instances of the recover block at once.  Finally, the
+recursive rule breaks ‘make -n’ when run with GNU ‘make’ (as well as
+some other ‘make’ implementations), as it may remove ‘data.h’ even when
+it should not (*note How the ‘MAKE’ Variable Works: (make)MAKE
+Variable.).
+
+   Let us deal with the first problem.  ‘foo’ outputs four files, but we
+do not know in which order these files are created.  Suppose that
+‘data.h’ is created before ‘data.c’.  Then we have a weird situation.
+The next time ‘make’ is run, ‘data.h’ will appear older than ‘data.c’,
+the second rule will be triggered, a shell will be started to execute
+the ‘if...fi’ command, but actually it will just execute the ‘then’
+branch, that is: nothing.  In other words, because the witness we
+selected is not the first file created by ‘foo’, ‘make’ will start a
+shell to do nothing each time it is run.
+
+   A simple riposte is to fix the timestamps when this happens.
+
+     data.c: data.foo data.bar
+             foo data.foo data.bar
+     data.h data.w data.x: data.c
+             @if test -f $@; then \
+               touch $@; \
+             else \
+     ## Recover from the removal of $@
+               rm -f data.c; \
+               $(MAKE) $(AM_MAKEFLAGS) data.c; \
+             fi
+
+   Another solution is to use a different and dedicated file as witness,
+rather than using any of ‘foo’’s outputs.
+
+     data.stamp: data.foo data.bar
+             @rm -f data.tmp
+             @touch data.tmp
+             foo data.foo data.bar
+             @mv -f data.tmp $@
+     data.c data.h data.w data.x: data.stamp
+     ## Recover from the removal of $@
+             @if test -f $@; then :; else \
+               rm -f data.stamp; \
+               $(MAKE) $(AM_MAKEFLAGS) data.stamp; \
+             fi
+
+   ‘data.tmp’ is created before ‘foo’ is run, so it has a timestamp
+older than output files output by ‘foo’.  It is then renamed to
+‘data.stamp’ after ‘foo’ has run, because we do not want to update
+‘data.stamp’ if ‘foo’ fails.
+
+   This solution still suffers from the second problem: the race
+condition in the recover rule.  If, after a successful build, a user
+erases ‘data.c’ and ‘data.h’, and runs ‘make -j’, then ‘make’ may start
+both recover rules in parallel.  If the two instances of the rule
+execute ‘$(MAKE) $(AM_MAKEFLAGS) data.stamp’ concurrently the build is
+likely to fail (for instance, the two rules will create ‘data.tmp’, but
+only one can rename it).
+
+   Admittedly, such a weird situation does not arise during ordinary
+builds.  It occurs only when the build tree is mutilated.  Here ‘data.c’
+and ‘data.h’ have been explicitly removed without also removing
+‘data.stamp’ and the other output files.  ‘make clean; make’ will always
+recover from these situations even with parallel makes, so you may
+decide that the recover rule is solely to help non-parallel make users
+and leave things as-is.  Fixing this requires some locking mechanism to
+ensure only one instance of the recover rule rebuilds ‘data.stamp’.  One
+could imagine something along the following lines.
+
+     data.c data.h data.w data.x: data.stamp
+     ## Recover from the removal of $@
+             @if test -f $@; then :; else \
+               trap 'rm -rf data.lock data.stamp' 1 2 13 15; \
+     ## mkdir is a portable test-and-set
+               if mkdir data.lock 2>/dev/null; then \
+     ## This code is being executed by the first process.
+                 rm -f data.stamp; \
+                 $(MAKE) $(AM_MAKEFLAGS) data.stamp; \
+                 result=$$?; rm -rf data.lock; exit $$result; \
+               else \
+     ## This code is being executed by the follower processes.
+     ## Wait until the first process is done.
+                 while test -d data.lock; do sleep 1; done; \
+     ## Succeed if and only if the first process succeeded.
+                 test -f data.stamp; \
+               fi; \
+             fi
+
+   Using a dedicated witness, like ‘data.stamp’, is very handy when the
+list of output files is not known beforehand.  As an illustration,
+consider the following rules to compile many ‘*.el’ files into ‘*.elc’
+files in a single command.  It does not matter how ‘ELFILES’ is defined
+(as long as it is not empty: empty targets are not accepted by POSIX).
+
+     ELFILES = one.el two.el three.el ...
+     ELCFILES = $(ELFILES:=c)
+
+     elc-stamp: $(ELFILES)
+             @rm -f elc-temp
+             @touch elc-temp
+             $(elisp_comp) $(ELFILES)
+             @mv -f elc-temp $@
+
+     $(ELCFILES): elc-stamp
+             @if test -f $@; then :; else \
+     ## Recover from the removal of $@
+               trap 'rm -rf elc-lock elc-stamp' 1 2 13 15; \
+               if mkdir elc-lock 2>/dev/null; then \
+     ## This code is being executed by the first process.
+                 rm -f elc-stamp; \
+                 $(MAKE) $(AM_MAKEFLAGS) elc-stamp; \
+                 rmdir elc-lock; \
+               else \
+     ## This code is being executed by the follower processes.
+     ## Wait until the first process is done.
+                 while test -d elc-lock; do sleep 1; done; \
+     ## Succeed if and only if the first process succeeded.
+                 test -f elc-stamp; exit $$?; \
+               fi; \
+             fi
+
+   These solutions all still suffer from the third problem, namely that
+they break the promise that ‘make -n’ should not cause any actual
+changes to the tree.  For those solutions that do not create lock files,
+it is possible to split the recover rules into two separate recipe
+commands, one of which does all work but the recursion, and the other
+invokes the recursive ‘$(MAKE)’.  The solutions involving locking could
+act upon the contents of the ‘MAKEFLAGS’ variable, but parsing that
+portably is not easy (*note (autoconf)The Make Macro MAKEFLAGS::).  Here
+is an example:
+
+     ELFILES = one.el two.el three.el ...
+     ELCFILES = $(ELFILES:=c)
+
+     elc-stamp: $(ELFILES)
+             @rm -f elc-temp
+             @touch elc-temp
+             $(elisp_comp) $(ELFILES)
+             @mv -f elc-temp $@
+
+     $(ELCFILES): elc-stamp
+     ## Recover from the removal of $@
+             @dry=; for f in x $$MAKEFLAGS; do \
+               case $$f in \
+                 *=*|--*);; \
+                 *n*) dry=:;; \
+               esac; \
+             done; \
+             if test -f $@; then :; else \
+               $$dry trap 'rm -rf elc-lock elc-stamp' 1 2 13 15; \
+               if $$dry mkdir elc-lock 2>/dev/null; then \
+     ## This code is being executed by the first process.
+                 $$dry rm -f elc-stamp; \
+                 $(MAKE) $(AM_MAKEFLAGS) elc-stamp; \
+                 $$dry rmdir elc-lock; \
+               else \
+     ## This code is being executed by the follower processes.
+     ## Wait until the first process is done.
+                 while test -d elc-lock && test -z "$$dry"; do \
+                   sleep 1; \
+                 done; \
+     ## Succeed if and only if the first process succeeded.
+                 $$dry test -f elc-stamp; exit $$?; \
+               fi; \
+             fi
+
+   For completeness it should be noted that GNU ‘make’ is able to
+express rules with multiple output files using pattern rules (*note
+Pattern Rule Examples: (make)Pattern Examples.).  We do not discuss
+pattern rules here because they are not portable, but they can be
+convenient in packages that assume GNU ‘make’.
+
+File: automake.info,  Node: Hard-Coded Install Paths,  Next: Debugging Make Rules,  Prev: Multiple Outputs,  Up: FAQ
+

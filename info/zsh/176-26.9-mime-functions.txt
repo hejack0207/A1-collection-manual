@@ -1,0 +1,352 @@
+26.9 MIME Functions
+===================
+
+
+Three functions are available to provide handling of files recognised by
+extension, for example to dispatch a file text.ps when executed as a
+command to an appropriate viewer.
+
+zsh-mime-setup [ -fv ] [ -l [ SUFFIX ... ] ]
+zsh-mime-handler [ -l ] COMMAND ARGUMENT ...
+     These two functions use the files ~/.mime.types and
+     /etc/mime.types, which associate types and extensions, as well as
+     ~/.mailcap and /etc/mailcap files, which associate types and the
+     programs that handle them.  These are provided on many systems with
+     the Multimedia Internet Mail Extensions.
+
+     To enable the system, the function zsh-mime-setup should be
+     autoloaded and run.  This allows files with extensions to be
+     treated as executable; such files be completed by the function
+     completion system.  The function zsh-mime-handler should not need
+     to be called by the user.
+
+     The system works by setting up suffix aliases with 'alias -s'.
+     Suffix aliases already installed by the user will not be
+     overwritten.
+
+     For suffixes defined in lower case, upper case variants will also
+     automatically be handled (e.g.  PDF is automatically handled if
+     handling for the suffix pdf is defined), but not vice versa.
+
+     Repeated calls to zsh-mime-setup do not override the existing
+     mapping between suffixes and executable files unless the option -f
+     is given.  Note, however, that this does not override existing
+     suffix aliases assigned to handlers other than zsh-mime-handler.
+
+     Calling zsh-mime-setup with the option -l lists the existing
+     mappings without altering them.  Suffixes to list (which may
+     contain pattern characters that should be quoted from immediate
+     interpretation on the command line) may be given as additional
+     arguments, otherwise all suffixes are listed.
+
+     Calling zsh-mime-setup with the option -v causes verbose output to
+     be shown during the setup operation.
+
+     The system respects the mailcap flags needsterminal and
+     copiousoutput, see man page mailcap(4).
+
+     The functions use the following styles, which are defined with the
+     zstyle builtin command (*note The zsh/zutil Module::).  They should
+     be defined before zsh-mime-setup is run.  The contexts used all
+     start with :mime:, with additional components in some cases.  It is
+     recommended that a trailing * (suitably quoted) be appended to
+     style patterns in case the system is extended in future.  Some
+     examples are given below.
+
+     For files that have multiple suffixes, e.g.  .pdf.gz, where the
+     context includes the suffix it will be looked up starting with the
+     longest possible suffix until a match for the style is found.  For
+     example, if .pdf.gz produces a match for the handler, that will be
+     used; otherwise the handler for .gz will be used.  Note that, owing
+     to the way suffix aliases work, it is always required that there be
+     a handler for the shortest possible suffix, so in this example
+     .pdf.gz can only be handled if .gz is also handled (though not
+     necessarily in the same way).  Alternatively, if no handling for
+     .gz on its own is needed, simply adding the command
+
+          alias -s gz=zsh-mime-handler
+
+     to the initialisation code is sufficient; .gz will not be handled
+     on its own, but may be in combination with other suffixes.
+
+     current-shell
+          If this boolean style is true, the mailcap handler for the
+          context in question is run using the eval builtin instead of
+          by starting a new sh process.  This is more efficient, but may
+          not work in the occasional cases where the mailcap handler
+          uses strict POSIX syntax.
+
+     disown
+          If this boolean style is true, mailcap handlers started in the
+          background will be disowned, i.e.  not subject to job control
+          within the parent shell.  Such handlers nearly always produce
+          their own windows, so the only likely harmful side effect of
+          setting the style is that it becomes harder to kill jobs from
+          within the shell.
+
+     execute-as-is
+          This style gives a list of patterns to be matched against
+          files passed for execution with a handler program.  If the
+          file matches the pattern, the entire command line is executed
+          in its current form, with no handler.  This is useful for
+          files which might have suffixes but nonetheless be executable
+          in their own right.  If the style is not set, the pattern *(*)
+          *(/) is used; hence executable files are executed directly and
+          not passed to a handler, and the option AUTO_CD may be used to
+          change to directories that happen to have MIME suffixes.
+
+     execute-never
+          This style is useful in combination with execute-as-is.  It is
+          set to an array of patterns corresponding to full paths to
+          files that should never be treated as executable, even if the
+          file passed to the MIME handler matches execute-as-is.  This
+          is useful for file systems that don't handle execute
+          permission or that contain executables from another operating
+          system.  For example, if /mnt/windows is a Windows mount, then
+
+               zstyle ':mime:*' execute-never '/mnt/windows/*'
+
+          will ensure that any files found in that area will be executed
+          as MIME types even if they are executable.  As this example
+          shows, the complete file name is matched against the pattern,
+          regardless of how the file was passed to the handler.  The
+          file is resolved to a full path using the :P modifier
+          described in *note Modifiers::; this means that symbolic links
+          are resolved where possible, so that links into other file
+          systems behave in the correct fashion.
+
+     file-path
+          Used if the style find-file-in-path is true for the same
+          context.  Set to an array of directories that are used for
+          searching for the file to be handled; the default is the
+          command path given by the special parameter path.  The shell
+          option PATH_DIRS is respected; if that is set, the appropriate
+          path will be searched even if the name of the file to be
+          handled as it appears on the command line contains a '/'.  The
+          full context is :mime:.SUFFIX:, as described for the style
+          handler.
+
+     find-file-in-path
+          If set, allows files whose names do not contain absolute paths
+          to be searched for in the command path or the path specified
+          by the file-path style.  If the file is not found in the path,
+          it is looked for locally (whether or not the current directory
+          is in the path); if it is not found locally, the handler will
+          abort unless the handle-nonexistent style is set.  Files found
+          in the path are tested as described for the style
+          execute-as-is.  The full context is :mime:.SUFFIX:, as
+          described for the style handler.
+
+     flags
+          Defines flags to go with a handler; the context is as for the
+          handler style, and the format is as for the flags in mailcap.
+
+     handle-nonexistent
+          By default, arguments that don't correspond to files are not
+          passed to the MIME handler in order to prevent it from
+          intercepting commands found in the path that happen to have
+          suffixes.  This style may be set to an array of extended glob
+          patterns for arguments that will be passed to the handler even
+          if they don't exist.  If it is not explicitly set it defaults
+          to [[:alpha:]]#:/* which allows URLs to be passed to the MIME
+          handler even though they don't exist in that format in the
+          file system.  The full context is :mime:.SUFFIX:, as described
+          for the style handler.
+
+     handler
+          Specifies a handler for a suffix; the suffix is given by the
+          context as :mime:.SUFFIX:, and the format of the handler is
+          exactly that in mailcap.  Note in particular the '.' and
+          trailing colon to distinguish this use of the context.  This
+          overrides any handler specified by the mailcap files.  If the
+          handler requires a terminal, the flags style should be set to
+          include the word needsterminal, or if the output is to be
+          displayed through a pager (but not if the handler is itself a
+          pager), it should include copiousoutput.
+
+     mailcap
+          A list of files in the format of ~/.mailcap and /etc/mailcap
+          to be read during setup, replacing the default list which
+          consists of those two files.  The context is :mime:.  A + in
+          the list will be replaced by the default files.
+
+     mailcap-priorities
+          This style is used to resolve multiple mailcap entries for the
+          same MIME type.  It consists of an array of the following
+          elements, in descending order of priority; later entries will
+          be used if earlier entries are unable to resolve the entries
+          being compared.  If none of the tests resolve the entries, the
+          first entry encountered is retained.
+
+          files
+               The order of files (entries in the mailcap style) read.
+               Earlier files are preferred.  (Note this does not resolve
+               entries in the same file.)
+
+          priority
+               The priority flag from the mailcap entry.  The priority
+               is an integer from 0 to 9 with the default value being 5.
+
+          flags
+               The test given by the mailcap-prio-flags option is used
+               to resolve entries.
+
+          place
+               Later entries are preferred; as the entries are strictly
+               ordered, this test always succeeds.
+
+          Note that as this style is handled during initialisation, the
+          context is always :mime:, with no discrimination by suffix.
+
+     mailcap-prio-flags
+          This style is used when the keyword flags is encountered in
+          the list of tests specified by the mailcap-priorities style.
+          It should be set to a list of patterns, each of which is
+          tested against the flags specified in the mailcap entry (in
+          other words, the sets of assignments found with some entries
+          in the mailcap file).  Earlier patterns in the list are
+          preferred to later ones, and matched patterns are preferred to
+          unmatched ones.
+
+     mime-types
+          A list of files in the format of ~/.mime.types and
+          /etc/mime.types to be read during setup, replacing the default
+          list which consists of those two files.  The context is
+          :mime:.  A + in the list will be replaced by the default
+          files.
+
+     never-background
+          If this boolean style is set, the handler for the given
+          context is always run in the foreground, even if the flags
+          provided in the mailcap entry suggest it need not be (for
+          example, it doesn't require a terminal).
+
+     pager
+          If set, will be used instead of $PAGER or more to handle
+          suffixes where the copiousoutput flag is set.  The context is
+          as for handler, i.e.  :mime:.SUFFIX: for handling a file with
+          the given SUFFIX.
+
+     Examples:
+
+          zstyle ':mime:*' mailcap ~/.mailcap /usr/local/etc/mailcap
+          zstyle ':mime:.txt:' handler less %s
+          zstyle ':mime:.txt:' flags needsterminal
+
+     When zsh-mime-setup is subsequently run, it will look for mailcap
+     entries in the two files given.  Files of suffix .txt will be
+     handled by running 'less FILE.TXT'.  The flag needsterminal is set
+     to show that this program must run attached to a terminal.
+
+     As there are several steps to dispatching a command, the following
+     should be checked if attempting to execute a file by extension .EXT
+     does not have the expected effect.
+
+     The command 'alias -s EXT' should show 'ps=zsh-mime-handler'.  If
+     it shows something else, another suffix alias was already installed
+     and was not overwritten.  If it shows nothing, no handler was
+     installed: this is most likely because no handler was found in the
+     .mime.types and mailcap combination for .ext files.  In that case,
+     appropriate handling should be added to ~/.mime.types and mailcap.
+
+     If the extension is handled by zsh-mime-handler but the file is not
+     opened correctly, either the handler defined for the type is
+     incorrect, or the flags associated with it are in appropriate.
+     Running zsh-mime-setup -l will show the handler and, if there are
+     any, the flags.  A %s in the handler is replaced by the file
+     (suitably quoted if necessary).  Check that the handler program
+     listed lists and can be run in the way shown.  Also check that the
+     flags needsterminal or copiousoutput are set if the handler needs
+     to be run under a terminal; the second flag is used if the output
+     should be sent to a pager.  An example of a suitable mailcap entry
+     for such a program is:
+
+          text/html; /usr/bin/lynx '%s'; needsterminal
+
+     Running 'zsh-mime-handler -l COMMAND LINE' prints the command line
+     that would be executed, simplified to remove the effect of any
+     flags, and quoted so that the output can be run as a complete zsh
+     command line.  This is used by the completion system to decide how
+     to complete after a file handled by zsh-mime-setup.
+
+pick-web-browser
+     This function is separate from the two MIME functions described
+     above and can be assigned directly to a suffix:
+
+          autoload -U pick-web-browser
+          alias -s html=pick-web-browser
+
+     It is provided as an intelligent front end to dispatch a web
+     browser.  It may be run as either a function or a shell script.
+     The status 255 is returned if no browser could be started.
+
+     Various styles are available to customize the choice of browsers:
+
+     browser-style
+          The value of the style is an array giving preferences in
+          decreasing order for the type of browser to use.  The values
+          of elements may be
+
+          running
+               Use a GUI browser that is already running when an X
+               Window display is available.  The browsers listed in the
+               x-browsers style are tried in order until one is found;
+               if it is, the file will be displayed in that browser, so
+               the user may need to check whether it has appeared.  If
+               no running browser is found, one is not started.
+               Browsers other than Firefox, Opera and Konqueror are
+               assumed to understand the Mozilla syntax for opening a
+               URL remotely.
+
+          x
+               Start a new GUI browser when an X Window display is
+               available.  Search for the availability of one of the
+               browsers listed in the x-browsers style and start the
+               first one that is found.  No check is made for an already
+               running browser.
+
+          tty
+               Start a terminal-based browser.  Search for the
+               availability of one of the browsers listed in the
+               tty-browsers style and start the first one that is found.
+
+          If the style is not set the default running x tty is used.
+
+     x-browsers
+          An array in decreasing order of preference of browsers to use
+          when running under the X Window System.  The array consists of
+          the command name under which to start the browser.  They are
+          looked up in the context :mime: (which may be extended in
+          future, so appending '*' is recommended).  For example,
+
+               zstyle ':mime:*' x-browsers opera konqueror firefox
+
+          specifies that pick-web-browser should first look for a
+          running instance of Opera, Konqueror or Firefox, in that
+          order, and if it fails to find any should attempt to start
+          Opera.  The default is firefox mozilla netscape opera
+          konqueror.
+
+     tty-browsers
+          An array similar to x-browsers, except that it gives browsers
+          to use when no X Window display is available.  The default is
+          elinks links lynx.
+
+     command
+          If it is set this style is used to pick the command used to
+          open a page for a browser.  The context is
+          :mime:browser:new:$browser: to start a new browser or
+          :mime:browser:running:$browser: to open a URL in a browser
+          already running on the current X display, where $browser is
+          the value matched in the x-browsers or tty-browsers style.
+          The escape sequence %b in the style's value will be replaced
+          by the browser, while %u will be replaced by the URL. If the
+          style is not set, the default for all new instances is
+          equivalent to %b %u and the defaults for using running
+          browsers are equivalent to the values kfmclient openURL %u for
+          Konqueror, firefox -new-tab %u for Firefox, opera -newpage %u
+          for Opera, and %b -remote "openUrl(%u)" for all others.
+
+
+File: zsh.info,  Node: Mathematical Functions,  Next: User Configuration Functions,  Prev: MIME Functions,  Up: User Contributions
+

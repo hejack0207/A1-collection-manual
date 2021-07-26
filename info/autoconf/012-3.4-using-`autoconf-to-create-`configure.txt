@@ -1,0 +1,153 @@
+3.4 Using `autoconf' to Create `configure'
+==========================================
+
+To create `configure' from `configure.ac', run the `autoconf' program
+with no arguments.  `autoconf' processes `configure.ac' with the M4
+macro processor, using the Autoconf macros.  If you give `autoconf' an
+argument, it reads that file instead of `configure.ac' and writes the
+configuration script to the standard output instead of to `configure'.
+If you give `autoconf' the argument `-', it reads from the standard
+input instead of `configure.ac' and writes the configuration script to
+the standard output.
+
+   The Autoconf macros are defined in several files.  Some of the files
+are distributed with Autoconf; `autoconf' reads them first.  Then it
+looks for the optional file `acsite.m4' in the directory that contains
+the distributed Autoconf macro files, and for the optional file
+`aclocal.m4' in the current directory.  Those files can contain your
+site's or the package's own Autoconf macro definitions (*note Writing
+Autoconf Macros::, for more information).  If a macro is defined in
+more than one of the files that `autoconf' reads, the last definition
+it reads overrides the earlier ones.
+
+   `autoconf' accepts the following options:
+
+`--help'
+`-h'
+     Print a summary of the command line options and exit.
+
+`--version'
+`-V'
+     Print the version number of Autoconf and exit.
+
+`--verbose'
+`-v'
+     Report processing steps.
+
+`--debug'
+`-d'
+     Don't remove the temporary files.
+
+`--force'
+`-f'
+     Remake `configure' even if newer than its input files.
+
+`--include=DIR'
+`-I DIR'
+     Append DIR to the include path.  Multiple invocations accumulate.
+
+`--prepend-include=DIR'
+`-B DIR'
+     Prepend DIR to the include path.  Multiple invocations accumulate.
+
+`--output=FILE'
+`-o FILE'
+     Save output (script or trace) to FILE.  The file `-' stands for
+     the standard output.
+
+`--warnings=CATEGORY'
+`-W CATEGORY'
+     Report the warnings related to CATEGORY (which can actually be a
+     comma separated list).  *Note Reporting Messages::, macro
+     `AC_DIAGNOSE', for a comprehensive list of categories.  Special
+     values include:
+
+    `all'
+          report all the warnings
+
+    `none'
+          report none
+
+    `error'
+          treats warnings as errors
+
+    `no-CATEGORY'
+          disable warnings falling into CATEGORY
+
+     Warnings about `syntax' are enabled by default, and the environment
+     variable `WARNINGS', a comma separated list of categories, is
+     honored as well.  Passing `-W CATEGORY' actually behaves as if you
+     had passed `--warnings syntax,$WARNINGS,CATEGORY'.  To disable the
+     defaults and `WARNINGS', and then enable warnings about obsolete
+     constructs, use `-W none,obsolete'.
+
+     Because `autoconf' uses `autom4te' behind the scenes, it displays
+     a back trace for errors, but not for warnings; if you want them,
+     just pass `-W error'.  *Note autom4te Invocation::, for some
+     examples.
+
+`--trace=MACRO[:FORMAT]'
+`-t MACRO[:FORMAT]'
+     Do not create the `configure' script, but list the calls to MACRO
+     according to the FORMAT.  Multiple `--trace' arguments can be used
+     to list several macros.  Multiple `--trace' arguments for a single
+     macro are not cumulative; instead, you should just make FORMAT as
+     long as needed.
+
+     The FORMAT is a regular string, with newlines if desired, and
+     several special escape codes.  It defaults to `$f:$l:$n:$%'; see
+     *note autom4te Invocation::, for details on the FORMAT.
+
+`--initialization'
+`-i'
+     By default, `--trace' does not trace the initialization of the
+     Autoconf macros (typically the `AC_DEFUN' definitions).  This
+     results in a noticeable speedup, but can be disabled by this
+     option.
+
+   It is often necessary to check the content of a `configure.ac' file,
+but parsing it yourself is extremely fragile and error-prone.  It is
+suggested that you rely upon `--trace' to scan `configure.ac'.  For
+instance, to find the list of variables that are substituted, use:
+
+     $ autoconf -t AC_SUBST
+     configure.ac:2:AC_SUBST:ECHO_C
+     configure.ac:2:AC_SUBST:ECHO_N
+     configure.ac:2:AC_SUBST:ECHO_T
+     More traces deleted
+
+The example below highlights the difference between `$@', `$*', and
+`$%'.
+
+     $ cat configure.ac
+     AC_DEFINE(This, is, [an
+     [example]])
+     $ autoconf -t 'AC_DEFINE:@: $@
+     *: $*
+     %: $%'
+     @: [This],[is],[an
+     [example]]
+     *: This,is,an
+     [example]
+     %: This:is:an [example]
+
+The FORMAT gives you a lot of freedom:
+
+     $ autoconf -t 'AC_SUBST:$$ac_subst{"$1"} = "$f:$l";'
+     $ac_subst{"ECHO_C"} = "configure.ac:2";
+     $ac_subst{"ECHO_N"} = "configure.ac:2";
+     $ac_subst{"ECHO_T"} = "configure.ac:2";
+     More traces deleted
+
+A long SEPARATOR can be used to improve the readability of complex
+structures, and to ease their parsing (for instance when no single
+character is suitable as a separator):
+
+     $ autoconf -t 'AM_MISSING_PROG:${|:::::|}*'
+     ACLOCAL|:::::|aclocal|:::::|$missing_dir
+     AUTOCONF|:::::|autoconf|:::::|$missing_dir
+     AUTOMAKE|:::::|automake|:::::|$missing_dir
+     More traces deleted
+
+File: autoconf.info,  Node: autoreconf Invocation,  Prev: autoconf Invocation,  Up: Making configure Scripts
+

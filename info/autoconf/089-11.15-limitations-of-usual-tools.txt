@@ -1,0 +1,1058 @@
+11.15 Limitations of Usual Tools
+================================
+
+The small set of tools you can expect to find on any machine can still
+include some limitations you should be aware of.
+
+`awk'
+     Don't leave white space before the opening parenthesis in a user
+     function call.  Posix does not allow this and GNU Awk rejects it:
+
+          $ gawk 'function die () { print "Aaaaarg!"  }
+                  BEGIN { die () }'
+          gawk: cmd. line:2:         BEGIN { die () }
+          gawk: cmd. line:2:                      ^ parse error
+          $ gawk 'function die () { print "Aaaaarg!"  }
+                  BEGIN { die() }'
+          Aaaaarg!
+
+     Posix says that if a program contains only `BEGIN' actions, and
+     contains no instances of `getline', then the program merely
+     executes the actions without reading input.  However, traditional
+     Awk implementations (such as Solaris 10 `awk') read and discard
+     input in this case.  Portable scripts can redirect input from
+     `/dev/null' to work around the problem.  For example:
+
+          awk 'BEGIN {print "hello world"}' </dev/null
+
+     Posix says that in an `END' action, `$NF' (and presumably, `$1')
+     retain their value from the last record read, if no intervening
+     `getline' occurred.  However, some implementations (such as
+     Solaris 10 `/usr/bin/awk', `nawk', or Darwin `awk') reset these
+     variables.  A workaround is to use an intermediate variable prior
+     to the `END' block.  For example:
+
+          $ cat end.awk
+          { tmp = $1 }
+          END { print "a", $1, $NF, "b", tmp }
+          $ echo 1 | awk -f end.awk
+          a   b 1
+          $ echo 1 | gawk -f end.awk
+          a 1 1 b 1
+
+     If you want your program to be deterministic, don't depend on `for'
+     on arrays:
+
+          $ cat for.awk
+          END {
+            arr["foo"] = 1
+            arr["bar"] = 1
+            for (i in arr)
+              print i
+          }
+          $ gawk -f for.awk </dev/null
+          foo
+          bar
+          $ nawk -f for.awk </dev/null
+          bar
+          foo
+
+     Some Awk implementations, such as HP-UX 11.0's native one,
+     mishandle anchors:
+
+          $ echo xfoo | $AWK '/foo|^bar/ { print }'
+          $ echo bar | $AWK '/foo|^bar/ { print }'
+          bar
+          $ echo xfoo | $AWK '/^bar|foo/ { print }'
+          xfoo
+          $ echo bar | $AWK '/^bar|foo/ { print }'
+          bar
+
+     Either do not depend on such patterns (i.e., use `/^(.*foo|bar)/',
+     or use a simple test to reject such implementations.
+
+     On `ia64-hp-hpux11.23', Awk mishandles `printf' conversions after
+     `%u':
+
+          $ awk 'BEGIN { printf "%u %d\n", 0, -1 }'
+          0 0
+
+     AIX version 5.2 has an arbitrary limit of 399 on the length of
+     regular expressions and literal strings in an Awk program.
+
+     Traditional Awk implementations derived from Unix version 7, such
+     as Solaris `/bin/awk', have many limitations and do not conform to
+     Posix.  Nowadays `AC_PROG_AWK' (*note Particular Programs::) finds
+     you an Awk that doesn't have these problems, but if for some
+     reason you prefer not to use `AC_PROG_AWK' you may need to address
+     them.  For more detailed descriptions, see *note `awk' language
+     history: (gawk)Language History.
+
+     Traditional Awk does not support multidimensional arrays or
+     user-defined functions.
+
+     Traditional Awk does not support the `-v' option.  You can use
+     assignments after the program instead, e.g., `$AWK '{print v $1}'
+     v=x'; however, don't forget that such assignments are not
+     evaluated until they are encountered (e.g., after any `BEGIN'
+     action).
+
+     Traditional Awk does not support the keywords `delete' or `do'.
+
+     Traditional Awk does not support the expressions `A?B:C', `!A',
+     `A^B', or `A^=B'.
+
+     Traditional Awk does not support the predefined `CONVFMT' or
+     `ENVIRON' variables.
+
+     Traditional Awk supports only the predefined functions `exp',
+     `index', `int', `length', `log', `split', `sprintf', `sqrt', and
+     `substr'.
+
+     Traditional Awk `getline' is not at all compatible with Posix;
+     avoid it.
+
+     Traditional Awk has `for (i in a) ...' but no other uses of the
+     `in' keyword.  For example, it lacks `if (i in a) ...'.
+
+     In code portable to both traditional and modern Awk, `FS' must be a
+     string containing just one ordinary character, and similarly for
+     the field-separator argument to `split'.
+
+     Traditional Awk has a limit of 99 fields in a record.  Since some
+     Awk implementations, like Tru64's, split the input even if you
+     don't refer to any field in the script, to circumvent this
+     problem, set `FS' to an unusual character and use `split'.
+
+     Traditional Awk has a limit of at most 99 bytes in a number
+     formatted by `OFMT'; for example, `OFMT="%.300e"; print 0.1;'
+     typically dumps core.
+
+     The original version of Awk had a limit of at most 99 bytes per
+     `split' field, 99 bytes per `substr' substring, and 99 bytes per
+     run of non-special characters in a `printf' format, but these bugs
+     have been fixed on all practical hosts that we know of.
+
+     HP-UX 11.00 and IRIX 6.5 Awk require that input files have a line
+     length of at most 3070 bytes.
+
+`basename'
+     Not all hosts have a working `basename'.  You can use `expr'
+     instead.
+
+`cat'
+     Don't rely on any option.
+
+`cc'
+     The command `cc -c foo.c' traditionally produces an object file
+     named `foo.o'.  Most compilers allow `-c' to be combined with `-o'
+     to specify a different object file name, but Posix does not
+     require this combination and a few compilers lack support for it.
+     *Note C Compiler::, for how GNU Make tests for this feature with
+     `AC_PROG_CC_C_O'.
+
+     When a compilation such as `cc -o foo foo.c' fails, some compilers
+     (such as CDS on Reliant Unix) leave a `foo.o'.
+
+     HP-UX `cc' doesn't accept `.S' files to preprocess and assemble.
+     `cc -c foo.S' appears to succeed, but in fact does nothing.
+
+     The default executable, produced by `cc foo.c', can be
+
+        * `a.out' -- usual Posix convention.
+
+        * `b.out' -- i960 compilers (including `gcc').
+
+        * `a.exe' -- DJGPP port of `gcc'.
+
+        * `a_out.exe' -- GNV `cc' wrapper for DEC C on OpenVMS.
+
+        * `foo.exe' -- various MS-DOS compilers.
+
+     The C compiler's traditional name is `cc', but other names like
+     `gcc' are common.  Posix 1003.1-2001 specifies the name `c99', but
+     older Posix editions specified `c89' and anyway these standard
+     names are rarely used in practice.  Typically the C compiler is
+     invoked from makefiles that use `$(CC)', so the value of the `CC'
+     make variable selects the compiler name.
+
+`chgrp'
+`chown'
+     It is not portable to change a file's group to a group that the
+     owner does not belong to.
+
+`chmod'
+     Avoid usages like `chmod -w file'; use `chmod a-w file' instead,
+     for two reasons.  First, plain `-w' does not necessarily make the
+     file unwritable, since it does not affect mode bits that
+     correspond to bits in the file mode creation mask.  Second, Posix
+     says that the `-w' might be interpreted as an
+     implementation-specific option, not as a mode; Posix suggests
+     using `chmod -- -w file' to avoid this confusion, but unfortunately
+     `--' does not work on some older hosts.
+
+`cmp'
+     `cmp' performs a raw data comparison of two files, while `diff'
+     compares two text files.  Therefore, if you might compare DOS
+     files, even if only checking whether two files are different, use
+     `diff' to avoid spurious differences due to differences of newline
+     encoding.
+
+`cp'
+     Avoid the `-r' option, since Posix 1003.1-2004 marks it as
+     obsolescent and its behavior on special files is
+     implementation-defined.  Use `-R' instead.  On GNU hosts the two
+     options are equivalent, but on Solaris hosts (for example) `cp -r'
+     reads from pipes instead of replicating them.  AIX 5.3 `cp -R' may
+     corrupt its own memory with some directory hierarchies and error
+     out or dump core:
+
+          mkdir -p 12345678/12345678/12345678/12345678
+          touch 12345678/12345678/x
+          cp -R 12345678 t
+          cp: 0653-440 12345678/12345678/: name too long.
+
+     Some `cp' implementations (e.g., BSD/OS 4.2) do not allow trailing
+     slashes at the end of nonexistent destination directories.  To
+     avoid this problem, omit the trailing slashes.  For example, use
+     `cp -R source /tmp/newdir' rather than `cp -R source /tmp/newdir/'
+     if `/tmp/newdir' does not exist.
+
+     The ancient SunOS 4 `cp' does not support `-f', although its `mv'
+     does.
+
+     Traditionally, file timestamps had 1-second resolution, and `cp
+     -p' copied the timestamps exactly.  However, many modern file
+     systems have timestamps with 1-nanosecond resolution.
+     Unfortunately, some older `cp -p' implementations truncate
+     timestamps when copying files, which can cause the destination
+     file to appear to be older than the source.  The exact amount of
+     truncation depends on the resolution of the system calls that `cp'
+     uses.  Traditionally this was `utime', which has 1-second
+     resolution.  Less-ancient `cp' implementations such as GNU Core
+     Utilities 5.0.91 (2003) use `utimes', which has 1-microsecond
+     resolution.  Modern implementations such as GNU Core Utilities
+     6.12 (2008) can set timestamps to the full nanosecond resolution,
+     using the modern system calls `futimens' and `utimensat' when they
+     are available.  As of 2011, though, many platforms do not yet
+     fully support these new system calls.
+
+     Bob Proulx notes that `cp -p' always _tries_ to copy ownerships.
+     But whether it actually does copy ownerships or not is a system
+     dependent policy decision implemented by the kernel.  If the
+     kernel allows it then it happens.  If the kernel does not allow it
+     then it does not happen.  It is not something `cp' itself has
+     control over.
+
+     In Unix System V any user can chown files to any other user, and
+     System V also has a non-sticky `/tmp'.  That probably derives from
+     the heritage of System V in a business environment without hostile
+     users.  BSD changed this to be a more secure model where only root
+     can `chown' files and a sticky `/tmp' is used.  That undoubtedly
+     derives from the heritage of BSD in a campus environment.
+
+     GNU/Linux and Solaris by default follow BSD, but can be configured
+     to allow a System V style `chown'.  On the other hand, HP-UX
+     follows System V, but can be configured to use the modern security
+     model and disallow `chown'.  Since it is an
+     administrator-configurable parameter you can't use the name of the
+     kernel as an indicator of the behavior.
+
+`date'
+     Some versions of `date' do not recognize special `%' directives,
+     and unfortunately, instead of complaining, they just pass them
+     through, and exit with success:
+
+          $ uname -a
+          OSF1 medusa.sis.pasteur.fr V5.1 732 alpha
+          $ date "+%s"
+          %s
+
+`diff'
+     Option `-u' is nonportable.
+
+     Some implementations, such as Tru64's, fail when comparing to
+     `/dev/null'.  Use an empty file instead.
+
+`dirname'
+     Not all hosts have a working `dirname', and you should instead use
+     `AS_DIRNAME' (*note Programming in M4sh::).  For example:
+
+          dir=`dirname "$file"`       # This is not portable.
+          dir=`AS_DIRNAME(["$file"])` # This is more portable.
+
+`egrep'
+     Posix 1003.1-2001 no longer requires `egrep', but many hosts do
+     not yet support the Posix replacement `grep -E'.  Also, some
+     traditional implementations do not work on long input lines.  To
+     work around these problems, invoke `AC_PROG_EGREP' and then use
+     `$EGREP'.
+
+     Portable extended regular expressions should use `\' only to escape
+     characters in the string `$()*+.?[\^{|'.  For example, `\}' is not
+     portable, even though it typically matches `}'.
+
+     The empty alternative is not portable.  Use `?' instead.  For
+     instance with Digital Unix v5.0:
+
+          > printf "foo\n|foo\n" | $EGREP '^(|foo|bar)$'
+          |foo
+          > printf "bar\nbar|\n" | $EGREP '^(foo|bar|)$'
+          bar|
+          > printf "foo\nfoo|\n|bar\nbar\n" | $EGREP '^(foo||bar)$'
+          foo
+          |bar
+
+     `$EGREP' also suffers the limitations of `grep' (*note Limitations
+     of Usual Tools: grep.).
+
+`expr'
+     Not all implementations obey the Posix rule that `--' separates
+     options from arguments; likewise, not all implementations provide
+     the extension to Posix that the first argument can be treated as
+     part of a valid expression rather than an invalid option if it
+     begins with `-'.  When performing arithmetic, use `expr 0 + $var'
+     if `$var' might be a negative number, to keep `expr' from
+     interpreting it as an option.
+
+     No `expr' keyword starts with `X', so use `expr X"WORD" :
+     'XREGEX'' to keep `expr' from misinterpreting WORD.
+
+     Don't use `length', `substr', `match' and `index'.
+
+`expr' (`|')
+     You can use `|'.  Although Posix does require that `expr '''
+     return the empty string, it does not specify the result when you
+     `|' together the empty string (or zero) with the empty string.  For
+     example:
+
+          expr '' \| ''
+
+     Posix 1003.2-1992 returns the empty string for this case, but
+     traditional Unix returns `0' (Solaris is one such example).  In
+     Posix 1003.1-2001, the specification was changed to match
+     traditional Unix's behavior (which is bizarre, but it's too late
+     to fix this).  Please note that the same problem does arise when
+     the empty string results from a computation, as in:
+
+          expr bar : foo \| foo : bar
+
+     Avoid this portability problem by avoiding the empty string.
+
+`expr' (`:')
+     Portable `expr' regular expressions should use `\' to escape only
+     characters in the string `$()*.0123456789[\^n{}'.  For example,
+     alternation, `\|', is common but Posix does not require its
+     support, so it should be avoided in portable scripts.  Similarly,
+     `\+' and `\?' should be avoided.
+
+     Portable `expr' regular expressions should not begin with `^'.
+     Patterns are automatically anchored so leading `^' is not needed
+     anyway.
+
+     On the other hand, the behavior of the `$' anchor is not portable
+     on multi-line strings.  Posix is ambiguous whether the anchor
+     applies to each line, as was done in older versions of the GNU
+     Core Utilities, or whether it applies only to the end of the
+     overall string, as in Coreutils 6.0 and most other implementations.
+
+          $ baz='foo
+          > bar'
+          $ expr "X$baz" : 'X\(foo\)$'
+
+          $ expr-5.97 "X$baz" : 'X\(foo\)$'
+          foo
+
+     The Posix standard is ambiguous as to whether `expr 'a' : '\(b\)''
+     outputs `0' or the empty string.  In practice, it outputs the
+     empty string on most platforms, but portable scripts should not
+     assume this.  For instance, the QNX 4.25 native `expr' returns `0'.
+
+     One might think that a way to get a uniform behavior would be to
+     use the empty string as a default value:
+
+          expr a : '\(b\)' \| ''
+
+     Unfortunately this behaves exactly as the original expression; see
+     the `expr' (`|') entry for more information.
+
+     Some ancient `expr' implementations (e.g., SunOS 4 `expr' and
+     Solaris 8 `/usr/ucb/expr') have a silly length limit that causes
+     `expr' to fail if the matched substring is longer than 120 bytes.
+     In this case, you might want to fall back on `echo|sed' if `expr'
+     fails.  Nowadays this is of practical importance only for the rare
+     installer who mistakenly puts `/usr/ucb' before `/usr/bin' in
+     `PATH'.
+
+     On Mac OS X 10.4, `expr' mishandles the pattern `[^-]' in some
+     cases.  For example, the command
+          expr Xpowerpc-apple-darwin8.1.0 : 'X[^-]*-[^-]*-\(.*\)'
+
+     outputs `apple-darwin8.1.0' rather than the correct `darwin8.1.0'.
+     This particular case can be worked around by substituting `[^--]'
+     for `[^-]'.
+
+     Don't leave, there is some more!
+
+     The QNX 4.25 `expr', in addition of preferring `0' to the empty
+     string, has a funny behavior in its exit status: it's always 1
+     when parentheses are used!
+
+          $ val=`expr 'a' : 'a'`; echo "$?: $val"
+          0: 1
+          $ val=`expr 'a' : 'b'`; echo "$?: $val"
+          1: 0
+
+          $ val=`expr 'a' : '\(a\)'`; echo "?: $val"
+          1: a
+          $ val=`expr 'a' : '\(b\)'`; echo "?: $val"
+          1: 0
+
+     In practice this can be a big problem if you are ready to catch
+     failures of `expr' programs with some other method (such as using
+     `sed'), since you may get twice the result.  For instance
+
+          $ expr 'a' : '\(a\)' || echo 'a' | sed 's/^\(a\)$/\1/'
+
+     outputs `a' on most hosts, but `aa' on QNX 4.25.  A simple
+     workaround consists of testing `expr' and using a variable set to
+     `expr' or to `false' according to the result.
+
+     Tru64 `expr' incorrectly treats the result as a number, if it can
+     be interpreted that way:
+
+          $ expr 00001 : '.*\(...\)'
+          1
+
+     On HP-UX 11, `expr' only supports a single sub-expression.
+
+          $ expr 'Xfoo' : 'X\(f\(oo\)*\)$'
+          expr: More than one '\(' was used.
+
+`fgrep'
+     Posix 1003.1-2001 no longer requires `fgrep', but many hosts do
+     not yet support the Posix replacement `grep -F'.  Also, some
+     traditional implementations do not work on long input lines.  To
+     work around these problems, invoke `AC_PROG_FGREP' and then use
+     `$FGREP'.
+
+     Tru64/OSF 5.1 `fgrep' does not match an empty pattern.
+
+`find'
+     The option `-maxdepth' seems to be GNU specific.  Tru64 v5.1,
+     NetBSD 1.5 and Solaris `find' commands do not understand it.
+
+     The replacement of `{}' is guaranteed only if the argument is
+     exactly _{}_, not if it's only a part of an argument.  For
+     instance on DU, and HP-UX 10.20 and HP-UX 11:
+
+          $ touch foo
+          $ find . -name foo -exec echo "{}-{}" \;
+          {}-{}
+
+     while GNU `find' reports `./foo-./foo'.
+
+`grep'
+     Portable scripts can rely on the `grep' options `-c', `-l', `-n',
+     and `-v', but should avoid other options.  For example, don't use
+     `-w', as Posix does not require it and Irix 6.5.16m's `grep' does
+     not support it.  Also, portable scripts should not combine `-c'
+     with `-l', as Posix does not allow this.
+
+     Some of the options required by Posix are not portable in practice.
+     Don't use `grep -q' to suppress output, because many `grep'
+     implementations (e.g., Solaris) do not support `-q'.  Don't use
+     `grep -s' to suppress output either, because Posix says `-s' does
+     not suppress output, only some error messages; also, the `-s'
+     option of traditional `grep' behaved like `-q' does in most modern
+     implementations.  Instead, redirect the standard output and
+     standard error (in case the file doesn't exist) of `grep' to
+     `/dev/null'.  Check the exit status of `grep' to determine whether
+     it found a match.
+
+     The QNX4 implementation fails to count lines with `grep -c '$'',
+     but works with `grep -c '^''.  Other alternatives for counting
+     lines are to use `sed -n '$='' or `wc -l'.
+
+     Some traditional `grep' implementations do not work on long input
+     lines.  On AIX the default `grep' silently truncates long lines on
+     the input before matching.
+
+     Also, many implementations do not support multiple regexps with
+     `-e': they either reject `-e' entirely (e.g., Solaris) or honor
+     only the last pattern (e.g., IRIX 6.5 and NeXT).  To work around
+     these problems, invoke `AC_PROG_GREP' and then use `$GREP'.
+
+     Another possible workaround for the multiple `-e' problem is to
+     separate the patterns by newlines, for example:
+
+          grep 'foo
+          bar' in.txt
+
+     except that this fails with traditional `grep' implementations and
+     with OpenBSD 3.8 `grep'.
+
+     Traditional `grep' implementations (e.g., Solaris) do not support
+     the `-E' or `-F' options.  To work around these problems, invoke
+     `AC_PROG_EGREP' and then use `$EGREP', and similarly for
+     `AC_PROG_FGREP' and `$FGREP'.  Even if you are willing to require
+     support for Posix `grep', your script should not use both `-E' and
+     `-F', since Posix does not allow this combination.
+
+     Portable `grep' regular expressions should use `\' only to escape
+     characters in the string `$()*.0123456789[\^{}'.  For example,
+     alternation, `\|', is common but Posix does not require its
+     support in basic regular expressions, so it should be avoided in
+     portable scripts.  Solaris and HP-UX `grep' do not support it.
+     Similarly, the following escape sequences should also be avoided:
+     `\<', `\>', `\+', `\?', `\`', `\'', `\B', `\b', `\S', `\s', `\W',
+     and `\w'.
+
+     Posix does not specify the behavior of `grep' on binary files.  An
+     example where this matters is using BSD `grep' to search text that
+     includes embedded ANSI escape sequences for colored output to
+     terminals (`\033[m' is the sequence to restore normal output); the
+     behavior depends on whether input is seekable:
+
+          $ printf 'esc\033[mape\n' > sample
+          $ grep . sample
+          Binary file sample matches
+          $ cat sample | grep .
+          escape
+
+`join'
+     Solaris 8 `join' has bugs when the second operand is standard
+     input, and when standard input is a pipe.  For example, the
+     following shell script causes Solaris 8 `join' to loop forever:
+
+          cat >file <<'EOF'
+          1 x
+          2 y
+          EOF
+          cat file | join file -
+
+     Use `join - file' instead.
+
+     On NetBSD, `join -a 1 file1 file2' mistakenly behaves like `join
+     -a 1 -a 2 1 file1 file2', resulting in a usage warning; the
+     workaround is to use `join -a1 file1 file2' instead.
+
+`ln'
+     Don't rely on `ln' having a `-f' option.  Symbolic links are not
+     available on old systems; use `$(LN_S)' as a portable substitute.
+
+     For versions of the DJGPP before 2.04, `ln' emulates symbolic links
+     to executables by generating a stub that in turn calls the real
+     program.  This feature also works with nonexistent files like in
+     the Posix spec.  So `ln -s file link' generates `link.exe', which
+     attempts to call `file.exe' if run.  But this feature only works
+     for executables, so `cp -p' is used instead for these systems.
+     DJGPP versions 2.04 and later have full support for symbolic links.
+
+`ls'
+     The portable options are `-acdilrtu'.  Current practice is for
+     `-l' to output both owner and group, even though ancient versions
+     of `ls' omitted the group.
+
+     On ancient hosts, `ls foo' sent the diagnostic `foo not found' to
+     standard output if `foo' did not exist.  Hence a shell command
+     like `sources=`ls *.c 2>/dev/null`' did not always work, since it
+     was equivalent to `sources='*.c not found'' in the absence of `.c'
+     files.  This is no longer a practical problem, since current `ls'
+     implementations send diagnostics to standard error.
+
+     The behavior of `ls' on a directory that is being concurrently
+     modified is not always predictable, because of a data race where
+     cached information returned by `readdir' does not match the current
+     directory state.  In fact, MacOS 10.5 has an intermittent bug where
+     `readdir', and thus `ls', sometimes lists a file more than once if
+     other files were added or removed from the directory immediately
+     prior to the `ls' call.  Since `ls' already sorts its output, the
+     duplicate entries can be avoided by piping the results through
+     `uniq'.
+
+`mkdir'
+     No `mkdir' option is portable to older systems.  Instead of `mkdir
+     -p FILE-NAME', you should use `AS_MKDIR_P(FILE-NAME)' (*note
+     Programming in M4sh::) or `AC_PROG_MKDIR_P' (*note Particular
+     Programs::).
+
+     Combining the `-m' and `-p' options, as in `mkdir -m go-w -p DIR',
+     often leads to trouble.  FreeBSD `mkdir' incorrectly attempts to
+     change the permissions of DIR even if it already exists.  HP-UX
+     11.23 and IRIX 6.5 `mkdir' often assign the wrong permissions to
+     any newly-created parents of DIR.
+
+     Posix does not clearly specify whether `mkdir -p foo' should
+     succeed when `foo' is a symbolic link to an already-existing
+     directory.  The GNU Core Utilities 5.1.0 `mkdir' succeeds, but
+     Solaris `mkdir' fails.
+
+     Traditional `mkdir -p' implementations suffer from race conditions.
+     For example, if you invoke `mkdir -p a/b' and `mkdir -p a/c' at
+     the same time, both processes might detect that `a' is missing,
+     one might create `a', then the other might try to create `a' and
+     fail with a `File exists' diagnostic.  The GNU Core Utilities
+     (`fileutils' version 4.1), FreeBSD 5.0, NetBSD 2.0.2, and OpenBSD
+     2.4 are known to be race-free when two processes invoke `mkdir -p'
+     simultaneously, but earlier versions are vulnerable.  Solaris
+     `mkdir' is still vulnerable as of Solaris 10, and other
+     traditional Unix systems are probably vulnerable too.  This
+     possible race is harmful in parallel builds when several Make
+     rules call `mkdir -p' to construct directories.  You may use
+     `install-sh -d' as a safe replacement, provided this script is
+     recent enough; the copy shipped with Autoconf 2.60 and Automake
+     1.10 is OK, but copies from older versions are vulnerable.
+
+`mkfifo'
+`mknod'
+     The GNU Coding Standards state that `mknod' is safe to use on
+     platforms where it has been tested to exist; but it is generally
+     portable only for creating named FIFOs, since device numbers are
+     platform-specific.  Autotest uses `mkfifo' to implement parallel
+     testsuites.  Posix states that behavior is unspecified when
+     opening a named FIFO for both reading and writing; on at least
+     Cygwin, this results in failure on any attempt to read or write to
+     that file descriptor.
+
+`mktemp'
+     Shell scripts can use temporary files safely with `mktemp', but it
+     does not exist on all systems.  A portable way to create a safe
+     temporary file name is to create a temporary directory with mode
+     700 and use a file inside this directory.  Both methods prevent
+     attackers from gaining control, though `mktemp' is far less likely
+     to fail gratuitously under attack.
+
+     Here is sample code to create a new temporary directory `$dir'
+     safely:
+
+          # Create a temporary directory $dir in $TMPDIR (default /tmp).
+          # Use mktemp if possible; otherwise fall back on mkdir,
+          # with $RANDOM to make collisions less likely.
+          : "${TMPDIR:=/tmp}"
+          {
+            dir=`
+              (umask 077 && mktemp -d "$TMPDIR/fooXXXXXX") 2>/dev/null
+            ` &&
+            test -d "$dir"
+          } || {
+            dir=$TMPDIR/foo$$-$RANDOM
+            (umask 077 && mkdir "$dir")
+          } || exit $?
+
+`mv'
+     The only portable options are `-f' and `-i'.
+
+     Moving individual files between file systems is portable (it was
+     in Unix version 6), but it is not always atomic: when doing `mv
+     new existing', there's a critical section where neither the old
+     nor the new version of `existing' actually exists.
+
+     On some systems moving files from `/tmp' can sometimes cause
+     undesirable (but perfectly valid) warnings, even if you created
+     these files.  This is because `/tmp' belongs to a group that
+     ordinary users are not members of, and files created in `/tmp'
+     inherit the group of `/tmp'.  When the file is copied, `mv' issues
+     a diagnostic without failing:
+
+          $ touch /tmp/foo
+          $ mv /tmp/foo .
+          error-->mv: ./foo: set owner/group (was: 100/0): Operation not permitted
+          $ echo $?
+          0
+          $ ls foo
+          foo
+
+     This annoying behavior conforms to Posix, unfortunately.
+
+     Moving directories across mount points is not portable, use `cp'
+     and `rm'.
+
+     DOS variants cannot rename or remove open files, and do not
+     support commands like `mv foo bar >foo', even though this is
+     perfectly portable among Posix hosts.
+
+`od'
+     In Mac OS X 10.3, `od' does not support the standard Posix options
+     `-A', `-j', `-N', or `-t', or the XSI option `-s'.  The only
+     supported Posix option is `-v', and the only supported XSI options
+     are those in `-bcdox'.  The BSD `hexdump' program can be used
+     instead.
+
+     This problem no longer exists in Mac OS X 10.4.3.
+
+`rm'
+     The `-f' and `-r' options are portable.
+
+     It is not portable to invoke `rm' without options or operands.  On
+     the other hand, Posix now requires `rm -f' to silently succeed
+     when there are no operands (useful for constructs like `rm -rf
+     $filelist' without first checking if `$filelist' was empty).  But
+     this was not always portable; at least NetBSD `rm' built before
+     2008 would fail with a diagnostic.
+
+     A file might not be removed even if its parent directory is
+     writable and searchable.  Many Posix hosts cannot remove a mount
+     point, a named stream, a working directory, or a last link to a
+     file that is being executed.
+
+     DOS variants cannot rename or remove open files, and do not
+     support commands like `rm foo >foo', even though this is perfectly
+     portable among Posix hosts.
+
+`rmdir'
+     Just as with `rm', some platforms refuse to remove a working
+     directory.
+
+`sed'
+     Patterns should not include the separator (unless escaped), even
+     as part of a character class.  In conformance with Posix, the Cray
+     `sed' rejects `s/[^/]*$//': use `s%[^/]*$%%'.  Even when escaped,
+     patterns should not include separators that are also used as `sed'
+     metacharacters.  For example, GNU sed 4.0.9 rejects
+     `s,x\{1\,\},,', while sed 4.1 strips the backslash before the comma
+     before evaluating the basic regular expression.
+
+     Avoid empty patterns within parentheses (i.e., `\(\)').  Posix does
+     not require support for empty patterns, and Unicos 9 `sed' rejects
+     them.
+
+     Unicos 9 `sed' loops endlessly on patterns like `.*\n.*'.
+
+     Sed scripts should not use branch labels longer than 7 characters
+     and should not contain comments; AIX 5.3 `sed' rejects indented
+     comments.  HP-UX sed has a limit of 99 commands (not counting `:'
+     commands) and 48 labels, which cannot be circumvented by using
+     more than one script file.  It can execute up to 19 reads with the
+     `r' command per cycle.  Solaris `/usr/ucb/sed' rejects usages that
+     exceed a limit of about 6000 bytes for the internal representation
+     of commands.
+
+     Avoid redundant `;', as some `sed' implementations, such as NetBSD
+     1.4.2's, incorrectly try to interpret the second `;' as a command:
+
+          $ echo a | sed 's/x/x/;;s/x/x/'
+          sed: 1: "s/x/x/;;s/x/x/": invalid command code ;
+
+     Some `sed' implementations have a buffer limited to 4000 bytes,
+     and this limits the size of input lines, output lines, and internal
+     buffers that can be processed portably.  Likewise, not all `sed'
+     implementations can handle embedded `NUL' or a missing trailing
+     newline.
+
+     Remember that ranges within a bracket expression of a regular
+     expression are only well-defined in the `C' (or `POSIX') locale.
+     Meanwhile, support for character classes like `[[:upper:]]' is not
+     yet universal, so if you cannot guarantee the setting of `LC_ALL',
+     it is better to spell out a range `[ABCDEFGHIJKLMNOPQRSTUVWXYZ]'
+     than to rely on `[A-Z]'.
+
+     Additionally, Posix states that regular expressions are only
+     well-defined on characters.  Unfortunately, there exist platforms
+     such as MacOS X 10.5 where not all 8-bit byte values are valid
+     characters, even though that platform has a single-byte `C'
+     locale.  And Posix allows the existence of a multi-byte `C'
+     locale, although that does not yet appear to be a common
+     implementation.  At any rate, it means that not all bytes will be
+     matched by the regular expression `.':
+
+          $ printf '\200\n' | LC_ALL=C sed -n /./p | wc -l
+          0
+          $ printf '\200\n' | LC_ALL=en_US.ISO8859-1 sed -n /./p | wc -l
+          1
+
+     Portable `sed' regular expressions should use `\' only to escape
+     characters in the string `$()*.0123456789[\^n{}'.  For example,
+     alternation, `\|', is common but Posix does not require its
+     support, so it should be avoided in portable scripts.  Solaris
+     `sed' does not support alternation; e.g., `sed '/a\|b/d'' deletes
+     only lines that contain the literal string `a|b'.  Similarly, `\+'
+     and `\?' should be avoided.
+
+     Anchors (`^' and `$') inside groups are not portable.
+
+     Nested parentheses in patterns (e.g., `\(\(a*\)b*)\)') are quite
+     portable to current hosts, but was not supported by some ancient
+     `sed' implementations like SVR3.
+
+     Some `sed' implementations, e.g., Solaris, restrict the special
+     role of the asterisk `*' to one-character regular expressions and
+     back-references, and the special role of interval expressions
+     `\{M\}', `\{M,\}', or `\{M,N\}' to one-character regular
+     expressions.  This may lead to unexpected behavior:
+
+          $ echo '1*23*4' | /usr/bin/sed 's/\(.\)*/x/g'
+          x2x4
+          $ echo '1*23*4' | /usr/xpg4/bin/sed 's/\(.\)*/x/g'
+          x
+
+     The `-e' option is mostly portable.  However, its argument cannot
+     start with `a', `c', or `i', as this runs afoul of a Tru64 5.1 bug.
+     Also, its argument cannot be empty, as this fails on AIX 5.3.
+     Some people prefer to use `-e':
+
+          sed -e 'COMMAND-1' \
+              -e 'COMMAND-2'
+
+     as opposed to the equivalent:
+
+          sed '
+            COMMAND-1
+            COMMAND-2
+          '
+
+     The following usage is sometimes equivalent:
+
+          sed 'COMMAND-1;COMMAND-2'
+
+     but Posix says that this use of a semicolon has undefined effect if
+     COMMAND-1's verb is `{', `a', `b', `c', `i', `r', `t', `w', `:',
+     or `#', so you should use semicolon only with simple scripts that
+     do not use these verbs.
+
+     Posix up to the 2008 revision requires the argument of the `-e'
+     option to be a syntactically complete script.  GNU `sed' allows to
+     pass multiple script fragments, each as argument of a separate
+     `-e' option, that are then combined, with newlines between the
+     fragments, and a future Posix revision may allow this as well.
+     This approach is not portable with script fragments ending in
+     backslash; for example, the `sed' programs on Solaris 10, HP-UX
+     11, and AIX don't allow splitting in this case:
+
+          $ echo a | sed -n -e 'i\
+          0'
+          0
+          $ echo a | sed -n -e 'i\' -e 0
+          Unrecognized command: 0
+
+     In practice, however, this technique of joining fragments through
+     `-e' works for multiple `sed' functions within `{' and `}', even
+     if that is not specified by Posix:
+
+          $ echo a | sed -n -e '/a/{' -e s/a/b/ -e p -e '}'
+          b
+
+     Commands inside { } brackets are further restricted.  Posix 2008
+     says that they cannot be preceded by addresses, `!', or `;', and
+     that each command must be followed immediately by a newline,
+     without any intervening blanks or semicolons.  The closing bracket
+     must be alone on a line, other than white space preceding or
+     following it.  However, a future version of Posix may standardize
+     the use of addresses within brackets.
+
+     Contrary to yet another urban legend, you may portably use `&' in
+     the replacement part of the `s' command to mean "what was
+     matched".  All descendants of Unix version 7 `sed' (at least; we
+     don't have first hand experience with older `sed' implementations)
+     have supported it.
+
+     Posix requires that you must not have any white space between `!'
+     and the following command.  It is OK to have blanks between the
+     address and the `!'.  For instance, on Solaris:
+
+          $ echo "foo" | sed -n '/bar/ ! p'
+          error-->Unrecognized command: /bar/ ! p
+          $ echo "foo" | sed -n '/bar/! p'
+          error-->Unrecognized command: /bar/! p
+          $ echo "foo" | sed -n '/bar/ !p'
+          foo
+
+     Posix also says that you should not combine `!' and `;'.  If you
+     use `!', it is best to put it on a command that is delimited by
+     newlines rather than `;'.
+
+     Also note that Posix requires that the `b', `t', `r', and `w'
+     commands be followed by exactly one space before their argument.
+     On the other hand, no white space is allowed between `:' and the
+     subsequent label name.
+
+     If a sed script is specified on the command line and ends in an
+     `a', `c', or `i' command, the last line of inserted text should be
+     followed by a newline.  Otherwise some `sed' implementations
+     (e.g., OpenBSD 3.9) do not append a newline to the inserted text.
+
+     Many `sed' implementations (e.g., MacOS X 10.4, OpenBSD 3.9,
+     Solaris 10 `/usr/ucb/sed') strip leading white space from the text
+     of `a', `c', and `i' commands.  Prepend a backslash to work around
+     this incompatibility with Posix:
+
+          $ echo flushleft | sed 'a\
+          >    indented
+          > '
+          flushleft
+          indented
+          $ echo foo | sed 'a\
+          > \   indented
+          > '
+          flushleft
+             indented
+
+     Posix requires that with an empty regular expression, the last
+     non-empty regular expression from either an address specification
+     or substitution command is applied.  However, busybox 1.6.1
+     complains when using a substitution command with a replacement
+     containing a back-reference to an empty regular expression; the
+     workaround is repeating the regular expression.
+
+          $ echo abc | busybox sed '/a\(b\)c/ s//\1/'
+          sed: No previous regexp.
+          $ echo abc | busybox sed '/a\(b\)c/ s/a\(b\)c/\1/'
+          b
+
+`sed' (`t')
+     Some old systems have `sed' that "forget" to reset their `t' flag
+     when starting a new cycle.  For instance on MIPS RISC/OS, and on
+     IRIX 5.3, if you run the following `sed' script (the line numbers
+     are not actual part of the texts):
+
+          s/keep me/kept/g  # a
+          t end             # b
+          s/.*/deleted/g    # c
+          :end              # d
+
+     on
+
+          delete me         # 1
+          delete me         # 2
+          keep me           # 3
+          delete me         # 4
+
+     you get
+
+          deleted
+          delete me
+          kept
+          deleted
+
+     instead of
+
+          deleted
+          deleted
+          kept
+          deleted
+
+     Why?  When processing line 1, (c) matches, therefore sets the `t'
+     flag, and the output is produced.  When processing line 2, the `t'
+     flag is still set (this is the bug).  Command (a) fails to match,
+     but `sed' is not supposed to clear the `t' flag when a
+     substitution fails.  Command (b) sees that the flag is set,
+     therefore it clears it, and jumps to (d), hence you get `delete me'
+     instead of `deleted'.  When processing line (3), `t' is clear, (a)
+     matches, so the flag is set, hence (b) clears the flags and jumps.
+     Finally, since the flag is clear, line 4 is processed properly.
+
+     There are two things one should remember about `t' in `sed'.
+     Firstly, always remember that `t' jumps if _some_ substitution
+     succeeded, not only the immediately preceding substitution.
+     Therefore, always use a fake `t clear' followed by a `:clear' on
+     the next line, to reset the `t' flag where needed.
+
+     Secondly, you cannot rely on `sed' to clear the flag at each new
+     cycle.
+
+     One portable implementation of the script above is:
+
+          t clear
+          :clear
+          s/keep me/kept/g
+          t end
+          s/.*/deleted/g
+          :end
+
+`sleep'
+     Using `sleep' is generally portable.  However, remember that
+     adding a `sleep' to work around timestamp issues, with a minimum
+     granularity of one second, doesn't scale well for parallel builds
+     on modern machines with sub-second process completion.
+
+`sort'
+     Remember that sort order is influenced by the current locale.
+     Inside `configure', the C locale is in effect, but in Makefile
+     snippets, you may need to specify `LC_ALL=C sort'.
+
+`tar'
+     There are multiple file formats for `tar'; if you use Automake,
+     the macro `AM_INIT_AUTOMAKE' has some options controlling which
+     level of portability to use.
+
+`touch'
+     If you specify the desired timestamp (e.g., with the `-r' option),
+     older `touch' implementations use the `utime' or `utimes' system
+     call, which can result in the same kind of timestamp truncation
+     problems that `cp -p' has.
+
+     On ancient BSD systems, `touch' or any command that results in an
+     empty file does not update the timestamps, so use a command like
+     `echo' as a workaround.  Also, GNU `touch' 3.16r (and presumably
+     all before that) fails to work on SunOS 4.1.3 when the empty file
+     is on an NFS-mounted 4.2 volume.  However, these problems are no
+     longer of practical concern.
+
+`tr'
+     Not all versions of `tr' handle all backslash character escapes.
+     For example, Solaris 10 `/usr/ucb/tr' falls over, even though
+     Solaris contains more modern `tr' in other locations.  Using octal
+     escapes is more portable for carriage returns, since `\015' is the
+     same for both ASCII and EBCDIC, and since use of literal carriage
+     returns in scripts causes a number of other problems.  But for
+     other characters, like newline, using octal escapes ties the
+     operation to ASCII, so it is better to use literal characters.
+
+          $ { echo moon; echo light; } | /usr/ucb/tr -d '\n' ; echo
+          moo
+          light
+          $ { echo moon; echo light; } | /usr/bin/tr -d '\n' ; echo
+          moonlight
+          $ { echo moon; echo light; } | /usr/ucb/tr -d '\012' ; echo
+          moonlight
+          $ nl='
+          '; { echo moon; echo light; } | /usr/ucb/tr -d "$nl" ; echo
+          moonlight
+
+     Not all versions of `tr' recognize direct ranges of characters: at
+     least Solaris `/usr/bin/tr' still fails to do so.  But you can use
+     `/usr/xpg4/bin/tr' instead, or add brackets (which in Posix
+     transliterate to themselves).
+
+          $ echo "Hazy Fantazy" | LC_ALL=C /usr/bin/tr a-z A-Z
+          HAZy FAntAZy
+          $ echo "Hazy Fantazy" | LC_ALL=C /usr/bin/tr '[a-z]' '[A-Z]'
+          HAZY FANTAZY
+          $ echo "Hazy Fantazy" | LC_ALL=C /usr/xpg4/bin/tr a-z A-Z
+          HAZY FANTAZY
+
+     When providing two arguments, be sure the second string is at
+     least as long as the first.
+
+          $ echo abc | /usr/xpg4/bin/tr bc d
+          adc
+          $ echo abc | coreutils/tr bc d
+          add
+
+     Posix requires `tr' to operate on binary files.  But at least
+     Solaris `/usr/ucb/tr' and `/usr/bin/tr' silently discard `NUL' in
+     the input prior to doing any translation.  When using `tr' to
+     process a binary file that may contain `NUL' bytes, it is
+     necessary to use `/usr/xpg4/bin/tr' instead, or `/usr/xpg6/bin/tr'
+     if that is available.
+
+          $ printf 'a\0b' | /usr/ucb/tr x x | od -An -tx1
+           61 62
+          $ printf 'a\0b' | /usr/bin/tr x x | od -An -tx1
+           61 62
+          $ printf 'a\0b' | /usr/xpg4/bin/tr x x | od -An -tx1
+           61 00 62
+
+     Solaris `/usr/ucb/tr' additionally fails to handle `\0' as the
+     octal escape for `NUL'.
+
+          $ printf 'abc' | /usr/ucb/tr 'bc' '\0d' | od -An -tx1
+           61 62 63
+          $ printf 'abc' | /usr/bin/tr 'bc' '\0d' | od -An -tx1
+           61 00 64
+          $ printf 'abc' | /usr/xpg4/bin/tr 'bc' '\0d' | od -An -tx1
+           61 00 64
+
+
+File: autoconf.info,  Node: Portable Make,  Next: Portable C and C++,  Prev: Portable Shell,  Up: Top
+

@@ -1,0 +1,253 @@
+19.5 Completion Matching Control
+================================
+
+
+It is possible by use of the -M option of the compadd builtin command to
+specify how the characters in the string to be completed (referred to
+here as the command line) map onto the characters in the list of matches
+produced by the completion code (referred to here as the trial
+completions).  Note that this is not used if the command line contains a
+glob pattern and the GLOB_COMPLETE option is set or the pattern_match of
+the compstate special association is set to a non-empty string.
+
+The MATCH-SPEC given as the argument to the -M option (see *note
+Completion Builtin Commands::) consists of one or more matching
+descriptions separated by whitespace.  Each description consists of a
+letter followed by a colon and then the patterns describing which
+character sequences on the line match which character sequences in the
+trial completion.  Any sequence of characters not handled in this
+fashion must match exactly, as usual.
+
+The forms of MATCH-SPEC understood are as follows.  In each case, the
+form with an upper case initial character retains the string already
+typed on the command line as the final result of completion, while with
+a lower case initial character the string on the command line is changed
+into the corresponding part of the trial completion.
+
+m:LPAT=TPAT
+M:LPAT=TPAT
+     Here, LPAT is a pattern that matches on the command line,
+     corresponding to TPAT which matches in the trial completion.
+
+l:LANCHOR|LPAT=TPAT
+L:LANCHOR|LPAT=TPAT
+l:LANCHOR||RANCHOR=TPAT
+L:LANCHOR||RANCHOR=TPAT
+b:LPAT=TPAT
+B:LPAT=TPAT
+     These letters are for patterns that are anchored by another pattern
+     on the left side.  Matching for LPAT and TPAT is as for m and M,
+     but the pattern LPAT matched on the command line must be preceded
+     by the pattern LANCHOR.  The LANCHOR can be blank to anchor the
+     match to the start of the command line string; otherwise the anchor
+     can occur anywhere, but must match in both the command line and
+     trial completion strings.
+
+     If no LPAT is given but a RANCHOR is, this matches the gap between
+     substrings matched by LANCHOR and RANCHOR.  Unlike LANCHOR, the
+     RANCHOR only needs to match the trial completion string.
+
+     The b and B forms are similar to l and L with an empty anchor, but
+     need to match only the beginning of the word on the command line or
+     trial completion, respectively.
+
+r:LPAT|RANCHOR=TPAT
+R:LPAT|RANCHOR=TPAT
+r:LANCHOR||RANCHOR=TPAT
+R:LANCHOR||RANCHOR=TPAT
+e:LPAT=TPAT
+E:LPAT=TPAT
+     As l, L, b and B, with the difference that the command line and
+     trial completion patterns are anchored on the right side.  Here an
+     empty RANCHOR and the e and E forms force the match to the end of
+     the command line or trial completion string.
+
+x:
+     This form is used to mark the end of matching specifications:
+     subsequent specifications are ignored.  In a single standalone list
+     of specifications this has no use but where matching specifications
+     are accumulated, such as from nested function calls, it can allow
+     one function to override another.
+
+Each LPAT, TPAT or ANCHOR is either an empty string or consists of a
+sequence of literal characters (which may be quoted with a backslash),
+question marks, character classes, and correspondence classes; ordinary
+shell patterns are not used.  Literal characters match only themselves,
+question marks match any character, and character classes are formed as
+for globbing and match any character in the given set.
+
+Correspondence classes are defined like character classes, but with two
+differences: they are delimited by a pair of braces, and negated classes
+are not allowed, so the characters ! and ^ have no special meaning
+directly after the opening brace.  They indicate that a range of
+characters on the line match a range of characters in the trial
+completion, but (unlike ordinary character classes) paired according to
+the corresponding position in the sequence.  For example, to make any
+ASCII lower case letter on the line match the corresponding upper case
+letter in the trial completion, you can use 'm:{a-z}={A-Z}' (however,
+see below for the recommended form for this).  More than one pair of
+classes can occur, in which case the first class before the =
+corresponds to the first after it, and so on.  If one side has more such
+classes than the other side, the superfluous classes behave like normal
+character classes.  In anchor patterns correspondence classes also
+behave like normal character classes.
+
+The standard '[:NAME:]' forms described for standard shell patterns (see
+*note Filename Generation::) may appear in correspondence classes as
+well as normal character classes.  The only special behaviour in
+correspondence classes is if the form on the left and the form on the
+right are each one of [:upper:], [:lower:].  In these cases the
+character in the word and the character on the line must be the same up
+to a difference in case.  Hence to make any lower case character on the
+line match the corresponding upper case character in the trial
+completion you can use 'm:{[:lower:]}={[:upper:]}'.  Although the
+matching system does not yet handle multibyte characters, this is likely
+to be a future extension, at which point this syntax will handle
+arbitrary alphabets; hence this form, rather than the use of explicit
+ranges, is the recommended form.  In other cases '[:NAME:]' forms are
+allowed.  If the two forms on the left and right are the same, the
+characters must match exactly.  In remaining cases, the corresponding
+tests are applied to both characters, but they are not otherwise
+constrained; any matching character in one set goes with any matching
+character in the other set: this is equivalent to the behaviour of
+ordinary character classes.
+
+The pattern TPAT may also be one or two stars, '*' or '**'.  This means
+that the pattern on the command line can match any number of characters
+in the trial completion.  In this case the pattern must be anchored (on
+either side); in the case of a single star, the ANCHOR then determines
+how much of the trial completion is to be included -- only the
+characters up to the next appearance of the anchor will be matched.
+With two stars, substrings matched by the anchor can be matched, too.
+
+Examples:
+
+The keys of the options association defined by the parameter module are
+the option names in all-lower-case form, without underscores, and
+without the optional no at the beginning even though the builtins setopt
+and unsetopt understand option names with upper case letters,
+underscores, and the optional no.  The following alters the matching
+rules so that the prefix no and any underscore are ignored when trying
+to match the trial completions generated and upper case letters on the
+line match the corresponding lower case letters in the words:
+
+     compadd -M 'L:|[nN][oO]= M:_= M:{[:upper:]}={[:lower:]}' - \
+       ${(k)options}
+
+The first part says that the pattern '[nN][oO]' at the beginning (the
+empty anchor before the pipe symbol) of the string on the line matches
+the empty string in the list of words generated by completion, so it
+will be ignored if present.  The second part does the same for an
+underscore anywhere in the command line string, and the third part uses
+correspondence classes so that any upper case letter on the line matches
+the corresponding lower case letter in the word.  The use of the upper
+case forms of the specification characters (L and M) guarantees that
+what has already been typed on the command line (in particular the
+prefix no) will not be deleted.
+
+Note that the use of L in the first part means that it matches only when
+at the beginning of both the command line string and the trial
+completion.  I.e., the string '_NO_f' would not be completed to
+'_NO_foo', nor would 'NONO_f' be completed to 'NONO_foo' because of the
+leading underscore or the second 'NO' on the line which makes the
+pattern fail even though they are otherwise ignored.  To fix this, one
+would use 'B:[nN][oO]=' instead of the first part.  As described above,
+this matches at the beginning of the trial completion, independent of
+other characters or substrings at the beginning of the command line word
+which are ignored by the same or other MATCH-SPECs.
+
+The second example makes completion case insensitive.  This is just the
+same as in the option example, except here we wish to retain the
+characters in the list of completions:
+
+     compadd -M 'm:{[:lower:]}={[:upper:]}' ...
+
+This makes lower case letters match their upper case counterparts.  To
+make upper case letters match the lower case forms as well:
+
+     compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}' ...
+
+A nice example for the use of * patterns is partial word completion.
+Sometimes you would like to make strings like 'c.s.u' complete to
+strings like 'comp.source.unix', i.e.  the word on the command line
+consists of multiple parts, separated by a dot in this example, where
+each part should be completed separately -- note, however, that the case
+where each part of the word, i.e.  'comp', 'source' and 'unix' in this
+example, is to be completed from separate sets of matches is a different
+problem to be solved by the implementation of the completion widget.
+The example can be handled by:
+
+     compadd -M 'r:|.=* r:|=*' \
+       - comp.sources.unix comp.sources.misc ...
+
+The first specification says that LPAT is the empty string, while ANCHOR
+is a dot; TPAT is *, so this can match anything except for the '.' from
+the anchor in the trial completion word.  So in 'c.s.u', the matcher
+sees 'c', followed by the empty string, followed by the anchor '.', and
+likewise for the second dot, and replaces the empty strings before the
+anchors, giving 'c[omp].s[ources].u[nix]', where the last part of the
+completion is just as normal.
+
+With the pattern shown above, the string 'c.u' could not be completed to
+'comp.sources.unix' because the single star means that no dot (matched
+by the anchor) can be skipped.  By using two stars as in 'r:|.=**',
+however, 'c.u' could be completed to 'comp.sources.unix'.  This also
+shows that in some cases, especially if the anchor is a real pattern,
+like a character class, the form with two stars may result in more
+matches than one would like.
+
+The second specification is needed to make this work when the cursor is
+in the middle of the string on the command line and the option
+COMPLETE_IN_WORD is set.  In this case the completion code would
+normally try to match trial completions that end with the string as
+typed so far, i.e.  it will only insert new characters at the cursor
+position rather than at the end.  However in our example we would like
+the code to recognise matches which contain extra characters after the
+string on the line (the 'nix' in the example).  Hence we say that the
+empty string at the end of the string on the line matches any characters
+at the end of the trial completion.
+
+More generally, the specification
+
+     compadd -M 'r:|[.,_-]=* r:|=*' ...
+
+allows one to complete words with abbreviations before any of the
+characters in the square brackets.  For example, to complete
+veryverylongfile.c rather than veryverylongheader.h with the above in
+effect, you can just type very.c before attempting completion.
+
+The specifications with both a left and a right anchor are useful to
+complete partial words whose parts are not separated by some special
+character.  For example, in some places strings have to be completed
+that are formed 'LikeThis' (i.e.  the separate parts are determined by a
+leading upper case letter) or maybe one has to complete strings with
+trailing numbers.  Here one could use the simple form with only one
+anchor as in:
+
+     compadd -M 'r:|[[:upper:]0-9]=* r:|=*' LikeTHIS FooHoo 5foo123 5bar234
+
+But with this, the string 'H' would neither complete to 'FooHoo' nor to
+'LikeTHIS' because in each case there is an upper case letter before the
+'H' and that is matched by the anchor.  Likewise, a '2' would not be
+completed.  In both cases this could be changed by using
+'r:|[[:upper:]0-9]=**', but then 'H' completes to both 'LikeTHIS' and
+'FooHoo' and a '2' matches the other strings because characters can be
+inserted before every upper case letter and digit.  To avoid this one
+would use:
+
+     compadd -M 'r:[^[:upper:]0-9]||[[:upper:]0-9]=** r:|=*' \
+         LikeTHIS FooHoo foo123 bar234
+
+By using these two anchors, a 'H' matches only upper case 'H's that are
+immediately preceded by something matching the left anchor
+'[^[:upper:]0-9]'.  The effect is, of course, that 'H' matches only the
+string 'FooHoo', a '2' matches only 'bar234' and so on.
+
+When using the completion system (see *note Completion System::), users
+can define match specifications that are to be used for specific
+contexts by using the matcher and matcher-list styles.  The values for
+the latter will be used everywhere.
+
+
+File: zsh.info,  Node: Completion Widget Example,  Prev: Completion Matching Control,  Up: Completion Widgets
+

@@ -1,0 +1,1055 @@
+6.21 Threads, Mutexes, Asyncs and Dynamic Roots
+===============================================
+
+* Menu:
+
+* Arbiters::                    Synchronization primitives.
+* Asyncs::                      Asynchronous procedure invocation.
+* Threads::                     Multiple threads of execution.
+* Mutexes and Condition Variables:: Synchronization primitives.
+* Blocking::                    How to block properly in guile mode.
+* Critical Sections::           Avoiding concurrency and reentries.
+* Fluids and Dynamic States::   Thread-local variables, etc.
+* Parameters::                  Dynamic scoping in Scheme.
+* Futures::                     Fine-grain parallelism.
+* Parallel Forms::              Parallel execution of forms.
+
+File: guile.info,  Node: Arbiters,  Next: Asyncs,  Up: Scheduling
+
+6.21.1 Arbiters
+---------------
+
+Arbiters are synchronization objects, they can be used by threads to
+control access to a shared resource.  An arbiter can be locked to
+indicate a resource is in use, and unlocked when done.
+
+   An arbiter is like a light-weight mutex (*note Mutexes and Condition
+Variables::).  It uses less memory and may be faster, but there’s no way
+for a thread to block waiting on an arbiter, it can only test and get
+the status returned.
+
+ -- Scheme Procedure: make-arbiter name
+ -- C Function: scm_make_arbiter (name)
+     Return an object of type arbiter and name NAME.  Its state is
+     initially unlocked.  Arbiters are a way to achieve process
+     synchronization.
+
+ -- Scheme Procedure: try-arbiter arb
+ -- C Function: scm_try_arbiter (arb)
+     If ARB is unlocked, then lock it and return ‘#t’.  If ARB is
+     already locked, then do nothing and return ‘#f’.
+
+ -- Scheme Procedure: release-arbiter arb
+ -- C Function: scm_release_arbiter (arb)
+     If ARB is locked, then unlock it and return ‘#t’.  If ARB is
+     already unlocked, then do nothing and return ‘#f’.
+
+     Typical usage is for the thread which locked an arbiter to later
+     release it, but that’s not required, any thread can release it.
+
+File: guile.info,  Node: Asyncs,  Next: Threads,  Prev: Arbiters,  Up: Scheduling
+
+6.21.2 Asyncs
+-------------
+
+Asyncs are a means of deferring the execution of Scheme code until it is
+safe to do so.
+
+   Guile provides two kinds of asyncs that share the basic concept but
+are otherwise quite different: system asyncs and user asyncs.  System
+asyncs are integrated into the core of Guile and are executed
+automatically when the system is in a state to allow the execution of
+Scheme code.  For example, it is not possible to execute Scheme code in
+a POSIX signal handler, but such a signal handler can queue a system
+async to be executed in the near future, when it is safe to do so.
+
+   System asyncs can also be queued for threads other than the current
+one.  This way, you can cause threads to asynchronously execute
+arbitrary code.
+
+   User asyncs offer a convenient means of queuing procedures for future
+execution and triggering this execution.  They will not be executed
+automatically.
+
+* Menu:
+
+* System asyncs::
+* User asyncs::
+
+File: guile.info,  Node: System asyncs,  Next: User asyncs,  Up: Asyncs
+
+6.21.2.1 System asyncs
+......................
+
+To cause the future asynchronous execution of a procedure in a given
+thread, use ‘system-async-mark’.
+
+   Automatic invocation of system asyncs can be temporarily disabled by
+calling ‘call-with-blocked-asyncs’.  This function works by temporarily
+increasing the _async blocking level_ of the current thread while a
+given procedure is running.  The blocking level starts out at zero, and
+whenever a safe point is reached, a blocking level greater than zero
+will prevent the execution of queued asyncs.
+
+   Analogously, the procedure ‘call-with-unblocked-asyncs’ will
+temporarily decrease the blocking level of the current thread.  You can
+use it when you want to disable asyncs by default and only allow them
+temporarily.
+
+   In addition to the C versions of ‘call-with-blocked-asyncs’ and
+‘call-with-unblocked-asyncs’, C code can use ‘scm_dynwind_block_asyncs’
+and ‘scm_dynwind_unblock_asyncs’ inside a “dynamic context” (*note
+Dynamic Wind::) to block or unblock system asyncs temporarily.
+
+ -- Scheme Procedure: system-async-mark proc [thread]
+ -- C Function: scm_system_async_mark (proc)
+ -- C Function: scm_system_async_mark_for_thread (proc, thread)
+     Mark PROC (a procedure with zero arguments) for future execution in
+     THREAD.  When PROC has already been marked for THREAD but has not
+     been executed yet, this call has no effect.  When THREAD is
+     omitted, the thread that called ‘system-async-mark’ is used.
+
+     This procedure is not safe to be called from signal handlers.  Use
+     ‘scm_sigaction’ or ‘scm_sigaction_for_thread’ to install signal
+     handlers.
+
+ -- Scheme Procedure: call-with-blocked-asyncs proc
+ -- C Function: scm_call_with_blocked_asyncs (proc)
+     Call PROC and block the execution of system asyncs by one level for
+     the current thread while it is running.  Return the value returned
+     by PROC.  For the first two variants, call PROC with no arguments;
+     for the third, call it with DATA.
+
+ -- C Function: void * scm_c_call_with_blocked_asyncs (void * (*proc)
+          (void *data), void *data)
+     The same but with a C function PROC instead of a Scheme thunk.
+
+ -- Scheme Procedure: call-with-unblocked-asyncs proc
+ -- C Function: scm_call_with_unblocked_asyncs (proc)
+     Call PROC and unblock the execution of system asyncs by one level
+     for the current thread while it is running.  Return the value
+     returned by PROC.  For the first two variants, call PROC with no
+     arguments; for the third, call it with DATA.
+
+ -- C Function: void * scm_c_call_with_unblocked_asyncs (void *(*proc)
+          (void *data), void *data)
+     The same but with a C function PROC instead of a Scheme thunk.
+
+ -- C Function: void scm_dynwind_block_asyncs ()
+     During the current dynwind context, increase the blocking of asyncs
+     by one level.  This function must be used inside a pair of calls to
+     ‘scm_dynwind_begin’ and ‘scm_dynwind_end’ (*note Dynamic Wind::).
+
+ -- C Function: void scm_dynwind_unblock_asyncs ()
+     During the current dynwind context, decrease the blocking of asyncs
+     by one level.  This function must be used inside a pair of calls to
+     ‘scm_dynwind_begin’ and ‘scm_dynwind_end’ (*note Dynamic Wind::).
+
+File: guile.info,  Node: User asyncs,  Prev: System asyncs,  Up: Asyncs
+
+6.21.2.2 User asyncs
+....................
+
+A user async is a pair of a thunk (a parameterless procedure) and a
+mark.  Setting the mark on a user async will cause the thunk to be
+executed when the user async is passed to ‘run-asyncs’.  Setting the
+mark more than once is satisfied by one execution of the thunk.
+
+   User asyncs are created with ‘async’.  They are marked with
+‘async-mark’.
+
+ -- Scheme Procedure: async thunk
+ -- C Function: scm_async (thunk)
+     Create a new user async for the procedure THUNK.
+
+ -- Scheme Procedure: async-mark a
+ -- C Function: scm_async_mark (a)
+     Mark the user async A for future execution.
+
+ -- Scheme Procedure: run-asyncs list_of_a
+ -- C Function: scm_run_asyncs (list_of_a)
+     Execute all thunks from the marked asyncs of the list LIST_OF_A.
+
+File: guile.info,  Node: Threads,  Next: Mutexes and Condition Variables,  Prev: Asyncs,  Up: Scheduling
+
+6.21.3 Threads
+--------------
+
+Guile supports POSIX threads, unless it was configured with
+‘--without-threads’ or the host lacks POSIX thread support.  When thread
+support is available, the ‘threads’ feature is provided (*note
+‘provided?’: Feature Manipulation.).
+
+   The procedures below manipulate Guile threads, which are wrappers
+around the system’s POSIX threads.  For application-level parallelism,
+using higher-level constructs, such as futures, is recommended (*note
+Futures::).
+
+ -- Scheme Procedure: all-threads
+ -- C Function: scm_all_threads ()
+     Return a list of all threads.
+
+ -- Scheme Procedure: current-thread
+ -- C Function: scm_current_thread ()
+     Return the thread that called this function.
+
+ -- Scheme Procedure: call-with-new-thread thunk [handler]
+     Call ‘thunk’ in a new thread and with a new dynamic state,
+     returning the new thread.  The procedure THUNK is called via
+     ‘with-continuation-barrier’.
+
+     When HANDLER is specified, then THUNK is called from within a
+     ‘catch’ with tag ‘#t’ that has HANDLER as its handler.  This catch
+     is established inside the continuation barrier.
+
+     Once THUNK or HANDLER returns, the return value is made the _exit
+     value_ of the thread and the thread is terminated.
+
+ -- C Function: SCM scm_spawn_thread (scm_t_catch_body body, void
+          *body_data, scm_t_catch_handler handler, void *handler_data)
+     Call BODY in a new thread, passing it BODY_DATA, returning the new
+     thread.  The function BODY is called via
+     ‘scm_c_with_continuation_barrier’.
+
+     When HANDLER is non-‘NULL’, BODY is called via ‘scm_internal_catch’
+     with tag ‘SCM_BOOL_T’ that has HANDLER and HANDLER_DATA as the
+     handler and its data.  This catch is established inside the
+     continuation barrier.
+
+     Once BODY or HANDLER returns, the return value is made the _exit
+     value_ of the thread and the thread is terminated.
+
+ -- Scheme Procedure: thread? obj
+ -- C Function: scm_thread_p (obj)
+     Return ‘#t’ ff OBJ is a thread; otherwise, return ‘#f’.
+
+ -- Scheme Procedure: join-thread thread [timeout [timeoutval]]
+ -- C Function: scm_join_thread (thread)
+ -- C Function: scm_join_thread_timed (thread, timeout, timeoutval)
+     Wait for THREAD to terminate and return its exit value.  Threads
+     that have not been created with ‘call-with-new-thread’ or
+     ‘scm_spawn_thread’ have an exit value of ‘#f’.  When TIMEOUT is
+     given, it specifies a point in time where the waiting should be
+     aborted.  It can be either an integer as returned by ‘current-time’
+     or a pair as returned by ‘gettimeofday’.  When the waiting is
+     aborted, TIMEOUTVAL is returned (if it is specified; ‘#f’ is
+     returned otherwise).
+
+ -- Scheme Procedure: thread-exited? thread
+ -- C Function: scm_thread_exited_p (thread)
+     Return ‘#t’ if THREAD has exited, or ‘#f’ otherwise.
+
+ -- Scheme Procedure: yield
+     If one or more threads are waiting to execute, calling yield forces
+     an immediate context switch to one of them.  Otherwise, yield has
+     no effect.
+
+ -- Scheme Procedure: cancel-thread thread
+ -- C Function: scm_cancel_thread (thread)
+     Asynchronously notify THREAD to exit.  Immediately after receiving
+     this notification, THREAD will call its cleanup handler (if one has
+     been set) and then terminate, aborting any evaluation that is in
+     progress.
+
+     Because Guile threads are isomorphic with POSIX threads, THREAD
+     will not receive its cancellation signal until it reaches a
+     cancellation point.  See your operating system’s POSIX threading
+     documentation for more information on cancellation points; note
+     that in Guile, unlike native POSIX threads, a thread can receive a
+     cancellation notification while attempting to lock a mutex.
+
+ -- Scheme Procedure: set-thread-cleanup! thread proc
+ -- C Function: scm_set_thread_cleanup_x (thread, proc)
+     Set PROC as the cleanup handler for the thread THREAD.  PROC, which
+     must be a thunk, will be called when THREAD exits, either normally
+     or by being canceled.  Thread cleanup handlers can be used to
+     perform useful tasks like releasing resources, such as locked
+     mutexes, when thread exit cannot be predicted.
+
+     The return value of PROC will be set as the _exit value_ of THREAD.
+
+     To remove a cleanup handler, pass ‘#f’ for PROC.
+
+ -- Scheme Procedure: thread-cleanup thread
+ -- C Function: scm_thread_cleanup (thread)
+     Return the cleanup handler currently installed for the thread
+     THREAD.  If no cleanup handler is currently installed,
+     thread-cleanup returns ‘#f’.
+
+   Higher level thread procedures are available by loading the ‘(ice-9
+threads)’ module.  These provide standardized thread creation.
+
+ -- macro: make-thread proc arg ...
+     Apply PROC to ARG ... in a new thread formed by
+     ‘call-with-new-thread’ using a default error handler that display
+     the error to the current error port.  The ARG ... expressions are
+     evaluated in the new thread.
+
+ -- macro: begin-thread expr1 expr2 ...
+     Evaluate forms EXPR1 EXPR2 ... in a new thread formed by
+     ‘call-with-new-thread’ using a default error handler that display
+     the error to the current error port.
+
+File: guile.info,  Node: Mutexes and Condition Variables,  Next: Blocking,  Prev: Threads,  Up: Scheduling
+
+6.21.4 Mutexes and Condition Variables
+--------------------------------------
+
+A mutex is a thread synchronization object, it can be used by threads to
+control access to a shared resource.  A mutex can be locked to indicate
+a resource is in use, and other threads can then block on the mutex to
+wait for the resource (or can just test and do something else if not
+available).  “Mutex” is short for “mutual exclusion”.
+
+   There are two types of mutexes in Guile, “standard” and “recursive”.
+They’re created by ‘make-mutex’ and ‘make-recursive-mutex’ respectively,
+the operation functions are then common to both.
+
+   Note that for both types of mutex there’s no protection against a
+“deadly embrace”.  For instance if one thread has locked mutex A and is
+waiting on mutex B, but another thread owns B and is waiting on A, then
+an endless wait will occur (in the current implementation).  Acquiring
+requisite mutexes in a fixed order (like always A before B) in all
+threads is one way to avoid such problems.
+
+
+ -- Scheme Procedure: make-mutex flag ...
+ -- C Function: scm_make_mutex ()
+ -- C Function: scm_make_mutex_with_flags (SCM flags)
+     Return a new mutex.  It is initially unlocked.  If FLAG ... is
+     specified, it must be a list of symbols specifying configuration
+     flags for the newly-created mutex.  The supported flags are:
+     ‘unchecked-unlock’
+          Unless this flag is present, a call to ‘unlock-mutex’ on the
+          returned mutex when it is already unlocked will cause an error
+          to be signalled.
+
+     ‘allow-external-unlock’
+          Allow the returned mutex to be unlocked by the calling thread
+          even if it was originally locked by a different thread.
+
+     ‘recursive’
+          The returned mutex will be recursive.
+
+ -- Scheme Procedure: mutex? obj
+ -- C Function: scm_mutex_p (obj)
+     Return ‘#t’ if OBJ is a mutex; otherwise, return ‘#f’.
+
+ -- Scheme Procedure: make-recursive-mutex
+ -- C Function: scm_make_recursive_mutex ()
+     Create a new recursive mutex.  It is initially unlocked.  Calling
+     this function is equivalent to calling ‘make-mutex’ and specifying
+     the ‘recursive’ flag.
+
+ -- Scheme Procedure: lock-mutex mutex [timeout [owner]]
+ -- C Function: scm_lock_mutex (mutex)
+ -- C Function: scm_lock_mutex_timed (mutex, timeout, owner)
+     Lock MUTEX.  If the mutex is already locked, then block and return
+     only when MUTEX has been acquired.
+
+     When TIMEOUT is given, it specifies a point in time where the
+     waiting should be aborted.  It can be either an integer as returned
+     by ‘current-time’ or a pair as returned by ‘gettimeofday’.  When
+     the waiting is aborted, ‘#f’ is returned.
+
+     When OWNER is given, it specifies an owner for MUTEX other than the
+     calling thread.  OWNER may also be ‘#f’, indicating that the mutex
+     should be locked but left unowned.
+
+     For standard mutexes (‘make-mutex’), and error is signalled if the
+     thread has itself already locked MUTEX.
+
+     For a recursive mutex (‘make-recursive-mutex’), if the thread has
+     itself already locked MUTEX, then a further ‘lock-mutex’ call
+     increments the lock count.  An additional ‘unlock-mutex’ will be
+     required to finally release.
+
+     If MUTEX was locked by a thread that exited before unlocking it,
+     the next attempt to lock MUTEX will succeed, but
+     ‘abandoned-mutex-error’ will be signalled.
+
+     When a system async (*note System asyncs::) is activated for a
+     thread blocked in ‘lock-mutex’, the wait is interrupted and the
+     async is executed.  When the async returns, the wait resumes.
+
+ -- C Function: void scm_dynwind_lock_mutex (SCM mutex)
+     Arrange for MUTEX to be locked whenever the current dynwind context
+     is entered and to be unlocked when it is exited.
+
+ -- Scheme Procedure: try-mutex mx
+ -- C Function: scm_try_mutex (mx)
+     Try to lock MUTEX as per ‘lock-mutex’.  If MUTEX can be acquired
+     immediately then this is done and the return is ‘#t’.  If MUTEX is
+     locked by some other thread then nothing is done and the return is
+     ‘#f’.
+
+ -- Scheme Procedure: unlock-mutex mutex [condvar [timeout]]
+ -- C Function: scm_unlock_mutex (mutex)
+ -- C Function: scm_unlock_mutex_timed (mutex, condvar, timeout)
+     Unlock MUTEX.  An error is signalled if MUTEX is not locked and was
+     not created with the ‘unchecked-unlock’ flag set, or if MUTEX is
+     locked by a thread other than the calling thread and was not
+     created with the ‘allow-external-unlock’ flag set.
+
+     If CONDVAR is given, it specifies a condition variable upon which
+     the calling thread will wait to be signalled before returning.
+     (This behavior is very similar to that of
+     ‘wait-condition-variable’, except that the mutex is left in an
+     unlocked state when the function returns.)
+
+     When TIMEOUT is also given and not false, it specifies a point in
+     time where the waiting should be aborted.  It can be either an
+     integer as returned by ‘current-time’ or a pair as returned by
+     ‘gettimeofday’.  When the waiting is aborted, ‘#f’ is returned.
+     Otherwise the function returns ‘#t’.
+
+ -- Scheme Procedure: mutex-owner mutex
+ -- C Function: scm_mutex_owner (mutex)
+     Return the current owner of MUTEX, in the form of a thread or ‘#f’
+     (indicating no owner).  Note that a mutex may be unowned but still
+     locked.
+
+ -- Scheme Procedure: mutex-level mutex
+ -- C Function: scm_mutex_level (mutex)
+     Return the current lock level of MUTEX.  If MUTEX is currently
+     unlocked, this value will be 0; otherwise, it will be the number of
+     times MUTEX has been recursively locked by its current owner.
+
+ -- Scheme Procedure: mutex-locked? mutex
+ -- C Function: scm_mutex_locked_p (mutex)
+     Return ‘#t’ if MUTEX is locked, regardless of ownership; otherwise,
+     return ‘#f’.
+
+ -- Scheme Procedure: make-condition-variable
+ -- C Function: scm_make_condition_variable ()
+     Return a new condition variable.
+
+ -- Scheme Procedure: condition-variable? obj
+ -- C Function: scm_condition_variable_p (obj)
+     Return ‘#t’ if OBJ is a condition variable; otherwise, return ‘#f’.
+
+ -- Scheme Procedure: wait-condition-variable condvar mutex [time]
+ -- C Function: scm_wait_condition_variable (condvar, mutex, time)
+     Wait until CONDVAR has been signalled.  While waiting, MUTEX is
+     atomically unlocked (as with ‘unlock-mutex’) and is locked again
+     when this function returns.  When TIME is given, it specifies a
+     point in time where the waiting should be aborted.  It can be
+     either a integer as returned by ‘current-time’ or a pair as
+     returned by ‘gettimeofday’.  When the waiting is aborted, ‘#f’ is
+     returned.  When the condition variable has in fact been signalled,
+     ‘#t’ is returned.  The mutex is re-locked in any case before
+     ‘wait-condition-variable’ returns.
+
+     When a system async is activated for a thread that is blocked in a
+     call to ‘wait-condition-variable’, the waiting is interrupted, the
+     mutex is locked, and the async is executed.  When the async
+     returns, the mutex is unlocked again and the waiting is resumed.
+     When the thread block while re-acquiring the mutex, execution of
+     asyncs is blocked.
+
+ -- Scheme Procedure: signal-condition-variable condvar
+ -- C Function: scm_signal_condition_variable (condvar)
+     Wake up one thread that is waiting for CONDVAR.
+
+ -- Scheme Procedure: broadcast-condition-variable condvar
+ -- C Function: scm_broadcast_condition_variable (condvar)
+     Wake up all threads that are waiting for CONDVAR.
+
+
+   The following are higher level operations on mutexes.  These are
+available from
+
+     (use-modules (ice-9 threads))
+
+ -- macro: with-mutex mutex body1 body2 ...
+     Lock MUTEX, evaluate the body BODY1 BODY2 ..., then unlock MUTEX.
+     The return value is that returned by the last body form.
+
+     The lock, body and unlock form the branches of a ‘dynamic-wind’
+     (*note Dynamic Wind::), so MUTEX is automatically unlocked if an
+     error or new continuation exits the body, and is re-locked if the
+     body is re-entered by a captured continuation.
+
+ -- macro: monitor body1 body2 ...
+     Evaluate the body form BODY1 BODY2 ... with a mutex locked so only
+     one thread can execute that code at any one time.  The return value
+     is the return from the last body form.
+
+     Each ‘monitor’ form has its own private mutex and the locking and
+     evaluation is as per ‘with-mutex’ above.  A standard mutex
+     (‘make-mutex’) is used, which means the body must not recursively
+     re-enter the ‘monitor’ form.
+
+     The term “monitor” comes from operating system theory, where it
+     means a particular bit of code managing access to some resource and
+     which only ever executes on behalf of one process at any one time.
+
+File: guile.info,  Node: Blocking,  Next: Critical Sections,  Prev: Mutexes and Condition Variables,  Up: Scheduling
+
+6.21.5 Blocking in Guile Mode
+-----------------------------
+
+Up to Guile version 1.8, a thread blocked in guile mode would prevent
+the garbage collector from running.  Thus threads had to explicitly
+leave guile mode with ‘scm_without_guile ()’ before making a potentially
+blocking call such as a mutex lock, a ‘select ()’ system call, etc.  The
+following functions could be used to temporarily leave guile mode or to
+perform some common blocking operations in a supported way.
+
+   Starting from Guile 2.0, blocked threads no longer hinder garbage
+collection.  Thus, the functions below are not needed anymore.  They can
+still be used to inform the GC that a thread is about to block, giving
+it a (small) optimization opportunity for “stop the world” garbage
+collections, should they occur while the thread is blocked.
+
+ -- C Function: void * scm_without_guile (void *(*func) (void *), void
+          *data)
+     Leave guile mode, call FUNC on DATA, enter guile mode and return
+     the result of calling FUNC.
+
+     While a thread has left guile mode, it must not call any libguile
+     functions except ‘scm_with_guile’ or ‘scm_without_guile’ and must
+     not use any libguile macros.  Also, local variables of type ‘SCM’
+     that are allocated while not in guile mode are not protected from
+     the garbage collector.
+
+     When used from non-guile mode, calling ‘scm_without_guile’ is still
+     allowed: it simply calls FUNC.  In that way, you can leave guile
+     mode without having to know whether the current thread is in guile
+     mode or not.
+
+ -- C Function: int scm_pthread_mutex_lock (pthread_mutex_t *mutex)
+     Like ‘pthread_mutex_lock’, but leaves guile mode while waiting for
+     the mutex.
+
+ -- C Function: int scm_pthread_cond_wait (pthread_cond_t *cond,
+          pthread_mutex_t *mutex)
+ -- C Function: int scm_pthread_cond_timedwait (pthread_cond_t *cond,
+          pthread_mutex_t *mutex, struct timespec *abstime)
+     Like ‘pthread_cond_wait’ and ‘pthread_cond_timedwait’, but leaves
+     guile mode while waiting for the condition variable.
+
+ -- C Function: int scm_std_select (int nfds, fd_set *readfds, fd_set
+          *writefds, fd_set *exceptfds, struct timeval *timeout)
+     Like ‘select’ but leaves guile mode while waiting.  Also, the
+     delivery of a system async causes this function to be interrupted
+     with error code ‘EINTR’.
+
+ -- C Function: unsigned int scm_std_sleep (unsigned int seconds)
+     Like ‘sleep’, but leaves guile mode while sleeping.  Also, the
+     delivery of a system async causes this function to be interrupted.
+
+ -- C Function: unsigned long scm_std_usleep (unsigned long usecs)
+     Like ‘usleep’, but leaves guile mode while sleeping.  Also, the
+     delivery of a system async causes this function to be interrupted.
+
+File: guile.info,  Node: Critical Sections,  Next: Fluids and Dynamic States,  Prev: Blocking,  Up: Scheduling
+
+6.21.6 Critical Sections
+------------------------
+
+ -- C Macro: SCM_CRITICAL_SECTION_START
+ -- C Macro: SCM_CRITICAL_SECTION_END
+     These two macros can be used to delimit a critical section.
+     Syntactically, they are both statements and need to be followed
+     immediately by a semicolon.
+
+     Executing ‘SCM_CRITICAL_SECTION_START’ will lock a recursive mutex
+     and block the executing of system asyncs.  Executing
+     ‘SCM_CRITICAL_SECTION_END’ will unblock the execution of system
+     asyncs and unlock the mutex.  Thus, the code that executes between
+     these two macros can only be executed in one thread at any one time
+     and no system asyncs will run.  However, because the mutex is a
+     recursive one, the code might still be reentered by the same
+     thread.  You must either allow for this or avoid it, both by
+     careful coding.
+
+     On the other hand, critical sections delimited with these macros
+     can be nested since the mutex is recursive.
+
+     You must make sure that for each ‘SCM_CRITICAL_SECTION_START’, the
+     corresponding ‘SCM_CRITICAL_SECTION_END’ is always executed.  This
+     means that no non-local exit (such as a signalled error) might
+     happen, for example.
+
+ -- C Function: void scm_dynwind_critical_section (SCM mutex)
+     Call ‘scm_dynwind_lock_mutex’ on MUTEX and call
+     ‘scm_dynwind_block_asyncs’.  When MUTEX is false, a recursive mutex
+     provided by Guile is used instead.
+
+     The effect of a call to ‘scm_dynwind_critical_section’ is that the
+     current dynwind context (*note Dynamic Wind::) turns into a
+     critical section.  Because of the locked mutex, no second thread
+     can enter it concurrently and because of the blocked asyncs, no
+     system async can reenter it from the current thread.
+
+     When the current thread reenters the critical section anyway, the
+     kind of MUTEX determines what happens: When MUTEX is recursive, the
+     reentry is allowed.  When it is a normal mutex, an error is
+     signalled.
+
+File: guile.info,  Node: Fluids and Dynamic States,  Next: Parameters,  Prev: Critical Sections,  Up: Scheduling
+
+6.21.7 Fluids and Dynamic States
+--------------------------------
+
+A _fluid_ is an object that can store one value per _dynamic state_.
+Each thread has a current dynamic state, and when accessing a fluid,
+this current dynamic state is used to provide the actual value.  In this
+way, fluids can be used for thread local storage, but they are in fact
+more flexible: dynamic states are objects of their own and can be made
+current for more than one thread at the same time, or only be made
+current temporarily, for example.
+
+   Fluids can also be used to simulate the desirable effects of
+dynamically scoped variables.  Dynamically scoped variables are useful
+when you want to set a variable to a value during some dynamic extent in
+the execution of your program and have them revert to their original
+value when the control flow is outside of this dynamic extent.  See the
+description of ‘with-fluids’ below for details.
+
+   New fluids are created with ‘make-fluid’ and ‘fluid?’ is used for
+testing whether an object is actually a fluid.  The values stored in a
+fluid can be accessed with ‘fluid-ref’ and ‘fluid-set!’.
+
+ -- Scheme Procedure: make-fluid [dflt]
+ -- C Function: scm_make_fluid ()
+ -- C Function: scm_make_fluid_with_default (dflt)
+     Return a newly created fluid, whose initial value is DFLT, or ‘#f’
+     if DFLT is not given.  Fluids are objects that can hold one value
+     per dynamic state.  That is, modifications to this value are only
+     visible to code that executes with the same dynamic state as the
+     modifying code.  When a new dynamic state is constructed, it
+     inherits the values from its parent.  Because each thread normally
+     executes with its own dynamic state, you can use fluids for thread
+     local storage.
+
+ -- Scheme Procedure: make-unbound-fluid
+ -- C Function: scm_make_unbound_fluid ()
+     Return a new fluid that is initially unbound (instead of being
+     implicitly bound to some definite value).
+
+ -- Scheme Procedure: fluid? obj
+ -- C Function: scm_fluid_p (obj)
+     Return ‘#t’ if OBJ is a fluid; otherwise, return ‘#f’.
+
+ -- Scheme Procedure: fluid-ref fluid
+ -- C Function: scm_fluid_ref (fluid)
+     Return the value associated with FLUID in the current dynamic root.
+     If FLUID has not been set, then return its default value.  Calling
+     ‘fluid-ref’ on an unbound fluid produces a runtime error.
+
+ -- Scheme Procedure: fluid-set! fluid value
+ -- C Function: scm_fluid_set_x (fluid, value)
+     Set the value associated with FLUID in the current dynamic root.
+
+ -- Scheme Procedure: fluid-unset! fluid
+ -- C Function: scm_fluid_unset_x (fluid)
+     Disassociate the given fluid from any value, making it unbound.
+
+ -- Scheme Procedure: fluid-bound? fluid
+ -- C Function: scm_fluid_bound_p (fluid)
+     Returns ‘#t’ if the given fluid is bound to a value, otherwise
+     ‘#f’.
+
+   ‘with-fluids*’ temporarily changes the values of one or more fluids,
+so that the given procedure and each procedure called by it access the
+given values.  After the procedure returns, the old values are restored.
+
+ -- Scheme Procedure: with-fluid* fluid value thunk
+ -- C Function: scm_with_fluid (fluid, value, thunk)
+     Set FLUID to VALUE temporarily, and call THUNK.  THUNK must be a
+     procedure with no argument.
+
+ -- Scheme Procedure: with-fluids* fluids values thunk
+ -- C Function: scm_with_fluids (fluids, values, thunk)
+     Set FLUIDS to VALUES temporary, and call THUNK.  FLUIDS must be a
+     list of fluids and VALUES must be the same number of their values
+     to be applied.  Each substitution is done in the order given.
+     THUNK must be a procedure with no argument.  It is called inside a
+     ‘dynamic-wind’ and the fluids are set/restored when control enter
+     or leaves the established dynamic extent.
+
+ -- Scheme Macro: with-fluids ((fluid value) ...) body1 body2 ...
+     Execute body BODY1 BODY2 ... while each FLUID is set to the
+     corresponding VALUE.  Both FLUID and VALUE are evaluated and FLUID
+     must yield a fluid.  The body is executed inside a ‘dynamic-wind’
+     and the fluids are set/restored when control enter or leaves the
+     established dynamic extent.
+
+ -- C Function: SCM scm_c_with_fluids (SCM fluids, SCM vals, SCM
+          (*cproc)(void *), void *data)
+ -- C Function: SCM scm_c_with_fluid (SCM fluid, SCM val, SCM
+          (*cproc)(void *), void *data)
+     The function ‘scm_c_with_fluids’ is like ‘scm_with_fluids’ except
+     that it takes a C function to call instead of a Scheme thunk.
+
+     The function ‘scm_c_with_fluid’ is similar but only allows one
+     fluid to be set instead of a list.
+
+ -- C Function: void scm_dynwind_fluid (SCM fluid, SCM val)
+     This function must be used inside a pair of calls to
+     ‘scm_dynwind_begin’ and ‘scm_dynwind_end’ (*note Dynamic Wind::).
+     During the dynwind context, the fluid FLUID is set to VAL.
+
+     More precisely, the value of the fluid is swapped with a ‘backup’
+     value whenever the dynwind context is entered or left.  The backup
+     value is initialized with the VAL argument.
+
+ -- Scheme Procedure: make-dynamic-state [parent]
+ -- C Function: scm_make_dynamic_state (parent)
+     Return a copy of the dynamic state object PARENT or of the current
+     dynamic state when PARENT is omitted.
+
+ -- Scheme Procedure: dynamic-state? obj
+ -- C Function: scm_dynamic_state_p (obj)
+     Return ‘#t’ if OBJ is a dynamic state object; return ‘#f’
+     otherwise.
+
+ -- C Procedure: int scm_is_dynamic_state (SCM obj)
+     Return non-zero if OBJ is a dynamic state object; return zero
+     otherwise.
+
+ -- Scheme Procedure: current-dynamic-state
+ -- C Function: scm_current_dynamic_state ()
+     Return the current dynamic state object.
+
+ -- Scheme Procedure: set-current-dynamic-state state
+ -- C Function: scm_set_current_dynamic_state (state)
+     Set the current dynamic state object to STATE and return the
+     previous current dynamic state object.
+
+ -- Scheme Procedure: with-dynamic-state state proc
+ -- C Function: scm_with_dynamic_state (state, proc)
+     Call PROC while STATE is the current dynamic state object.
+
+ -- C Procedure: void scm_dynwind_current_dynamic_state (SCM state)
+     Set the current dynamic state to STATE for the current dynwind
+     context.
+
+ -- C Procedure: void * scm_c_with_dynamic_state (SCM state, void
+          *(*func)(void *), void *data)
+     Like ‘scm_with_dynamic_state’, but call FUNC with DATA.
+
+File: guile.info,  Node: Parameters,  Next: Futures,  Prev: Fluids and Dynamic States,  Up: Scheduling
+
+6.21.8 Parameters
+-----------------
+
+A parameter object is a procedure.  Calling it with no arguments returns
+its value.  Calling it with one argument sets the value.
+
+     (define my-param (make-parameter 123))
+     (my-param) ⇒ 123
+     (my-param 456)
+     (my-param) ⇒ 456
+
+   The ‘parameterize’ special form establishes new locations for
+parameters, those new locations having effect within the dynamic scope
+of the ‘parameterize’ body.  Leaving restores the previous locations.
+Re-entering (through a saved continuation) will again use the new
+locations.
+
+     (parameterize ((my-param 789))
+       (my-param)) ⇒ 789
+     (my-param) ⇒ 456
+
+   Parameters are like dynamically bound variables in other Lisp
+dialects.  They allow an application to establish parameter settings (as
+the name suggests) just for the execution of a particular bit of code,
+restoring when done.  Examples of such parameters might be
+case-sensitivity for a search, or a prompt for user input.
+
+   Global variables are not as good as parameter objects for this sort
+of thing.  Changes to them are visible to all threads, but in Guile
+parameter object locations are per-thread, thereby truly limiting the
+effect of ‘parameterize’ to just its dynamic execution.
+
+   Passing arguments to functions is thread-safe, but that soon becomes
+tedious when there’s more than a few or when they need to pass down
+through several layers of calls before reaching the point they should
+affect.  And introducing a new setting to existing code is often easier
+with a parameter object than adding arguments.
+
+ -- Scheme Procedure: make-parameter init [converter]
+     Return a new parameter object, with initial value INIT.
+
+     If a CONVERTER is given, then a call ‘(CONVERTER val)’ is made for
+     each value set, its return is the value stored.  Such a call is
+     made for the INIT initial value too.
+
+     A CONVERTER allows values to be validated, or put into a canonical
+     form.  For example,
+
+          (define my-param (make-parameter 123
+                             (lambda (val)
+                               (if (not (number? val))
+                                   (error "must be a number"))
+                               (inexact->exact val))))
+          (my-param 0.75)
+          (my-param) ⇒ 3/4
+
+ -- library syntax: parameterize ((param value) ...) body1 body2 ...
+     Establish a new dynamic scope with the given PARAMs bound to new
+     locations and set to the given VALUEs.  BODY1 BODY2 ... is
+     evaluated in that environment.  The value returned is that of last
+     body form.
+
+     Each PARAM is an expression which is evaluated to get the parameter
+     object.  Often this will just be the name of a variable holding the
+     object, but it can be anything that evaluates to a parameter.
+
+     The PARAM expressions and VALUE expressions are all evaluated
+     before establishing the new dynamic bindings, and they’re evaluated
+     in an unspecified order.
+
+     For example,
+
+          (define prompt (make-parameter "Type something: "))
+          (define (get-input)
+            (display (prompt))
+            ...)
+
+          (parameterize ((prompt "Type a number: "))
+            (get-input)
+            ...)
+
+   Parameter objects are implemented using fluids (*note Fluids and
+Dynamic States::), so each dynamic state has its own parameter
+locations.  That includes the separate locations when outside any
+‘parameterize’ form.  When a parameter is created it gets a separate
+initial location in each dynamic state, all initialized to the given
+INIT value.
+
+   New code should probably just use parameters instead of fluids,
+because the interface is better.  But for migrating old code or
+otherwise providing interoperability, Guile provides the
+‘fluid->parameter’ procedure:
+
+ -- Scheme Procedure: fluid->parameter fluid [conv]
+     Make a parameter that wraps a fluid.
+
+     The value of the parameter will be the same as the value of the
+     fluid.  If the parameter is rebound in some dynamic extent, perhaps
+     via ‘parameterize’, the new value will be run through the optional
+     CONV procedure, as with any parameter.  Note that unlike
+     ‘make-parameter’, CONV is not applied to the initial value.
+
+   As alluded to above, because each thread usually has a separate
+dynamic state, each thread has its own locations behind parameter
+objects, and changes in one thread are not visible to any other.  When a
+new dynamic state or thread is created, the values of parameters in the
+originating context are copied, into new locations.
+
+   Guile’s parameters conform to SRFI-39 (*note SRFI-39::).
+
+File: guile.info,  Node: Futures,  Next: Parallel Forms,  Prev: Parameters,  Up: Scheduling
+
+6.21.9 Futures
+--------------
+
+The ‘(ice-9 futures)’ module provides “futures”, a construct for
+fine-grain parallelism.  A future is a wrapper around an expression
+whose computation may occur in parallel with the code of the calling
+thread, and possibly in parallel with other futures.  Like promises,
+futures are essentially proxies that can be queried to obtain the value
+of the enclosed expression:
+
+     (touch (future (+ 2 3)))
+     ⇒ 5
+
+   However, unlike promises, the expression associated with a future may
+be evaluated on another CPU core, should one be available.  This
+supports “fine-grain parallelism”, because even relatively small
+computations can be embedded in futures.  Consider this sequential code:
+
+     (define (find-prime lst1 lst2)
+       (or (find prime? lst1)
+           (find prime? lst2)))
+
+   The two arms of ‘or’ are potentially computation-intensive.  They are
+independent of one another, yet, they are evaluated sequentially when
+the first one returns ‘#f’.  Using futures, one could rewrite it like
+this:
+
+     (define (find-prime lst1 lst2)
+       (let ((f (future (find prime? lst2))))
+         (or (find prime? lst1)
+             (touch f))))
+
+   This preserves the semantics of ‘find-prime’.  On a multi-core
+machine, though, the computation of ‘(find prime? lst2)’ may be done in
+parallel with that of the other ‘find’ call, which can reduce the
+execution time of ‘find-prime’.
+
+   Futures may be nested: a future can itself spawn and then ‘touch’
+other futures, leading to a directed acyclic graph of futures.  Using
+this facility, a parallel ‘map’ procedure can be defined along these
+lines:
+
+     (use-modules (ice-9 futures) (ice-9 match))
+
+     (define (par-map proc lst)
+       (match lst
+         (()
+          '())
+         ((head tail ...)
+          (let ((tail (future (par-map proc tail)))
+                (head (proc head)))
+            (cons head (touch tail))))))
+
+   Note that futures are intended for the evaluation of purely
+functional expressions.  Expressions that have side-effects or rely on
+I/O may require additional care, such as explicit synchronization (*note
+Mutexes and Condition Variables::).
+
+   Guile’s futures are implemented on top of POSIX threads (*note
+Threads::).  Internally, a fixed-size pool of threads is used to
+evaluate futures, such that offloading the evaluation of an expression
+to another thread doesn’t incur thread creation costs.  By default, the
+pool contains one thread per available CPU core, minus one, to account
+for the main thread.  The number of available CPU cores is determined
+using ‘current-processor-count’ (*note Processes::).
+
+   When a thread touches a future that has not completed yet, it
+processes any pending future while waiting for it to complete, or just
+waits if there are no pending futures.  When ‘touch’ is called from
+within a future, the execution of the calling future is suspended,
+allowing its host thread to process other futures, and resumed when the
+touched future has completed.  This suspend/resume is achieved by
+capturing the calling future’s continuation, and later reinstating it
+(*note delimited continuations: Prompts.).
+
+   Note that ‘par-map’ above is not tail-recursive.  This could lead to
+stack overflows when LST is large compared to
+‘(current-processor-count)’.  To address that, ‘touch’ uses the suspend
+mechanism described above to limit the number of nested futures
+executing on the same stack.  Thus, the above code should never run into
+stack overflows.
+
+ -- Scheme Syntax: future exp
+     Return a future for expression EXP.  This is equivalent to:
+
+          (make-future (lambda () exp))
+
+ -- Scheme Procedure: make-future thunk
+     Return a future for THUNK, a zero-argument procedure.
+
+     This procedure returns immediately.  Execution of THUNK may begin
+     in parallel with the calling thread’s computations, if idle CPU
+     cores are available, or it may start when ‘touch’ is invoked on the
+     returned future.
+
+     If the execution of THUNK throws an exception, that exception will
+     be re-thrown when ‘touch’ is invoked on the returned future.
+
+ -- Scheme Procedure: future? obj
+     Return ‘#t’ if OBJ is a future.
+
+ -- Scheme Procedure: touch f
+     Return the result of the expression embedded in future F.
+
+     If the result was already computed in parallel, ‘touch’ returns
+     instantaneously.  Otherwise, it waits for the computation to
+     complete, if it already started, or initiates it.  In the former
+     case, the calling thread may process other futures in the meantime.
+
+File: guile.info,  Node: Parallel Forms,  Prev: Futures,  Up: Scheduling
+
+6.21.10 Parallel forms
+----------------------
+
+The functions described in this section are available from
+
+     (use-modules (ice-9 threads))
+
+   They provide high-level parallel constructs.  The following functions
+are implemented in terms of futures (*note Futures::).  Thus they are
+relatively cheap as they re-use existing threads, and portable, since
+they automatically use one thread per available CPU core.
+
+ -- syntax: parallel expr ...
+     Evaluate each EXPR expression in parallel, each in its own thread.
+     Return the results of N expressions as a set of N multiple values
+     (*note Multiple Values::).
+
+ -- syntax: letpar ((var expr) ...) body1 body2 ...
+     Evaluate each EXPR in parallel, each in its own thread, then bind
+     the results to the corresponding VAR variables, and then evaluate
+     BODY1 BODY2 ...
+
+     ‘letpar’ is like ‘let’ (*note Local Bindings::), but all the
+     expressions for the bindings are evaluated in parallel.
+
+ -- Scheme Procedure: par-map proc lst1 lst2 ...
+ -- Scheme Procedure: par-for-each proc lst1 lst2 ...
+     Call PROC on the elements of the given lists.  ‘par-map’ returns a
+     list comprising the return values from PROC.  ‘par-for-each’
+     returns an unspecified value, but waits for all calls to complete.
+
+     The PROC calls are ‘(PROC ELEM1 ELEM2 ...)’, where each ELEM is
+     from the corresponding LST .  Each LST must be the same length.
+     The calls are potentially made in parallel, depending on the number
+     of CPU cores available.
+
+     These functions are like ‘map’ and ‘for-each’ (*note List
+     Mapping::), but make their PROC calls in parallel.
+
+   Unlike those above, the functions described below take a number of
+threads as an argument.  This makes them inherently non-portable since
+the specified number of threads may differ from the number of available
+CPU cores as returned by ‘current-processor-count’ (*note Processes::).
+In addition, these functions create the specified number of threads when
+they are called and terminate them upon completion, which makes them
+quite expensive.
+
+   Therefore, they should be avoided.
+
+ -- Scheme Procedure: n-par-map n proc lst1 lst2 ...
+ -- Scheme Procedure: n-par-for-each n proc lst1 lst2 ...
+     Call PROC on the elements of the given lists, in the same way as
+     ‘par-map’ and ‘par-for-each’ above, but use no more than N threads
+     at any one time.  The order in which calls are initiated within
+     that threads limit is unspecified.
+
+     These functions are good for controlling resource consumption if
+     PROC calls might be costly, or if there are many to be made.  On a
+     dual-CPU system for instance N=4 might be enough to keep the CPUs
+     utilized, and not consume too much memory.
+
+ -- Scheme Procedure: n-for-each-par-map n sproc pproc lst1 lst2 ...
+     Apply PPROC to the elements of the given lists, and apply SPROC to
+     each result returned by PPROC.  The final return value is
+     unspecified, but all calls will have been completed before
+     returning.
+
+     The calls made are ‘(SPROC (PPROC ELEM1 ... ELEMN))’, where each
+     ELEM is from the corresponding LST.  Each LST must have the same
+     number of elements.
+
+     The PPROC calls are made in parallel, in separate threads.  No more
+     than N threads are used at any one time.  The order in which PPROC
+     calls are initiated within that limit is unspecified.
+
+     The SPROC calls are made serially, in list element order, one at a
+     time.  PPROC calls on later elements may execute in parallel with
+     the SPROC calls.  Exactly which thread makes each SPROC call is
+     unspecified.
+
+     This function is designed for individual calculations that can be
+     done in parallel, but with results needing to be handled serially,
+     for instance to write them to a file.  The N limit on threads
+     controls system resource usage when there are many calculations or
+     when they might be costly.
+
+     It will be seen that ‘n-for-each-par-map’ is like a combination of
+     ‘n-par-map’ and ‘for-each’,
+
+          (for-each sproc (n-par-map n pproc lst1 ... lstN))
+
+     But the actual implementation is more efficient since each SPROC
+     call, in turn, can be initiated once the relevant PPROC call has
+     completed, it doesn’t need to wait for all to finish.
+
+File: guile.info,  Node: Options and Config,  Next: Other Languages,  Prev: Scheduling,  Up: API Reference
+

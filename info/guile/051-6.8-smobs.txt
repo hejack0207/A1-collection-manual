@@ -1,0 +1,206 @@
+6.8 Smobs
+=========
+
+This chapter contains reference information related to defining and
+working with smobs.  *Note Defining New Types (Smobs)::, for a
+tutorial-like introduction to smobs.
+
+ -- Function: scm_t_bits scm_make_smob_type (const char *name, size_t
+          size)
+     This function adds a new smob type, named NAME, with instance size
+     SIZE, to the system.  The return value is a tag that is used in
+     creating instances of the type.
+
+     If SIZE is 0, the default _free_ function will do nothing.
+
+     If SIZE is not 0, the default _free_ function will deallocate the
+     memory block pointed to by ‘SCM_SMOB_DATA’ with ‘scm_gc_free’.  The
+     WHAT parameter in the call to ‘scm_gc_free’ will be NAME.
+
+     Default values are provided for the _mark_, _free_, _print_, and
+     _equalp_ functions, as described in *note Defining New Types
+     (Smobs)::.  If you want to customize any of these functions, the
+     call to ‘scm_make_smob_type’ should be immediately followed by
+     calls to one or several of ‘scm_set_smob_mark’,
+     ‘scm_set_smob_free’, ‘scm_set_smob_print’, and/or
+     ‘scm_set_smob_equalp’.
+
+ -- C Function: void scm_set_smob_free (scm_t_bits tc, size_t (*free)
+          (SCM obj))
+     This function sets the smob freeing procedure (sometimes referred
+     to as a “finalizer”) for the smob type specified by the tag TC.  TC
+     is the tag returned by ‘scm_make_smob_type’.
+
+     The FREE procedure must deallocate all resources that are directly
+     associated with the smob instance OBJ.  It must assume that all
+     ‘SCM’ values that it references have already been freed and are
+     thus invalid.
+
+     It must also not call any libguile function or macro except
+     ‘scm_gc_free’, ‘SCM_SMOB_FLAGS’, ‘SCM_SMOB_DATA’,
+     ‘SCM_SMOB_DATA_2’, and ‘SCM_SMOB_DATA_3’.
+
+     The FREE procedure must return 0.
+
+     Note that defining a freeing procedure is not necessary if the
+     resources associated with OBJ consists only of memory allocated
+     with ‘scm_gc_malloc’ or ‘scm_gc_malloc_pointerless’ because this
+     memory is automatically reclaimed by the garbage collector when it
+     is no longer needed (*note ‘scm_gc_malloc’: Memory Blocks.).
+
+   Smob free functions must be thread-safe.  *Note Garbage Collecting
+Smobs::, for a discussion on finalizers and concurrency.  If you are
+embedding Guile in an application that is not thread-safe, and you
+define smob types that need finalization, you might want to disable
+automatic finalization, and arrange to call ‘scm_run_finalizers’
+yourself.
+
+ -- C Function: int scm_set_automatic_finalization_enabled (int
+          ENABLED_P)
+     Enable or disable automatic finalization.  By default, Guile
+     arranges to invoke object finalizers automatically, in a separate
+     thread if possible.  Passing a zero value for ENABLED_P will
+     disable automatic finalization for Guile as a whole.  If you
+     disable automatic finalization, you will have to call
+     ‘scm_run_finalizers’ periodically.
+
+     Unlike most other Guile functions, you can call
+     ‘scm_set_automatic_finalization_enabled’ before Guile has been
+     initialized.
+
+     Return the previous status of automatic finalization.
+
+ -- C Function: int scm_run_finalizers (void)
+     Invoke any pending finalizers.  Return the number of finalizers
+     that were invoked.  This function should be called when automatic
+     finalization is disabled, though it may be called if it is enabled
+     as well.
+
+ -- C Function: void scm_set_smob_mark (scm_t_bits tc, SCM (*mark) (SCM
+          obj))
+     This function sets the smob marking procedure for the smob type
+     specified by the tag TC.  TC is the tag returned by
+     ‘scm_make_smob_type’.
+
+     Defining a marking procedure may sometimes be unnecessary because
+     large parts of the process’ memory (with the exception of
+     ‘scm_gc_malloc_pointerless’ regions, and ‘malloc’- or
+     ‘scm_malloc’-allocated memory) are scanned for live pointers(1).
+
+     The MARK procedure must cause ‘scm_gc_mark’ to be called for every
+     ‘SCM’ value that is directly referenced by the smob instance OBJ.
+     One of these ‘SCM’ values can be returned from the procedure and
+     Guile will call ‘scm_gc_mark’ for it.  This can be used to avoid
+     deep recursions for smob instances that form a list.
+
+     It must not call any libguile function or macro except
+     ‘scm_gc_mark’, ‘SCM_SMOB_FLAGS’, ‘SCM_SMOB_DATA’,
+     ‘SCM_SMOB_DATA_2’, and ‘SCM_SMOB_DATA_3’.
+
+ -- C Function: void scm_set_smob_print (scm_t_bits tc, int (*print)
+          (SCM obj, SCM port, scm_print_state* pstate))
+     This function sets the smob printing procedure for the smob type
+     specified by the tag TC.  TC is the tag returned by
+     ‘scm_make_smob_type’.
+
+     The PRINT procedure should output a textual representation of the
+     smob instance OBJ to PORT, using information in PSTATE.
+
+     The textual representation should be of the form ‘#<name ...>’.
+     This ensures that ‘read’ will not interpret it as some other Scheme
+     value.
+
+     It is often best to ignore PSTATE and just print to PORT with
+     ‘scm_display’, ‘scm_write’, ‘scm_simple_format’, and ‘scm_puts’.
+
+ -- C Function: void scm_set_smob_equalp (scm_t_bits tc, SCM (*equalp)
+          (SCM obj1, SCM obj2))
+     This function sets the smob equality-testing predicate for the smob
+     type specified by the tag TC.  TC is the tag returned by
+     ‘scm_make_smob_type’.
+
+     The EQUALP procedure should return ‘SCM_BOOL_T’ when OBJ1 is
+     ‘equal?’ to OBJ2.  Else it should return ‘SCM_BOOL_F’.  Both OBJ1
+     and OBJ2 are instances of the smob type TC.
+
+ -- C Function: void scm_assert_smob_type (scm_t_bits tag, SCM val)
+     When VAL is a smob of the type indicated by TAG, do nothing.  Else,
+     signal an error.
+
+ -- C Macro: int SCM_SMOB_PREDICATE (scm_t_bits tag, SCM exp)
+     Return true if EXP is a smob instance of the type indicated by TAG,
+     or false otherwise.  The expression EXP can be evaluated more than
+     once, so it shouldn’t contain any side effects.
+
+ -- C Function: SCM scm_new_smob (scm_t_bits tag, void *data)
+ -- C Function: SCM scm_new_double_smob (scm_t_bits tag, void *data,
+          void *data2, void *data3)
+     Make a new smob of the type with tag TAG and smob data DATA, DATA2,
+     and DATA3, as appropriate.
+
+     The TAG is what has been returned by ‘scm_make_smob_type’.  The
+     initial values DATA, DATA2, and DATA3 are of type ‘scm_t_bits’;
+     when you want to use them for ‘SCM’ values, these values need to be
+     converted to a ‘scm_t_bits’ first by using ‘SCM_UNPACK’.
+
+     The flags of the smob instance start out as zero.
+
+ -- C Macro: scm_t_bits SCM_SMOB_FLAGS (SCM obj)
+     Return the 16 extra bits of the smob OBJ.  No meaning is predefined
+     for these bits, you can use them freely.
+
+ -- C Macro: scm_t_bits SCM_SET_SMOB_FLAGS (SCM obj, scm_t_bits flags)
+     Set the 16 extra bits of the smob OBJ to FLAGS.  No meaning is
+     predefined for these bits, you can use them freely.
+
+ -- C Macro: scm_t_bits SCM_SMOB_DATA (SCM obj)
+ -- C Macro: scm_t_bits SCM_SMOB_DATA_2 (SCM obj)
+ -- C Macro: scm_t_bits SCM_SMOB_DATA_3 (SCM obj)
+     Return the first (second, third) immediate word of the smob OBJ as
+     a ‘scm_t_bits’ value.  When the word contains a ‘SCM’ value, use
+     ‘SCM_SMOB_OBJECT’ (etc.)  instead.
+
+ -- C Macro: void SCM_SET_SMOB_DATA (SCM obj, scm_t_bits val)
+ -- C Macro: void SCM_SET_SMOB_DATA_2 (SCM obj, scm_t_bits val)
+ -- C Macro: void SCM_SET_SMOB_DATA_3 (SCM obj, scm_t_bits val)
+     Set the first (second, third) immediate word of the smob OBJ to
+     VAL.  When the word should be set to a ‘SCM’ value, use
+     ‘SCM_SMOB_SET_OBJECT’ (etc.)  instead.
+
+ -- C Macro: SCM SCM_SMOB_OBJECT (SCM obj)
+ -- C Macro: SCM SCM_SMOB_OBJECT_2 (SCM obj)
+ -- C Macro: SCM SCM_SMOB_OBJECT_3 (SCM obj)
+     Return the first (second, third) immediate word of the smob OBJ as
+     a ‘SCM’ value.  When the word contains a ‘scm_t_bits’ value, use
+     ‘SCM_SMOB_DATA’ (etc.)  instead.
+
+ -- C Macro: void SCM_SET_SMOB_OBJECT (SCM obj, SCM val)
+ -- C Macro: void SCM_SET_SMOB_OBJECT_2 (SCM obj, SCM val)
+ -- C Macro: void SCM_SET_SMOB_OBJECT_3 (SCM obj, SCM val)
+     Set the first (second, third) immediate word of the smob OBJ to
+     VAL.  When the word should be set to a ‘scm_t_bits’ value, use
+     ‘SCM_SMOB_SET_DATA’ (etc.)  instead.
+
+ -- C Macro: SCM * SCM_SMOB_OBJECT_LOC (SCM obj)
+ -- C Macro: SCM * SCM_SMOB_OBJECT_2_LOC (SCM obj)
+ -- C Macro: SCM * SCM_SMOB_OBJECT_3_LOC (SCM obj)
+     Return a pointer to the first (second, third) immediate word of the
+     smob OBJ.  Note that this is a pointer to ‘SCM’.  If you need to
+     work with ‘scm_t_bits’ values, use ‘SCM_PACK’ and ‘SCM_UNPACK’, as
+     appropriate.
+
+ -- Function: SCM scm_markcdr (SCM X)
+     Mark the references in the smob X, assuming that X’s first data
+     word contains an ordinary Scheme object, and X refers to no other
+     objects.  This function simply returns X’s first data word.
+
+   ---------- Footnotes ----------
+
+   (1) Conversely, in Guile up to the 1.8 series, the marking procedure
+was always required.  The reason is that Guile’s GC would only look for
+pointers in the memory area used for built-in types (the “cell heap”),
+not in user-allocated or statically allocated memory.  This approach is
+often referred to as “precise marking”.
+
+File: guile.info,  Node: Procedures,  Next: Macros,  Prev: Smobs,  Up: API Reference
+

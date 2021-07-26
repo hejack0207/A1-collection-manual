@@ -1,0 +1,159 @@
+25.4 Miscellaneous Features
+===========================
+
+
+
+25.4.1 Configuration
+--------------------
+
+
+Various styles are available using the standard shell style mechanism,
+described in *note The zsh/zutil Module::.  Briefly, the command 'zstyle
+':zftp:*' STYLE VALUE ...'.  defines the STYLE to have value VALUE; more
+than one value may be given, although that is not useful in the cases
+described here.  These values will then be used throughout the zftp
+function system.  For more precise control, the first argument, which
+gives a context in which the style applies, can be modified to include a
+particular function, as for example ':zftp:zfget': the style will then
+have the given value only in the zfget function.  Values for the same
+style in different contexts may be set; the most specific function will
+be used, where strings are held to be more specific than patterns, and
+longer patterns and shorter patterns.  Note that only the top level
+function name, as called by the user, is used; calling of lower level
+functions is transparent to the user.  Hence modifications to the title
+bar in zftp_chpwd use the contexts :zftp:zfopen, :zftp:zfcd, etc.,
+depending where it was called from.  The following styles are
+understood:
+
+progress
+     Controls the way that zftp_progress reports on the progress of a
+     transfer.  If empty, unset, or 'none', no progress report is made;
+     if 'bar' a growing bar of inverse video is shown; if 'percent' (or
+     any other string, though this may change in future), the percentage
+     of the file transferred is shown.  The bar meter requires that the
+     width of the terminal be available via the $COLUMNS parameter
+     (normally this is set automatically).  If the size of the file
+     being transferred is not available, bar and percent meters will
+     simply show the number of bytes transferred so far.
+
+     When zfinit is run, if this style is not defined for the context
+     :zftp:*, it will be set to 'bar'.
+
+update
+     Specifies the minimum time interval between updates of the progress
+     meter in seconds.  No update is made unless new data has been
+     received, so the actual time interval is limited only by
+     $ZFTP_TIMEOUT.
+
+     As described for progress, zfinit will force this to default to 1.
+
+remote-glob
+     If set to '1', 'yes' or 'true', filename generation (globbing) is
+     performed on the remote machine instead of by zsh itself; see
+     below.
+
+titlebar
+     If set to '1', 'yes' or 'true', zftp_chpwd will put the remote host
+     and remote directory into the titlebar of terminal emulators such
+     as xterm or sun-cmd that allow this.
+
+     As described for progress, zfinit will force this to default to 1.
+
+chpwd
+     If set to '1' 'yes' or 'true', zftp_chpwd will call the function
+     chpwd when a connection is closed.  This is useful if the remote
+     host details were put into the terminal title bar by zftp_chpwd and
+     your usual chpwd also modifies the title bar.
+
+     When zfinit is run, it will determine whether chpwd exists and if
+     so it will set the default value for the style to 1 if none exists
+     already.
+
+Note that there is also an associative array zfconfig which contains
+values used by the function system.  This should not be modified or
+overwritten.
+
+
+25.4.2 Remote globbing
+----------------------
+
+
+The commands for retrieving files usually perform filename generation
+(globbing) on their arguments; this can be turned off by passing the
+option -G to each of the commands.  Normally this operates by retrieving
+a complete list of files for the directory in question, then matching
+these locally against the pattern supplied.  This has the advantage that
+the full range of zsh patterns (respecting the setting of the option
+EXTENDED_GLOB) can be used.  However, it means that the directory part
+of a filename will not be expanded and must be given exactly.  If the
+remote server does not support the UNIX directory semantics, directory
+handling is problematic and it is recommended that globbing only be used
+within the current directory.  The list of files in the current
+directory, if retrieved, will be cached, so that subsequent globs in the
+same directory without an intervening zfcd are much faster.
+
+If the remote-glob style (see above) is set, globbing is instead
+performed on the remote host: the server is asked for a list of matching
+files.  This is highly dependent on how the server is implemented,
+though typically UNIX servers will provide support for basic glob
+patterns.  This may in some cases be faster, as it avoids retrieving the
+entire list of directory contents.
+
+
+25.4.3 Automatic and temporary reopening
+----------------------------------------
+
+
+As described for the zfopen command, a subsequent zfopen with no
+parameters will reopen the connection to the last host (this includes
+connections made with the zfanon command).  Opened in this fashion, the
+connection starts in the default remote directory and will remain open
+until explicitly closed.
+
+Automatic re-opening is also available.  If a connection is not
+currently open and a command requiring a connection is given, the last
+connection is implicitly reopened.  In this case the directory which was
+current when the connection was closed again becomes the current
+directory (unless, of course, the command given changes it).  Automatic
+reopening will also take place if the connection was close by the remote
+server for whatever reason (e.g.  a timeout).  It is not available if
+the -1 option to zfopen or zfanon was used.
+
+Furthermore, if the command issued is a file transfer, the connection
+will be closed after the transfer is finished, hence providing a
+one-shot mode for transfers.  This does not apply to directory changing
+or listing commands; for example a zfdir may reopen a connection but
+will leave it open.  Also, automatic closure will only ever happen in
+the same command as automatic opening, i.e a zfdir directly followed by
+a zfget will never close the connection automatically.
+
+Information about the previous connection is given by the zfstat
+function.  So, for example, if that reports:
+
+     Session:        default
+     Not connected.
+     Last session:   ftp.bar.com:/pub/textfiles
+
+then the command zfget file.txt will attempt to reopen a connection to
+ftp.bar.com, retrieve the file /pub/textfiles/file.txt, and immediately
+close the connection again.  On the other hand, zfcd .. will open the
+connection in the directory /pub and leave it open.
+
+Note that all the above is local to each session; if you return to a
+previous session, the connection for that session is the one which will
+be reopened.
+
+
+25.4.4 Completion
+-----------------
+
+
+Completion of local and remote files, directories, sessions and
+bookmarks is supported.  The older, compctl-style completion is defined
+when zfinit is called; support for the new widget-based completion
+system is provided in the function Completion/Zsh/Command/_zftp, which
+should be installed with the other functions of the completion system
+and hence should automatically be available.
+
+File: zsh.info,  Node: User Contributions,  Prev: Zftp Function System,  Up: Top
+

@@ -1,0 +1,68 @@
+7.10 Numbering Lines
+====================
+
+This script replaces 'cat -n'; in fact it formats its output exactly
+like GNU 'cat' does.
+
+   Of course this is completely useless and for two reasons: first,
+because somebody else did it in C, second, because the following
+Bourne-shell script could be used for the same purpose and would be much
+faster:
+
+     #! /bin/sh
+     sed -e "=" $@ | sed -e '
+       s/^/      /
+       N
+       s/^ *\(......\)\n/\1  /
+     '
+
+   It uses 'sed' to print the line number, then groups lines two by two
+using 'N'.  Of course, this script does not teach as much as the one
+presented below.
+
+   The algorithm used for incrementing uses both buffers, so the line is
+printed as soon as possible and then discarded.  The number is split so
+that changing digits go in a buffer and unchanged ones go in the other;
+the changed digits are modified in a single step (using a 'y' command).
+The line number for the next line is then composed and stored in the
+hold space, to be used in the next iteration.
+
+     #!/usr/bin/sed -nf
+
+     # Prime the pump on the first line
+     x
+     /^$/ s/^.*$/1/
+
+     # Add the correct line number before the pattern
+     G
+     h
+
+     # Format it and print it
+     s/^/      /
+     s/^ *\(......\)\n/\1  /p
+
+     # Get the line number from hold space; add a zero
+     # if we're going to add a digit on the next line
+     g
+     s/\n.*$//
+     /^9*$/ s/^/0/
+
+     # separate changing/unchanged digits with an x
+     s/.9*$/x&/
+
+     # keep changing digits in hold space
+     h
+     s/^.*x//
+     y/0123456789/1234567890/
+     x
+
+     # keep unchanged digits in pattern space
+     s/x.*$//
+
+     # compose the new number, remove the newline implicitly added by G
+     G
+     s/\n//
+     h
+
+File: sed.info,  Node: cat -b,  Next: wc -c,  Prev: cat -n,  Up: Examples
+

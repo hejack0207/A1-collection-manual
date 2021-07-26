@@ -1,0 +1,290 @@
+4.9 Configuration Header Files
+==============================
+
+When a package contains more than a few tests that define C preprocessor
+symbols, the command lines to pass `-D' options to the compiler can get
+quite long.  This causes two problems.  One is that the `make' output
+is hard to visually scan for errors.  More seriously, the command lines
+can exceed the length limits of some operating systems.  As an
+alternative to passing `-D' options to the compiler, `configure'
+scripts can create a C header file containing `#define' directives.
+The `AC_CONFIG_HEADERS' macro selects this kind of output.  Though it
+can be called anywhere between `AC_INIT' and `AC_OUTPUT', it is
+customary to call it right after `AC_INIT'.
+
+   The package should `#include' the configuration header file before
+any other header files, to prevent inconsistencies in declarations (for
+example, if it redefines `const').
+
+   To provide for VPATH builds, remember to pass the C compiler a `-I.'
+option (or `-I..'; whichever directory contains `config.h').  Even if
+you use `#include "config.h"', the preprocessor searches only the
+directory of the currently read file, i.e., the source directory, not
+the build directory.
+
+   With the appropriate `-I' option, you can use `#include <config.h>'.
+Actually, it's a good habit to use it, because in the rare case when
+the source directory contains another `config.h', the build directory
+should be searched first.
+
+ -- Macro: AC_CONFIG_HEADERS (HEADER ..., [CMDS], [INIT-CMDS])
+     This macro is one of the instantiating macros; see *note
+     Configuration Actions::.  Make `AC_OUTPUT' create the file(s) in
+     the blank-or-newline-separated list HEADER containing C
+     preprocessor `#define' statements, and replace `@DEFS@' in
+     generated files with `-DHAVE_CONFIG_H' instead of the value of
+     `DEFS'.  The usual name for HEADER is `config.h'.
+
+     If HEADER already exists and its contents are identical to what
+     `AC_OUTPUT' would put in it, it is left alone.  Doing this allows
+     making some changes in the configuration without needlessly causing
+     object files that depend on the header file to be recompiled.
+
+     Usually the input file is named `HEADER.in'; however, you can
+     override the input file name by appending to HEADER a
+     colon-separated list of input files.  For example, you might need
+     to make the input file name acceptable to DOS variants:
+
+          AC_CONFIG_HEADERS([config.h:config.hin])
+
+
+ -- Macro: AH_HEADER
+     This macro is defined as the name of the first declared config
+     header and undefined if no config headers have been declared up to
+     this point.  A third-party macro may, for example, require use of
+     a config header without invoking AC_CONFIG_HEADERS twice, like
+     this:
+
+          AC_CONFIG_COMMANDS_PRE(
+                  [m4_ifndef([AH_HEADER], [AC_CONFIG_HEADERS([config.h])])])
+
+
+   *Note Configuration Actions::, for more details on HEADER.
+
+* Menu:
+
+* Header Templates::            Input for the configuration headers
+* autoheader Invocation::       How to create configuration templates
+* Autoheader Macros::           How to specify CPP templates
+
+File: autoconf.info,  Node: Header Templates,  Next: autoheader Invocation,  Up: Configuration Headers
+
+4.9.1 Configuration Header Templates
+------------------------------------
+
+Your distribution should contain a template file that looks as you want
+the final header file to look, including comments, with `#undef'
+statements which are used as hooks.  For example, suppose your
+`configure.ac' makes these calls:
+
+     AC_CONFIG_HEADERS([conf.h])
+     AC_CHECK_HEADERS([unistd.h])
+
+Then you could have code like the following in `conf.h.in'.  The
+`conf.h' created by `configure' defines `HAVE_UNISTD_H' to 1, if and
+only if the system has `unistd.h'.
+
+     /* Define as 1 if you have unistd.h.  */
+     #undef HAVE_UNISTD_H
+
+   The format of the template file is stricter than what the C
+preprocessor is required to accept.  A directive line should contain
+only whitespace, `#undef', and `HAVE_UNISTD_H'.  The use of `#define'
+instead of `#undef', or of comments on the same line as `#undef', is
+strongly discouraged.  Each hook should only be listed once.  Other
+preprocessor lines, such as `#ifdef' or `#include', are copied verbatim
+from the template into the generated header.
+
+   Since it is a tedious task to keep a template header up to date, you
+may use `autoheader' to generate it, see *note autoheader Invocation::.
+
+   During the instantiation of the header, each `#undef' line in the
+template file for each symbol defined by `AC_DEFINE' is changed to an
+appropriate `#define'. If the corresponding `AC_DEFINE' has not been
+executed during the `configure' run, the `#undef' line is commented
+out.  (This is important, e.g., for `_POSIX_SOURCE': on many systems,
+it can be implicitly defined by the compiler, and undefining it in the
+header would then break compilation of subsequent headers.)
+
+   Currently, _all_ remaining `#undef' lines in the header template are
+commented out, whether or not there was a corresponding `AC_DEFINE' for
+the macro name; but this behavior is not guaranteed for future releases
+of Autoconf.
+
+   Generally speaking, since you should not use `#define', and you
+cannot guarantee whether a `#undef' directive in the header template
+will be converted to a `#define' or commented out in the generated
+header file, the template file cannot be used for conditional
+definition effects.  Consequently, if you need to use the construct
+
+     #ifdef THIS
+     # define THAT
+     #endif
+
+you must place it outside of the template.  If you absolutely need to
+hook it to the config header itself, please put the directives to a
+separate file, and `#include' that file from the config header
+template.  If you are using `autoheader', you would probably use
+`AH_BOTTOM' to append the `#include' directive.
+
+File: autoconf.info,  Node: autoheader Invocation,  Next: Autoheader Macros,  Prev: Header Templates,  Up: Configuration Headers
+
+4.9.2 Using `autoheader' to Create `config.h.in'
+------------------------------------------------
+
+The `autoheader' program can create a template file of C `#define'
+statements for `configure' to use.  It searches for the first
+invocation of `AC_CONFIG_HEADERS' in `configure' sources to determine
+the name of the template.  (If the first call of `AC_CONFIG_HEADERS'
+specifies more than one input file name, `autoheader' uses the first
+one.)
+
+   It is recommended that only one input file is used.  If you want to
+append a boilerplate code, it is preferable to use `AH_BOTTOM([#include
+<conf_post.h>])'.  File `conf_post.h' is not processed during the
+configuration then, which make things clearer.  Analogically, `AH_TOP'
+can be used to prepend a boilerplate code.
+
+   In order to do its job, `autoheader' needs you to document all of
+the symbols that you might use.  Typically this is done via an
+`AC_DEFINE' or `AC_DEFINE_UNQUOTED' call whose first argument is a
+literal symbol and whose third argument describes the symbol (*note
+Defining Symbols::).  Alternatively, you can use `AH_TEMPLATE' (*note
+Autoheader Macros::), or you can supply a suitable input file for a
+subsequent configuration header file.  Symbols defined by Autoconf's
+builtin tests are already documented properly; you need to document
+only those that you define yourself.
+
+   You might wonder why `autoheader' is needed: after all, why would
+`configure' need to "patch" a `config.h.in' to produce a `config.h'
+instead of just creating `config.h' from scratch?  Well, when
+everything rocks, the answer is just that we are wasting our time
+maintaining `autoheader': generating `config.h' directly is all that is
+needed.  When things go wrong, however, you'll be thankful for the
+existence of `autoheader'.
+
+   The fact that the symbols are documented is important in order to
+_check_ that `config.h' makes sense.  The fact that there is a
+well-defined list of symbols that should be defined (or not) is also
+important for people who are porting packages to environments where
+`configure' cannot be run: they just have to _fill in the blanks_.
+
+   But let's come back to the point: the invocation of `autoheader'...
+
+   If you give `autoheader' an argument, it uses that file instead of
+`configure.ac' and writes the header file to the standard output
+instead of to `config.h.in'.  If you give `autoheader' an argument of
+`-', it reads the standard input instead of `configure.ac' and writes
+the header file to the standard output.
+
+   `autoheader' accepts the following options:
+
+`--help'
+`-h'
+     Print a summary of the command line options and exit.
+
+`--version'
+`-V'
+     Print the version number of Autoconf and exit.
+
+`--verbose'
+`-v'
+     Report processing steps.
+
+`--debug'
+`-d'
+     Don't remove the temporary files.
+
+`--force'
+`-f'
+     Remake the template file even if newer than its input files.
+
+`--include=DIR'
+`-I DIR'
+     Append DIR to the include path.  Multiple invocations accumulate.
+
+`--prepend-include=DIR'
+`-B DIR'
+     Prepend DIR to the include path.  Multiple invocations accumulate.
+
+`--warnings=CATEGORY'
+`-W CATEGORY'
+     Report the warnings related to CATEGORY (which can actually be a
+     comma separated list).  Current categories include:
+
+    `obsolete'
+          report the uses of obsolete constructs
+
+    `all'
+          report all the warnings
+
+    `none'
+          report none
+
+    `error'
+          treats warnings as errors
+
+    `no-CATEGORY'
+          disable warnings falling into CATEGORY
+
+
+File: autoconf.info,  Node: Autoheader Macros,  Prev: autoheader Invocation,  Up: Configuration Headers
+
+4.9.3 Autoheader Macros
+-----------------------
+
+`autoheader' scans `configure.ac' and figures out which C preprocessor
+symbols it might define.  It knows how to generate templates for
+symbols defined by `AC_CHECK_HEADERS', `AC_CHECK_FUNCS' etc., but if
+you `AC_DEFINE' any additional symbol, you must define a template for
+it.  If there are missing templates, `autoheader' fails with an error
+message.
+
+   The template for a SYMBOL is created by `autoheader' from the
+DESCRIPTION argument to an `AC_DEFINE'; see *note Defining Symbols::.
+
+   For special needs, you can use the following macros.
+
+ -- Macro: AH_TEMPLATE (KEY, DESCRIPTION)
+     Tell `autoheader' to generate a template for KEY.  This macro
+     generates standard templates just like `AC_DEFINE' when a
+     DESCRIPTION is given.
+
+     For example:
+
+          AH_TEMPLATE([CRAY_STACKSEG_END],
+                      [Define to one of _getb67, GETB67, getb67
+                       for Cray-2 and Cray-YMP systems.  This
+                       function is required for alloca.c support
+                       on those systems.])
+
+     generates the following template, with the description properly
+     justified.
+
+          /* Define to one of _getb67, GETB67, getb67 for Cray-2 and
+             Cray-YMP systems.  This function is required for alloca.c
+             support on those systems.  */
+          #undef CRAY_STACKSEG_END
+
+ -- Macro: AH_VERBATIM (KEY, TEMPLATE)
+     Tell `autoheader' to include the TEMPLATE as-is in the header
+     template file.  This TEMPLATE is associated with the KEY, which is
+     used to sort all the different templates and guarantee their
+     uniqueness.  It should be a symbol that can be defined via
+     `AC_DEFINE'.
+
+ -- Macro: AH_TOP (TEXT)
+     Include TEXT at the top of the header template file.
+
+ -- Macro: AH_BOTTOM (TEXT)
+     Include TEXT at the bottom of the header template file.
+
+   Please note that TEXT gets included "verbatim" to the template file,
+not to the resulting config header, so it can easily get mangled when
+the template is processed.  There is rarely a need for something other
+than
+
+     AH_BOTTOM([#include <custom.h>])
+
+File: autoconf.info,  Node: Configuration Commands,  Next: Configuration Links,  Prev: Configuration Headers,  Up: Setup
+

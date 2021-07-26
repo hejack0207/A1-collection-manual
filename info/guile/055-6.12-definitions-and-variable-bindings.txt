@@ -1,0 +1,294 @@
+6.12 Definitions and Variable Bindings
+======================================
+
+Scheme supports the definition of variables in different contexts.
+Variables can be defined at the top level, so that they are visible in
+the entire program, and variables can be defined locally to procedures
+and expressions.  This is important for modularity and data abstraction.
+
+* Menu:
+
+* Top Level::                   Top level variable definitions.
+* Local Bindings::              Local variable bindings.
+* Internal Definitions::        Internal definitions.
+* Binding Reflection::          Querying variable bindings.
+* Binding Multiple Values::     Binding multiple return values.
+
+File: guile.info,  Node: Top Level,  Next: Local Bindings,  Up: Binding Constructs
+
+6.12.1 Top Level Variable Definitions
+-------------------------------------
+
+At the top level of a program (i.e., not nested within any other
+expression), a definition of the form
+
+     (define a VALUE)
+
+defines a variable called ‘a’ and sets it to the value VALUE.
+
+   If the variable already exists in the current module, because it has
+already been created by a previous ‘define’ expression with the same
+name, its value is simply changed to the new VALUE.  In this case, then,
+the above form is completely equivalent to
+
+     (set! a VALUE)
+
+This equivalence means that ‘define’ can be used interchangeably with
+‘set!’ to change the value of variables at the top level of the REPL or
+a Scheme source file.  It is useful during interactive development when
+reloading a Scheme file that you have modified, because it allows the
+‘define’ expressions in that file to work as expected both the first
+time that the file is loaded and on subsequent occasions.
+
+   Note, though, that ‘define’ and ‘set!’ are not always equivalent.
+For example, a ‘set!’ is not allowed if the named variable does not
+already exist, and the two expressions can behave differently in the
+case where there are imported variables visible from another module.
+
+ -- Scheme Syntax: define name value
+     Create a top level variable named NAME with value VALUE.  If the
+     named variable already exists, just change its value.  The return
+     value of a ‘define’ expression is unspecified.
+
+   The C API equivalents of ‘define’ are ‘scm_define’ and
+‘scm_c_define’, which differ from each other in whether the variable
+name is specified as a ‘SCM’ symbol or as a null-terminated C string.
+
+ -- C Function: scm_define (sym, value)
+ -- C Function: scm_c_define (const char *name, value)
+     C equivalents of ‘define’, with variable name specified either by
+     SYM, a symbol, or by NAME, a null-terminated C string.  Both
+     variants return the new or preexisting variable object.
+
+   ‘define’ (when it occurs at top level), ‘scm_define’ and
+‘scm_c_define’ all create or set the value of a variable in the top
+level environment of the current module.  If there was not already a
+variable with the specified name belonging to the current module, but a
+similarly named variable from another module was visible through having
+been imported, the newly created variable in the current module will
+shadow the imported variable, such that the imported variable is no
+longer visible.
+
+   Attention: Scheme definitions inside local binding constructs (*note
+Local Bindings::) act differently (*note Internal Definitions::).
+
+   Many people end up in a development style of adding and changing
+definitions at runtime, building out their program without restarting
+it.  (You can do this using ‘reload-module’, the ‘reload’ REPL command,
+the ‘load’ procedure, or even just pasting code into a REPL.) If you are
+one of these people, you will find that sometimes there are some
+variables that you _don’t_ want to redefine all the time.  For these,
+use ‘define-once’.
+
+ -- Scheme Syntax: define-once name value
+     Create a top level variable named NAME with value VALUE, but only
+     if NAME is not already bound in the current module.
+
+   Old Lispers probably know ‘define-once’ under its Lisp name,
+‘defvar’.
+
+File: guile.info,  Node: Local Bindings,  Next: Internal Definitions,  Prev: Top Level,  Up: Binding Constructs
+
+6.12.2 Local Variable Bindings
+------------------------------
+
+As opposed to definitions at the top level, which creates bindings that
+are visible to all code in a module, it is also possible to define
+variables which are only visible in a well-defined part of the program.
+Normally, this part of a program will be a procedure or a subexpression
+of a procedure.
+
+   With the constructs for local binding (‘let’, ‘let*’, ‘letrec’, and
+‘letrec*’), the Scheme language has a block structure like most other
+programming languages since the days of ALGOL 60.  Readers familiar to
+languages like C or Java should already be used to this concept, but the
+family of ‘let’ expressions has a few properties which are well worth
+knowing.
+
+   The most basic local binding construct is ‘let’.
+
+ -- syntax: let bindings body
+     BINDINGS has the form
+
+          ((VARIABLE1 INIT1) ...)
+
+     that is zero or more two-element lists of a variable and an
+     arbitrary expression each.  All VARIABLE names must be distinct.
+
+     A ‘let’ expression is evaluated as follows.
+
+        • All INIT expressions are evaluated.
+
+        • New storage is allocated for the VARIABLES.
+
+        • The values of the INIT expressions are stored into the
+          variables.
+
+        • The expressions in BODY are evaluated in order, and the value
+          of the last expression is returned as the value of the ‘let’
+          expression.
+
+     The INIT expressions are not allowed to refer to any of the
+     VARIABLES.
+
+   The other binding constructs are variations on the same theme: making
+new values, binding them to variables, and executing a body in that new,
+extended lexical context.
+
+ -- syntax: let* bindings body
+     Similar to ‘let’, but the variable bindings are performed
+     sequentially, that means that all INIT expression are allowed to
+     use the variables defined on their left in the binding list.
+
+     A ‘let*’ expression can always be expressed with nested ‘let’
+     expressions.
+
+          (let* ((a 1) (b a))
+             b)
+          ≡
+          (let ((a 1))
+            (let ((b a))
+              b))
+
+ -- syntax: letrec bindings body
+     Similar to ‘let’, but it is possible to refer to the VARIABLE from
+     lambda expression created in any of the INITS.  That is, procedures
+     created in the INIT expression can recursively refer to the defined
+     variables.
+
+          (letrec ((even? (lambda (n)
+                            (if (zero? n)
+                                #t
+                                (odd? (- n 1)))))
+                   (odd? (lambda (n)
+                            (if (zero? n)
+                                #f
+                                (even? (- n 1))))))
+            (even? 88))
+          ⇒
+          #t
+
+     Note that while the INIT expressions may refer to the new
+     variables, they may not access their values.  For example, making
+     the ‘even?’ function above creates a closure (*note About
+     Closure::) referencing the ‘odd?’ variable.  But ‘odd?’ can’t be
+     called until after execution has entered the body.
+
+ -- syntax: letrec* bindings body
+     Similar to ‘letrec’, except the INIT expressions are bound to their
+     variables in order.
+
+     ‘letrec*’ thus relaxes the letrec restriction, in that later INIT
+     expressions may refer to the values of previously bound variables.
+
+          (letrec ((a 42)
+                   (b (+ a 10)))  ;; Illegal access
+            (* a b))
+          ;; The behavior of the expression above is unspecified
+
+          (letrec* ((a 42)
+                    (b (+ a 10)))
+            (* a b))
+          ⇒ 2184
+
+   There is also an alternative form of the ‘let’ form, which is used
+for expressing iteration.  Because of the use as a looping construct,
+this form (the “named let”) is documented in the section about iteration
+(*note Iteration: while do.)
+
+File: guile.info,  Node: Internal Definitions,  Next: Binding Reflection,  Prev: Local Bindings,  Up: Binding Constructs
+
+6.12.3 Internal definitions
+---------------------------
+
+A ‘define’ form which appears inside the body of a ‘lambda’, ‘let’,
+‘let*’, ‘letrec’, ‘letrec*’ or equivalent expression is called an
+“internal definition”.  An internal definition differs from a top level
+definition (*note Top Level::), because the definition is only visible
+inside the complete body of the enclosing form.  Let us examine the
+following example.
+
+     (let ((frumble "froz"))
+        (define banana (lambda () (apple 'peach)))
+        (define apple (lambda (x) x))
+        (banana))
+     ⇒
+     peach
+
+   Here the enclosing form is a ‘let’, so the ‘define’s in the
+‘let’-body are internal definitions.  Because the scope of the internal
+definitions is the *complete* body of the ‘let’-expression, the
+‘lambda’-expression which gets bound to the variable ‘banana’ may refer
+to the variable ‘apple’, even though its definition appears lexically
+_after_ the definition of ‘banana’.  This is because a sequence of
+internal definition acts as if it were a ‘letrec*’ expression.
+
+     (let ()
+       (define a 1)
+       (define b 2)
+       (+ a b))
+
+is equivalent to
+
+     (let ()
+       (letrec* ((a 1) (b 2))
+         (+ a b)))
+
+   Internal definitions are only allowed at the beginning of the body of
+an enclosing expression.  They may not be mixed with other expressions.
+
+   Another noteworthy difference to top level definitions is that within
+one group of internal definitions all variable names must be distinct.
+That means where on the top level a second define for a given variable
+acts like a ‘set!’, an exception is thrown for internal definitions with
+duplicate bindings.
+
+   As a historical note, it used to be that internal bindings were
+expanded in terms of ‘letrec’, not ‘letrec*’.  This was the situation
+for the R5RS report and before.  However with the R6RS, it was
+recognized that sequential definition was a more intuitive expansion, as
+in the following case:
+
+     (let ()
+       (define a 1)
+       (define b (+ a a))
+       (+ a b))
+
+Guile decided to follow the R6RS in this regard, and now expands
+internal definitions using ‘letrec*’.
+
+File: guile.info,  Node: Binding Reflection,  Next: Binding Multiple Values,  Prev: Internal Definitions,  Up: Binding Constructs
+
+6.12.4 Querying variable bindings
+---------------------------------
+
+Guile provides a procedure for checking whether a symbol is bound in the
+top level environment.
+
+ -- Scheme Procedure: defined? sym [module]
+ -- C Function: scm_defined_p (sym, module)
+     Return ‘#t’ if SYM is defined in the module MODULE or the current
+     module when MODULE is not specified; otherwise return ‘#f’.
+
+File: guile.info,  Node: Binding Multiple Values,  Prev: Binding Reflection,  Up: Binding Constructs
+
+6.12.5 Binding multiple return values
+-------------------------------------
+
+ -- Syntax: define-values formals expression
+     The EXPRESSION is evaluated, and the FORMALS are bound to the
+     return values in the same way that the formals in a ‘lambda’
+     expression are matched to the arguments in a procedure call.
+
+     (define-values (q r) (floor/ 10 3))
+     (list q r) ⇒ (3 1)
+
+     (define-values (x . y) (values 1 2 3))
+     x ⇒ 1
+     y ⇒ (2 3)
+
+     (define-values x (values 1 2 3))
+     x ⇒ (1 2 3)
+
+File: guile.info,  Node: Control Mechanisms,  Next: Input and Output,  Prev: Binding Constructs,  Up: API Reference
+

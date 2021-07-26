@@ -1,0 +1,407 @@
+20.4 Control Functions
+======================
+
+
+The initialization script compinit redefines all the widgets which
+perform completion to call the supplied widget function _main_complete.
+This function acts as a wrapper calling the so-called 'completer'
+functions that generate matches.  If _main_complete is called with
+arguments, these are taken as the names of completer functions to be
+called in the order given.  If no arguments are given, the set of
+functions to try is taken from the completer style.  For example, to use
+normal completion and correction if that doesn't generate any matches:
+
+     zstyle ':completion:*' completer _complete _correct
+
+after calling compinit.  The default value for this style is '_complete
+_ignored', i.e.  normally only ordinary completion is tried, first with
+the effect of the ignored-patterns style and then without it.  The
+_main_complete function uses the return status of the completer
+functions to decide if other completers should be called.  If the return
+status is zero, no other completers are tried and the _main_complete
+function returns.
+
+If the first argument to _main_complete is a single hyphen, the
+arguments will not be taken as names of completers.  Instead, the second
+argument gives a name to use in the COMPLETER field of the context and
+the other arguments give a command name and arguments to call to
+generate the matches.
+
+The following completer functions are contained in the distribution,
+although users may write their own.  Note that in contexts the leading
+underscore is stripped, for example basic completion is performed in the
+context ':completion::complete:...'.
+
+_all_matches
+     This completer can be used to add a string consisting of all other
+     matches.  As it influences later completers it must appear as the
+     first completer in the list.  The list of all matches is affected
+     by the avoid-completer and old-matches styles described above.
+
+     It may be useful to use the _generic function described below to
+     bind _all_matches to its own keystroke, for example:
+
+          zle -C all-matches complete-word _generic
+          bindkey '^Xa' all-matches
+          zstyle ':completion:all-matches:*' old-matches only
+          zstyle ':completion:all-matches::::' completer _all_matches
+
+     Note that this does not generate completions by itself: first use
+     any of the standard ways of generating a list of completions, then
+     use ^Xa to show all matches.  It is possible instead to add a
+     standard completer to the list and request that the list of all
+     matches should be directly inserted:
+
+          zstyle ':completion:all-matches::::' completer \
+                 _all_matches _complete
+          zstyle ':completion:all-matches:*' insert true
+
+     In this case the old-matches style should not be set.
+
+_approximate
+     This is similar to the basic _complete completer but allows the
+     completions to undergo corrections.  The maximum number of errors
+     can be specified by the max-errors style; see the description of
+     approximate matching in *note Filename Generation:: for how errors
+     are counted.  Normally this completer will only be tried after the
+     normal _complete completer:
+
+          zstyle ':completion:*' completer _complete _approximate
+
+     This will give correcting completion if and only if normal
+     completion yields no possible completions.  When corrected
+     completions are found, the completer will normally start menu
+     completion allowing you to cycle through these strings.
+
+     This completer uses the tags corrections and original when
+     generating the possible corrections and the original string.  The
+     format style for the former may contain the additional sequences
+     '%e' and '%o' which will be replaced by the number of errors
+     accepted to generate the corrections and the original string,
+     respectively.
+
+     The completer progressively increases the number of errors allowed
+     up to the limit by the max-errors style, hence if a completion is
+     found with one error, no completions with two errors will be shown,
+     and so on.  It modifies the completer name in the context to
+     indicate the number of errors being tried: on the first try the
+     completer field contains 'approximate-1', on the second try
+     'approximate-2', and so on.
+
+     When _approximate is called from another function, the number of
+     errors to accept may be passed with the -a option.  The argument is
+     in the same format as the max-errors style, all in one string.
+
+     Note that this completer (and the _correct completer mentioned
+     below) can be quite expensive to call, especially when a large
+     number of errors are allowed.  One way to avoid this is to set up
+     the completer style using the -e option to zstyle so that some
+     completers are only used when completion is attempted a second time
+     on the same string, e.g.:
+
+          zstyle -e ':completion:*' completer '
+            if [[ $_last_try != "$HISTNO$BUFFER$CURSOR" ]]; then
+              _last_try="$HISTNO$BUFFER$CURSOR"
+              reply=(_complete _match _prefix)
+            else
+              reply=(_ignored _correct _approximate)
+            fi'
+
+     This uses the HISTNO parameter and the BUFFER and CURSOR special
+     parameters that are available inside zle and completion widgets to
+     find out if the command line hasn't changed since the last time
+     completion was tried.  Only then are the _ignored, _correct and
+     _approximate completers called.
+
+_canonical_paths [ -A VAR ] [ -N ] [ -MJV12nfX ] TAG DESCR [ PATHS ... ]
+     This completion function completes all paths given to it, and also
+     tries to offer completions which point to the same file as one of
+     the paths given (relative path when an absolute path is given, and
+     vice versa; when ..'s are present in the word to be completed; and
+     some paths got from symlinks).
+
+     -A, if specified, takes the paths from the array variable
+     specified.  Paths can also be specified on the command line as
+     shown above.  -N, if specified, prevents canonicalizing the paths
+     given before using them for completion, in case they are already
+     so.  The options -M, -J, -V, -1, -2, -n, -F, -X are passed to
+     compadd.
+
+     See _description for a description of TAG and DESCR.
+
+_cmdambivalent
+     Completes the remaining positional arguments as an external
+     command.  The external command and its arguments are completed as
+     separate arguments (in a manner appropriate for completing
+     /usr/bin/env) if there are two or more remaining positional
+     arguments on the command line, and as a quoted command string (in
+     the manner of system(...)) otherwise.  See also _cmdstring and
+     _precommand.
+
+     This function takes no arguments.
+
+_cmdstring
+     Completes an external command as a single argument, as for
+     system(...).
+
+_complete
+     This completer generates all possible completions in a
+     context-sensitive manner, i.e.  using the settings defined with the
+     compdef function explained above and the current settings of all
+     special parameters.  This gives the normal completion behaviour.
+
+     To complete arguments of commands, _complete uses the utility
+     function _normal, which is in turn responsible for finding the
+     particular function; it is described below.  Various contexts of
+     the form -CONTEXT- are handled specifically.  These are all
+     mentioned above as possible arguments to the #compdef tag.
+
+     Before trying to find a function for a specific context, _complete
+     checks if the parameter 'compcontext' is set.  Setting
+     'compcontext' allows the usual completion dispatching to be
+     overridden which is useful in places such as a function that uses
+     vared for input.  If it is set to an array, the elements are taken
+     to be the possible matches which will be completed using the tag
+     'values' and the description 'value'.  If it is set to an
+     associative array, the keys are used as the possible completions
+     and the values (if non-empty) are used as descriptions for the
+     matches.  If 'compcontext' is set to a string containing colons, it
+     should be of the form 'TAG:DESCR:ACTION'.  In this case the TAG and
+     DESCR give the tag and description to use and the ACTION indicates
+     what should be completed in one of the forms accepted by the
+     _arguments utility function described below.
+
+     Finally, if 'compcontext' is set to a string without colons, the
+     value is taken as the name of the context to use and the function
+     defined for that context will be called.  For this purpose, there
+     is a special context named -command-line- that completes whole
+     command lines (commands and their arguments).  This is not used by
+     the completion system itself but is nonetheless handled when
+     explicitly called.
+
+_correct
+     Generate corrections, but not completions, for the current word;
+     this is similar to _approximate but will not allow any number of
+     extra characters at the cursor as that completer does.  The effect
+     is similar to spell-checking.  It is based on _approximate, but the
+     completer field in the context name is correct.
+
+     For example, with:
+
+          zstyle ':completion:::::' completer \
+                 _complete _correct _approximate
+          zstyle ':completion:*:correct:::' max-errors 2 not-numeric
+          zstyle ':completion:*:approximate:::' max-errors 3 numeric
+
+     correction will accept up to two errors.  If a numeric argument is
+     given, correction will not be performed, but correcting completion
+     will be, and will accept as many errors as given by the numeric
+     argument.  Without a numeric argument, first correction and then
+     correcting completion will be tried, with the first one accepting
+     two errors and the second one accepting three errors.
+
+     When _correct is called as a function, the number of errors to
+     accept may be given following the -a option.  The argument is in
+     the same form a values to the accept style, all in one string.
+
+     This completer function is intended to be used without the
+     _approximate completer or, as in the example, just before it.
+     Using it after the _approximate completer is useless since
+     _approximate will at least generate the corrected strings generated
+     by the _correct completer -- and probably more.
+
+_expand
+     This completer function does not really perform completion, but
+     instead checks if the word on the command line is eligible for
+     expansion and, if it is, gives detailed control over how this
+     expansion is done.  For this to happen, the completion system needs
+     to be invoked with complete-word, not expand-or-complete (the
+     default binding for TAB), as otherwise the string will be expanded
+     by the shell's internal mechanism before the completion system is
+     started.  Note also this completer should be called before the
+     _complete completer function.
+
+     The tags used when generating expansions are all-expansions for the
+     string containing all possible expansions, expansions when adding
+     the possible expansions as single matches and original when adding
+     the original string from the line.  The order in which these
+     strings are generated, if at all, can be controlled by the
+     group-order and tag-order styles, as usual.
+
+     The format string for all-expansions and for expansions may contain
+     the sequence '%o' which will be replaced by the original string
+     from the line.
+
+     The kind of expansion to be tried is controlled by the substitute,
+     glob and subst-globs-only styles.
+
+     It is also possible to call _expand as a function, in which case
+     the different modes may be selected with options: -s for
+     substitute, -g for glob and -o for subst-globs-only.
+
+_expand_alias
+     If the word the cursor is on is an alias, it is expanded and no
+     other completers are called.  The types of aliases which are to be
+     expanded can be controlled with the styles regular, global and
+     disabled.
+
+     This function is also a bindable command, see *note Bindable
+     Commands::.
+
+_extensions
+     If the cursor follows the string '*.', filename extensions are
+     completed.  The extensions are taken from files in current
+     directory or a directory specified at the beginning of the current
+     word.  For exact matches, completion continues to allow other
+     completers such as _expand to expand the pattern.  The standard
+     add-space and prefix-hidden styles are observed.
+
+_external_pwds
+     Completes current directories of other zsh processes belonging to
+     the current user.
+
+     This is intended to be used via _generic, bound to a custom key
+     combination.  Note that pattern matching is enabled so matching is
+     performed similar to how it works with the _match completer.
+
+_history
+     Complete words from the shell's command history.  This completer
+     can be controlled by the remove-all-dups, and sort styles as for
+     the _history_complete_word bindable command, see *note Bindable
+     Commands:: and *note Completion System Configuration::.
+
+_ignored
+     The ignored-patterns style can be set to a list of patterns which
+     are compared against possible completions; matching ones are
+     removed.  With this completer those matches can be reinstated, as
+     if no ignored-patterns style were set.  The completer actually
+     generates its own list of matches; which completers are invoked is
+     determined in the same way as for the _prefix completer.  The
+     single-ignored style is also available as described above.
+
+_list
+     This completer allows the insertion of matches to be delayed until
+     completion is attempted a second time without the word on the line
+     being changed.  On the first attempt, only the list of matches will
+     be shown.  It is affected by the styles condition and word, see
+     *note Completion System Configuration::.
+
+_match
+     This completer is intended to be used after the _complete
+     completer.  It behaves similarly but the string on the command line
+     may be a pattern to match against trial completions.  This gives
+     the effect of the GLOB_COMPLETE option.
+
+     Normally completion will be performed by taking the pattern from
+     the line, inserting a '*' at the cursor position and comparing the
+     resulting pattern with the possible completions generated.  This
+     can be modified with the match-original style described above.
+
+     The generated matches will be offered in a menu completion unless
+     the insert-unambiguous style is set to 'true'; see the description
+     above for other options for this style.
+
+     Note that matcher specifications defined globally or used by the
+     completion functions (the styles matcher-list and matcher) will not
+     be used.
+
+_menu
+     This completer was written as simple example function to show how
+     menu completion can be enabled in shell code.  However, it has the
+     notable effect of disabling menu selection which can be useful with
+     _generic based widgets.  It should be used as the first completer
+     in the list.  Note that this is independent of the setting of the
+     MENU_COMPLETE option and does not work with the other menu
+     completion widgets such as reverse-menu-complete, or
+     accept-and-menu-complete.
+
+_oldlist
+     This completer controls how the standard completion widgets behave
+     when there is an existing list of completions which may have been
+     generated by a special completion (i.e.  a separately-bound
+     completion command).  It allows the ordinary completion keys to
+     continue to use the list of completions thus generated, instead of
+     producing a new list of ordinary contextual completions.  It should
+     appear in the list of completers before any of the widgets which
+     generate matches.  It uses two styles: old-list and old-menu, see
+     *note Completion System Configuration::.
+
+_precommand
+     Complete an external command in word-separated arguments, as for
+     exec and /usr/bin/env.
+
+_prefix
+     This completer can be used to try completion with the suffix
+     (everything after the cursor) ignored.  In other words, the suffix
+     will not be considered to be part of the word to complete.  The
+     effect is similar to the expand-or-complete-prefix command.
+
+     The completer style is used to decide which other completers are to
+     be called to generate matches.  If this style is unset, the list of
+     completers set for the current context is used -- except, of
+     course, the _prefix completer itself.  Furthermore, if this
+     completer appears more than once in the list of completers only
+     those completers not already tried by the last invocation of
+     _prefix will be called.
+
+     For example, consider this global completer style:
+
+          zstyle ':completion:*' completer \
+              _complete _prefix _correct _prefix:foo
+
+     Here, the _prefix completer tries normal completion but ignoring
+     the suffix.  If that doesn't generate any matches, and neither does
+     the call to the _correct completer after it, _prefix will be called
+     a second time and, now only trying correction with the suffix
+     ignored.  On the second invocation the completer part of the
+     context appears as 'foo'.
+
+     To use _prefix as the last resort and try only normal completion
+     when it is invoked:
+
+          zstyle ':completion:*' completer _complete ... _prefix
+          zstyle ':completion::prefix:*' completer _complete
+
+     The add-space style is also respected.  If it is set to 'true' then
+     _prefix will insert a space between the matches generated (if any)
+     and the suffix.
+
+     Note that this completer is only useful if the COMPLETE_IN_WORD
+     option is set; otherwise, the cursor will be moved to the end of
+     the current word before the completion code is called and hence
+     there will be no suffix.
+
+_user_expand
+     This completer behaves similarly to the _expand completer but
+     instead performs expansions defined by users.  The styles add-space
+     and sort styles specific to the _expand completer are usable with
+     _user_expand in addition to other styles handled more generally by
+     the completion system.  The tag all-expansions is also available.
+
+     The expansion depends on the array style user-expand being defined
+     for the current context; remember that the context for completers
+     is less specific than that for contextual completion as the full
+     context has not yet been determined.  Elements of the array may
+     have one of the following forms:
+
+     $HASH
+
+          HASH is the name of an associative array.  Note this is not a
+          full parameter expression, merely a $, suitably quoted to
+          prevent immediate expansion, followed by the name of an
+          associative array.  If the trial expansion word matches a key
+          in HASH, the resulting expansion is the corresponding value.
+
+     _FUNC
+
+          _FUNC is the name of a shell function whose name must begin
+          with _ but is not otherwise special to the completion system.
+          The function is called with the trial word as an argument.  If
+          the word is to be expanded, the function should set the array
+          reply to a list of expansions.  Optionally, it can set REPLY
+          to a word that will be used as a description for the set of
+          expansions.  The return status of the function is irrelevant.
+
+
+File: zsh.info,  Node: Bindable Commands,  Next: Completion Functions,  Prev: Control Functions,  Up: Completion System
+

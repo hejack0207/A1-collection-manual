@@ -1,0 +1,67 @@
+12.9 The Make Macro `SHELL'
+===========================
+
+Posix-compliant `make' internally uses the `$(SHELL)' macro to spawn
+shell processes and execute Make rules.  This is a builtin macro
+supplied by `make', but it can be modified by a makefile or by a
+command-line argument.
+
+   Not all `make' implementations define this `SHELL' macro.  Tru64
+`make' is an example; this implementation always uses `/bin/sh'.  So
+it's a good idea to always define `SHELL' in your makefiles.  If you
+use Autoconf, do
+
+     SHELL = @SHELL@
+
+If you use Automake, this is done for you.
+
+   Do not force `SHELL = /bin/sh' because that is not correct
+everywhere.  Remember, `/bin/sh' is not Posix compliant on many
+systems, such as FreeBSD 4, NetBSD 3, AIX 3, Solaris 10, or Tru64.
+Additionally, DJGPP lacks `/bin/sh', and when its GNU `make' port sees
+such a setting it enters a special emulation mode where features like
+pipes and redirections are emulated on top of DOS's `command.com'.
+Unfortunately this emulation is incomplete; for instance it does not
+handle command substitutions.  Using `@SHELL@' means that your makefile
+will benefit from the same improved shell, such as `bash' or `ksh',
+that was discovered during `configure', so that you aren't fighting two
+different sets of shell bugs between the two contexts.
+
+   Posix-compliant `make' should never acquire the value of $(SHELL)
+from the environment, even when `make -e' is used (otherwise, think
+about what would happen to your rules if `SHELL=/bin/tcsh').
+
+   However not all `make' implementations have this exception.  For
+instance it's not surprising that Tru64 `make' doesn't protect `SHELL',
+since it doesn't use it.
+
+     $ cat Makefile
+     SHELL = /bin/sh
+     FOO = foo
+     all:
+             @echo $(SHELL)
+             @echo $(FOO)
+     $ env SHELL=/bin/tcsh FOO=bar make -e   # Tru64 Make
+     /bin/tcsh
+     bar
+     $ env SHELL=/bin/tcsh FOO=bar gmake -e  # GNU make
+     /bin/sh
+     bar
+
+   Conversely, `make' is not supposed to export any changes to the
+macro `SHELL' to child processes.  Again, many implementations break
+this rule:
+
+     $ cat Makefile
+     all:
+             @echo $(SHELL)
+             @printenv SHELL
+     $ env SHELL=sh make -e SHELL=/bin/ksh   # BSD Make, GNU make 3.80
+     /bin/ksh
+     /bin/ksh
+     $ env SHELL=sh gmake -e SHELL=/bin/ksh  # GNU make 3.81
+     /bin/ksh
+     sh
+
+File: autoconf.info,  Node: Parallel Make,  Next: Comments in Make Rules,  Prev: The Make Macro SHELL,  Up: Portable Make
+

@@ -1,0 +1,156 @@
+19.1 Using an Autotest Test Suite
+=================================
+
+* Menu:
+
+* testsuite Scripts::           The concepts of Autotest
+* Autotest Logs::               Their contents
+
+File: autoconf.info,  Node: testsuite Scripts,  Next: Autotest Logs,  Up: Using an Autotest Test Suite
+
+19.1.1 `testsuite' Scripts
+--------------------------
+
+Generating testing or validation suites using Autotest is rather easy.
+The whole validation suite is held in a file to be processed through
+`autom4te', itself using GNU M4 under the hood, to produce a
+stand-alone Bourne shell script which then gets distributed.  Neither
+`autom4te' nor GNU M4 are needed at the installer's end.
+
+   Each test of the validation suite should be part of some test group.
+A "test group" is a sequence of interwoven tests that ought to be
+executed together, usually because one test in the group creates data
+files that a later test in the same group needs to read.  Complex test
+groups make later debugging more tedious.  It is much better to keep
+only a few tests per test group.  Ideally there is only one test per
+test group.
+
+   For all but the simplest packages, some file such as `testsuite.at'
+does not fully hold all test sources, as these are often easier to
+maintain in separate files.  Each of these separate files holds a single
+test group, or a sequence of test groups all addressing some common
+functionality in the package.  In such cases, `testsuite.at' merely
+initializes the validation suite, and sometimes does elementary health
+checking, before listing include statements for all other test files.
+The special file `package.m4', containing the identification of the
+package, is automatically included if found.
+
+   A convenient alternative consists in moving all the global issues
+(local Autotest macros, elementary health checking, and `AT_INIT'
+invocation) into the file `local.at', and making `testsuite.at' be a
+simple list of `m4_include's of sub test suites.  In such case,
+generating the whole test suite or pieces of it is only a matter of
+choosing the `autom4te' command line arguments.
+
+   The validation scripts that Autotest produces are by convention
+called `testsuite'.  When run, `testsuite' executes each test group in
+turn, producing only one summary line per test to say if that
+particular test succeeded or failed.  At end of all tests, summarizing
+counters get printed.  One debugging directory is left for each test
+group which failed, if any: such directories are named
+`testsuite.dir/NN', where NN is the sequence number of the test group,
+and they include:
+
+   * a debugging script named `run' which reruns the test in "debug
+     mode" (*note testsuite Invocation::).  The automatic generation of
+     debugging scripts has the purpose of easing the chase for bugs.
+
+   * all the files created with `AT_DATA'
+
+   * all the Erlang source code files created with `AT_CHECK_EUNIT'
+
+   * a log of the run, named `testsuite.log'
+
+   In the ideal situation, none of the tests fail, and consequently no
+debugging directory is left behind for validation.
+
+   It often happens in practice that individual tests in the validation
+suite need to get information coming out of the configuration process.
+Some of this information, common for all validation suites, is provided
+through the file `atconfig', automatically created by
+`AC_CONFIG_TESTDIR'.  For configuration information which your testing
+environment specifically needs, you might prepare an optional file
+named `atlocal.in', instantiated by `AC_CONFIG_FILES'.  The
+configuration process produces `atconfig' and `atlocal' out of these
+two input files, and these two produced files are automatically read by
+the `testsuite' script.
+
+   Here is a diagram showing the relationship between files.
+
+Files used in preparing a software package for distribution:
+
+                     [package.m4] -->.
+                                      \
+     subfile-1.at ->.  [local.at] ---->+
+         ...         \                  \
+     subfile-i.at ---->-- testsuite.at -->-- autom4te* -->testsuite
+         ...         /
+     subfile-n.at ->'
+
+Files used in configuring a software package:
+
+                                          .--> atconfig
+                                         /
+     [atlocal.in] -->  config.status* --<
+                                         \
+                                          `--> [atlocal]
+
+Files created during test suite execution:
+
+     atconfig -->.                    .--> testsuite.log
+                  \                  /
+                   >-- testsuite* --<
+                  /                  \
+     [atlocal] ->'                    `--> [testsuite.dir]
+
+File: autoconf.info,  Node: Autotest Logs,  Prev: testsuite Scripts,  Up: Using an Autotest Test Suite
+
+19.1.2 Autotest Logs
+--------------------
+
+When run, the test suite creates a log file named after itself, e.g., a
+test suite named `testsuite' creates `testsuite.log'.  It contains a
+lot of information, usually more than maintainers actually need, but
+therefore most of the time it contains all that is needed:
+
+command line arguments
+     A bad but unfortunately widespread habit consists of setting
+     environment variables before the command, such as in
+     `CC=my-home-grown-cc ./testsuite'.  The test suite does not know
+     this change, hence (i) it cannot report it to you, and (ii) it
+     cannot preserve the value of `CC' for subsequent runs.  Autoconf
+     faced exactly the same problem, and solved it by asking users to
+     pass the variable definitions as command line arguments.  Autotest
+     requires this rule, too, but has no means to enforce it; the log
+     then contains a trace of the variables that were changed by the
+     user.
+
+`ChangeLog' excerpts
+     The topmost lines of all the `ChangeLog' files found in the source
+     hierarchy.  This is especially useful when bugs are reported
+     against development versions of the package, since the version
+     string does not provide sufficient information to know the exact
+     state of the sources the user compiled.  Of course, this relies on
+     the use of a `ChangeLog'.
+
+build machine
+     Running a test suite in a cross-compile environment is not an easy
+     task, since it would mean having the test suite run on a machine
+     BUILD, while running programs on a machine HOST.  It is much
+     simpler to run both the test suite and the programs on HOST, but
+     then, from the point of view of the test suite, there remains a
+     single environment, HOST = BUILD.  The log contains relevant
+     information on the state of the BUILD machine, including some
+     important environment variables.
+
+tested programs
+     The absolute file name and answers to `--version' of the tested
+     programs (see *note Writing Testsuites::, `AT_TESTED').
+
+configuration log
+     The contents of `config.log', as created by `configure', are
+     appended.  It contains the configuration flags and a detailed
+     report on the configuration itself.
+
+File: autoconf.info,  Node: Writing Testsuites,  Next: testsuite Invocation,  Prev: Using an Autotest Test Suite,  Up: Using Autotest
+

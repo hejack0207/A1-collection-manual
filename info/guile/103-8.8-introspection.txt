@@ -1,0 +1,366 @@
+8.8 Introspection
+=================
+
+“Introspection”, or “reflection”, means being able to obtain information
+dynamically about GOOPS objects.  It is perhaps best illustrated by
+considering an object oriented language that does not provide any
+introspection, namely C++.
+
+   Nothing in C++ allows a running program to obtain answers to the
+following types of question:
+
+   • What are the data members of this object or class?
+
+   • What classes does this class inherit from?
+
+   • Is this method call virtual or non-virtual?
+
+   • If I invoke ‘Employee::adjustHoliday()’, what class contains the
+     ‘adjustHoliday()’ method that will be applied?
+
+   In C++, answers to such questions can only be determined by looking
+at the source code, if you have access to it.  GOOPS, on the other hand,
+includes procedures that allow answers to these questions — or their
+GOOPS equivalents — to be obtained dynamically, at run time.
+
+* Menu:
+
+* Classes::
+* Instances::
+* Slots::
+* Generic Functions::
+* Accessing Slots::
+
+File: guile.info,  Node: Classes,  Next: Instances,  Up: Introspection
+
+8.8.1 Classes
+-------------
+
+A GOOPS class is itself an instance of the ‘<class>’ class, or of a
+subclass of ‘<class>’.  The definition of the ‘<class>’ class has slots
+that are used to describe the properties of a class, including the
+following.
+
+ -- primitive procedure: class-name class
+     Return the name of class CLASS.  This is the value of CLASS’s
+     ‘name’ slot.
+
+ -- primitive procedure: class-direct-supers class
+     Return a list containing the direct superclasses of CLASS.  This is
+     the value of CLASS’s ‘direct-supers’ slot.
+
+ -- primitive procedure: class-direct-slots class
+     Return a list containing the slot definitions of the direct slots
+     of CLASS.  This is the value of CLASS’s ‘direct-slots’ slot.
+
+ -- primitive procedure: class-direct-subclasses class
+     Return a list containing the direct subclasses of CLASS.  This is
+     the value of CLASS’s ‘direct-subclasses’ slot.
+
+ -- primitive procedure: class-direct-methods class
+     Return a list of all the generic function methods that use CLASS as
+     a formal parameter specializer.  This is the value of CLASS’s
+     ‘direct-methods’ slot.
+
+ -- primitive procedure: class-precedence-list class
+     Return the class precedence list for class CLASS (*note Class
+     Precedence List::).  This is the value of CLASS’s ‘cpl’ slot.
+
+ -- primitive procedure: class-slots class
+     Return a list containing the slot definitions for all CLASS’s
+     slots, including any slots that are inherited from superclasses.
+     This is the value of CLASS’s ‘slots’ slot.
+
+ -- procedure: class-subclasses class
+     Return a list of all subclasses of CLASS.
+
+ -- procedure: class-methods class
+     Return a list of all methods that use CLASS or a subclass of CLASS
+     as one of its formal parameter specializers.
+
+File: guile.info,  Node: Instances,  Next: Slots,  Prev: Classes,  Up: Introspection
+
+8.8.2 Instances
+---------------
+
+ -- primitive procedure: class-of value
+     Return the GOOPS class of any Scheme VALUE.
+
+ -- primitive procedure: instance? object
+     Return ‘#t’ if OBJECT is any GOOPS instance, otherwise ‘#f’.
+
+ -- procedure: is-a? object class
+     Return ‘#t’ if OBJECT is an instance of CLASS or one of its
+     subclasses.
+
+   You can use the ‘is-a?’ predicate to ask whether any given value
+belongs to a given class, or ‘class-of’ to discover the class of a given
+value.  Note that when GOOPS is loaded (by code using the ‘(oop goops)’
+module) built-in classes like ‘<string>’, ‘<list>’ and ‘<number>’ are
+automatically set up, corresponding to all Guile Scheme types.
+
+     (is-a? 2.3 <number>) ⇒ #t
+     (is-a? 2.3 <real>) ⇒ #t
+     (is-a? 2.3 <string>) ⇒ #f
+     (is-a? '("a" "b") <string>) ⇒ #f
+     (is-a? '("a" "b") <list>) ⇒ #t
+     (is-a? (car '("a" "b")) <string>) ⇒ #t
+     (is-a? <string> <class>) ⇒ #t
+     (is-a? <class> <string>) ⇒ #f
+
+     (class-of 2.3) ⇒ #<<class> <real> 908c708>
+     (class-of #(1 2 3)) ⇒ #<<class> <vector> 908cd20>
+     (class-of <string>) ⇒ #<<class> <class> 8bd3e10>
+     (class-of <class>) ⇒ #<<class> <class> 8bd3e10>
+
+File: guile.info,  Node: Slots,  Next: Generic Functions,  Prev: Instances,  Up: Introspection
+
+8.8.3 Slots
+-----------
+
+ -- procedure: class-slot-definition class slot-name
+     Return the slot definition for the slot named SLOT-NAME in class
+     CLASS.  SLOT-NAME should be a symbol.
+
+ -- procedure: slot-definition-name slot-def
+     Extract and return the slot name from SLOT-DEF.
+
+ -- procedure: slot-definition-options slot-def
+     Extract and return the slot options from SLOT-DEF.
+
+ -- procedure: slot-definition-allocation slot-def
+     Extract and return the slot allocation option from SLOT-DEF.  This
+     is the value of the ‘#:allocation’ keyword (*note allocation: Slot
+     Options.), or ‘#:instance’ if the ‘#:allocation’ keyword is absent.
+
+ -- procedure: slot-definition-getter slot-def
+     Extract and return the slot getter option from SLOT-DEF.  This is
+     the value of the ‘#:getter’ keyword (*note getter: Slot Options.),
+     or ‘#f’ if the ‘#:getter’ keyword is absent.
+
+ -- procedure: slot-definition-setter slot-def
+     Extract and return the slot setter option from SLOT-DEF.  This is
+     the value of the ‘#:setter’ keyword (*note setter: Slot Options.),
+     or ‘#f’ if the ‘#:setter’ keyword is absent.
+
+ -- procedure: slot-definition-accessor slot-def
+     Extract and return the slot accessor option from SLOT-DEF.  This is
+     the value of the ‘#:accessor’ keyword (*note accessor: Slot
+     Options.), or ‘#f’ if the ‘#:accessor’ keyword is absent.
+
+ -- procedure: slot-definition-init-value slot-def
+     Extract and return the slot init-value option from SLOT-DEF.  This
+     is the value of the ‘#:init-value’ keyword (*note init-value: Slot
+     Options.), or the unbound value if the ‘#:init-value’ keyword is
+     absent.
+
+ -- procedure: slot-definition-init-form slot-def
+     Extract and return the slot init-form option from SLOT-DEF.  This
+     is the value of the ‘#:init-form’ keyword (*note init-form: Slot
+     Options.), or the unbound value if the ‘#:init-form’ keyword is
+     absent.
+
+ -- procedure: slot-definition-init-thunk slot-def
+     Extract and return the slot init-thunk option from SLOT-DEF.  This
+     is the value of the ‘#:init-thunk’ keyword (*note init-thunk: Slot
+     Options.), or ‘#f’ if the ‘#:init-thunk’ keyword is absent.
+
+ -- procedure: slot-definition-init-keyword slot-def
+     Extract and return the slot init-keyword option from SLOT-DEF.
+     This is the value of the ‘#:init-keyword’ keyword (*note
+     init-keyword: Slot Options.), or ‘#f’ if the ‘#:init-keyword’
+     keyword is absent.
+
+ -- procedure: slot-init-function class slot-name
+     Return the initialization function for the slot named SLOT-NAME in
+     class CLASS.  SLOT-NAME should be a symbol.
+
+     The returned initialization function incorporates the effects of
+     the standard ‘#:init-thunk’, ‘#:init-form’ and ‘#:init-value’ slot
+     options.  These initializations can be overridden by the
+     ‘#:init-keyword’ slot option or by a specialized ‘initialize’
+     method, so, in general, the function returned by
+     ‘slot-init-function’ may be irrelevant.  For a fuller discussion,
+     see *note init-value: Slot Options.
+
+File: guile.info,  Node: Generic Functions,  Next: Accessing Slots,  Prev: Slots,  Up: Introspection
+
+8.8.4 Generic Functions
+-----------------------
+
+A generic function is an instance of the ‘<generic>’ class, or of a
+subclass of ‘<generic>’.  The definition of the ‘<generic>’ class has
+slots that are used to describe the properties of a generic function.
+
+ -- primitive procedure: generic-function-name gf
+     Return the name of generic function GF.
+
+ -- primitive procedure: generic-function-methods gf
+     Return a list of the methods of generic function GF.  This is the
+     value of GF’s ‘methods’ slot.
+
+   Similarly, a method is an instance of the ‘<method>’ class, or of a
+subclass of ‘<method>’; and the definition of the ‘<method>’ class has
+slots that are used to describe the properties of a method.
+
+ -- primitive procedure: method-generic-function method
+     Return the generic function that METHOD belongs to.  This is the
+     value of METHOD’s ‘generic-function’ slot.
+
+ -- primitive procedure: method-specializers method
+     Return a list of METHOD’s formal parameter specializers .  This is
+     the value of METHOD’s ‘specializers’ slot.
+
+ -- primitive procedure: method-procedure method
+     Return the procedure that implements METHOD.  This is the value of
+     METHOD’s ‘procedure’ slot.
+
+ -- generic: method-source
+ -- method: method-source (m <method>)
+     Return an expression that prints to show the definition of method
+     M.
+
+          (define-generic cube)
+
+          (define-method (cube (n <number>))
+            (* n n n))
+
+          (map method-source (generic-function-methods cube))
+          ⇒
+          ((method ((n <number>)) (* n n n)))
+
+File: guile.info,  Node: Accessing Slots,  Prev: Generic Functions,  Up: Introspection
+
+8.8.5 Accessing Slots
+---------------------
+
+Any slot, regardless of its allocation, can be queried, referenced and
+set using the following four primitive procedures.
+
+ -- primitive procedure: slot-exists? obj slot-name
+     Return ‘#t’ if OBJ has a slot with name SLOT-NAME, otherwise ‘#f’.
+
+ -- primitive procedure: slot-bound? obj slot-name
+     Return ‘#t’ if the slot named SLOT-NAME in OBJ has a value,
+     otherwise ‘#f’.
+
+     ‘slot-bound?’ calls the generic function ‘slot-missing’ if OBJ does
+     not have a slot called SLOT-NAME (*note slot-missing: Accessing
+     Slots.).
+
+ -- primitive procedure: slot-ref obj slot-name
+     Return the value of the slot named SLOT-NAME in OBJ.
+
+     ‘slot-ref’ calls the generic function ‘slot-missing’ if OBJ does
+     not have a slot called SLOT-NAME (*note slot-missing: Accessing
+     Slots.).
+
+     ‘slot-ref’ calls the generic function ‘slot-unbound’ if the named
+     slot in OBJ does not have a value (*note slot-unbound: Accessing
+     Slots.).
+
+ -- primitive procedure: slot-set! obj slot-name value
+     Set the value of the slot named SLOT-NAME in OBJ to VALUE.
+
+     ‘slot-set!’ calls the generic function ‘slot-missing’ if OBJ does
+     not have a slot called SLOT-NAME (*note slot-missing: Accessing
+     Slots.).
+
+   GOOPS stores information about slots in classes.  Internally, all of
+these procedures work by looking up the slot definition for the slot
+named SLOT-NAME in the class ‘(class-of OBJ)’, and then using the slot
+definition’s “getter” and “setter” closures to get and set the slot
+value.
+
+   The next four procedures differ from the previous ones in that they
+take the class as an explicit argument, rather than assuming ‘(class-of
+OBJ)’.  Therefore they allow you to apply the “getter” and “setter”
+closures of a slot definition in one class to an instance of a different
+class.
+
+ -- primitive procedure: slot-exists-using-class? class obj slot-name
+     Return ‘#t’ if CLASS has a slot definition for a slot with name
+     SLOT-NAME, otherwise ‘#f’.
+
+ -- primitive procedure: slot-bound-using-class? class obj slot-name
+     Return ‘#t’ if applying ‘slot-ref-using-class’ to the same
+     arguments would call the generic function ‘slot-unbound’, otherwise
+     ‘#f’.
+
+     ‘slot-bound-using-class?’ calls the generic function ‘slot-missing’
+     if CLASS does not have a slot definition for a slot called
+     SLOT-NAME (*note slot-missing: Accessing Slots.).
+
+ -- primitive procedure: slot-ref-using-class class obj slot-name
+     Apply the “getter” closure for the slot named SLOT-NAME in CLASS to
+     OBJ, and return its result.
+
+     ‘slot-ref-using-class’ calls the generic function ‘slot-missing’ if
+     CLASS does not have a slot definition for a slot called SLOT-NAME
+     (*note slot-missing: Accessing Slots.).
+
+     ‘slot-ref-using-class’ calls the generic function ‘slot-unbound’ if
+     the application of the “getter” closure to OBJ returns an unbound
+     value (*note slot-unbound: Accessing Slots.).
+
+ -- primitive procedure: slot-set-using-class! class obj slot-name value
+     Apply the “setter” closure for the slot named SLOT-NAME in CLASS to
+     OBJ and VALUE.
+
+     ‘slot-set-using-class!’ calls the generic function ‘slot-missing’
+     if CLASS does not have a slot definition for a slot called
+     SLOT-NAME (*note slot-missing: Accessing Slots.).
+
+   Slots whose allocation is per-class rather than per-instance can be
+referenced and set without needing to specify any particular instance.
+
+ -- procedure: class-slot-ref class slot-name
+     Return the value of the slot named SLOT-NAME in class CLASS.  The
+     named slot must have ‘#:class’ or ‘#:each-subclass’ allocation
+     (*note allocation: Slot Options.).
+
+     If there is no such slot with ‘#:class’ or ‘#:each-subclass’
+     allocation, ‘class-slot-ref’ calls the ‘slot-missing’ generic
+     function with arguments CLASS and SLOT-NAME.  Otherwise, if the
+     slot value is unbound, ‘class-slot-ref’ calls the ‘slot-unbound’
+     generic function, with the same arguments.
+
+ -- procedure: class-slot-set! class slot-name value
+     Set the value of the slot named SLOT-NAME in class CLASS to VALUE.
+     The named slot must have ‘#:class’ or ‘#:each-subclass’ allocation
+     (*note allocation: Slot Options.).
+
+     If there is no such slot with ‘#:class’ or ‘#:each-subclass’
+     allocation, ‘class-slot-ref’ calls the ‘slot-missing’ generic
+     function with arguments CLASS and SLOT-NAME.
+
+   When a ‘slot-ref’ or ‘slot-set!’ call specifies a non-existent slot
+name, or tries to reference a slot whose value is unbound, GOOPS calls
+one of the following generic functions.
+
+ -- generic: slot-missing
+ -- method: slot-missing (class <class>) slot-name
+ -- method: slot-missing (class <class>) (object <object>) slot-name
+ -- method: slot-missing (class <class>) (object <object>) slot-name
+          value
+     When an application attempts to reference or set a class or
+     instance slot by name, and the slot name is invalid for the
+     specified CLASS or OBJECT, GOOPS calls the ‘slot-missing’ generic
+     function.
+
+     The default methods all call ‘goops-error’ with an appropriate
+     message.
+
+ -- generic: slot-unbound
+ -- method: slot-unbound (object <object>)
+ -- method: slot-unbound (class <class>) slot-name
+ -- method: slot-unbound (class <class>) (object <object>) slot-name
+     When an application attempts to reference a class or instance slot,
+     and the slot’s value is unbound, GOOPS calls the ‘slot-unbound’
+     generic function.
+
+     The default methods all call ‘goops-error’ with an appropriate
+     message.
+
+File: guile.info,  Node: GOOPS Error Handling,  Next: GOOPS Object Miscellany,  Prev: Introspection,  Up: GOOPS
+

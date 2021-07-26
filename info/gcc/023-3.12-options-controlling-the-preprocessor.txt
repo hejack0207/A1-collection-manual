@@ -1,0 +1,486 @@
+3.12 Options Controlling the Preprocessor
+=========================================
+
+These options control the C preprocessor, which is run on each C source
+file before actual compilation.
+
+ If you use the '-E' option, nothing is done except preprocessing.  Some
+of these options make sense only together with '-E' because they cause
+the preprocessor output to be unsuitable for actual compilation.
+
+ In addition to the options listed here, there are a number of options
+to control search paths for include files documented in *note Directory
+Options::.  Options to control preprocessor diagnostics are listed in
+*note Warning Options::.
+
+'-D NAME'
+     Predefine NAME as a macro, with definition '1'.
+
+'-D NAME=DEFINITION'
+     The contents of DEFINITION are tokenized and processed as if they
+     appeared during translation phase three in a '#define' directive.
+     In particular, the definition is truncated by embedded newline
+     characters.
+
+     If you are invoking the preprocessor from a shell or shell-like
+     program you may need to use the shell's quoting syntax to protect
+     characters such as spaces that have a meaning in the shell syntax.
+
+     If you wish to define a function-like macro on the command line,
+     write its argument list with surrounding parentheses before the
+     equals sign (if any).  Parentheses are meaningful to most shells,
+     so you should quote the option.  With 'sh' and 'csh',
+     '-D'NAME(ARGS...)=DEFINITION'' works.
+
+     '-D' and '-U' options are processed in the order they are given on
+     the command line.  All '-imacros FILE' and '-include FILE' options
+     are processed after all '-D' and '-U' options.
+
+'-U NAME'
+     Cancel any previous definition of NAME, either built in or provided
+     with a '-D' option.
+
+'-include FILE'
+     Process FILE as if '#include "file"' appeared as the first line of
+     the primary source file.  However, the first directory searched for
+     FILE is the preprocessor's working directory _instead of_ the
+     directory containing the main source file.  If not found there, it
+     is searched for in the remainder of the '#include "..."' search
+     chain as normal.
+
+     If multiple '-include' options are given, the files are included in
+     the order they appear on the command line.
+
+'-imacros FILE'
+     Exactly like '-include', except that any output produced by
+     scanning FILE is thrown away.  Macros it defines remain defined.
+     This allows you to acquire all the macros from a header without
+     also processing its declarations.
+
+     All files specified by '-imacros' are processed before all files
+     specified by '-include'.
+
+'-undef'
+     Do not predefine any system-specific or GCC-specific macros.  The
+     standard predefined macros remain defined.
+
+'-pthread'
+     Define additional macros required for using the POSIX threads
+     library.  You should use this option consistently for both
+     compilation and linking.  This option is supported on GNU/Linux
+     targets, most other Unix derivatives, and also on x86 Cygwin and
+     MinGW targets.
+
+'-M'
+     Instead of outputting the result of preprocessing, output a rule
+     suitable for 'make' describing the dependencies of the main source
+     file.  The preprocessor outputs one 'make' rule containing the
+     object file name for that source file, a colon, and the names of
+     all the included files, including those coming from '-include' or
+     '-imacros' command-line options.
+
+     Unless specified explicitly (with '-MT' or '-MQ'), the object file
+     name consists of the name of the source file with any suffix
+     replaced with object file suffix and with any leading directory
+     parts removed.  If there are many included files then the rule is
+     split into several lines using '\'-newline.  The rule has no
+     commands.
+
+     This option does not suppress the preprocessor's debug output, such
+     as '-dM'.  To avoid mixing such debug output with the dependency
+     rules you should explicitly specify the dependency output file with
+     '-MF', or use an environment variable like 'DEPENDENCIES_OUTPUT'
+     (*note Environment Variables::).  Debug output is still sent to the
+     regular output stream as normal.
+
+     Passing '-M' to the driver implies '-E', and suppresses warnings
+     with an implicit '-w'.
+
+'-MM'
+     Like '-M' but do not mention header files that are found in system
+     header directories, nor header files that are included, directly or
+     indirectly, from such a header.
+
+     This implies that the choice of angle brackets or double quotes in
+     an '#include' directive does not in itself determine whether that
+     header appears in '-MM' dependency output.
+
+'-MF FILE'
+     When used with '-M' or '-MM', specifies a file to write the
+     dependencies to.  If no '-MF' switch is given the preprocessor
+     sends the rules to the same place it would send preprocessed
+     output.
+
+     When used with the driver options '-MD' or '-MMD', '-MF' overrides
+     the default dependency output file.
+
+     If FILE is '-', then the dependencies are written to 'stdout'.
+
+'-MG'
+     In conjunction with an option such as '-M' requesting dependency
+     generation, '-MG' assumes missing header files are generated files
+     and adds them to the dependency list without raising an error.  The
+     dependency filename is taken directly from the '#include' directive
+     without prepending any path.  '-MG' also suppresses preprocessed
+     output, as a missing header file renders this useless.
+
+     This feature is used in automatic updating of makefiles.
+
+'-MP'
+     This option instructs CPP to add a phony target for each dependency
+     other than the main file, causing each to depend on nothing.  These
+     dummy rules work around errors 'make' gives if you remove header
+     files without updating the 'Makefile' to match.
+
+     This is typical output:
+
+          test.o: test.c test.h
+
+          test.h:
+
+'-MT TARGET'
+
+     Change the target of the rule emitted by dependency generation.  By
+     default CPP takes the name of the main input file, deletes any
+     directory components and any file suffix such as '.c', and appends
+     the platform's usual object suffix.  The result is the target.
+
+     An '-MT' option sets the target to be exactly the string you
+     specify.  If you want multiple targets, you can specify them as a
+     single argument to '-MT', or use multiple '-MT' options.
+
+     For example, '-MT '$(objpfx)foo.o'' might give
+
+          $(objpfx)foo.o: foo.c
+
+'-MQ TARGET'
+
+     Same as '-MT', but it quotes any characters which are special to
+     Make.  '-MQ '$(objpfx)foo.o'' gives
+
+          $$(objpfx)foo.o: foo.c
+
+     The default target is automatically quoted, as if it were given
+     with '-MQ'.
+
+'-MD'
+     '-MD' is equivalent to '-M -MF FILE', except that '-E' is not
+     implied.  The driver determines FILE based on whether an '-o'
+     option is given.  If it is, the driver uses its argument but with a
+     suffix of '.d', otherwise it takes the name of the input file,
+     removes any directory components and suffix, and applies a '.d'
+     suffix.
+
+     If '-MD' is used in conjunction with '-E', any '-o' switch is
+     understood to specify the dependency output file (*note -MF:
+     dashMF.), but if used without '-E', each '-o' is understood to
+     specify a target object file.
+
+     Since '-E' is not implied, '-MD' can be used to generate a
+     dependency output file as a side effect of the compilation process.
+
+'-MMD'
+     Like '-MD' except mention only user header files, not system header
+     files.
+
+'-fpreprocessed'
+     Indicate to the preprocessor that the input file has already been
+     preprocessed.  This suppresses things like macro expansion,
+     trigraph conversion, escaped newline splicing, and processing of
+     most directives.  The preprocessor still recognizes and removes
+     comments, so that you can pass a file preprocessed with '-C' to the
+     compiler without problems.  In this mode the integrated
+     preprocessor is little more than a tokenizer for the front ends.
+
+     '-fpreprocessed' is implicit if the input file has one of the
+     extensions '.i', '.ii' or '.mi'.  These are the extensions that GCC
+     uses for preprocessed files created by '-save-temps'.
+
+'-fdirectives-only'
+     When preprocessing, handle directives, but do not expand macros.
+
+     The option's behavior depends on the '-E' and '-fpreprocessed'
+     options.
+
+     With '-E', preprocessing is limited to the handling of directives
+     such as '#define', '#ifdef', and '#error'.  Other preprocessor
+     operations, such as macro expansion and trigraph conversion are not
+     performed.  In addition, the '-dD' option is implicitly enabled.
+
+     With '-fpreprocessed', predefinition of command line and most
+     builtin macros is disabled.  Macros such as '__LINE__', which are
+     contextually dependent, are handled normally.  This enables
+     compilation of files previously preprocessed with '-E
+     -fdirectives-only'.
+
+     With both '-E' and '-fpreprocessed', the rules for '-fpreprocessed'
+     take precedence.  This enables full preprocessing of files
+     previously preprocessed with '-E -fdirectives-only'.
+
+'-fdollars-in-identifiers'
+     Accept '$' in identifiers.
+
+'-fextended-identifiers'
+     Accept universal character names in identifiers.  This option is
+     enabled by default for C99 (and later C standard versions) and C++.
+
+'-fno-canonical-system-headers'
+     When preprocessing, do not shorten system header paths with
+     canonicalization.
+
+'-ftabstop=WIDTH'
+     Set the distance between tab stops.  This helps the preprocessor
+     report correct column numbers in warnings or errors, even if tabs
+     appear on the line.  If the value is less than 1 or greater than
+     100, the option is ignored.  The default is 8.
+
+'-ftrack-macro-expansion[=LEVEL]'
+     Track locations of tokens across macro expansions.  This allows the
+     compiler to emit diagnostic about the current macro expansion stack
+     when a compilation error occurs in a macro expansion.  Using this
+     option makes the preprocessor and the compiler consume more memory.
+     The LEVEL parameter can be used to choose the level of precision of
+     token location tracking thus decreasing the memory consumption if
+     necessary.  Value '0' of LEVEL de-activates this option.  Value '1'
+     tracks tokens locations in a degraded mode for the sake of minimal
+     memory overhead.  In this mode all tokens resulting from the
+     expansion of an argument of a function-like macro have the same
+     location.  Value '2' tracks tokens locations completely.  This
+     value is the most memory hungry.  When this option is given no
+     argument, the default parameter value is '2'.
+
+     Note that '-ftrack-macro-expansion=2' is activated by default.
+
+'-fmacro-prefix-map=OLD=NEW'
+     When preprocessing files residing in directory 'OLD', expand the
+     '__FILE__' and '__BASE_FILE__' macros as if the files resided in
+     directory 'NEW' instead.  This can be used to change an absolute
+     path to a relative path by using '.' for NEW which can result in
+     more reproducible builds that are location independent.  This
+     option also affects '__builtin_FILE()' during compilation.  See
+     also '-ffile-prefix-map'.
+
+'-fexec-charset=CHARSET'
+     Set the execution character set, used for string and character
+     constants.  The default is UTF-8.  CHARSET can be any encoding
+     supported by the system's 'iconv' library routine.
+
+'-fwide-exec-charset=CHARSET'
+     Set the wide execution character set, used for wide string and
+     character constants.  The default is UTF-32 or UTF-16, whichever
+     corresponds to the width of 'wchar_t'.  As with '-fexec-charset',
+     CHARSET can be any encoding supported by the system's 'iconv'
+     library routine; however, you will have problems with encodings
+     that do not fit exactly in 'wchar_t'.
+
+'-finput-charset=CHARSET'
+     Set the input character set, used for translation from the
+     character set of the input file to the source character set used by
+     GCC.  If the locale does not specify, or GCC cannot get this
+     information from the locale, the default is UTF-8.  This can be
+     overridden by either the locale or this command-line option.
+     Currently the command-line option takes precedence if there's a
+     conflict.  CHARSET can be any encoding supported by the system's
+     'iconv' library routine.
+
+'-fpch-deps'
+     When using precompiled headers (*note Precompiled Headers::), this
+     flag causes the dependency-output flags to also list the files from
+     the precompiled header's dependencies.  If not specified, only the
+     precompiled header are listed and not the files that were used to
+     create it, because those files are not consulted when a precompiled
+     header is used.
+
+'-fpch-preprocess'
+     This option allows use of a precompiled header (*note Precompiled
+     Headers::) together with '-E'.  It inserts a special '#pragma',
+     '#pragma GCC pch_preprocess "FILENAME"' in the output to mark the
+     place where the precompiled header was found, and its FILENAME.
+     When '-fpreprocessed' is in use, GCC recognizes this '#pragma' and
+     loads the PCH.
+
+     This option is off by default, because the resulting preprocessed
+     output is only really suitable as input to GCC.  It is switched on
+     by '-save-temps'.
+
+     You should not write this '#pragma' in your own code, but it is
+     safe to edit the filename if the PCH file is available in a
+     different location.  The filename may be absolute or it may be
+     relative to GCC's current directory.
+
+'-fworking-directory'
+     Enable generation of linemarkers in the preprocessor output that
+     let the compiler know the current working directory at the time of
+     preprocessing.  When this option is enabled, the preprocessor
+     emits, after the initial linemarker, a second linemarker with the
+     current working directory followed by two slashes.  GCC uses this
+     directory, when it's present in the preprocessed input, as the
+     directory emitted as the current working directory in some
+     debugging information formats.  This option is implicitly enabled
+     if debugging information is enabled, but this can be inhibited with
+     the negated form '-fno-working-directory'.  If the '-P' flag is
+     present in the command line, this option has no effect, since no
+     '#line' directives are emitted whatsoever.
+
+'-A PREDICATE=ANSWER'
+     Make an assertion with the predicate PREDICATE and answer ANSWER.
+     This form is preferred to the older form '-A PREDICATE(ANSWER)',
+     which is still supported, because it does not use shell special
+     characters.
+
+'-A -PREDICATE=ANSWER'
+     Cancel an assertion with the predicate PREDICATE and answer ANSWER.
+
+'-C'
+     Do not discard comments.  All comments are passed through to the
+     output file, except for comments in processed directives, which are
+     deleted along with the directive.
+
+     You should be prepared for side effects when using '-C'; it causes
+     the preprocessor to treat comments as tokens in their own right.
+     For example, comments appearing at the start of what would be a
+     directive line have the effect of turning that line into an
+     ordinary source line, since the first token on the line is no
+     longer a '#'.
+
+'-CC'
+     Do not discard comments, including during macro expansion.  This is
+     like '-C', except that comments contained within macros are also
+     passed through to the output file where the macro is expanded.
+
+     In addition to the side effects of the '-C' option, the '-CC'
+     option causes all C++-style comments inside a macro to be converted
+     to C-style comments.  This is to prevent later use of that macro
+     from inadvertently commenting out the remainder of the source line.
+
+     The '-CC' option is generally used to support lint comments.
+
+'-P'
+     Inhibit generation of linemarkers in the output from the
+     preprocessor.  This might be useful when running the preprocessor
+     on something that is not C code, and will be sent to a program
+     which might be confused by the linemarkers.
+
+'-traditional'
+'-traditional-cpp'
+
+     Try to imitate the behavior of pre-standard C preprocessors, as
+     opposed to ISO C preprocessors.  See the GNU CPP manual for
+     details.
+
+     Note that GCC does not otherwise attempt to emulate a pre-standard
+     C compiler, and these options are only supported with the '-E'
+     switch, or when invoking CPP explicitly.
+
+'-trigraphs'
+     Support ISO C trigraphs.  These are three-character sequences, all
+     starting with '??', that are defined by ISO C to stand for single
+     characters.  For example, '??/' stands for '\', so ''??/n'' is a
+     character constant for a newline.
+
+     The nine trigraphs and their replacements are
+
+          Trigraph:       ??(  ??)  ??<  ??>  ??=  ??/  ??'  ??!  ??-
+          Replacement:      [    ]    {    }    #    \    ^    |    ~
+
+     By default, GCC ignores trigraphs, but in standard-conforming modes
+     it converts them.  See the '-std' and '-ansi' options.
+
+'-remap'
+     Enable special code to work around file systems which only permit
+     very short file names, such as MS-DOS.
+
+'-H'
+     Print the name of each header file used, in addition to other
+     normal activities.  Each name is indented to show how deep in the
+     '#include' stack it is.  Precompiled header files are also printed,
+     even if they are found to be invalid; an invalid precompiled header
+     file is printed with '...x' and a valid one with '...!' .
+
+'-dLETTERS'
+     Says to make debugging dumps during compilation as specified by
+     LETTERS.  The flags documented here are those relevant to the
+     preprocessor.  Other LETTERS are interpreted by the compiler
+     proper, or reserved for future versions of GCC, and so are silently
+     ignored.  If you specify LETTERS whose behavior conflicts, the
+     result is undefined.  *Note Developer Options::, for more
+     information.
+
+     '-dM'
+          Instead of the normal output, generate a list of '#define'
+          directives for all the macros defined during the execution of
+          the preprocessor, including predefined macros.  This gives you
+          a way of finding out what is predefined in your version of the
+          preprocessor.  Assuming you have no file 'foo.h', the command
+
+               touch foo.h; cpp -dM foo.h
+
+          shows all the predefined macros.
+
+          If you use '-dM' without the '-E' option, '-dM' is interpreted
+          as a synonym for '-fdump-rtl-mach'.  *Note (gcc)Developer
+          Options::.
+
+     '-dD'
+          Like '-dM' except in two respects: it does _not_ include the
+          predefined macros, and it outputs _both_ the '#define'
+          directives and the result of preprocessing.  Both kinds of
+          output go to the standard output file.
+
+     '-dN'
+          Like '-dD', but emit only the macro names, not their
+          expansions.
+
+     '-dI'
+          Output '#include' directives in addition to the result of
+          preprocessing.
+
+     '-dU'
+          Like '-dD' except that only macros that are expanded, or whose
+          definedness is tested in preprocessor directives, are output;
+          the output is delayed until the use or test of the macro; and
+          '#undef' directives are also output for macros tested but
+          undefined at the time.
+
+'-fdebug-cpp'
+     This option is only useful for debugging GCC. When used from CPP or
+     with '-E', it dumps debugging information about location maps.
+     Every token in the output is preceded by the dump of the map its
+     location belongs to.
+
+     When used from GCC without '-E', this option has no effect.
+
+'-Wp,OPTION'
+     You can use '-Wp,OPTION' to bypass the compiler driver and pass
+     OPTION directly through to the preprocessor.  If OPTION contains
+     commas, it is split into multiple options at the commas.  However,
+     many options are modified, translated or interpreted by the
+     compiler driver before being passed to the preprocessor, and '-Wp'
+     forcibly bypasses this phase.  The preprocessor's direct interface
+     is undocumented and subject to change, so whenever possible you
+     should avoid using '-Wp' and let the driver handle the options
+     instead.
+
+'-Xpreprocessor OPTION'
+     Pass OPTION as an option to the preprocessor.  You can use this to
+     supply system-specific preprocessor options that GCC does not
+     recognize.
+
+     If you want to pass an option that takes an argument, you must use
+     '-Xpreprocessor' twice, once for the option and once for the
+     argument.
+
+'-no-integrated-cpp'
+     Perform preprocessing as a separate pass before compilation.  By
+     default, GCC performs preprocessing as an integrated part of input
+     tokenization and parsing.  If this option is provided, the
+     appropriate language front end ('cc1', 'cc1plus', or 'cc1obj' for
+     C, C++, and Objective-C, respectively) is instead invoked twice,
+     once for preprocessing only and once for actual compilation of the
+     preprocessed input.  This option may be useful in conjunction with
+     the '-B' or '-wrapper' options to specify an alternate preprocessor
+     or perform additional processing of the program source between
+     normal preprocessing and compilation.
+
+File: gcc.info,  Node: Assembler Options,  Next: Link Options,  Prev: Preprocessor Options,  Up: Invoking GCC
+

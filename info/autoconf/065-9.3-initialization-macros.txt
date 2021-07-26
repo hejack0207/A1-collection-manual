@@ -1,0 +1,107 @@
+9.3 Initialization Macros
+=========================
+
+ -- Macro: AS_BOURNE_COMPATIBLE
+     Set up the shell to be more compatible with the Bourne shell as
+     standardized by Posix, if possible.  This may involve setting
+     environment variables, or setting options, or similar
+     implementation-specific actions.  This macro is deprecated, since
+     `AS_INIT' already invokes it.
+
+ -- Macro: AS_INIT
+     Initialize the M4sh environment.  This macro calls `m4_init', then
+     outputs the `#! /bin/sh' line, a notice about where the output was
+     generated from, and code to sanitize the environment for the rest
+     of the script.  Among other initializations, this sets `SHELL' to
+     the shell chosen to run the script (*note CONFIG_SHELL::), and
+     `LC_ALL' to ensure the C locale.  Finally, it changes the current
+     diversion to `BODY'.  `AS_INIT' is called automatically by
+     `AC_INIT' and `AT_INIT', so shell code in `configure',
+     `config.status', and `testsuite' all benefit from a sanitized
+     shell environment.
+
+ -- Macro: AS_INIT_GENERATED (FILE, [COMMENT])
+     Emit shell code to start the creation of a subsidiary shell script
+     in FILE, including changing FILE to be executable.  This macro
+     populates the child script with information learned from the parent
+     (thus, the emitted code is equivalent in effect, but more
+     efficient, than the code output by `AS_INIT',
+     `AS_BOURNE_COMPATIBLE', and `AS_SHELL_SANITIZE').  If present,
+     COMMENT is output near the beginning of the child, prior to the
+     shell initialization code, and is subject to parameter expansion,
+     command substitution, and backslash quote removal.  The parent
+     script should check the exit status after this macro, in case FILE
+     could not be properly created (for example, if the disk was full).
+     If successfully created, the parent script can then proceed to
+     append additional M4sh constructs into the child script.
+
+     Note that the child script starts life without a log file open, so
+     if the parent script uses logging (*note AS_MESSAGE_LOG_FD::), you
+     must temporarily disable any attempts to use the log file until
+     after emitting code to open a log within the child.  On the other
+     hand, if the parent script has `AS_MESSAGE_FD' redirected
+     somewhere besides `1', then the child script already has code that
+     copies stdout to that descriptor.  Currently, the suggested idiom
+     for writing a M4sh shell script from within another script is:
+
+          AS_INIT_GENERATED([FILE], [[# My child script.
+          ]]) || { AS_ECHO(["Failed to create child script"]); AS_EXIT; }
+          m4_pushdef([AS_MESSAGE_LOG_FD])dnl
+          cat >> "FILE" <<\__EOF__
+          # Code to initialize AS_MESSAGE_LOG_FD
+          m4_popdef([AS_MESSAGE_LOG_FD])dnl
+          # Additional code
+          __EOF__
+
+     This, however, may change in the future as the M4sh interface is
+     stabilized further.
+
+     Also, be aware that use of `LINENO' within the child script may
+     report line numbers relative to their location in the parent
+     script, even when using `AS_LINENO_PREPARE', if the parent script
+     was unable to locate a shell with working `LINENO' support.
+
+ -- Macro: AS_LINENO_PREPARE
+     Find a shell that supports the special variable `LINENO', which
+     contains the number of the currently executing line.  This macro is
+     automatically invoked by `AC_INIT' in configure scripts.
+
+ -- Macro: AS_ME_PREPARE
+     Set up variable `as_me' to be the basename of the currently
+     executing script.  This macro is automatically invoked by
+     `AC_INIT' in configure scripts.
+
+ -- Macro: AS_TMPDIR (PREFIX, [DIR = `${TMPDIR:=/tmp}'])
+     Create, as safely as possible, a temporary sub-directory within
+     DIR with a name starting with PREFIX.  PREFIX should be 2-4
+     characters, to make it slightly easier to identify the owner of
+     the directory.  If DIR is omitted, then the value of `TMPDIR' will
+     be used (defaulting to `/tmp').  On success, the name of the newly
+     created directory is stored in the shell variable `tmp'.  On
+     error, the script is aborted.
+
+     Typically, this macro is coupled with some exit traps to delete
+     the created directory and its contents on exit or interrupt.
+     However, there is a slight window between when the directory is
+     created and when the name is actually known to the shell, so an
+     interrupt at the right moment might leave the temporary directory
+     behind.  Hence it is important to use a PREFIX that makes it
+     easier to determine if a leftover temporary directory from an
+     interrupted script is safe to delete.
+
+     The use of the output variable `$tmp' rather than something in the
+     `as_' namespace is historical; it has the unfortunate consequence
+     that reusing this otherwise common name for any other purpose
+     inside your script has the potential to break any cleanup traps
+     designed to remove the temporary directory.
+
+ -- Macro: AS_SHELL_SANITIZE
+     Initialize the shell suitably for `configure' scripts.  This has
+     the effect of `AS_BOURNE_COMPATIBLE', and sets some other
+     environment variables for predictable results from configuration
+     tests.  For example, it sets `LC_ALL' to change to the default C
+     locale.  *Note Special Shell Variables::.  This macro is
+     deprecated, since `AS_INIT' already invokes it.
+
+File: autoconf.info,  Node: File Descriptor Macros,  Prev: Initialization Macros,  Up: Programming in M4sh
+

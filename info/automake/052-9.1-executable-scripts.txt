@@ -1,0 +1,73 @@
+9.1 Executable Scripts
+======================
+
+It is possible to define and install programs that are scripts.  Such
+programs are listed using the ‘SCRIPTS’ primary name.  When the script
+is distributed in its final, installable form, the ‘Makefile’ usually
+looks as follows:
+
+     # Install my_script in $(bindir) and distribute it.
+     dist_bin_SCRIPTS = my_script
+
+   Scripts are not distributed by default; as we have just seen, those
+that should be distributed can be specified using a ‘dist_’ prefix as
+with other primaries.
+
+   Scripts can be installed in ‘bindir’, ‘sbindir’, ‘libexecdir’,
+‘pkglibexecdir’, or ‘pkgdatadir’.
+
+   Scripts that need not be installed can be listed in ‘noinst_SCRIPTS’,
+and among them, those which are needed only by ‘make check’ should go in
+‘check_SCRIPTS’.
+
+   When a script needs to be built, the ‘Makefile.am’ should include the
+appropriate rules.  For instance the ‘automake’ program itself is a Perl
+script that is generated from ‘automake.in’.  Here is how this is
+handled:
+
+     bin_SCRIPTS = automake
+     CLEANFILES = $(bin_SCRIPTS)
+     EXTRA_DIST = automake.in
+
+     do_subst = sed -e 's,[@]datadir[@],$(datadir),g' \
+                 -e 's,[@]PERL[@],$(PERL),g' \
+                 -e 's,[@]PACKAGE[@],$(PACKAGE),g' \
+                 -e 's,[@]VERSION[@],$(VERSION),g' \
+                 ...
+
+     automake: automake.in Makefile
+             $(do_subst) < $(srcdir)/automake.in > automake
+             chmod +x automake
+
+   Such scripts for which a build rule has been supplied need to be
+deleted explicitly using ‘CLEANFILES’ (*note Clean::), and their sources
+have to be distributed, usually with ‘EXTRA_DIST’ (*note Basics of
+Distribution::).
+
+   Another common way to build scripts is to process them from
+‘configure’ with ‘AC_CONFIG_FILES’.  In this situation Automake knows
+which files should be cleaned and distributed, and what the rebuild
+rules should look like.
+
+   For instance if ‘configure.ac’ contains
+
+     AC_CONFIG_FILES([src/my_script], [chmod +x src/my_script])
+
+to build ‘src/my_script’ from ‘src/my_script.in’, then a
+‘src/Makefile.am’ to install this script in ‘$(bindir)’ can be as simple
+as
+
+     bin_SCRIPTS = my_script
+     CLEANFILES = $(bin_SCRIPTS)
+
+There is no need for ‘EXTRA_DIST’ or any build rule: Automake infers
+them from ‘AC_CONFIG_FILES’ (*note Requirements::).  ‘CLEANFILES’ is
+still useful, because by default Automake will clean targets of
+‘AC_CONFIG_FILES’ in ‘distclean’, not ‘clean’.
+
+   Although this looks simpler, building scripts this way has one
+drawback: directory variables such as ‘$(datadir)’ are not fully
+expanded and may refer to other directory variables.
+
+File: automake.info,  Node: Headers,  Next: Data,  Prev: Scripts,  Up: Other Objects
+

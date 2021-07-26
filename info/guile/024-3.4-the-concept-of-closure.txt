@@ -1,0 +1,541 @@
+3.4 The Concept of Closure
+==========================
+
+The concept of “closure” is the idea that a lambda expression “captures”
+the variable bindings that are in lexical scope at the point where the
+lambda expression occurs.  The procedure created by the lambda
+expression can refer to and mutate the captured bindings, and the values
+of those bindings persist between procedure calls.
+
+   This section explains and explores the various parts of this idea in
+more detail.
+
+* Menu:
+
+* About Environments::          Names, locations, values and environments.
+* Local Variables::             Local variables and local environments.
+* Chaining::                    Environment chaining.
+* Lexical Scope::               The meaning of lexical scoping.
+* Closure::                     Explaining the concept of closure.
+* Serial Number::               Example 1: a serial number generator.
+* Shared Variable::             Example 2: a shared persistent variable.
+* Callback Closure::            Example 3: the callback closure problem.
+* OO Closure::                  Example 4: object orientation.
+
+File: guile.info,  Node: About Environments,  Next: Local Variables,  Up: About Closure
+
+3.4.1 Names, Locations, Values and Environments
+-----------------------------------------------
+
+We said earlier that a variable name in a Scheme program is associated
+with a location in which any kind of Scheme value may be stored.
+(Incidentally, the term “vcell” is often used in Lisp and Scheme circles
+as an alternative to “location”.)  Thus part of what we mean when we
+talk about “creating a variable” is in fact establishing an association
+between a name, or identifier, that is used by the Scheme program code,
+and the variable location to which that name refers.  Although the value
+that is stored in that location may change, the location to which a
+given name refers is always the same.
+
+   We can illustrate this by breaking down the operation of the ‘define’
+syntax into three parts: ‘define’
+
+   • creates a new location
+
+   • establishes an association between that location and the name
+     specified as the first argument of the ‘define’ expression
+
+   • stores in that location the value obtained by evaluating the second
+     argument of the ‘define’ expression.
+
+   A collection of associations between names and locations is called an
+“environment”.  When you create a top level variable in a program using
+‘define’, the name-location association for that variable is added to
+the “top level” environment.  The “top level” environment also includes
+name-location associations for all the procedures that are supplied by
+standard Scheme.
+
+   It is also possible to create environments other than the top level
+one, and to create variable bindings, or name-location associations, in
+those environments.  This ability is a key ingredient in the concept of
+closure; the next subsection shows how it is done.
+
+File: guile.info,  Node: Local Variables,  Next: Chaining,  Prev: About Environments,  Up: About Closure
+
+3.4.2 Local Variables and Environments
+--------------------------------------
+
+We have seen how to create top level variables using the ‘define’ syntax
+(*note Definition::).  It is often useful to create variables that are
+more limited in their scope, typically as part of a procedure body.  In
+Scheme, this is done using the ‘let’ syntax, or one of its modified
+forms ‘let*’ and ‘letrec’.  These syntaxes are described in full later
+in the manual (*note Local Bindings::).  Here our purpose is to
+illustrate their use just enough that we can see how local variables
+work.
+
+   For example, the following code uses a local variable ‘s’ to simplify
+the computation of the area of a triangle given the lengths of its three
+sides.
+
+     (define a 5.3)
+     (define b 4.7)
+     (define c 2.8)
+
+     (define area
+       (let ((s (/ (+ a b c) 2)))
+         (sqrt (* s (- s a) (- s b) (- s c)))))
+
+   The effect of the ‘let’ expression is to create a new environment
+and, within this environment, an association between the name ‘s’ and a
+new location whose initial value is obtained by evaluating ‘(/ (+ a b c)
+2)’.  The expressions in the body of the ‘let’, namely ‘(sqrt (* s (- s
+a) (- s b) (- s c)))’, are then evaluated in the context of the new
+environment, and the value of the last expression evaluated becomes the
+value of the whole ‘let’ expression, and therefore the value of the
+variable ‘area’.
+
+File: guile.info,  Node: Chaining,  Next: Lexical Scope,  Prev: Local Variables,  Up: About Closure
+
+3.4.3 Environment Chaining
+--------------------------
+
+In the example of the previous subsection, we glossed over an important
+point.  The body of the ‘let’ expression in that example refers not only
+to the local variable ‘s’, but also to the top level variables ‘a’, ‘b’,
+‘c’ and ‘sqrt’.  (‘sqrt’ is the standard Scheme procedure for
+calculating a square root.)  If the body of the ‘let’ expression is
+evaluated in the context of the _local_ ‘let’ environment, how does the
+evaluation get at the values of these top level variables?
+
+   The answer is that the local environment created by a ‘let’
+expression automatically has a reference to its containing environment —
+in this case the top level environment — and that the Scheme interpreter
+automatically looks for a variable binding in the containing environment
+if it doesn’t find one in the local environment.  More generally, every
+environment except for the top level one has a reference to its
+containing environment, and the interpreter keeps searching back up the
+chain of environments — from most local to top level — until it either
+finds a variable binding for the required identifier or exhausts the
+chain.
+
+   This description also determines what happens when there is more than
+one variable binding with the same name.  Suppose, continuing the
+example of the previous subsection, that there was also a pre-existing
+top level variable ‘s’ created by the expression:
+
+     (define s "Some beans, my lord!")
+
+   Then both the top level environment and the local ‘let’ environment
+would contain bindings for the name ‘s’.  When evaluating code within
+the ‘let’ body, the interpreter looks first in the local ‘let’
+environment, and so finds the binding for ‘s’ created by the ‘let’
+syntax.  Even though this environment has a reference to the top level
+environment, which also has a binding for ‘s’, the interpreter doesn’t
+get as far as looking there.  When evaluating code outside the ‘let’
+body, the interpreter looks up variable names in the top level
+environment, so the name ‘s’ refers to the top level variable.
+
+   Within the ‘let’ body, the binding for ‘s’ in the local environment
+is said to “shadow” the binding for ‘s’ in the top level environment.
+
+File: guile.info,  Node: Lexical Scope,  Next: Closure,  Prev: Chaining,  Up: About Closure
+
+3.4.4 Lexical Scope
+-------------------
+
+The rules that we have just been describing are the details of how
+Scheme implements “lexical scoping”.  This subsection takes a brief
+diversion to explain what lexical scope means in general and to present
+an example of non-lexical scoping.
+
+   “Lexical scope” in general is the idea that
+
+   • an identifier at a particular place in a program always refers to
+     the same variable location — where “always” means “every time that
+     the containing expression is executed”, and that
+
+   • the variable location to which it refers can be determined by
+     static examination of the source code context in which that
+     identifier appears, without having to consider the flow of
+     execution through the program as a whole.
+
+   In practice, lexical scoping is the norm for most programming
+languages, and probably corresponds to what you would intuitively
+consider to be “normal”.  You may even be wondering how the situation
+could possibly — and usefully — be otherwise.  To demonstrate that
+another kind of scoping is possible, therefore, and to compare it
+against lexical scoping, the following subsection presents an example of
+non-lexical scoping and examines in detail how its behavior differs from
+the corresponding lexically scoped code.
+
+* Menu:
+
+* Scoping Example::             An example of non-lexical scoping.
+
+File: guile.info,  Node: Scoping Example,  Up: Lexical Scope
+
+3.4.4.1 An Example of Non-Lexical Scoping
+.........................................
+
+To demonstrate that non-lexical scoping does exist and can be useful, we
+present the following example from Emacs Lisp, which is a “dynamically
+scoped” language.
+
+     (defvar currency-abbreviation "USD")
+
+     (defun currency-string (units hundredths)
+       (concat currency-abbreviation
+               (number-to-string units)
+               "."
+               (number-to-string hundredths)))
+
+     (defun french-currency-string (units hundredths)
+       (let ((currency-abbreviation "FRF"))
+         (currency-string units hundredths)))
+
+   The question to focus on here is: what does the identifier
+‘currency-abbreviation’ refer to in the ‘currency-string’ function?  The
+answer, in Emacs Lisp, is that all variable bindings go onto a single
+stack, and that ‘currency-abbreviation’ refers to the topmost binding
+from that stack which has the name “currency-abbreviation”.  The binding
+that is created by the ‘defvar’ form, to the value ‘"USD"’, is only
+relevant if none of the code that calls ‘currency-string’ rebinds the
+name “currency-abbreviation” in the meanwhile.
+
+   The second function ‘french-currency-string’ works precisely by
+taking advantage of this behaviour.  It creates a new binding for the
+name “currency-abbreviation” which overrides the one established by the
+‘defvar’ form.
+
+     ;; Note!  This is Emacs Lisp evaluation, not Scheme!
+     (french-currency-string 33 44)
+     ⇒
+     "FRF33.44"
+
+   Now let’s look at the corresponding, _lexically scoped_ Scheme code:
+
+     (define currency-abbreviation "USD")
+
+     (define (currency-string units hundredths)
+       (string-append currency-abbreviation
+                      (number->string units)
+                      "."
+                      (number->string hundredths)))
+
+     (define (french-currency-string units hundredths)
+       (let ((currency-abbreviation "FRF"))
+         (currency-string units hundredths)))
+
+   According to the rules of lexical scoping, the
+‘currency-abbreviation’ in ‘currency-string’ refers to the variable
+location in the innermost environment at that point in the code which
+has a binding for ‘currency-abbreviation’, which is the variable
+location in the top level environment created by the preceding ‘(define
+currency-abbreviation ...)’ expression.
+
+   In Scheme, therefore, the ‘french-currency-string’ procedure does not
+work as intended.  The variable binding that it creates for
+“currency-abbreviation” is purely local to the code that forms the body
+of the ‘let’ expression.  Since this code doesn’t directly use the name
+“currency-abbreviation” at all, the binding is pointless.
+
+     (french-currency-string 33 44)
+     ⇒
+     "USD33.44"
+
+   This begs the question of how the Emacs Lisp behaviour can be
+implemented in Scheme.  In general, this is a design question whose
+answer depends upon the problem that is being addressed.  In this case,
+the best answer may be that ‘currency-string’ should be redesigned so
+that it can take an optional third argument.  This third argument, if
+supplied, is interpreted as a currency abbreviation that overrides the
+default.
+
+   It is possible to change ‘french-currency-string’ so that it mostly
+works without changing ‘currency-string’, but the fix is inelegant, and
+susceptible to interrupts that could leave the ‘currency-abbreviation’
+variable in the wrong state:
+
+     (define (french-currency-string units hundredths)
+       (set! currency-abbreviation "FRF")
+       (let ((result (currency-string units hundredths)))
+         (set! currency-abbreviation "USD")
+         result))
+
+   The key point here is that the code does not create any local binding
+for the identifier ‘currency-abbreviation’, so all occurrences of this
+identifier refer to the top level variable.
+
+File: guile.info,  Node: Closure,  Next: Serial Number,  Prev: Lexical Scope,  Up: About Closure
+
+3.4.5 Closure
+-------------
+
+Consider a ‘let’ expression that doesn’t contain any ‘lambda’s:
+
+     (let ((s (/ (+ a b c) 2)))
+       (sqrt (* s (- s a) (- s b) (- s c))))
+
+When the Scheme interpreter evaluates this, it
+
+   • creates a new environment with a reference to the environment that
+     was current when it encountered the ‘let’
+
+   • creates a variable binding for ‘s’ in the new environment, with
+     value given by ‘(/ (+ a b c) 2)’
+
+   • evaluates the expression in the body of the ‘let’ in the context of
+     the new local environment, and remembers the value ‘V’
+
+   • forgets the local environment
+
+   • continues evaluating the expression that contained the ‘let’, using
+     the value ‘V’ as the value of the ‘let’ expression, in the context
+     of the containing environment.
+
+   After the ‘let’ expression has been evaluated, the local environment
+that was created is simply forgotten, and there is no longer any way to
+access the binding that was created in this environment.  If the same
+code is evaluated again, it will follow the same steps again, creating a
+second new local environment that has no connection with the first, and
+then forgetting this one as well.
+
+   If the ‘let’ body contains a ‘lambda’ expression, however, the local
+environment is _not_ forgotten.  Instead, it becomes associated with the
+procedure that is created by the ‘lambda’ expression, and is reinstated
+every time that that procedure is called.  In detail, this works as
+follows.
+
+   • When the Scheme interpreter evaluates a ‘lambda’ expression, to
+     create a procedure object, it stores the current environment as
+     part of the procedure definition.
+
+   • Then, whenever that procedure is called, the interpreter reinstates
+     the environment that is stored in the procedure definition and
+     evaluates the procedure body within the context of that
+     environment.
+
+   The result is that the procedure body is always evaluated in the
+context of the environment that was current when the procedure was
+created.
+
+   This is what is meant by “closure”.  The next few subsections present
+examples that explore the usefulness of this concept.
+
+File: guile.info,  Node: Serial Number,  Next: Shared Variable,  Prev: Closure,  Up: About Closure
+
+3.4.6 Example 1: A Serial Number Generator
+------------------------------------------
+
+This example uses closure to create a procedure with a variable binding
+that is private to the procedure, like a local variable, but whose value
+persists between procedure calls.
+
+     (define (make-serial-number-generator)
+       (let ((current-serial-number 0))
+         (lambda ()
+           (set! current-serial-number (+ current-serial-number 1))
+           current-serial-number)))
+
+     (define entry-sn-generator (make-serial-number-generator))
+
+     (entry-sn-generator)
+     ⇒
+     1
+
+     (entry-sn-generator)
+     ⇒
+     2
+
+   When ‘make-serial-number-generator’ is called, it creates a local
+environment with a binding for ‘current-serial-number’ whose initial
+value is 0, then, within this environment, creates a procedure.  The
+local environment is stored within the created procedure object and so
+persists for the lifetime of the created procedure.
+
+   Every time the created procedure is invoked, it increments the value
+of the ‘current-serial-number’ binding in the captured environment and
+then returns the current value.
+
+   Note that ‘make-serial-number-generator’ can be called again to
+create a second serial number generator that is independent of the
+first.  Every new invocation of ‘make-serial-number-generator’ creates a
+new local ‘let’ environment and returns a new procedure object with an
+association to this environment.
+
+File: guile.info,  Node: Shared Variable,  Next: Callback Closure,  Prev: Serial Number,  Up: About Closure
+
+3.4.7 Example 2: A Shared Persistent Variable
+---------------------------------------------
+
+This example uses closure to create two procedures, ‘get-balance’ and
+‘deposit’, that both refer to the same captured local environment so
+that they can both access the ‘balance’ variable binding inside that
+environment.  The value of this variable binding persists between calls
+to either procedure.
+
+   Note that the captured ‘balance’ variable binding is private to these
+two procedures: it is not directly accessible to any other code.  It can
+only be accessed indirectly via ‘get-balance’ or ‘deposit’, as
+illustrated by the ‘withdraw’ procedure.
+
+     (define get-balance #f)
+     (define deposit #f)
+
+     (let ((balance 0))
+       (set! get-balance
+             (lambda ()
+               balance))
+       (set! deposit
+             (lambda (amount)
+               (set! balance (+ balance amount))
+               balance)))
+
+     (define (withdraw amount)
+       (deposit (- amount)))
+
+     (get-balance)
+     ⇒
+     0
+
+     (deposit 50)
+     ⇒
+     50
+
+     (withdraw 75)
+     ⇒
+     -25
+
+   An important detail here is that the ‘get-balance’ and ‘deposit’
+variables must be set up by ‘define’ing them at top level and then
+‘set!’ing their values inside the ‘let’ body.  Using ‘define’ within the
+‘let’ body would not work: this would create variable bindings within
+the local ‘let’ environment that would not be accessible at top level.
+
+File: guile.info,  Node: Callback Closure,  Next: OO Closure,  Prev: Shared Variable,  Up: About Closure
+
+3.4.8 Example 3: The Callback Closure Problem
+---------------------------------------------
+
+A frequently used programming model for library code is to allow an
+application to register a callback function for the library to call when
+some particular event occurs.  It is often useful for the application to
+make several such registrations using the same callback function, for
+example if several similar library events can be handled using the same
+application code, but the need then arises to distinguish the callback
+function calls that are associated with one callback registration from
+those that are associated with different callback registrations.
+
+   In languages without the ability to create functions dynamically,
+this problem is usually solved by passing a ‘user_data’ parameter on the
+registration call, and including the value of this parameter as one of
+the parameters on the callback function.  Here is an example of
+declarations using this solution in C:
+
+     typedef void (event_handler_t) (int event_type,
+                                     void *user_data);
+
+     void register_callback (int event_type,
+                             event_handler_t *handler,
+                             void *user_data);
+
+   In Scheme, closure can be used to achieve the same functionality
+without requiring the library code to store a ‘user-data’ for each
+callback registration.
+
+     ;; In the library:
+
+     (define (register-callback event-type handler-proc)
+       ...)
+
+     ;; In the application:
+
+     (define (make-handler event-type user-data)
+       (lambda ()
+         ...
+         <code referencing event-type and user-data>
+         ...))
+
+     (register-callback event-type
+                        (make-handler event-type ...))
+
+   As far as the library is concerned, ‘handler-proc’ is a procedure
+with no arguments, and all the library has to do is call it when the
+appropriate event occurs.  From the application’s point of view, though,
+the handler procedure has used closure to capture an environment that
+includes all the context that the handler code needs — ‘event-type’ and
+‘user-data’ — to handle the event correctly.
+
+File: guile.info,  Node: OO Closure,  Prev: Callback Closure,  Up: About Closure
+
+3.4.9 Example 4: Object Orientation
+-----------------------------------
+
+Closure is the capture of an environment, containing persistent variable
+bindings, within the definition of a procedure or a set of related
+procedures.  This is rather similar to the idea in some object oriented
+languages of encapsulating a set of related data variables inside an
+“object”, together with a set of “methods” that operate on the
+encapsulated data.  The following example shows how closure can be used
+to emulate the ideas of objects, methods and encapsulation in Scheme.
+
+     (define (make-account)
+       (let ((balance 0))
+         (define (get-balance)
+           balance)
+         (define (deposit amount)
+           (set! balance (+ balance amount))
+           balance)
+         (define (withdraw amount)
+           (deposit (- amount)))
+
+         (lambda args
+           (apply
+             (case (car args)
+               ((get-balance) get-balance)
+               ((deposit) deposit)
+               ((withdraw) withdraw)
+               (else (error "Invalid method!")))
+             (cdr args)))))
+
+   Each call to ‘make-account’ creates and returns a new procedure,
+created by the expression in the example code that begins “(lambda
+args”.
+
+     (define my-account (make-account))
+
+     my-account
+     ⇒
+     #<procedure args>
+
+   This procedure acts as an account object with methods ‘get-balance’,
+‘deposit’ and ‘withdraw’.  To apply one of the methods to the account,
+you call the procedure with a symbol indicating the required method as
+the first parameter, followed by any other parameters that are required
+by that method.
+
+     (my-account 'get-balance)
+     ⇒
+     0
+
+     (my-account 'withdraw 5)
+     ⇒
+     -5
+
+     (my-account 'deposit 396)
+     ⇒
+     391
+
+     (my-account 'get-balance)
+     ⇒
+     391
+
+   Note how, in this example, both the current balance and the helper
+procedures ‘get-balance’, ‘deposit’ and ‘withdraw’, used to implement
+the guts of the account object’s methods, are all stored in variable
+bindings within the private local environment captured by the ‘lambda’
+expression that creates the account object procedure.
+
+File: guile.info,  Node: Further Reading,  Prev: About Closure,  Up: Hello Scheme!
+

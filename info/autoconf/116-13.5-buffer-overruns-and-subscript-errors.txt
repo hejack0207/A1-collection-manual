@@ -1,0 +1,53 @@
+13.5 Buffer Overruns and Subscript Errors
+=========================================
+
+Buffer overruns and subscript errors are the most common dangerous
+errors in C programs.  They result in undefined behavior because storing
+outside an array typically modifies storage that is used by some other
+object, and most modern systems lack runtime checks to catch these
+errors.  Programs should not rely on buffer overruns being caught.
+
+   There is one exception to the usual rule that a portable program
+cannot address outside an array.  In C, it is valid to compute the
+address just past an object, e.g., `&a[N]' where `a' has `N' elements,
+so long as you do not dereference the resulting pointer.  But it is not
+valid to compute the address just before an object, e.g., `&a[-1]'; nor
+is it valid to compute two past the end, e.g., `&a[N+1]'.  On most
+platforms `&a[-1] < &a[0] && &a[N] < &a[N+1]', but this is not reliable
+in general, and it is usually easy enough to avoid the potential
+portability problem, e.g., by allocating an extra unused array element
+at the start or end.
+
+   Valgrind (http://valgrind.org/) can catch many overruns.  GCC users
+might also consider using the `-fmudflap' option to catch overruns.
+
+   Buffer overruns are usually caused by off-by-one errors, but there
+are more subtle ways to get them.
+
+   Using `int' values to index into an array or compute array sizes
+causes problems on typical 64-bit hosts where an array index might be
+2^31 or larger.  Index values of type `size_t' avoid this problem, but
+cannot be negative.  Index values of type `ptrdiff_t' are signed, and
+are wide enough in practice.
+
+   If you add or multiply two numbers to calculate an array size, e.g.,
+`malloc (x * sizeof y + z)', havoc ensues if the addition or
+multiplication overflows.
+
+   Many implementations of the `alloca' function silently misbehave and
+can generate buffer overflows if given sizes that are too large.  The
+size limits are implementation dependent, but are at least 4000 bytes
+on all platforms that we know about.
+
+   The standard functions `asctime', `asctime_r', `ctime', `ctime_r',
+and `gets' are prone to buffer overflows, and portable code should not
+use them unless the inputs are known to be within certain limits.  The
+time-related functions can overflow their buffers if given timestamps
+out of range (e.g., a year less than -999 or greater than 9999).
+Time-related buffer overflows cannot happen with recent-enough versions
+of the GNU C library, but are possible with other implementations.  The
+`gets' function is the worst, since it almost invariably overflows its
+buffer when presented with an input line larger than the buffer.
+
+File: autoconf.info,  Node: Volatile Objects,  Next: Floating Point Portability,  Prev: Buffer Overruns,  Up: Portable C and C++
+

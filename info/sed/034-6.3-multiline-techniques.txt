@@ -1,0 +1,105 @@
+6.3 Multiline techniques - using D,G,H,N,P to process multiple lines
+====================================================================
+
+Multiple lines can be processed as one buffer using the
+'D','G','H','N','P'.  They are similar to their lowercase counterparts
+('d','g', 'h','n','p'), except that these commands append or subtract
+data while respecting embedded newlines - allowing adding and removing
+lines from the pattern and hold spaces.
+
+   They operate as follows:
+'D'
+     _deletes_ line from the pattern space until the first newline, and
+     restarts the cycle.
+
+'G'
+     _appends_ line from the hold space to the pattern space, with a
+     newline before it.
+
+'H'
+     _appends_ line from the pattern space to the hold space, with a
+     newline before it.
+
+'N'
+     _appends_ line from the input file to the pattern space.
+
+'P'
+     _prints_ line from the pattern space until the first newline.
+
+   The following example illustrates the operation of 'N' and 'D'
+commands:
+
+     $ seq 6 | sed -n 'N;l;D'
+     1\n2$
+     2\n3$
+     3\n4$
+     4\n5$
+     5\n6$
+
+  1. 'sed' starts by reading the first line into the pattern space (i.e.
+     '1').
+  2. At the beginning of every cycle, the 'N' command appends a newline
+     and the next line to the pattern space (i.e.  '1', '\n', '2' in the
+     first cycle).
+  3. The 'l' command prints the content of the pattern space
+     unambiguously.
+  4. The 'D' command then removes the content of pattern space up to the
+     first newline (leaving '2' at the end of the first cycle).
+  5. At the next cycle the 'N' command appends a newline and the next
+     input line to the pattern space (e.g.  '2', '\n', '3').
+
+   A common technique to process blocks of text such as paragraphs
+(instead of line-by-line) is using the following construct:
+
+     sed '/./{H;$!d} ; x ; s/REGEXP/REPLACEMENT/'
+
+  1. The first expression, '/./{H;$!d}' operates on all non-empty lines,
+     and adds the current line (in the pattern space) to the hold space.
+     On all lines except the last, the pattern space is deleted and the
+     cycle is restarted.
+
+  2. The other expressions 'x' and 's' are executed only on empty lines
+     (i.e.  paragraph separators).  The 'x' command fetches the
+     accumulated lines from the hold space back to the pattern space.
+     The 's///' command then operates on all the text in the paragraph
+     (including the embedded newlines).
+
+   The following example demonstrates this technique:
+     $ cat input.txt
+     a a a aa aaa
+     aaaa aaaa aa
+     aaaa aaa aaa
+
+     bbbb bbb bbb
+     bb bb bbb bb
+     bbbbbbbb bbb
+
+     ccc ccc cccc
+     cccc ccccc c
+     cc cc cc cc
+
+     $ sed '/./{H;$!d} ; x ; s/^/\nSTART-->/ ; s/$/\n<--END/' input.txt
+
+     START-->
+     a a a aa aaa
+     aaaa aaaa aa
+     aaaa aaa aaa
+     <--END
+
+     START-->
+     bbbb bbb bbb
+     bb bb bbb bb
+     bbbbbbbb bbb
+     <--END
+
+     START-->
+     ccc ccc cccc
+     cccc ccccc c
+     cc cc cc cc
+     <--END
+
+   For more annotated examples, *note Text search across multiple
+lines:: and *note Line length adjustment::.
+
+File: sed.info,  Node: Branching and flow control,  Prev: Multiline techniques,  Up: advanced sed
+

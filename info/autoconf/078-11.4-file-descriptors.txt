@@ -1,0 +1,178 @@
+11.4 File Descriptors
+=====================
+
+Most shells, if not all (including Bash, Zsh, Ash), output traces on
+stderr, even for subshells.  This might result in undesirable content
+if you meant to capture the standard-error output of the inner command:
+
+     $ ash -x -c '(eval "echo foo >&2") 2>stderr'
+     $ cat stderr
+     + eval echo foo >&2
+     + echo foo
+     foo
+     $ bash -x -c '(eval "echo foo >&2") 2>stderr'
+     $ cat stderr
+     + eval 'echo foo >&2'
+     ++ echo foo
+     foo
+     $ zsh -x -c '(eval "echo foo >&2") 2>stderr'
+     # Traces on startup files deleted here.
+     $ cat stderr
+     +zsh:1> eval echo foo >&2
+     +zsh:1> echo foo
+     foo
+
+One workaround is to grep out uninteresting lines, hoping not to remove
+good ones.
+
+   If you intend to redirect both standard error and standard output,
+redirect standard output first.  This works better with HP-UX, since
+its shell mishandles tracing if standard error is redirected first:
+
+     $ sh -x -c ': 2>err >out'
+     + :
+     + 2> err $ cat err
+     1> out
+
+   Don't try to redirect the standard error of a command substitution.
+It must be done _inside_ the command substitution.  When running `: `cd
+/zorglub` 2>/dev/null' expect the error message to escape, while `: `cd
+/zorglub 2>/dev/null`' works properly.
+
+   On the other hand, some shells, such as Solaris or FreeBSD
+`/bin/sh', warn about missing programs before performing redirections.
+Therefore, to silently check whether a program exists, it is necessary
+to perform redirections on a subshell or brace group:
+     $ /bin/sh -c 'nosuch 2>/dev/null'
+     nosuch: not found
+     $ /bin/sh -c '(nosuch) 2>/dev/null'
+     $ /bin/sh -c '{ nosuch; } 2>/dev/null'
+     $ bash -c 'nosuch 2>/dev/null'
+
+   FreeBSD 6.2 sh may mix the trace output lines from the statements in
+a shell pipeline.
+
+   It is worth noting that Zsh (but not Ash nor Bash) makes it possible
+in assignments though: `foo=`cd /zorglub` 2>/dev/null'.
+
+   Some shells, like `ash', don't recognize bi-directional redirection
+(`<>').  And even on shells that recognize it, it is not portable to
+use on fifos: Posix does not require read-write support for named
+pipes, and Cygwin does not support it:
+
+     $ mkfifo fifo
+     $ exec 5<>fifo
+     $ echo hi >&5
+     bash: echo: write error: Communication error on send
+
+Furthermore, versions of `dash' before 0.5.6 mistakenly truncate
+regular files when using `<>':
+
+     $ echo a > file
+     $ bash -c ': 1<>file'; cat file
+     a
+     $ dash -c ': 1<>file'; cat file
+     $ rm a
+
+   When catering to old systems, don't redirect the same file descriptor
+several times, as you are doomed to failure under Ultrix.
+
+     ULTRIX V4.4 (Rev. 69) System #31: Thu Aug 10 19:42:23 GMT 1995
+     UWS V4.4 (Rev. 11)
+     $ eval 'echo matter >fullness' >void
+     illegal io
+     $ eval '(echo matter >fullness)' >void
+     illegal io
+     $ (eval '(echo matter >fullness)') >void
+     Ambiguous output redirect.
+
+In each case the expected result is of course `fullness' containing
+`matter' and `void' being empty.  However, this bug is probably not of
+practical concern to modern platforms.
+
+   Solaris 10 `sh' will try to optimize away a `:' command (even if it
+is redirected) in a loop after the first iteration, or in a shell
+function after the first call:
+
+     $ for i in 1 2 3 ; do : >x$i; done
+     $ ls x*
+     x1
+     $ f () { : >$1; }; f y1; f y2; f y3;
+     $ ls y*
+     y1
+
+As a workaround, `echo' or `eval' can be used.
+
+   Don't rely on file descriptors 0, 1, and 2 remaining closed in a
+subsidiary program.  If any of these descriptors is closed, the
+operating system may open an unspecified file for the descriptor in the
+new process image.  Posix 2008 says this may be done only if the
+subsidiary program is set-user-ID or set-group-ID, but HP-UX 11.23 does
+it even for ordinary programs, and the next version of Posix will allow
+HP-UX behavior.
+
+   If you want a file descriptor above 2 to be inherited into a child
+process, then you must use redirections specific to that command or a
+containing subshell or command group, rather than relying on `exec' in
+the shell. In `ksh' as well as HP-UX `sh', file descriptors above 2
+which are opened using `exec N>file' are closed by a subsequent `exec'
+(such as that involved in the fork-and-exec which runs a program or
+script):
+
+     $ echo 'echo hello >&5' >k
+     $ /bin/sh -c 'exec 5>t; ksh ./k; exec 5>&-; cat t
+     hello
+     $ bash -c 'exec 5>t; ksh ./k; exec 5>&-; cat t
+     hello
+     $ ksh -c 'exec 5>t; ksh ./k; exec 5>&-; cat t
+     ./k[1]: 5: cannot open [Bad file number]
+     $ ksh -c '(ksh ./k) 5>t; cat t'
+     hello
+     $ ksh -c '{ ksh ./k; } 5>t; cat t'
+     hello
+     $ ksh -c '5>t ksh ./k; cat t
+     hello
+
+   Don't rely on duplicating a closed file descriptor to cause an
+error.  With Solaris `/bin/sh', failed duplication is silently ignored,
+which can cause unintended leaks to the original file descriptor.  In
+this example, observe the leak to standard output:
+
+     $ bash -c 'echo hi >&3' 3>&-; echo $?
+     bash: 3: Bad file descriptor
+     1
+     $ /bin/sh -c 'echo hi >&3' 3>&-; echo $?
+     hi
+     0
+
+   Fortunately, an attempt to close an already closed file descriptor
+will portably succeed.  Likewise, it is safe to use either style of
+`N<&-' or `N>&-' for closing a file descriptor, even if it doesn't
+match the read/write mode that the file descriptor was opened with.
+
+   DOS variants cannot rename or remove open files, such as in `mv foo
+bar >foo' or `rm foo >foo', even though this is perfectly portable
+among Posix hosts.
+
+   A few ancient systems reserved some file descriptors.  By convention,
+file descriptor 3 was opened to `/dev/tty' when you logged into Eighth
+Edition (1985) through Tenth Edition Unix (1989).  File descriptor 4
+had a special use on the Stardent/Kubota Titan (circa 1990), though we
+don't now remember what it was.  Both these systems are obsolete, so
+it's now safe to treat file descriptors 3 and 4 like any other file
+descriptors.
+
+   On the other hand, you can't portably use multi-digit file
+descriptors.  Solaris `ksh' doesn't understand any file descriptor
+larger than `9':
+
+     $ bash -c 'exec 10>&-'; echo $?
+     0
+     $ ksh -c 'exec 9>&-'; echo $?
+     0
+     $ ksh -c 'exec 10>&-'; echo $?
+     ksh[1]: exec: 10: not found
+     127
+
+File: autoconf.info,  Node: Signal Handling,  Next: File System Conventions,  Prev: File Descriptors,  Up: Portable Shell
+

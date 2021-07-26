@@ -1,0 +1,265 @@
+3.1 Writing `configure.ac'
+==========================
+
+To produce a `configure' script for a software package, create a file
+called `configure.ac' that contains invocations of the Autoconf macros
+that test the system features your package needs or can use.  Autoconf
+macros already exist to check for many features; see *note Existing
+Tests::, for their descriptions.  For most other features, you can use
+Autoconf template macros to produce custom checks; see *note Writing
+Tests::, for information about them.  For especially tricky or
+specialized features, `configure.ac' might need to contain some
+hand-crafted shell commands; see *note Portable Shell Programming:
+Portable Shell.  The `autoscan' program can give you a good start in
+writing `configure.ac' (*note autoscan Invocation::, for more
+information).
+
+   Previous versions of Autoconf promoted the name `configure.in',
+which is somewhat ambiguous (the tool needed to process this file is not
+described by its extension), and introduces a slight confusion with
+`config.h.in' and so on (for which `.in' means "to be processed by
+`configure'").  Using `configure.ac' is now preferred.
+
+* Menu:
+
+* Shell Script Compiler::       Autoconf as solution of a problem
+* Autoconf Language::           Programming in Autoconf
+* Autoconf Input Layout::       Standard organization of `configure.ac'
+
+File: autoconf.info,  Node: Shell Script Compiler,  Next: Autoconf Language,  Up: Writing Autoconf Input
+
+3.1.1 A Shell Script Compiler
+-----------------------------
+
+Just as for any other computer language, in order to properly program
+`configure.ac' in Autoconf you must understand _what_ problem the
+language tries to address and _how_ it does so.
+
+   The problem Autoconf addresses is that the world is a mess.  After
+all, you are using Autoconf in order to have your package compile
+easily on all sorts of different systems, some of them being extremely
+hostile.  Autoconf itself bears the price for these differences:
+`configure' must run on all those systems, and thus `configure' must
+limit itself to their lowest common denominator of features.
+
+   Naturally, you might then think of shell scripts; who needs
+`autoconf'?  A set of properly written shell functions is enough to
+make it easy to write `configure' scripts by hand.  Sigh!
+Unfortunately, even in 2008, where shells without any function support
+are far and few between, there are pitfalls to avoid when making use of
+them.  Also, finding a Bourne shell that accepts shell functions is not
+trivial, even though there is almost always one on interesting porting
+targets.
+
+   So, what is really needed is some kind of compiler, `autoconf', that
+takes an Autoconf program, `configure.ac', and transforms it into a
+portable shell script, `configure'.
+
+   How does `autoconf' perform this task?
+
+   There are two obvious possibilities: creating a brand new language or
+extending an existing one.  The former option is attractive: all sorts
+of optimizations could easily be implemented in the compiler and many
+rigorous checks could be performed on the Autoconf program (e.g.,
+rejecting any non-portable construct).  Alternatively, you can extend
+an existing language, such as the `sh' (Bourne shell) language.
+
+   Autoconf does the latter: it is a layer on top of `sh'.  It was
+therefore most convenient to implement `autoconf' as a macro expander:
+a program that repeatedly performs "macro expansions" on text input,
+replacing macro calls with macro bodies and producing a pure `sh'
+script in the end.  Instead of implementing a dedicated Autoconf macro
+expander, it is natural to use an existing general-purpose macro
+language, such as M4, and implement the extensions as a set of M4
+macros.
+
+File: autoconf.info,  Node: Autoconf Language,  Next: Autoconf Input Layout,  Prev: Shell Script Compiler,  Up: Writing Autoconf Input
+
+3.1.2 The Autoconf Language
+---------------------------
+
+The Autoconf language differs from many other computer languages
+because it treats actual code the same as plain text.  Whereas in C,
+for instance, data and instructions have different syntactic status, in
+Autoconf their status is rigorously the same.  Therefore, we need a
+means to distinguish literal strings from text to be expanded:
+quotation.
+
+   When calling macros that take arguments, there must not be any white
+space between the macro name and the open parenthesis.
+
+     AC_INIT ([oops], [1.0]) # incorrect
+     AC_INIT([hello], [1.0]) # good
+
+   Arguments should be enclosed within the quote characters `[' and
+`]', and be separated by commas.  Any leading blanks or newlines in
+arguments are ignored, unless they are quoted.  You should always quote
+an argument that might contain a macro name, comma, parenthesis, or a
+leading blank or newline.  This rule applies recursively for every macro
+call, including macros called from other macros.  For more details on
+quoting rules, see *note Programming in M4::.
+
+   For instance:
+
+     AC_CHECK_HEADER([stdio.h],
+                     [AC_DEFINE([HAVE_STDIO_H], [1],
+                        [Define to 1 if you have <stdio.h>.])],
+                     [AC_MSG_ERROR([sorry, can't do anything for you])])
+
+is quoted properly.  You may safely simplify its quotation to:
+
+     AC_CHECK_HEADER([stdio.h],
+                     [AC_DEFINE([HAVE_STDIO_H], 1,
+                        [Define to 1 if you have <stdio.h>.])],
+                     [AC_MSG_ERROR([sorry, can't do anything for you])])
+
+because `1' cannot contain a macro call.  Here, the argument of
+`AC_MSG_ERROR' must be quoted; otherwise, its comma would be
+interpreted as an argument separator.  Also, the second and third
+arguments of `AC_CHECK_HEADER' must be quoted, since they contain macro
+calls.  The three arguments `HAVE_STDIO_H', `stdio.h', and `Define to 1
+if you have <stdio.h>.' do not need quoting, but if you unwisely
+defined a macro with a name like `Define' or `stdio' then they would
+need quoting.  Cautious Autoconf users would keep the quotes, but many
+Autoconf users find such precautions annoying, and would rewrite the
+example as follows:
+
+     AC_CHECK_HEADER(stdio.h,
+                     [AC_DEFINE(HAVE_STDIO_H, 1,
+                        [Define to 1 if you have <stdio.h>.])],
+                     [AC_MSG_ERROR([sorry, can't do anything for you])])
+
+This is safe, so long as you adopt good naming conventions and do not
+define macros with names like `HAVE_STDIO_H', `stdio', or `h'.  Though
+it is also safe here to omit the quotes around `Define to 1 if you have
+<stdio.h>.' this is not recommended, as message strings are more likely
+to inadvertently contain commas.
+
+   The following example is wrong and dangerous, as it is underquoted:
+
+     AC_CHECK_HEADER(stdio.h,
+                     AC_DEFINE(HAVE_STDIO_H, 1,
+                        Define to 1 if you have <stdio.h>.),
+                     AC_MSG_ERROR([sorry, can't do anything for you]))
+
+   In other cases, you may have to use text that also resembles a macro
+call.  You must quote that text even when it is not passed as a macro
+argument.  For example, these two approaches in `configure.ac' (quoting
+just the potential problems, or quoting the entire line) will protect
+your script in case autoconf ever adds a macro `AC_DC':
+
+     echo "Hard rock was here!  --[AC_DC]"
+     [echo "Hard rock was here!  --AC_DC"]
+
+which results in this text in `configure':
+
+     echo "Hard rock was here!  --AC_DC"
+     echo "Hard rock was here!  --AC_DC"
+
+When you use the same text in a macro argument, you must therefore have
+an extra quotation level (since one is stripped away by the macro
+substitution).  In general, then, it is a good idea to _use double
+quoting for all literal string arguments_, either around just the
+problematic portions, or over the entire argument:
+
+     AC_MSG_WARN([[AC_DC] stinks  --Iron Maiden])
+     AC_MSG_WARN([[AC_DC stinks  --Iron Maiden]])
+
+   However, the above example triggers a warning about a possibly
+unexpanded macro when running `autoconf', because it collides with the
+namespace of macros reserved for the Autoconf language.  To be really
+safe, you can use additional escaping (either a quadrigraph, or
+creative shell constructs) to silence that particular warning:
+
+     echo "Hard rock was here!  --AC""_DC"
+     AC_MSG_WARN([[AC@&t@_DC stinks  --Iron Maiden]])
+
+   You are now able to understand one of the constructs of Autoconf that
+has been continually misunderstood...  The rule of thumb is that
+_whenever you expect macro expansion, expect quote expansion_; i.e.,
+expect one level of quotes to be lost.  For instance:
+
+     AC_COMPILE_IFELSE(AC_LANG_SOURCE([char b[10];]), [],
+      [AC_MSG_ERROR([you lose])])
+
+is incorrect: here, the first argument of `AC_LANG_SOURCE' is `char
+b[10];' and is expanded once, which results in `char b10;'; and the
+`AC_LANG_SOURCE' is also expanded prior to being passed to
+`AC_COMPILE_IFELSE'.  (There was an idiom common in Autoconf's past to
+address this issue via the M4 `changequote' primitive, but do not use
+it!)  Let's take a closer look: the author meant the first argument to
+be understood as a literal, and therefore it must be quoted twice;
+likewise, the intermediate `AC_LANG_SOURCE' macro should be quoted once
+so that it is only expanded after the rest of the body of
+`AC_COMPILE_IFELSE' is in place:
+
+     AC_COMPILE_IFELSE([AC_LANG_SOURCE([[char b[10];]])], [],
+       [AC_MSG_ERROR([you lose])])
+
+Voila`, you actually produce `char b[10];' this time!
+
+   On the other hand, descriptions (e.g., the last parameter of
+`AC_DEFINE' or `AS_HELP_STRING') are not literals--they are subject to
+line breaking, for example--and should not be double quoted.  Even if
+these descriptions are short and are not actually broken, double
+quoting them yields weird results.
+
+   Some macros take optional arguments, which this documentation
+represents as [ARG] (not to be confused with the quote characters).
+You may just leave them empty, or use `[]' to make the emptiness of the
+argument explicit, or you may simply omit the trailing commas.  The
+three lines below are equivalent:
+
+     AC_CHECK_HEADERS([stdio.h], [], [], [])
+     AC_CHECK_HEADERS([stdio.h],,,)
+     AC_CHECK_HEADERS([stdio.h])
+
+   It is best to put each macro call on its own line in `configure.ac'.
+Most of the macros don't add extra newlines; they rely on the newline
+after the macro call to terminate the commands.  This approach makes
+the generated `configure' script a little easier to read by not
+inserting lots of blank lines.  It is generally safe to set shell
+variables on the same line as a macro call, because the shell allows
+assignments without intervening newlines.
+
+   You can include comments in `configure.ac' files by starting them
+with the `#'.  For example, it is helpful to begin `configure.ac' files
+with a line like this:
+
+     # Process this file with autoconf to produce a configure script.
+
+File: autoconf.info,  Node: Autoconf Input Layout,  Prev: Autoconf Language,  Up: Writing Autoconf Input
+
+3.1.3 Standard `configure.ac' Layout
+------------------------------------
+
+The order in which `configure.ac' calls the Autoconf macros is not
+important, with a few exceptions.  Every `configure.ac' must contain a
+call to `AC_INIT' before the checks, and a call to `AC_OUTPUT' at the
+end (*note Output::).  Additionally, some macros rely on other macros
+having been called first, because they check previously set values of
+some variables to decide what to do.  These macros are noted in the
+individual descriptions (*note Existing Tests::), and they also warn
+you when `configure' is created if they are called out of order.
+
+   To encourage consistency, here is a suggested order for calling the
+Autoconf macros.  Generally speaking, the things near the end of this
+list are those that could depend on things earlier in it.  For example,
+library functions could be affected by types and libraries.
+
+     Autoconf requirements
+     `AC_INIT(PACKAGE, VERSION, BUG-REPORT-ADDRESS)'
+     information on the package
+     checks for programs
+     checks for libraries
+     checks for header files
+     checks for types
+     checks for structures
+     checks for compiler characteristics
+     checks for library functions
+     checks for system services
+     `AC_CONFIG_FILES([FILE...])'
+     `AC_OUTPUT'
+
+File: autoconf.info,  Node: autoscan Invocation,  Next: ifnames Invocation,  Prev: Writing Autoconf Input,  Up: Making configure Scripts
+

@@ -1,0 +1,420 @@
+3.3 Expressions and Evaluation
+==============================
+
+So far, we have met expressions that _do_ things, such as the ‘define’
+expressions that create and initialize new variables, and we have also
+talked about expressions that have _values_, for example the value of
+the procedure invocation expression:
+
+     (string-append "/home" "/" "andrew")
+
+but we haven’t yet been precise about what causes an expression like
+this procedure invocation to be reduced to its “value”, or how the
+processing of such expressions relates to the execution of a Scheme
+program as a whole.
+
+   This section clarifies what we mean by an expression’s value, by
+introducing the idea of “evaluation”.  It discusses the side effects
+that evaluation can have, explains how each of the various types of
+Scheme expression is evaluated, and describes the behaviour and use of
+the Guile REPL as a mechanism for exploring evaluation.  The section
+concludes with a very brief summary of Scheme’s common syntactic
+expressions.
+
+* Menu:
+
+* Evaluating::                  How a Scheme program is executed.
+* Tail Calls::                  Space-safe recursion.
+* The REPL::                    Interacting with the Guile interpreter.
+* Syntax Summary::              Common syntactic expressions – in brief.
+
+File: guile.info,  Node: Evaluating,  Next: Tail Calls,  Up: About Expressions
+
+3.3.1 Evaluating Expressions and Executing Programs
+---------------------------------------------------
+
+In Scheme, the process of executing an expression is known as
+“evaluation”.  Evaluation has two kinds of result:
+
+   • the “value” of the evaluated expression
+
+   • the “side effects” of the evaluation, which consist of any effects
+     of evaluating the expression that are not represented by the value.
+
+   Of the expressions that we have met so far, ‘define’ and ‘set!’
+expressions have side effects — the creation or modification of a
+variable — but no value; ‘lambda’ expressions have values — the newly
+constructed procedures — but no side effects; and procedure invocation
+expressions, in general, have either values, or side effects, or both.
+
+   It is tempting to try to define more intuitively what we mean by
+“value” and “side effects”, and what the difference between them is.  In
+general, though, this is extremely difficult.  It is also unnecessary;
+instead, we can quite happily define the behaviour of a Scheme program
+by specifying how Scheme executes a program as a whole, and then by
+describing the value and side effects of evaluation for each type of
+expression individually.
+
+So, some(1) definitions...
+
+   • A Scheme program consists of a sequence of expressions.
+
+   • A Scheme interpreter executes the program by evaluating these
+     expressions in order, one by one.
+
+   • An expression can be
+
+        • a piece of literal data, such as a number ‘2.3’ or a string
+          ‘"Hello world!"’
+        • a variable name
+        • a procedure invocation expression
+        • one of Scheme’s special syntactic expressions.
+
+The following subsections describe how each of these types of expression
+is evaluated.
+
+* Menu:
+
+* Eval Literal::                Evaluating literal data.
+* Eval Variable::               Evaluating variable references.
+* Eval Procedure::              Evaluating procedure invocation expressions.
+* Eval Special::                Evaluating special syntactic expressions.
+
+   ---------- Footnotes ----------
+
+   (1) These definitions are approximate.  For the whole and detailed
+truth, see *note R5RS syntax: (r5rs)Formal syntax and semantics.
+
+File: guile.info,  Node: Eval Literal,  Next: Eval Variable,  Up: Evaluating
+
+3.3.1.1 Evaluating Literal Data
+...............................
+
+When a literal data expression is evaluated, the value of the expression
+is simply the value that the expression describes.  The evaluation of a
+literal data expression has no side effects.
+
+So, for example,
+
+   • the value of the expression ‘"abc"’ is the string value ‘"abc"’
+
+   • the value of the expression ‘3+4i’ is the complex number 3 + 4i
+
+   • the value of the expression ‘#(1 2 3)’ is a three-element vector
+     containing the numeric values 1, 2 and 3.
+
+   For any data type which can be expressed literally like this, the
+syntax of the literal data expression for that data type — in other
+words, what you need to write in your code to indicate a literal value
+of that type — is known as the data type’s “read syntax”.  This manual
+specifies the read syntax for each such data type in the section that
+describes that data type.
+
+   Some data types do not have a read syntax.  Procedures, for example,
+cannot be expressed as literal data; they must be created using a
+‘lambda’ expression (*note Creating a Procedure::) or implicitly using
+the shorthand form of ‘define’ (*note Lambda Alternatives::).
+
+File: guile.info,  Node: Eval Variable,  Next: Eval Procedure,  Prev: Eval Literal,  Up: Evaluating
+
+3.3.1.2 Evaluating a Variable Reference
+.......................................
+
+When an expression that consists simply of a variable name is evaluated,
+the value of the expression is the value of the named variable.  The
+evaluation of a variable reference expression has no side effects.
+
+   So, after
+
+     (define key "Paul Evans")
+
+the value of the expression ‘key’ is the string value ‘"Paul Evans"’.
+If KEY is then modified by
+
+     (set! key 3.74)
+
+the value of the expression ‘key’ is the numeric value 3.74.
+
+   If there is no variable with the specified name, evaluation of the
+variable reference expression signals an error.
+
+File: guile.info,  Node: Eval Procedure,  Next: Eval Special,  Prev: Eval Variable,  Up: Evaluating
+
+3.3.1.3 Evaluating a Procedure Invocation Expression
+....................................................
+
+This is where evaluation starts getting interesting!  As already noted,
+a procedure invocation expression has the form
+
+     (PROCEDURE [ARG1 [ARG2 ...]])
+
+where PROCEDURE must be an expression whose value, when evaluated, is a
+procedure.
+
+   The evaluation of a procedure invocation expression like this
+proceeds by
+
+   • evaluating individually the expressions PROCEDURE, ARG1, ARG2, and
+     so on
+
+   • calling the procedure that is the value of the PROCEDURE expression
+     with the list of values obtained from the evaluations of ARG1, ARG2
+     etc.  as its parameters.
+
+   For a procedure defined in Scheme, “calling the procedure with the
+list of values as its parameters” means binding the values to the
+procedure’s formal parameters and then evaluating the sequence of
+expressions that make up the body of the procedure definition.  The
+value of the procedure invocation expression is the value of the last
+evaluated expression in the procedure body.  The side effects of calling
+the procedure are the combination of the side effects of the sequence of
+evaluations of expressions in the procedure body.
+
+   For a built-in procedure, the value and side-effects of calling the
+procedure are best described by that procedure’s documentation.
+
+   Note that the complete side effects of evaluating a procedure
+invocation expression consist not only of the side effects of the
+procedure call, but also of any side effects of the preceding evaluation
+of the expressions PROCEDURE, ARG1, ARG2, and so on.
+
+   To illustrate this, let’s look again at the procedure invocation
+expression:
+
+     (string-length (string-append "/home" "/" "andrew"))
+
+   In the outermost expression, PROCEDURE is ‘string-length’ and ARG1 is
+‘(string-append "/home" "/" "andrew")’.
+
+   • Evaluation of ‘string-length’, which is a variable, gives a
+     procedure value that implements the expected behaviour for
+     “string-length”.
+
+   • Evaluation of ‘(string-append "/home" "/" "andrew")’, which is
+     another procedure invocation expression, means evaluating each of
+
+        • ‘string-append’, which gives a procedure value that implements
+          the expected behaviour for “string-append”
+
+        • ‘"/home"’, which gives the string value ‘"/home"’
+
+        • ‘"/"’, which gives the string value ‘"/"’
+
+        • ‘"andrew"’, which gives the string value ‘"andrew"’
+
+     and then invoking the procedure value with this list of string
+     values as its arguments.  The resulting value is a single string
+     value that is the concatenation of all the arguments, namely
+     ‘"/home/andrew"’.
+
+   In the evaluation of the outermost expression, the interpreter can
+now invoke the procedure value obtained from PROCEDURE with the value
+obtained from ARG1 as its arguments.  The resulting value is a numeric
+value that is the length of the argument string, which is 12.
+
+File: guile.info,  Node: Eval Special,  Prev: Eval Procedure,  Up: Evaluating
+
+3.3.1.4 Evaluating Special Syntactic Expressions
+................................................
+
+When a procedure invocation expression is evaluated, the procedure and
+_all_ the argument expressions must be evaluated before the procedure
+can be invoked.  Special syntactic expressions are special because they
+are able to manipulate their arguments in an unevaluated form, and can
+choose whether to evaluate any or all of the argument expressions.
+
+   Why is this needed?  Consider a program fragment that asks the user
+whether or not to delete a file, and then deletes the file if the user
+answers yes.
+
+     (if (string=? (read-answer "Should I delete this file?")
+                   "yes")
+         (delete-file file))
+
+   If the outermost ‘(if ...)’ expression here was a procedure
+invocation expression, the expression ‘(delete-file file)’, whose side
+effect is to actually delete a file, would already have been evaluated
+before the ‘if’ procedure even got invoked!  Clearly this is no use —
+the whole point of an ‘if’ expression is that the “consequent”
+expression is only evaluated if the condition of the ‘if’ expression is
+“true”.
+
+   Therefore ‘if’ must be special syntax, not a procedure.  Other
+special syntaxes that we have already met are ‘define’, ‘set!’ and
+‘lambda’.  ‘define’ and ‘set!’ are syntax because they need to know the
+variable _name_ that is given as the first argument in a ‘define’ or
+‘set!’ expression, not that variable’s value.  ‘lambda’ is syntax
+because it does not immediately evaluate the expressions that define the
+procedure body; instead it creates a procedure object that incorporates
+these expressions so that they can be evaluated in the future, when that
+procedure is invoked.
+
+   The rules for evaluating each special syntactic expression are
+specified individually for each special syntax.  For a summary of
+standard special syntax, see *Note Syntax Summary::.
+
+File: guile.info,  Node: Tail Calls,  Next: The REPL,  Prev: Evaluating,  Up: About Expressions
+
+3.3.2 Tail calls
+----------------
+
+Scheme is “properly tail recursive”, meaning that tail calls or
+recursions from certain contexts do not consume stack space or other
+resources and can therefore be used on arbitrarily large data or for an
+arbitrarily long calculation.  Consider for example,
+
+     (define (foo n)
+       (display n)
+       (newline)
+       (foo (1+ n)))
+
+     (foo 1)
+     ⊣
+     1
+     2
+     3
+     ...
+
+   ‘foo’ prints numbers infinitely, starting from the given N.  It’s
+implemented by printing N then recursing to itself to print N+1 and so
+on.  This recursion is a tail call, it’s the last thing done, and in
+Scheme such tail calls can be made without limit.
+
+   Or consider a case where a value is returned, a version of the SRFI-1
+‘last’ function (*note SRFI-1 Selectors::) returning the last element of
+a list,
+
+     (define (my-last lst)
+       (if (null? (cdr lst))
+           (car lst)
+           (my-last (cdr lst))))
+
+     (my-last '(1 2 3)) ⇒ 3
+
+   If the list has more than one element, ‘my-last’ applies itself to
+the ‘cdr’.  This recursion is a tail call, there’s no code after it, and
+the return value is the return value from that call.  In Scheme this can
+be used on an arbitrarily long list argument.
+
+
+   A proper tail call is only available from certain contexts, namely
+the following special form positions,
+
+   • ‘and’ — last expression
+
+   • ‘begin’ — last expression
+
+   • ‘case’ — last expression in each clause
+
+   • ‘cond’ — last expression in each clause, and the call to a ‘=>’
+     procedure is a tail call
+
+   • ‘do’ — last result expression
+
+   • ‘if’ — “true” and “false” leg expressions
+
+   • ‘lambda’ — last expression in body
+
+   • ‘let’, ‘let*’, ‘letrec’, ‘let-syntax’, ‘letrec-syntax’ — last
+     expression in body
+
+   • ‘or’ — last expression
+
+The following core functions make tail calls,
+
+   • ‘apply’ — tail call to given procedure
+
+   • ‘call-with-current-continuation’ — tail call to the procedure
+     receiving the new continuation
+
+   • ‘call-with-values’ — tail call to the values-receiving procedure
+
+   • ‘eval’ — tail call to evaluate the form
+
+   • ‘string-any’, ‘string-every’ — tail call to predicate on the last
+     character (if that point is reached)
+
+
+   The above are just core functions and special forms.  Tail calls in
+other modules are described with the relevant documentation, for example
+SRFI-1 ‘any’ and ‘every’ (*note SRFI-1 Searching::).
+
+   It will be noted there are a lot of places which could potentially be
+tail calls, for instance the last call in a ‘for-each’, but only those
+explicitly described are guaranteed.
+
+File: guile.info,  Node: The REPL,  Next: Syntax Summary,  Prev: Tail Calls,  Up: About Expressions
+
+3.3.3 Using the Guile REPL
+--------------------------
+
+If you start Guile without specifying a particular program for it to
+execute, Guile enters its standard Read Evaluate Print Loop — or “REPL”
+for short.  In this mode, Guile repeatedly reads in the next Scheme
+expression that the user types, evaluates it, and prints the resulting
+value.
+
+   The REPL is a useful mechanism for exploring the evaluation behaviour
+described in the previous subsection.  If you type ‘string-append’, for
+example, the REPL replies ‘#<primitive-procedure string-append>’,
+illustrating the relationship between the variable ‘string-append’ and
+the procedure value stored in that variable.
+
+   In this manual, the notation ⇒ is used to mean “evaluates to”.
+Wherever you see an example of the form
+
+     EXPRESSION
+     ⇒
+     RESULT
+
+feel free to try it out yourself by typing EXPRESSION into the REPL and
+checking that it gives the expected RESULT.
+
+File: guile.info,  Node: Syntax Summary,  Prev: The REPL,  Up: About Expressions
+
+3.3.4 Summary of Common Syntax
+------------------------------
+
+This subsection lists the most commonly used Scheme syntactic
+expressions, simply so that you will recognize common special syntax
+when you see it.  For a full description of each of these syntaxes,
+follow the appropriate reference.
+
+   ‘lambda’ (*note Lambda::) is used to construct procedure objects.
+
+   ‘define’ (*note Top Level::) is used to create a new variable and set
+its initial value.
+
+   ‘set!’ (*note Top Level::) is used to modify an existing variable’s
+value.
+
+   ‘let’, ‘let*’ and ‘letrec’ (*note Local Bindings::) create an inner
+lexical environment for the evaluation of a sequence of expressions, in
+which a specified set of local variables is bound to the values of a
+corresponding set of expressions.  For an introduction to environments,
+see *Note About Closure::.
+
+   ‘begin’ (*note begin::) executes a sequence of expressions in order
+and returns the value of the last expression.  Note that this is not the
+same as a procedure which returns its last argument, because the
+evaluation of a procedure invocation expression does not guarantee to
+evaluate the arguments in order.
+
+   ‘if’ and ‘cond’ (*note Conditionals::) provide conditional evaluation
+of argument expressions depending on whether one or more conditions
+evaluate to “true” or “false”.
+
+   ‘case’ (*note Conditionals::) provides conditional evaluation of
+argument expressions depending on whether a variable has one of a
+specified group of values.
+
+   ‘and’ (*note and or::) executes a sequence of expressions in order
+until either there are no expressions left, or one of them evaluates to
+“false”.
+
+   ‘or’ (*note and or::) executes a sequence of expressions in order
+until either there are no expressions left, or one of them evaluates to
+“true”.
+
+File: guile.info,  Node: About Closure,  Next: Further Reading,  Prev: About Expressions,  Up: Hello Scheme!
+

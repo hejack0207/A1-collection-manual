@@ -1,0 +1,114 @@
+6.6 Checking Runtime Behavior
+=============================
+
+Sometimes you need to find out how a system performs at runtime, such
+as whether a given function has a certain capability or bug.  If you
+can, make such checks when your program runs instead of when it is
+configured.  You can check for things like the machine's endianness when
+your program initializes itself.
+
+   If you really need to test for a runtime behavior while configuring,
+you can write a test program to determine the result, and compile and
+run it using `AC_RUN_IFELSE'.  Avoid running test programs if possible,
+because this prevents people from configuring your package for
+cross-compiling.
+
+ -- Macro: AC_RUN_IFELSE (INPUT, [ACTION-IF-TRUE], [ACTION-IF-FALSE],
+          [ACTION-IF-CROSS-COMPILING = `AC_MSG_FAILURE'])
+     Run the compiler (and compilation flags) and the linker of the
+     current language (*note Language Choice::) on the INPUT, then
+     execute the resulting program.  If the program returns an exit
+     status of 0 when executed, run shell commands ACTION-IF-TRUE.
+     Otherwise, run shell commands ACTION-IF-FALSE.
+
+     The INPUT can be made by `AC_LANG_PROGRAM' and friends.  `LDFLAGS'
+     and `LIBS' are used for linking, in addition to the compilation
+     flags of the current language (*note Language Choice::).
+     Additionally, ACTION-IF-TRUE can run `./conftest$EXEEXT' for
+     further testing.
+
+     In the ACTION-IF-FALSE section, the failing exit status is
+     available in the shell variable `$?'.  This exit status might be
+     that of a failed compilation, or it might be that of a failed
+     program execution.
+
+     If cross-compilation mode is enabled (this is the case if either
+     the compiler being used does not produce executables that run on
+     the system where `configure' is being run, or if the options
+     `--build' and `--host' were both specified and their values are
+     different), then the test program is not run.  If the optional
+     shell commands ACTION-IF-CROSS-COMPILING are given, those commands
+     are run instead; typically these commands provide pessimistic
+     defaults that allow cross-compilation to work even if the guess
+     was wrong.  If the fourth argument is empty or omitted, but
+     cross-compilation is detected, then `configure' prints an error
+     message and exits.  If you want your package to be useful in a
+     cross-compilation scenario, you _should_ provide a non-empty
+     ACTION-IF-CROSS-COMPILING clause, as well as wrap the
+     `AC_RUN_IFELSE' compilation inside an `AC_CACHE_CHECK' (*note
+     Caching Results::) which allows the user to override the
+     pessimistic default if needed.
+
+     It is customary to report unexpected failures with
+     `AC_MSG_FAILURE'.
+
+   `autoconf' prints a warning message when creating `configure' each
+time it encounters a call to `AC_RUN_IFELSE' with no
+ACTION-IF-CROSS-COMPILING argument given.  If you are not concerned
+about users configuring your package for cross-compilation, you may
+ignore the warning.  A few of the macros distributed with Autoconf
+produce this warning message; but if this is a problem for you, please
+report it as a bug, along with an appropriate pessimistic guess to use
+instead.
+
+   To configure for cross-compiling you can also choose a value for
+those parameters based on the canonical system name (*note Manual
+Configuration::).  Alternatively, set up a test results cache file with
+the correct values for the host system (*note Caching Results::).
+
+   To provide a default for calls of `AC_RUN_IFELSE' that are embedded
+in other macros, including a few of the ones that come with Autoconf,
+you can test whether the shell variable `cross_compiling' is set to
+`yes', and then use an alternate method to get the results instead of
+calling the macros.
+
+   It is also permissible to temporarily assign to `cross_compiling' in
+order to force tests to behave as though they are in a
+cross-compilation environment, particularly since this provides a way to
+test your ACTION-IF-CROSS-COMPILING even when you are not using a
+cross-compiler.
+
+     # We temporarily set cross-compile mode to force AC_COMPUTE_INT
+     # to use the slow link-only method
+     save_cross_compiling=$cross_compiling
+     cross_compiling=yes
+     AC_COMPUTE_INT([...])
+     cross_compiling=$save_cross_compiling
+
+   A C or C++ runtime test should be portable.  *Note Portable C and
+C++::.
+
+   Erlang tests must exit themselves the Erlang VM by calling the
+`halt/1' function: the given status code is used to determine the
+success of the test (status is `0') or its failure (status is different
+than `0'), as explained above.  It must be noted that data output
+through the standard output (e.g., using `io:format/2') may be
+truncated when halting the VM.  Therefore, if a test must output
+configuration information, it is recommended to create and to output
+data into the temporary file named `conftest.out', using the functions
+of module `file'.  The `conftest.out' file is automatically deleted by
+the `AC_RUN_IFELSE' macro.  For instance, a simplified implementation
+of Autoconf's `AC_ERLANG_SUBST_LIB_DIR' macro is:
+
+     AC_INIT([LibdirTest], [1.0], [bug-libdirtest@example.org])
+     AC_ERLANG_NEED_ERL
+     AC_LANG(Erlang)
+     AC_RUN_IFELSE(
+       [AC_LANG_PROGRAM([], [dnl
+         file:write_file("conftest.out", code:lib_dir()),
+         halt(0)])],
+       [echo "code:lib_dir() returned: `cat conftest.out`"],
+       [AC_MSG_FAILURE([test Erlang program execution failed])])
+
+File: autoconf.info,  Node: Systemology,  Next: Multiple Cases,  Prev: Runtime,  Up: Writing Tests
+

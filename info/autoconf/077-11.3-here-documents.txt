@@ -1,0 +1,102 @@
+11.3 Here-Documents
+===================
+
+Don't rely on `\' being preserved just because it has no special
+meaning together with the next symbol.  In the native `sh' on OpenBSD
+2.7 `\"' expands to `"' in here-documents with unquoted delimiter.  As
+a general rule, if `\\' expands to `\' use `\\' to get `\'.
+
+   With OpenBSD 2.7's `sh'
+
+     $ cat <<EOF
+     > \" \\
+     > EOF
+     " \
+
+and with Bash:
+
+     bash-2.04$ cat <<EOF
+     > \" \\
+     > EOF
+     \" \
+
+   Using command substitutions in a here-document that is fed to a shell
+function is not portable.  For example, with Solaris 10 `/bin/sh':
+
+     $ kitty () { cat; }
+     $ kitty <<EOF
+     > `echo ok`
+     > EOF
+     /tmp/sh199886: cannot open
+     $ echo $?
+     1
+
+   Some shells mishandle large here-documents: for example, Solaris 10
+`dtksh' and the UnixWare 7.1.1 Posix shell, which are derived from Korn
+shell version M-12/28/93d, mishandle braced variable expansion that
+crosses a 1024- or 4096-byte buffer boundary within a here-document.
+Only the part of the variable name after the boundary is used.  For
+example, `${variable}' could be replaced by the expansion of `${ble}'.
+If the end of the variable name is aligned with the block boundary, the
+shell reports an error, as if you used `${}'.  Instead of
+`${variable-default}', the shell may expand `${riable-default}', or
+even `${fault}'.  This bug can often be worked around by omitting the
+braces: `$variable'.  The bug was fixed in `ksh93g' (1998-04-30) but as
+of 2006 many operating systems were still shipping older versions with
+the bug.
+
+   Empty here-documents are not portable either; with the following
+code, `zsh' up to at least version 4.3.10 creates a file with a single
+newline, whereas other shells create an empty file:
+
+     cat >file <<EOF
+     EOF
+
+   Many shells (including the Bourne shell) implement here-documents
+inefficiently.  In particular, some shells can be extremely inefficient
+when a single statement contains many here-documents.  For instance if
+your `configure.ac' includes something like:
+
+     if <cross_compiling>; then
+       assume this and that
+     else
+       check this
+       check that
+       check something else
+       ...
+       on and on forever
+       ...
+     fi
+
+   A shell parses the whole `if'/`fi' construct, creating temporary
+files for each here-document in it.  Some shells create links for such
+here-documents on every `fork', so that the clean-up code they had
+installed correctly removes them.  It is creating the links that can
+take the shell forever.
+
+   Moving the tests out of the `if'/`fi', or creating multiple
+`if'/`fi' constructs, would improve the performance significantly.
+Anyway, this kind of construct is not exactly the typical use of
+Autoconf.  In fact, it's even not recommended, because M4 macros can't
+look into shell conditionals, so we may fail to expand a macro when it
+was expanded before in a conditional path, and the condition turned out
+to be false at runtime, and we end up not executing the macro at all.
+
+   Be careful with the use of `<<-' to unindent here-documents.  The
+behavior is only portable for stripping leading <TAB>s, and things can
+silently break if an overzealous editor converts to using leading
+spaces (not all shells are nice enough to warn about unterminated
+here-documents).
+
+     $ printf 'cat <<-x\n\t1\n\t 2\n\tx\n' | bash && echo done
+     1
+      2
+     done
+     $ printf 'cat <<-x\n 1\n  2\n x\n' | bash-3.2 && echo done
+      1
+       2
+      x
+     done
+
+File: autoconf.info,  Node: File Descriptors,  Next: Signal Handling,  Prev: Here-Documents,  Up: Portable Shell
+

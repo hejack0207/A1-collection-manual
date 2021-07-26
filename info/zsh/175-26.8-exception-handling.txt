@@ -1,0 +1,84 @@
+26.8 Exception Handling
+=======================
+
+
+Two functions are provided to enable zsh to provide exception handling
+in a form that should be familiar from other languages.
+
+throw EXCEPTION
+     The function throw throws the named EXCEPTION.  The name is an
+     arbitrary string and is only used by the throw and catch functions.
+     An exception is for the most part treated the same as a shell
+     error, i.e.  an unhandled exception will cause the shell to abort
+     all processing in a function or script and to return to the top
+     level in an interactive shell.
+
+catch EXCEPTION-PATTERN
+     The function catch returns status zero if an exception was thrown
+     and the pattern EXCEPTION-PATTERN matches its name.  Otherwise it
+     returns status 1.  EXCEPTION-PATTERN is a standard shell pattern,
+     respecting the current setting of the EXTENDED_GLOB option.  An
+     alias catch is also defined to prevent the argument to the function
+     from matching filenames, so patterns may be used unquoted.  Note
+     that as exceptions are not fundamentally different from other shell
+     errors it is possible to catch shell errors by using an empty
+     string as the exception name.  The shell variable CAUGHT is set by
+     catch to the name of the exception caught.  It is possible to
+     rethrow an exception by calling the throw function again once an
+     exception has been caught.
+
+The functions are designed to be used together with the always construct
+described in *note Complex Commands::.  This is important as only this
+construct provides the required support for exceptions.  A typical
+example is as follows.
+
+     {
+       # "try" block
+       # ... nested code here calls "throw MyExcept"
+     } always {
+       # "always" block
+       if catch MyExcept; then
+         print "Caught exception MyExcept"
+       elif catch ''; then
+         print "Caught a shell error.  Propagating..."
+         throw ''
+       fi
+       # Other exceptions are not handled but may be caught further
+       # up the call stack.
+     }
+
+If all exceptions should be caught, the following idiom might be
+preferable.
+
+     {
+       # ... nested code here throws an exception
+     } always {
+       if catch *; then
+         case $CAUGHT in
+           (MyExcept)
+           print "Caught my own exception"
+           ;;
+           (*)
+           print "Caught some other exception"
+           ;;
+         esac
+       fi
+     }
+
+In common with exception handling in other languages, the exception may
+be thrown by code deeply nested inside the 'try' block.  However, note
+that it must be thrown inside the current shell, not in a subshell
+forked for a pipeline, parenthesised current-shell construct, or some
+form of command or process substitution.
+
+The system internally uses the shell variable EXCEPTION to record the
+name of the exception between throwing and catching.  One drawback of
+this scheme is that if the exception is not handled the variable
+EXCEPTION remains set and may be incorrectly recognised as the name of
+an exception if a shell error subsequently occurs.  Adding unset
+EXCEPTION at the start of the outermost layer of any code that uses
+exception handling will eliminate this problem.
+
+
+File: zsh.info,  Node: MIME Functions,  Next: Mathematical Functions,  Prev: Exception Handling,  Up: User Contributions
+

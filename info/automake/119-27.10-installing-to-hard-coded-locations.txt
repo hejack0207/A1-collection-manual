@@ -1,0 +1,111 @@
+27.10 Installing to Hard-Coded Locations
+========================================
+
+     My package needs to install some configuration file.  I tried to use
+     the following rule, but ‘make distcheck’ fails.  Why?
+
+          # Do not do this.
+          install-data-local:
+                  $(INSTALL_DATA) $(srcdir)/afile $(DESTDIR)/etc/afile
+
+     My package needs to populate the installation directory of another
+     package at install-time.  I can easily compute that installation
+     directory in ‘configure’, but if I install files therein,
+     ‘make distcheck’ fails.  How else should I do?
+
+   These two setups share their symptoms: ‘make distcheck’ fails because
+they are installing files to hard-coded paths.  In the later case the
+path is not really hard-coded in the package, but we can consider it to
+be hard-coded in the system (or in whichever tool that supplies the
+path).  As long as the path does not use any of the standard directory
+variables (‘$(prefix)’, ‘$(bindir)’, ‘$(datadir)’, etc.), the effect
+will be the same: user-installations are impossible.
+
+   As a (non-root) user who wants to install a package, you usually have
+no right to install anything in ‘/usr’ or ‘/usr/local’.  So you do
+something like ‘./configure --prefix ~/usr’ to install a package in your
+own ‘~/usr’ tree.
+
+   If a package attempts to install something to some hard-coded path
+(e.g., ‘/etc/afile’), regardless of this ‘--prefix’ setting, then the
+installation will fail.  ‘make distcheck’ performs such a ‘--prefix’
+installation, hence it will fail too.
+
+   Now, there are some easy solutions.
+
+   The above ‘install-data-local’ example for installing ‘/etc/afile’
+would be better replaced by
+
+     sysconf_DATA = afile
+
+by default ‘sysconfdir’ will be ‘$(prefix)/etc’, because this is what
+the GNU Standards require.  When such a package is installed on an FHS
+compliant system, the installer will have to set ‘--sysconfdir=/etc’.
+As the maintainer of the package you should not be concerned by such
+site policies: use the appropriate standard directory variable to
+install your files so that the installer can easily redefine these
+variables to match their site conventions.
+
+   Installing files that should be used by another package is slightly
+more involved.  Let’s take an example and assume you want to install a
+shared library that is a Python extension module.  If you ask Python
+where to install the library, it will answer something like this:
+
+     % python -c 'from distutils import sysconfig;
+                  print sysconfig.get_python_lib(1,0)'
+     /usr/lib/python2.5/site-packages
+
+   If you indeed use this absolute path to install your shared library,
+non-root users will not be able to install the package, hence distcheck
+fails.
+
+   Let’s do better.  The ‘sysconfig.get_python_lib()’ function actually
+accepts a third argument that will replace Python’s installation prefix.
+
+     % python -c 'from distutils import sysconfig;
+                  print sysconfig.get_python_lib(1,0,"${exec_prefix}")'
+     ${exec_prefix}/lib/python2.5/site-packages
+
+   You can also use this new path.  If you do
+   • root users can install your package with the same ‘--prefix’ as
+     Python (you get the behavior of the previous attempt)
+
+   • non-root users can install your package too, they will have the
+     extension module in a place that is not searched by Python but they
+     can work around this using environment variables (and if you
+     installed scripts that use this shared library, it’s easy to tell
+     Python were to look in the beginning of your script, so the script
+     works in both cases).
+
+   The ‘AM_PATH_PYTHON’ macro uses similar commands to define
+‘$(pythondir)’ and ‘$(pyexecdir)’ (*note Python::).
+
+   Of course not all tools are as advanced as Python regarding that
+substitution of PREFIX.  So another strategy is to figure the part of
+the installation directory that must be preserved.  For instance, here
+is how ‘AM_PATH_LISPDIR’ (*note Emacs Lisp::) computes ‘$(lispdir)’:
+
+     $EMACS -batch -Q -eval '(while load-path
+       (princ (concat (car load-path) "\n"))
+       (setq load-path (cdr load-path)))' >conftest.out
+     lispdir=`sed -n
+       -e 's,/$,,'
+       -e '/.*\/lib\/x*emacs\/site-lisp$/{
+             s,.*/lib/\(x*emacs/site-lisp\)$,${libdir}/\1,;p;q;
+           }'
+       -e '/.*\/share\/x*emacs\/site-lisp$/{
+             s,.*/share/\(x*emacs/site-lisp\),${datarootdir}/\1,;p;q;
+           }'
+       conftest.out`
+
+   I.e., it just picks the first directory that looks like
+‘*/lib/*emacs/site-lisp’ or ‘*/share/*emacs/site-lisp’ in the search
+path of emacs, and then substitutes ‘${libdir}’ or ‘${datadir}’
+appropriately.
+
+   The emacs case looks complicated because it processes a list and
+expects two possible layouts, otherwise it’s easy, and the benefits for
+non-root users are really worth the extra ‘sed’ invocation.
+
+File: automake.info,  Node: Debugging Make Rules,  Next: Reporting Bugs,  Prev: Hard-Coded Install Paths,  Up: FAQ
+

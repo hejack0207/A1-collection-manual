@@ -1,0 +1,402 @@
+20.2 Initialization
+===================
+
+
+If the system was installed completely, it should be enough to call the
+shell function compinit from your initialization file; see the next
+section.  However, the function compinstall can be run by a user to
+configure various aspects of the completion system.
+
+Usually, compinstall will insert code into .zshrc, although if that is
+not writable it will save it in another file and tell you that file's
+location.  Note that it is up to you to make sure that the lines added
+to .zshrc are actually run; you may, for example, need to move them to
+an earlier place in the file if .zshrc usually returns early.  So long
+as you keep them all together (including the comment lines at the start
+and finish), you can rerun compinstall and it will correctly locate and
+modify these lines.  Note, however, that any code you add to this
+section by hand is likely to be lost if you rerun compinstall, although
+lines using the command 'zstyle' should be gracefully handled.
+
+The new code will take effect next time you start the shell, or run
+.zshrc by hand; there is also an option to make them take effect
+immediately.  However, if compinstall has removed definitions, you will
+need to restart the shell to see the changes.
+
+To run compinstall you will need to make sure it is in a directory
+mentioned in your fpath parameter, which should already be the case if
+zsh was properly configured as long as your startup files do not remove
+the appropriate directories from fpath.  Then it must be autoloaded
+('autoload -U compinstall' is recommended).  You can abort the
+installation any time you are being prompted for information, and your
+.zshrc will not be altered at all; changes only take place right at the
+end, where you are specifically asked for confirmation.
+
+
+20.2.1 Use of compinit
+----------------------
+
+
+This section describes the use of compinit to initialize completion for
+the current session when called directly; if you have run compinstall it
+will be called automatically from your .zshrc.
+
+To initialize the system, the function compinit should be in a directory
+mentioned in the fpath parameter, and should be autoloaded ('autoload -U
+compinit' is recommended), and then run simply as 'compinit'.  This will
+define a few utility functions, arrange for all the necessary shell
+functions to be autoloaded, and will then re-define all widgets that do
+completion to use the new system.  If you use the menu-select widget,
+which is part of the zsh/complist module, you should make sure that that
+module is loaded before the call to compinit so that that widget is also
+re-defined.  If completion styles (see below) are set up to perform
+expansion as well as completion by default, and the TAB key is bound to
+expand-or-complete, compinit will rebind it to complete-word; this is
+necessary to use the correct form of expansion.
+
+Should you need to use the original completion commands, you can still
+bind keys to the old widgets by putting a '.' in front of the widget
+name, e.g.  '.expand-or-complete'.
+
+To speed up the running of compinit, it can be made to produce a dumped
+configuration that will be read in on future invocations; this is the
+default, but can be turned off by calling compinit with the option -D.
+The dumped file is .zcompdump in the same directory as the startup files
+(i.e.  $ZDOTDIR or $HOME); alternatively, an explicit file name can be
+given by 'compinit -d DUMPFILE'.  The next invocation of compinit will
+read the dumped file instead of performing a full initialization.
+
+If the number of completion files changes, compinit will recognise this
+and produce a new dump file.  However, if the name of a function or the
+arguments in the first line of a #compdef function (as described below)
+change, it is easiest to delete the dump file by hand so that compinit
+will re-create it the next time it is run.  The check performed to see
+if there are new functions can be omitted by giving the option -C.  In
+this case the dump file will only be created if there isn't one already.
+
+The dumping is actually done by another function, compdump, but you will
+only need to run this yourself if you change the configuration (e.g.
+using compdef) and then want to dump the new one.  The name of the old
+dumped file will be remembered for this purpose.
+
+If the parameter _compdir is set, compinit uses it as a directory where
+completion functions can be found; this is only necessary if they are
+not already in the function search path.
+
+For security reasons compinit also checks if the completion system would
+use files not owned by root or by the current user, or files in
+directories that are world- or group-writable or that are not owned by
+root or by the current user.  If such files or directories are found,
+compinit will ask if the completion system should really be used.  To
+avoid these tests and make all files found be used without asking, use
+the option -u, and to make compinit silently ignore all insecure files
+and directories use the option -i.  This security check is skipped
+entirely when the -C option is given.
+
+The security check can be retried at any time by running the function
+compaudit.  This is the same check used by compinit, but when it is
+executed directly any changes to fpath are made local to the function so
+they do not persist.  The directories to be checked may be passed as
+arguments; if none are given, compaudit uses fpath and _compdir to find
+completion system directories, adding missing ones to fpath as
+necessary.  To force a check of exactly the directories currently named
+in fpath, set _compdir to an empty string before calling compaudit or
+compinit.
+
+The function bashcompinit provides compatibility with bash's
+programmable completion system.  When run it will define the functions,
+compgen and complete which correspond to the bash builtins with the same
+names.  It will then be possible to use completion specifications and
+functions written for bash.
+
+
+20.2.2 Autoloaded files
+-----------------------
+
+
+The convention for autoloaded functions used in completion is that they
+start with an underscore; as already mentioned, the fpath/FPATH
+parameter must contain the directory in which they are stored.  If zsh
+was properly installed on your system, then fpath/FPATH automatically
+contains the required directories for the standard functions.
+
+For incomplete installations, if compinit does not find enough files
+beginning with an underscore (fewer than twenty) in the search path, it
+will try to find more by adding the directory _compdir to the search
+path.  If that directory has a subdirectory named Base, all
+subdirectories will be added to the path.  Furthermore, if the
+subdirectory Base has a subdirectory named Core, compinit will add all
+subdirectories of the subdirectories to the path: this allows the
+functions to be in the same format as in the zsh source distribution.
+
+When compinit is run, it searches all such files accessible via
+fpath/FPATH and reads the first line of each of them.  This line should
+contain one of the tags described below.  Files whose first line does
+not start with one of these tags are not considered to be part of the
+completion system and will not be treated specially.
+
+The tags are:
+
+#compdef NAME ... [ -{p|P} PATTERN ... [ -N NAME ... ] ]
+     The file will be made autoloadable and the function defined in it
+     will be called when completing NAMEs, each of which is either the
+     name of a command whose arguments are to be completed or one of a
+     number of special contexts in the form -CONTEXT- described below.
+
+     Each NAME may also be of the form 'CMD=SERVICE'.  When completing
+     the command CMD, the function typically behaves as if the command
+     (or special context) SERVICE was being completed instead.  This
+     provides a way of altering the behaviour of functions that can
+     perform many different completions.  It is implemented by setting
+     the parameter $service when calling the function; the function may
+     choose to interpret this how it wishes, and simpler functions will
+     probably ignore it.
+
+     If the #compdef line contains one of the options -p or -P, the
+     words following are taken to be patterns.  The function will be
+     called when completion is attempted for a command or context that
+     matches one of the patterns.  The options -p and -P are used to
+     specify patterns to be tried before or after other completions
+     respectively.  Hence -P may be used to specify default actions.
+
+     The option -N is used after a list following -p or -P; it specifies
+     that remaining words no longer define patterns.  It is possible to
+     toggle between the three options as many times as necessary.
+
+#compdef -k STYLE KEY-SEQUENCE ...
+     This option creates a widget behaving like the builtin widget STYLE
+     and binds it to the given KEY-SEQUENCEs, if any.  The STYLE must be
+     one of the builtin widgets that perform completion, namely
+     complete-word, delete-char-or-list, expand-or-complete,
+     expand-or-complete-prefix, list-choices, menu-complete,
+     menu-expand-or-complete, or reverse-menu-complete.  If the
+     zsh/complist module is loaded (see *note The zsh/complist Module::)
+     the widget menu-select is also available.
+
+     When one of the KEY-SEQUENCEs is typed, the function in the file
+     will be invoked to generate the matches.  Note that a key will not
+     be re-bound if it already was (that is, was bound to something
+     other than undefined-key).  The widget created has the same name as
+     the file and can be bound to any other keys using bindkey as usual.
+
+#compdef -K WIDGET-NAME STYLE KEY-SEQUENCE [ NAME STYLE SEQ ... ]
+     This is similar to -k except that only one KEY-SEQUENCE argument
+     may be given for each WIDGET-NAME STYLE pair.  However, the entire
+     set of three arguments may be repeated with a different set of
+     arguments.  Note in particular that the WIDGET-NAME must be
+     distinct in each set.  If it does not begin with '_' this will be
+     added.  The WIDGET-NAME should not clash with the name of any
+     existing widget: names based on the name of the function are most
+     useful.  For example,
+
+          #compdef -K _foo_complete complete-word "^X^C" \
+            _foo_list list-choices "^X^D"
+
+     (all on one line) defines a widget _foo_complete for completion,
+     bound to '^X^C', and a widget _foo_list for listing, bound to
+     '^X^D'.
+
+#autoload [ OPTIONS ]
+     Functions with the #autoload tag are marked for autoloading but are
+     not otherwise treated specially.  Typically they are to be called
+     from within one of the completion functions.  Any OPTIONS supplied
+     will be passed to the autoload builtin; a typical use is +X to
+     force the function to be loaded immediately.  Note that the -U and
+     -z flags are always added implicitly.
+
+The # is part of the tag name and no white space is allowed after it.
+The #compdef tags use the compdef function described below; the main
+difference is that the name of the function is supplied implicitly.
+
+The special contexts for which completion functions can be defined are:
+
+-array-value-
+     The right hand side of an array-assignment ('NAME=(...)')
+
+-brace-parameter-
+     The name of a parameter expansion within braces ('${...}')
+
+-assign-parameter-
+     The name of a parameter in an assignment, i.e.  on the left hand
+     side of an '='
+
+-command-
+     A word in command position
+
+-condition-
+     A word inside a condition ('[[...]]')
+
+-default-
+     Any word for which no other completion is defined
+
+-equal-
+     A word beginning with an equals sign
+
+-first-
+     This is tried before any other completion function.  The function
+     called may set the _compskip parameter to one of various values:
+     all: no further completion is attempted; a string containing the
+     substring patterns: no pattern completion functions will be called;
+     a string containing default: the function for the '-default-'
+     context will not be called, but functions defined for commands will
+     be.
+
+-math-
+     Inside mathematical contexts, such as '((...))'
+
+-parameter-
+     The name of a parameter expansion ('$...')
+
+-redirect-
+     The word after a redirection operator.
+
+-subscript-
+     The contents of a parameter subscript.
+
+-tilde-
+     After an initial tilde ('~'), but before the first slash in the
+     word.
+
+-value-
+     On the right hand side of an assignment.
+
+Default implementations are supplied for each of these contexts.  In
+most cases the context -CONTEXT- is implemented by a corresponding
+function _CONTEXT, for example the context '-tilde-' and the function
+'_tilde').
+
+The contexts -redirect- and -value- allow extra context-specific
+information.  (Internally, this is handled by the functions for each
+context calling the function _dispatch.)  The extra information is added
+separated by commas.
+
+For the -redirect- context, the extra information is in the form
+'-redirect-,OP,COMMAND', where OP is the redirection operator and
+COMMAND is the name of the command on the line.  If there is no command
+on the line yet, the COMMAND field will be empty.
+
+For the -value- context, the form is '-value-,NAME,COMMAND', where NAME
+is the name of the parameter on the left hand side of the assignment.
+In the case of elements of an associative array, for example 'assoc=(key
+<TAB>', NAME is expanded to 'NAME-KEY'.  In certain special contexts,
+such as completing after 'make CFLAGS=', the COMMAND part gives the name
+of the command, here make; otherwise it is empty.
+
+It is not necessary to define fully specific completions as the
+functions provided will try to generate completions by progressively
+replacing the elements with '-default-'.  For example, when completing
+after 'foo=<TAB>', _value will try the names '-value-,foo,' (note the
+empty COMMAND part), '-value-,foo,-default-'
+and'-value-,-default-,-default-', in that order, until it finds a
+function to handle the context.
+
+As an example:
+
+     compdef '_files -g "*.log"' '-redirect-,2>,-default-'
+
+completes files matching '*.log' after '2> <TAB>' for any command with
+no more specific handler defined.
+
+Also:
+
+     compdef _foo -value-,-default-,-default-
+
+specifies that _foo provides completions for the values of parameters
+for which no special function has been defined.  This is usually handled
+by the function _value itself.
+
+The same lookup rules are used when looking up styles (as described
+below); for example
+
+     zstyle ':completion:*:*:-redirect-,2>,*:*' file-patterns '*.log'
+
+is another way to make completion after '2> <TAB>' complete files
+matching '*.log'.
+
+
+20.2.3 Functions
+----------------
+
+
+The following function is defined by compinit and may be called
+directly.
+
+
+compdef [ -ane ] FUNCTION NAME ... [ -{p|P} PATTERN ... [ -N NAME ...]]
+compdef -d NAME ...
+compdef -k [ -an ] FUNCTION STYLE KEY-SEQUENCE [ KEY-SEQUENCE ... ]
+compdef -K [ -an ] FUNCTION NAME STYLE KEY-SEQ [ NAME STYLE SEQ ... ]
+     The first form defines the FUNCTION to call for completion in the
+     given contexts as described for the #compdef tag above.
+
+     Alternatively, all the arguments may have the form 'CMD=SERVICE'.
+     Here SERVICE should already have been defined by 'CMD1=SERVICE'
+     lines in #compdef files, as described above.  The argument for CMD
+     will be completed in the same way as SERVICE.
+
+     The FUNCTION argument may alternatively be a string containing
+     almost any shell code.  If the string contains an equal sign, the
+     above will take precedence.  The option -e may be used to specify
+     the first argument is to be evaluated as shell code even if it
+     contains an equal sign.  The string will be executed using the eval
+     builtin command to generate completions.  This provides a way of
+     avoiding having to define a new completion function.  For example,
+     to complete files ending in '.h' as arguments to the command foo:
+
+          compdef '_files -g "*.h"' foo
+
+     The option -n prevents any completions already defined for the
+     command or context from being overwritten.
+
+     The option -d deletes any completion defined for the command or
+     contexts listed.
+
+     The NAMEs may also contain -p, -P and -N options as described for
+     the #compdef tag.  The effect on the argument list is identical,
+     switching between definitions of patterns tried initially, patterns
+     tried finally, and normal commands and contexts.
+
+     The parameter $_compskip may be set by any function defined for a
+     pattern context.  If it is set to a value containing the substring
+     'patterns' none of the pattern-functions will be called; if it is
+     set to a value containing the substring 'all', no other function
+     will be called.  Setting $_compskip in this manner is of particular
+     utility when using the -p option, as otherwise the dispatcher will
+     move on to additional functions (likely the default one) after
+     calling the pattern-context one, which can mangle the display of
+     completion possibilities if not handled properly.
+
+     The form with -k defines a widget with the same name as the
+     FUNCTION that will be called for each of the KEY-SEQUENCEs; this is
+     like the #compdef -k tag.  The function should generate the
+     completions needed and will otherwise behave like the builtin
+     widget whose name is given as the STYLE argument.  The widgets
+     usable for this are: complete-word, delete-char-or-list,
+     expand-or-complete, expand-or-complete-prefix, list-choices,
+     menu-complete, menu-expand-or-complete, and reverse-menu-complete,
+     as well as menu-select if the zsh/complist module is loaded.  The
+     option -n prevents the key being bound if it is already to bound to
+     something other than undefined-key.
+
+     The form with -K is similar and defines multiple widgets based on
+     the same FUNCTION, each of which requires the set of three
+     arguments NAME, STYLE and KEY-SEQuence, where the latter two are as
+     for -k and the first must be a unique widget name beginning with an
+     underscore.
+
+     Wherever applicable, the -a option makes the FUNCTION autoloadable,
+     equivalent to autoload -U FUNCTION.
+
+The function compdef can be used to associate existing completion
+functions with new commands.  For example,
+
+     compdef _pids foo
+
+uses the function _pids to complete process IDs for the command foo.
+
+Note also the _gnu_generic function described below, which can be used
+to complete options for commands that understand the '--help' option.
+
+
+File: zsh.info,  Node: Completion System Configuration,  Next: Control Functions,  Prev: Initialization,  Up: Completion System
+

@@ -1,0 +1,76 @@
+7.1 Recursing subdirectories
+============================
+
+In packages using make recursion, the top level ‘Makefile.am’ must tell
+Automake which subdirectories are to be built.  This is done via the
+‘SUBDIRS’ variable.
+
+   The ‘SUBDIRS’ variable holds a list of subdirectories in which
+building of various sorts can occur.  The rules for many targets (e.g.,
+‘all’) in the generated ‘Makefile’ will run commands both locally and in
+all specified subdirectories.  Note that the directories listed in
+‘SUBDIRS’ are not required to contain ‘Makefile.am’s; only ‘Makefile’s
+(after configuration).  This allows inclusion of libraries from packages
+that do not use Automake (such as ‘gettext’; see also *note Third-Party
+Makefiles::).
+
+   In packages that use subdirectories, the top-level ‘Makefile.am’ is
+often very short.  For instance, here is the ‘Makefile.am’ from the GNU
+Hello distribution:
+
+     EXTRA_DIST = BUGS ChangeLog.O README-alpha
+     SUBDIRS = doc intl po src tests
+
+   When Automake invokes ‘make’ in a subdirectory, it uses the value of
+the ‘MAKE’ variable.  It passes the value of the variable ‘AM_MAKEFLAGS’
+to the ‘make’ invocation; this can be set in ‘Makefile.am’ if there are
+flags you must always pass to ‘make’.
+
+   The directories mentioned in ‘SUBDIRS’ are usually direct children of
+the current directory, each subdirectory containing its own
+‘Makefile.am’ with a ‘SUBDIRS’ pointing to deeper subdirectories.
+Automake can be used to construct packages of arbitrary depth this way.
+
+   By default, Automake generates ‘Makefiles’ that work depth-first in
+postfix order: the subdirectories are built before the current
+directory.  However, it is possible to change this ordering.  You can do
+this by putting ‘.’ into ‘SUBDIRS’.  For instance, putting ‘.’ first
+will cause a prefix ordering of directories.
+
+   Using
+
+     SUBDIRS = lib src . test
+
+will cause ‘lib/’ to be built before ‘src/’, then the current directory
+will be built, finally the ‘test/’ directory will be built.  It is
+customary to arrange test directories to be built after everything else
+since they are meant to test what has been constructed.
+
+   In addition to the built-in recursive targets defined by Automake
+(‘all’, ‘check’, etc.), the developer can also define his own recursive
+targets.  That is done by passing the names of such targets as arguments
+to the m4 macro ‘AM_EXTRA_RECURSIVE_TARGETS’ in ‘configure.ac’.
+Automake generates rules to handle the recursion for such targets; and
+the developer can define real actions for them by defining corresponding
+‘-local’ targets.
+
+     % cat configure.ac
+     AC_INIT([pkg-name], [1.0]
+     AM_INIT_AUTOMAKE
+     AM_EXTRA_RECURSIVE_TARGETS([foo])
+     AC_CONFIG_FILES([Makefile sub/Makefile sub/src/Makefile])
+     AC_OUTPUT
+     % cat Makefile.am
+     SUBDIRS = sub
+     foo-local:
+             @echo This will be run by "make foo".
+     % cat sub/Makefile.am
+     SUBDIRS = src
+     % cat sub/src/Makefile.am
+     foo-local:
+             @echo This too will be run by a "make foo" issued either in
+             @echo the 'sub/src/' directory, the 'sub/' directory, or the
+             @echo top-level directory.
+
+File: automake.info,  Node: Conditional Subdirectories,  Next: Alternative,  Prev: Subdirectories,  Up: Directories
+

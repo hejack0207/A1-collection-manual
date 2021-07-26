@@ -1,0 +1,445 @@
+26.12 Other Functions
+=====================
+
+
+There are a large number of helpful functions in the Functions/Misc
+directory of the zsh distribution.  Most are very simple and do not
+require documentation here, but a few are worthy of special mention.
+
+
+26.12.1 Descriptions
+--------------------
+
+
+colors
+     This function initializes several associative arrays to map color
+     names to (and from) the ANSI standard eight-color terminal codes.
+     These are used by the prompt theme system (*note Prompt Themes::).
+     You seldom should need to run colors more than once.
+
+     The eight base colors are: black, red, green, yellow, blue,
+     magenta, cyan, and white.  Each of these has codes for foreground
+     and background.  In addition there are seven intensity attributes:
+     bold, faint, standout, underline, blink, reverse, and conceal.
+     Finally, there are seven codes used to negate attributes: none
+     (reset all attributes to the defaults), normal (neither bold nor
+     faint), no-standout, no-underline, no-blink, no-reverse, and
+     no-conceal.
+
+     Some terminals do not support all combinations of colors and
+     intensities.
+
+     The associative arrays are:
+
+     color
+     colour
+          Map all the color names to their integer codes, and integer
+          codes to the color names.  The eight base names map to the
+          foreground color codes, as do names prefixed with 'fg-', such
+          as 'fg-red'.  Names prefixed with 'bg-', such as 'bg-blue',
+          refer to the background codes.  The reverse mapping from code
+          to color yields base name for foreground codes and the bg-
+          form for backgrounds.
+
+          Although it is a misnomer to call them 'colors', these arrays
+          also map the other fourteen attributes from names to codes and
+          codes to names.
+
+     fg
+     fg_bold
+     fg_no_bold
+          Map the eight basic color names to ANSI terminal escape
+          sequences that set the corresponding foreground text
+          properties.  The fg sequences change the color without
+          changing the eight intensity attributes.
+
+     bg
+     bg_bold
+     bg_no_bold
+          Map the eight basic color names to ANSI terminal escape
+          sequences that set the corresponding background properties.
+          The bg sequences change the color without changing the eight
+          intensity attributes.
+
+     In addition, the scalar parameters reset_color and bold_color are
+     set to the ANSI terminal escapes that turn off all attributes and
+     turn on bold intensity, respectively.
+
+fned [ -x NUM ] NAME
+     Same as zed -f.  This function does not appear in the zsh
+     distribution, but can be created by linking zed to the name fned in
+     some directory in your fpath.
+
+is-at-least NEEDED [ PRESENT ]
+     Perform a greater-than-or-equal-to comparison of two strings having
+     the format of a zsh version number; that is, a string of numbers
+     and text with segments separated by dots or dashes.  If the PRESENT
+     string is not provided, $ZSH_VERSION is used.  Segments are paired
+     left-to-right in the two strings with leading non-number parts
+     ignored.  If one string has fewer segments than the other, the
+     missing segments are considered zero.
+
+     This is useful in startup files to set options and other state that
+     are not available in all versions of zsh.
+
+          is-at-least 3.1.6-15 && setopt NO_GLOBAL_RCS
+          is-at-least 3.1.0 && setopt HIST_REDUCE_BLANKS
+          is-at-least 2.6-17 || print "You can't use is-at-least here."
+
+nslookup [ ARG ... ]
+     This wrapper function for the nslookup command requires the
+     zsh/zpty module (see *note The zsh/zpty Module::).  It behaves
+     exactly like the standard nslookup except that it provides
+     customizable prompts (including a right-side prompt) and completion
+     of nslookup commands, host names, etc.  (if you use the
+     function-based completion system).  Completion styles may be set
+     with the context prefix ':completion:nslookup'.
+
+     See also the pager, prompt and rprompt styles below.
+
+regexp-replace VAR REGEXP REPLACE
+     Use regular expressions to perform a global search and replace
+     operation on a variable.  If the option RE_MATCH_PCRE is not set,
+     POSIX extended regular expressions are used, else Perl-compatible
+     regular expressions (this requires the shell to be linked against
+     the pcre library).
+
+     VAR is the name of the variable containing the string to be
+     matched.  The variable will be modified directly by the function.
+     The variables MATCH, MBEGIN, MEND, match, mbegin, mend should be
+     avoided as these are used by the regular expression code.
+
+     REGEXP is the regular expression to match against the string.
+
+     REPLACE is the replacement text.  This can contain parameter,
+     command and arithmetic expressions which will be replaced: in
+     particular, a reference to $MATCH will be replaced by the text
+     matched by the pattern.
+
+     The return status is 0 if at least one match was performed, else 1.
+
+run-help CMD
+     This function is designed to be invoked by the run-help ZLE widget,
+     in place of the default alias.  See 'Accessing On-Line Help' (*note
+     Utilities::) for setup instructions.
+
+     In the discussion which follows, if CMD is a file system path, it
+     is first reduced to its rightmost component (the file name).
+
+     Help is first sought by looking for a file named CMD in the
+     directory named by the HELPDIR parameter.  If no file is found, an
+     assistant function, alias, or command named run-help-CMD is sought.
+     If found, the assistant is executed with the rest of the current
+     command line (everything after the command name CMD) as its
+     arguments.  When neither file nor assistant is found, the external
+     command 'man CMD' is run.
+
+     An example assistant for the "ssh" command:
+
+          run-help-ssh() {
+              emulate -LR zsh
+              local -a args
+              # Delete the "-l username" option
+              zparseopts -D -E -a args l:
+              # Delete other options, leaving: host command
+              args=(${@:#-*})
+              if [[ ${#args} -lt 2 ]]; then
+                  man ssh
+              else
+                  run-help $args[2]
+              fi
+          }
+
+     Several of these assistants are provided in the Functions/Misc
+     directory.  These must be autoloaded, or placed as executable
+     scripts in your search path, in order to be found and used by
+     run-help.
+
+     run-help-git
+     run-help-ip
+     run-help-openssl
+     run-help-p4
+     run-help-sudo
+     run-help-svk
+     run-help-svn
+          Assistant functions for the git, ip, openssl, p4, sudo, svk,
+          and svn, commands.
+
+tetris
+     Zsh was once accused of not being as complete as Emacs, because it
+     lacked a Tetris game.  This function was written to refute this
+     vicious slander.
+
+     This function must be used as a ZLE widget:
+
+          autoload -U tetris
+          zle -N tetris
+          bindkey KEYS tetris
+
+     To start a game, execute the widget by typing the KEYS.  Whatever
+     command line you were editing disappears temporarily, and your
+     keymap is also temporarily replaced by the Tetris control keys.
+     The previous editor state is restored when you quit the game (by
+     pressing 'q') or when you lose.
+
+     If you quit in the middle of a game, the next invocation of the
+     tetris widget will continue where you left off.  If you lost, it
+     will start a new game.
+
+tetriscurses
+     This is a port of the above to zcurses.  The input handling is
+     improved a bit so that moving a block sideways doesn't
+     automatically advance a timestep, and the graphics use unicode
+     block graphics.
+
+     This version does not save the game state between invocations, and
+     is not invoked as a widget, but rather as:
+
+          autoload -U tetriscurses
+          tetriscurses
+
+zargs [ OPTION ... -- ] [ INPUT ... ] [ -- COMMAND [ ARG ... ] ]
+     This function has a similar purpose to GNU xargs.  Instead of
+     reading lines of arguments from the standard input, it takes them
+     from the command line.  This is useful because zsh, especially with
+     recursive glob operators, often can construct a command line for a
+     shell function that is longer than can be accepted by an external
+     command.
+
+     The OPTION list represents options of the zargs command itself,
+     which are the same as those of xargs.  The INPUT list is the
+     collection of strings (often file names) that become the arguments
+     of the command, analogous to the standard input of xargs.  Finally,
+     the ARG list consists of those arguments (usually options) that are
+     passed to the COMMAND each time it runs.  The ARG list precedes the
+     elements from the input list in each run.  If no COMMAND is
+     provided, then no ARG list may be provided, and in that event the
+     default command is 'print' with arguments '-r --'.
+
+     For example, to get a long ls listing of all plain files in the
+     current directory or its subdirectories:
+
+          autoload -U zargs
+          zargs -- **/*(.) -- ls -l
+
+     Note that '--' is used both to mark the end of the OPTION list and
+     to mark the end of the INPUT list, so it must appear twice whenever
+     the INPUT list may be empty.  If there is guaranteed to be at least
+     one INPUT and the first INPUT does not begin with a '-', then the
+     first '--' may be omitted.
+
+     In the event that the string '--' is or may be an INPUT, the -e
+     option may be used to change the end-of-inputs marker.  Note that
+     this does _not_ change the end-of-options marker.  For example, to
+     use '..' as the marker:
+
+          zargs -e.. -- **/*(.) .. ls -l
+
+     This is a good choice in that example because no plain file can be
+     named '..', but the best end-marker depends on the circumstances.
+
+     The options -i, -I, -l, -L, and -n differ slightly from their usage
+     in xargs.  There are no input lines for zargs to count, so -l and
+     -L count through the INPUT list, and -n counts the number of
+     arguments passed to each execution of COMMAND, _including_ any ARG
+     list.  Also, any time -i or -I is used, each INPUT is processed
+     separately as if by '-L 1'.
+
+     For details of the other zargs options, see man page xargs(1) (but
+     note the difference in function between zargs and xargs) or run
+     zargs with the --help option.
+
+zed [ -f [ -x NUM ] ] NAME
+zed -b
+     This function uses the ZLE editor to edit a file or function.
+
+     Only one NAME argument is allowed.  If the -f option is given, the
+     name is taken to be that of a function; if the function is marked
+     for autoloading, zed searches for it in the fpath and loads it.
+     Note that functions edited this way are installed into the current
+     shell, but _not_ written back to the autoload file.  In this case
+     the -x option specifies that leading tabs indenting the function
+     according to syntax should be converted into the given number of
+     spaces; '-x 2' is consistent with the layout of functions
+     distributed with the shell.
+
+     Without -f, NAME is the path name of the file to edit, which need
+     not exist; it is created on write, if necessary.
+
+     While editing, the function sets the main keymap to zed and the vi
+     command keymap to zed-vicmd.  These will be copied from the
+     existing main and vicmd keymaps if they do not exist the first time
+     zed is run.  They can be used to provide special key bindings used
+     only in zed.
+
+     If it creates the keymap, zed rebinds the return key to insert a
+     line break and '^X^W' to accept the edit in the zed keymap, and
+     binds 'ZZ' to accept the edit in the zed-vicmd keymap.
+
+     The bindings alone can be installed by running 'zed -b'.  This is
+     suitable for putting into a startup file.  Note that, if rerun,
+     this will overwrite the existing zed and zed-vicmd keymaps.
+
+     Completion is available, and styles may be set with the context
+     prefix ':completion:zed'.
+
+     A zle widget zed-set-file-name is available.  This can be called by
+     name from within zed using '\ex zed-set-file-name' (note, however,
+     that because of zed's rebindings you will have to type ^j at the
+     end instead of the return key), or can be bound to a key in either
+     of the zed or zed-vicmd keymaps after 'zed -b' has been run.  When
+     the widget is called, it prompts for a new name for the file being
+     edited.  When zed exits the file will be written under that name
+     and the original file will be left alone.  The widget has no effect
+     with 'zed -f'.
+
+     While zed-set-file-name is running, zed uses the keymap
+     zed-normal-keymap, which is linked from the main keymap in effect
+     at the time zed initialised its bindings.  (This is to make the
+     return key operate normally.)  The result is that if the main
+     keymap has been changed, the widget won't notice.  This is not a
+     concern for most users.
+
+zcp [ -finqQvwW ] SRCPAT DEST
+zln [ -finqQsvwW ] SRCPAT DEST
+     Same as zmv -C and zmv -L, respectively.  These functions do not
+     appear in the zsh distribution, but can be created by linking zmv
+     to the names zcp and zln in some directory in your fpath.
+
+zkbd
+     See 'Keyboard Definition' (*note Utilities::).
+
+zmv [ -finqQsvwW ] [ -C | -L | -M | -{p|P} PROGRAM ] [ -o OPTSTRING ]
+    SRCPAT DEST
+     Move (usually, rename) files matching the pattern SRCPAT to
+     corresponding files having names of the form given by DEST, where
+     SRCPAT contains parentheses surrounding patterns which will be
+     replaced in turn by $1, $2, ...  in DEST.  For example,
+
+          zmv '(*).lis' '$1.txt'
+
+     renames 'foo.lis' to 'foo.txt', 'my.old.stuff.lis' to
+     'my.old.stuff.txt', and so on.
+
+     The pattern is always treated as an EXTENDED_GLOB pattern.  Any
+     file whose name is not changed by the substitution is simply
+     ignored.  Any error (a substitution resulted in an empty string,
+     two substitutions gave the same result, the destination was an
+     existing regular file and -f was not given) causes the entire
+     function to abort without doing anything.
+
+     In addition to pattern replacement, the variable $f can be
+     referrred to in the second (replacement) argument.  This makes it
+     possible to use variable substitution to alter the argument; see
+     examples below.
+
+     Options:
+
+     -f
+          Force overwriting of destination files.  Not currently passed
+          down to the mv/cp/ln command due to vagaries of
+          implementations (but you can use -o-f to do that).
+     -i
+          Interactive: show each line to be executed and ask the user
+          whether to execute it.  'Y' or 'y' will execute it, anything
+          else will skip it.  Note that you just need to type one
+          character.
+     -n
+          No execution: print what would happen, but don't do it.
+     -q
+          Turn bare glob qualifiers off: now assumed by default, so this
+          has no effect.
+     -Q
+          Force bare glob qualifiers on.  Don't turn this on unless you
+          are actually using glob qualifiers in a pattern.
+     -s
+          Symbolic, passed down to ln; only works with -L.
+     -v
+          Verbose: print each command as it's being executed.
+     -w
+          Pick out wildcard parts of the pattern, as described above,
+          and implicitly add parentheses for referring to them.
+     -W
+          Just like -w, with the addition of turning wildcards in the
+          replacement pattern into sequential ${1} ..  ${N} references.
+     -C
+     -L
+     -M
+          Force cp, ln or mv, respectively, regardless of the name of
+          the function.
+     -p PROGRAM
+          Call PROGRAM instead of cp, ln or mv.  Whatever it does, it
+          should at least understand the form
+               PROGRAM -- OLDNAME NEWNAME
+          where OLDNAME and NEWNAME are filenames generated by zmv.
+          PROGRAM will be split into words, so might be e.g.  the name
+          of an archive tool plus a copy or rename subcommand.
+     -P PROGRAM
+          As -p PROGRAM, except that PROGRAM does not accept a following
+          -- to indicate the end of options.  In this case filenames
+          must already be in a sane form for the program in question.
+     -o OPTSTRING
+          The OPTSTRING is split into words and passed down verbatim to
+          the cp, ln or mv command called to perform the work.  It
+          should probably begin with a '-'.
+
+     Further examples:
+
+          zmv -v '(* *)' '${1// /_}'
+
+     For any file in the current directory with at least one space in
+     the name, replace every space by an underscore and display the
+     commands executed.
+
+          zmv -v '* *' '${f// /_}'
+
+     This does exactly the same by referring to the file name stored in
+     $f.
+
+     For more complete examples and other implementation details, see
+     the zmv source file, usually located in one of the directories
+     named in your fpath, or in Functions/Misc/zmv in the zsh
+     distribution.
+
+zrecompile
+     See 'Recompiling Functions' (*note Utilities::).
+
+zstyle+ CONTEXT STYLE VALUE [ + SUBCONTEXT STYLE VALUE ... ]
+     This makes defining styles a bit simpler by using a single '+' as a
+     special token that allows you to append a context name to the
+     previously used context name.  Like this:
+
+          zstyle+ ':foo:bar' STYLE1 VALUE1 \
+                 +':baz'     STYLE2 VALUE2 \
+                 +':frob'    STYLE3 VALUE3
+
+     This defines STYLE1 with VALUE1 for the context :foo:bar as usual,
+     but it also defines STYLE2 with VALUE2 for the context :foo:bar:baz
+     and STYLE3 with VALUE3 for :foo:bar:frob.  Any SUBCONTEXT may be
+     the empty string to re-use the first context unchanged.
+
+
+26.12.2 Styles
+--------------
+
+
+insert-tab
+     The zed function _sets_ this style in context ':completion:zed:*'
+     to turn off completion when TAB is typed at the beginning of a
+     line.  You may override this by setting your own value for this
+     context and style.
+
+pager
+     The nslookup function looks up this style in the context
+     ':nslookup' to determine the program used to display output that
+     does not fit on a single screen.
+
+prompt
+rprompt
+     The nslookup function looks up this style in the context
+     ':nslookup' to set the prompt and the right-side prompt,
+     respectively.  The usual expansions for the PS1 and RPS1 parameters
+     may be used (see *note Prompt Expansion::).
+
+File: zsh.info,  Node: Concept Index,  Next: Variables Index,  Prev: Top,  Up: Top
+

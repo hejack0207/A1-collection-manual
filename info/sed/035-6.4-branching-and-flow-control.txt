@@ -1,0 +1,207 @@
+6.4 Branching and Flow Control
+==============================
+
+The branching commands 'b', 't', and 'T' enable changing the flow of
+'sed' programs.
+
+   By default, 'sed' reads an input line into the pattern buffer, then
+continues to processes all commands in order.  Commands without
+addresses affect all lines.  Commands with addresses affect only
+matching lines.  *Note Execution Cycle:: and *note Addresses overview::.
+
+   'sed' does not support a typical 'if/then' construct.  Instead, some
+commands can be used as conditionals or to change the default flow
+control:
+
+'d'
+     delete (clears) the current pattern space, and restart the program
+     cycle without processing the rest of the commands and without
+     printing the pattern space.
+
+'D'
+     delete the contents of the pattern space _up to the first newline_,
+     and restart the program cycle without processing the rest of the
+     commands and without printing the pattern space.
+
+'[addr]X'
+'[addr]{ X ; X ; X }'
+'/regexp/X'
+'/regexp/{ X ; X ; X }'
+     Addresses and regular expressions can be used as an 'if/then'
+     conditional: If [ADDR] matches the current pattern space, execute
+     the command(s).  For example: The command '/^#/d' means: _if_ the
+     current pattern matches the regular expression '^#' (a line
+     starting with a hash), _then_ execute the 'd' command: delete the
+     line without printing it, and restart the program cycle
+     immediately.
+
+'b'
+     branch unconditionally (that is: always jump to a label, skipping
+     or repeating other commands, without restarting a new cycle).
+     Combined with an address, the branch can be conditionally executed
+     on matched lines.
+
+'t'
+     branch conditionally (that is: jump to a label) _only if_ a 's///'
+     command has succeeded since the last input line was read or another
+     conditional branch was taken.
+
+'T'
+     similar but opposite to the 't' command: branch only if there has
+     been _no_ successful substitutions since the last input line was
+     read.
+
+   The following two 'sed' programs are equivalent.  The first
+(contrived) example uses the 'b' command to skip the 's///' command on
+lines containing '1'.  The second example uses an address with negation
+('!') to perform substitution only on desired lines.  The 'y///' command
+is still executed on all lines:
+
+     $ printf '%s\n' a1 a2 a3 | sed -E '/1/bx ; s/a/z/ ; :x ; y/123/456/'
+     a4
+     z5
+     z6
+
+     $ printf '%s\n' a1 a2 a3 | sed -E '/1/!s/a/z/ ; y/123/456/'
+     a4
+     z5
+     z6
+
+6.4.1 Branching and Cycles
+--------------------------
+
+The 'b','t' and 'T' commands can be followed by a label (typically a
+single letter).  Labels are defined with a colon followed by one or more
+letters (e.g.  ':x').  If the label is omitted the branch commands
+restart the cycle.  Note the difference between branching to a label and
+restarting the cycle: when a cycle is restarted, 'sed' first prints the
+current content of the pattern space, then reads the next input line
+into the pattern space; Jumping to a label (even if it is at the
+beginning of the program) does not print the pattern space and does not
+read the next input line.
+
+   The following program is a no-op.  The 'b' command (the only command
+in the program) does not have a label, and thus simply restarts the
+cycle.  On each cycle, the pattern space is printed and the next input
+line is read:
+
+     $ seq 3 | sed b
+     1
+     2
+     3
+
+   The following example is an infinite-loop - it doesn't terminate and
+doesn't print anything.  The 'b' command jumps to the 'x' label, and a
+new cycle is never started:
+
+     $ seq 3 | sed ':x ; bx'
+
+     # The above command requires gnu sed (which supports additional
+     # commands following a label, without a newline). A portable equivalent:
+     #     sed -e ':x' -e bx
+
+   Branching is often complemented with the 'n' or 'N' commands: both
+commands read the next input line into the pattern space without waiting
+for the cycle to restart.  Before reading the next input line, 'n'
+prints the current pattern space then empties it, while 'N' appends a
+newline and the next input line to the pattern space.
+
+   Consider the following two examples:
+
+     $ seq 3 | sed ':x ; n ; bx'
+     1
+     2
+     3
+
+     $ seq 3 | sed ':x ; N ; bx'
+     1
+     2
+     3
+
+   * Both examples do not inf-loop, despite never starting a new cycle.
+
+   * In the first example, the 'n' commands first prints the content of
+     the pattern space, empties the pattern space then reads the next
+     input line.
+
+   * In the second example, the 'N' commands appends the next input line
+     to the pattern space (with a newline).  Lines are accumulated in
+     the pattern space until there are no more input lines to read, then
+     the 'N' command terminates the 'sed' program.  When the program
+     terminates, the end-of-cycle actions are performed, and the entire
+     pattern space is printed.
+
+   * The second example requires GNU 'sed', because it uses the
+     non-POSIX-standard behavior of 'N'.  See the "'N' command on the
+     last line" paragraph in *note Reporting Bugs::.
+
+   * To further examine the difference between the two examples, try the
+     following commands:
+          printf '%s\n' aa bb cc dd | sed ':x ; n ; = ; bx'
+          printf '%s\n' aa bb cc dd | sed ':x ; N ; = ; bx'
+          printf '%s\n' aa bb cc dd | sed ':x ; n ; s/\n/***/ ; bx'
+          printf '%s\n' aa bb cc dd | sed ':x ; N ; s/\n/***/ ; bx'
+
+6.4.2 Branching example: joining lines
+--------------------------------------
+
+As a real-world example of using branching, consider the case of
+quoted-printable (https://en.wikipedia.org/wiki/Quoted-printable) files,
+typically used to encode email messages.  In these files long lines are
+split and marked with a "soft line break" consisting of a single '='
+character at the end of the line:
+
+     $ cat jaques.txt
+     All the wor=
+     ld's a stag=
+     e,
+     And all the=
+      men and wo=
+     men merely =
+     players:
+     They have t=
+     heir exits =
+     and their e=
+     ntrances;
+     And one man=
+      in his tim=
+     e plays man=
+     y parts.
+
+   The following program uses an address match '/=$/' as a conditional:
+If the current pattern space ends with a '=', it reads the next input
+line using 'N', replaces all '=' characters which are followed by a
+newline, and unconditionally branches ('b') to the beginning of the
+program without restarting a new cycle.  If the pattern space does not
+ends with '=', the default action is performed: the pattern space is
+printed and a new cycle is started:
+
+     $ sed ':x ; /=$/ { N ; s/=\n//g ; bx }' jaques.txt
+     All the world's a stage,
+     And all the men and women merely players:
+     They have their exits and their entrances;
+     And one man in his time plays many parts.
+
+   Here's an alternative program with a slightly different approach: On
+all lines except the last, 'N' appends the line to the pattern space.  A
+substitution command then removes soft line breaks ('=' at the end of a
+line, i.e.  followed by a newline) by replacing them with an empty
+string.  _if_ the substitution was successful (meaning the pattern space
+contained a line which should be joined), The conditional branch command
+'t' jumps to the beginning of the program without completing or
+restarting the cycle.  If the substitution failed (meaning there were no
+soft line breaks), The 't' command will _not_ branch.  Then, 'P' will
+print the pattern space content until the first newline, and 'D' will
+delete the pattern space content until the first new line.  (To learn
+more about 'N', 'P' and 'D' commands *note Multiline techniques::).
+
+     $ sed ':x ; $!N ; s/=\n// ; tx ; P ; D' jaques.txt
+     All the world's a stage,
+     And all the men and women merely players:
+     They have their exits and their entrances;
+     And one man in his time plays many parts.
+
+   For more line-joining examples *note Joining lines::.
+
+File: sed.info,  Node: Examples,  Next: Limitations,  Prev: advanced sed,  Up: Top
+

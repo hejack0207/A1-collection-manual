@@ -1,0 +1,822 @@
+5.5 Library Functions
+=====================
+
+The following macros check for particular C library functions.  If
+there is no macro specifically defined to check for a function you need,
+and you don't need to check for any special properties of it, then you
+can use one of the general function-check macros.
+
+* Menu:
+
+* Function Portability::        Pitfalls with usual functions
+* Particular Functions::        Special handling to find certain functions
+* Generic Functions::           How to find other functions
+
+File: autoconf.info,  Node: Function Portability,  Next: Particular Functions,  Up: Library Functions
+
+5.5.1 Portability of C Functions
+--------------------------------
+
+Most usual functions can either be missing, or be buggy, or be limited
+on some architectures.  This section tries to make an inventory of these
+portability issues.  By definition, this list always requires
+additions.  A much more complete list is maintained by the Gnulib
+project (*note Gnulib::), covering *note Current Posix Functions:
+(gnulib)Function Substitutes, *note Legacy Functions: (gnulib)Legacy
+Function Substitutes, and *note Glibc Functions: (gnulib)Glibc Function
+Substitutes.  Please help us keep the gnulib list as complete as
+possible.
+
+`exit'
+     On ancient hosts, `exit' returned `int'.  This is because `exit'
+     predates `void', and there was a long tradition of it returning
+     `int'.
+
+     On current hosts, the problem more likely is that `exit' is not
+     declared, due to C++ problems of some sort or another.  For this
+     reason we suggest that test programs not invoke `exit', but return
+     from `main' instead.
+
+`free'
+     The C standard says a call `free (NULL)' does nothing, but some
+     old systems don't support this (e.g., NextStep).
+
+`isinf'
+`isnan'
+     The C99 standard says that `isinf' and `isnan' are macros.  On
+     some systems just macros are available (e.g., HP-UX and Solaris
+     10), on some systems both macros and functions (e.g., glibc
+     2.3.2), and on some systems only functions (e.g., IRIX 6 and
+     Solaris 9).  In some cases these functions are declared in
+     nonstandard headers like `<sunmath.h>' and defined in non-default
+     libraries like `-lm' or `-lsunmath'.
+
+     The C99 `isinf' and `isnan' macros work correctly with `long
+     double' arguments, but pre-C99 systems that use functions
+     typically assume `double' arguments.  On such a system, `isinf'
+     incorrectly returns true for a finite `long double' argument that
+     is outside the range of `double'.
+
+     The best workaround for these issues is to use gnulib modules
+     `isinf' and `isnan' (*note Gnulib::).  But a lighter weight
+     solution involves code like the following.
+
+          #include <math.h>
+
+          #ifndef isnan
+          # define isnan(x) \
+              (sizeof (x) == sizeof (long double) ? isnan_ld (x) \
+               : sizeof (x) == sizeof (double) ? isnan_d (x) \
+               : isnan_f (x))
+          static inline int isnan_f  (float       x) { return x != x; }
+          static inline int isnan_d  (double      x) { return x != x; }
+          static inline int isnan_ld (long double x) { return x != x; }
+          #endif
+
+          #ifndef isinf
+          # define isinf(x) \
+              (sizeof (x) == sizeof (long double) ? isinf_ld (x) \
+               : sizeof (x) == sizeof (double) ? isinf_d (x) \
+               : isinf_f (x))
+          static inline int isinf_f  (float       x)
+          { return !isnan (x) && isnan (x - x); }
+          static inline int isinf_d  (double      x)
+          { return !isnan (x) && isnan (x - x); }
+          static inline int isinf_ld (long double x)
+          { return !isnan (x) && isnan (x - x); }
+          #endif
+
+     Use `AC_C_INLINE' (*note C Compiler::) so that this code works on
+     compilers that lack the `inline' keyword.  Some optimizing
+     compilers mishandle these definitions, but systems with that bug
+     typically have many other floating point corner-case compliance
+     problems anyway, so it's probably not worth worrying about.
+
+`malloc'
+     The C standard says a call `malloc (0)' is implementation
+     dependent.  It can return either `NULL' or a new non-null pointer.
+     The latter is more common (e.g., the GNU C Library) but is by no
+     means universal.  `AC_FUNC_MALLOC' can be used to insist on
+     non-`NULL' (*note Particular Functions::).
+
+`putenv'
+     Posix prefers `setenv' to `putenv'; among other things, `putenv'
+     is not required of all Posix implementations, but `setenv' is.
+
+     Posix specifies that `putenv' puts the given string directly in
+     `environ', but some systems make a copy of it instead (e.g., glibc
+     2.0, or BSD).  And when a copy is made, `unsetenv' might not free
+     it, causing a memory leak (e.g., FreeBSD 4).
+
+     On some systems `putenv ("FOO")' removes `FOO' from the
+     environment, but this is not standard usage and it dumps core on
+     some systems (e.g., AIX).
+
+     On MinGW, a call `putenv ("FOO=")' removes `FOO' from the
+     environment, rather than inserting it with an empty value.
+
+`realloc'
+     The C standard says a call `realloc (NULL, size)' is equivalent to
+     `malloc (size)', but some old systems don't support this (e.g.,
+     NextStep).
+
+`signal' handler
+     Normally `signal' takes a handler function with a return type of
+     `void', but some old systems required `int' instead.  Any actual
+     `int' value returned is not used; this is only a difference in the
+     function prototype demanded.
+
+     All systems we know of in current use return `void'.  The `int'
+     was to support K&R C, where of course `void' is not available.
+     The obsolete macro `AC_TYPE_SIGNAL' (*note AC_TYPE_SIGNAL::) can
+     be used to establish the correct type in all cases.
+
+     In most cases, it is more robust to use `sigaction' when it is
+     available, rather than `signal'.
+
+`snprintf'
+     The C99 standard says that if the output array isn't big enough
+     and if no other errors occur, `snprintf' and `vsnprintf' truncate
+     the output and return the number of bytes that ought to have been
+     produced.  Some older systems return the truncated length (e.g.,
+     GNU C Library 2.0.x or IRIX 6.5), some a negative value (e.g.,
+     earlier GNU C Library versions), and some the buffer length
+     without truncation (e.g., 32-bit Solaris 7).  Also, some buggy
+     older systems ignore the length and overrun the buffer (e.g.,
+     64-bit Solaris 7).
+
+`sprintf'
+     The C standard says `sprintf' and `vsprintf' return the number of
+     bytes written.  On some ancient systems (SunOS 4 for instance)
+     they return the buffer pointer instead, but these no longer need
+     to be worried about.
+
+`sscanf'
+     On various old systems, e.g., HP-UX 9, `sscanf' requires that its
+     input string be writable (though it doesn't actually change it).
+     This can be a problem when using `gcc' since it normally puts
+     constant strings in read-only memory (*note Incompatibilities of
+     GCC: (gcc)Incompatibilities.).  Apparently in some cases even
+     having format strings read-only can be a problem.
+
+`strerror_r'
+     Posix specifies that `strerror_r' returns an `int', but many
+     systems (e.g., GNU C Library version 2.2.4) provide a different
+     version returning a `char *'.  `AC_FUNC_STRERROR_R' can detect
+     which is in use (*note Particular Functions::).
+
+`strnlen'
+     AIX 4.3 provides a broken version which produces the following
+     results:
+
+          strnlen ("foobar", 0) = 0
+          strnlen ("foobar", 1) = 3
+          strnlen ("foobar", 2) = 2
+          strnlen ("foobar", 3) = 1
+          strnlen ("foobar", 4) = 0
+          strnlen ("foobar", 5) = 6
+          strnlen ("foobar", 6) = 6
+          strnlen ("foobar", 7) = 6
+          strnlen ("foobar", 8) = 6
+          strnlen ("foobar", 9) = 6
+
+`sysconf'
+     `_SC_PAGESIZE' is standard, but some older systems (e.g., HP-UX 9)
+     have `_SC_PAGE_SIZE' instead.  This can be tested with `#ifdef'.
+
+`unlink'
+     The Posix spec says that `unlink' causes the given file to be
+     removed only after there are no more open file handles for it.
+     Some non-Posix hosts have trouble with this requirement, though,
+     and some DOS variants even corrupt the file system.
+
+`unsetenv'
+     On MinGW, `unsetenv' is not available, but a variable `FOO' can be
+     removed with a call `putenv ("FOO=")', as described under `putenv'
+     above.
+
+`va_copy'
+     The C99 standard provides `va_copy' for copying `va_list'
+     variables.  It may be available in older environments too, though
+     possibly as `__va_copy' (e.g., `gcc' in strict pre-C99 mode).
+     These can be tested with `#ifdef'.  A fallback to `memcpy (&dst,
+     &src, sizeof (va_list))' gives maximum portability.
+
+`va_list'
+     `va_list' is not necessarily just a pointer.  It can be a `struct'
+     (e.g., `gcc' on Alpha), which means `NULL' is not portable.  Or it
+     can be an array (e.g., `gcc' in some PowerPC configurations),
+     which means as a function parameter it can be effectively
+     call-by-reference and library routines might modify the value back
+     in the caller (e.g., `vsnprintf' in the GNU C Library 2.1).
+
+Signed `>>'
+     Normally the C `>>' right shift of a signed type replicates the
+     high bit, giving a so-called "arithmetic" shift.  But care should
+     be taken since Standard C doesn't require that behavior.  On those
+     few processors without a native arithmetic shift (for instance Cray
+     vector systems) zero bits may be shifted in, the same as a shift
+     of an unsigned type.
+
+Integer `/'
+     C divides signed integers by truncating their quotient toward zero,
+     yielding the same result as Fortran.  However, before C99 the
+     standard allowed C implementations to take the floor or ceiling of
+     the quotient in some cases.  Hardly any implementations took
+     advantage of this freedom, though, and it's probably not worth
+     worrying about this issue nowadays.
+
+File: autoconf.info,  Node: Particular Functions,  Next: Generic Functions,  Prev: Function Portability,  Up: Library Functions
+
+5.5.2 Particular Function Checks
+--------------------------------
+
+These macros check for particular C functions--whether they exist, and
+in some cases how they respond when given certain arguments.
+
+ -- Macro: AC_FUNC_ALLOCA
+     Check how to get `alloca'.  Tries to get a builtin version by
+     checking for `alloca.h' or the predefined C preprocessor macros
+     `__GNUC__' and `_AIX'.  If this macro finds `alloca.h', it defines
+     `HAVE_ALLOCA_H'.
+
+     If those attempts fail, it looks for the function in the standard C
+     library.  If any of those methods succeed, it defines
+     `HAVE_ALLOCA'.  Otherwise, it sets the output variable `ALLOCA' to
+     `${LIBOBJDIR}alloca.o' and defines `C_ALLOCA' (so programs can
+     periodically call `alloca (0)' to garbage collect).  This variable
+     is separate from `LIBOBJS' so multiple programs can share the
+     value of `ALLOCA' without needing to create an actual library, in
+     case only some of them use the code in `LIBOBJS'.  The
+     `${LIBOBJDIR}' prefix serves the same purpose as in `LIBOBJS'
+     (*note AC_LIBOBJ vs LIBOBJS::).
+
+     This macro does not try to get `alloca' from the System V R3
+     `libPW' or the System V R4 `libucb' because those libraries
+     contain some incompatible functions that cause trouble.  Some
+     versions do not even contain `alloca' or contain a buggy version.
+     If you still want to use their `alloca', use `ar' to extract
+     `alloca.o' from them instead of compiling `alloca.c'.
+
+     Source files that use `alloca' should start with a piece of code
+     like the following, to declare it properly.
+
+          #ifdef STDC_HEADERS
+          # include <stdlib.h>
+          # include <stddef.h>
+          #else
+          # ifdef HAVE_STDLIB_H
+          #  include <stdlib.h>
+          # endif
+          #endif
+          #ifdef HAVE_ALLOCA_H
+          # include <alloca.h>
+          #elif !defined alloca
+          # ifdef __GNUC__
+          #  define alloca __builtin_alloca
+          # elif defined _AIX
+          #  define alloca __alloca
+          # elif defined _MSC_VER
+          #  include <malloc.h>
+          #  define alloca _alloca
+          # elif !defined HAVE_ALLOCA
+          #  ifdef  __cplusplus
+          extern "C"
+          #  endif
+          void *alloca (size_t);
+          # endif
+          #endif
+
+ -- Macro: AC_FUNC_CHOWN
+     If the `chown' function is available and works (in particular, it
+     should accept `-1' for `uid' and `gid'), define `HAVE_CHOWN'.  The
+     result of this macro is cached in the `ac_cv_func_chown_works'
+     variable.
+
+ -- Macro: AC_FUNC_CLOSEDIR_VOID
+     If the `closedir' function does not return a meaningful value,
+     define `CLOSEDIR_VOID'.  Otherwise, callers ought to check its
+     return value for an error indicator.
+
+     Currently this test is implemented by running a test program.  When
+     cross compiling the pessimistic assumption that `closedir' does not
+     return a meaningful value is made.
+
+     The result of this macro is cached in the
+     `ac_cv_func_closedir_void' variable.
+
+     This macro is obsolescent, as `closedir' returns a meaningful value
+     on current systems.  New programs need not use this macro.
+
+ -- Macro: AC_FUNC_ERROR_AT_LINE
+     If the `error_at_line' function is not found, require an
+     `AC_LIBOBJ' replacement of `error'.
+
+     The result of this macro is cached in the `ac_cv_lib_error_at_line'
+     variable.
+
+     The `AC_FUNC_ERROR_AT_LINE' macro is obsolescent.  New programs
+     should use Gnulib's `error' module.  *Note Gnulib::.
+
+ -- Macro: AC_FUNC_FNMATCH
+     If the `fnmatch' function conforms to Posix, define
+     `HAVE_FNMATCH'.  Detect common implementation bugs, for example,
+     the bugs in Solaris 2.4.
+
+     Unlike the other specific `AC_FUNC' macros, `AC_FUNC_FNMATCH' does
+     not replace a broken/missing `fnmatch'.  This is for historical
+     reasons.  See `AC_REPLACE_FNMATCH' below.
+
+     The result of this macro is cached in the
+     `ac_cv_func_fnmatch_works' variable.
+
+     This macro is obsolescent.  New programs should use Gnulib's
+     `fnmatch-posix' module.  *Note Gnulib::.
+
+ -- Macro: AC_FUNC_FNMATCH_GNU
+     Behave like `AC_REPLACE_FNMATCH' (_replace_) but also test whether
+     `fnmatch' supports GNU extensions.  Detect common implementation
+     bugs, for example, the bugs in the GNU C Library 2.1.
+
+     The result of this macro is cached in the `ac_cv_func_fnmatch_gnu'
+     variable.
+
+     This macro is obsolescent.  New programs should use Gnulib's
+     `fnmatch-gnu' module.  *Note Gnulib::.
+
+ -- Macro: AC_FUNC_FORK
+     This macro checks for the `fork' and `vfork' functions.  If a
+     working `fork' is found, define `HAVE_WORKING_FORK'.  This macro
+     checks whether `fork' is just a stub by trying to run it.
+
+     If `vfork.h' is found, define `HAVE_VFORK_H'.  If a working
+     `vfork' is found, define `HAVE_WORKING_VFORK'.  Otherwise, define
+     `vfork' to be `fork' for backward compatibility with previous
+     versions of `autoconf'.  This macro checks for several known
+     errors in implementations of `vfork' and considers the system to
+     not have a working `vfork' if it detects any of them.  It is not
+     considered to be an implementation error if a child's invocation
+     of `signal' modifies the parent's signal handler, since child
+     processes rarely change their signal handlers.
+
+     Since this macro defines `vfork' only for backward compatibility
+     with previous versions of `autoconf' you're encouraged to define it
+     yourself in new code:
+          #ifndef HAVE_WORKING_VFORK
+          # define vfork fork
+          #endif
+
+     The results of this macro are cached in the `ac_cv_func_fork_works'
+     and `ac_cv_func_vfork_works' variables.  In order to override the
+     test, you also need to set the `ac_cv_func_fork' and
+     `ac_cv_func_vfork' variables.
+
+ -- Macro: AC_FUNC_FSEEKO
+     If the `fseeko' function is available, define `HAVE_FSEEKO'.
+     Define `_LARGEFILE_SOURCE' if necessary to make the prototype
+     visible on some systems (e.g., glibc 2.2).  Otherwise linkage
+     problems may occur when compiling with `AC_SYS_LARGEFILE' on
+     largefile-sensitive systems where `off_t' does not default to a
+     64bit entity.  All systems with `fseeko' also supply `ftello'.
+
+ -- Macro: AC_FUNC_GETGROUPS
+     If the `getgroups' function is available and works (unlike on
+     Ultrix 4.3, where `getgroups (0, 0)' always fails), define
+     `HAVE_GETGROUPS'.  Set `GETGROUPS_LIBS' to any libraries needed to
+     get that function.  This macro runs `AC_TYPE_GETGROUPS'.
+
+ -- Macro: AC_FUNC_GETLOADAVG
+     Check how to get the system load averages.  To perform its tests
+     properly, this macro needs the file `getloadavg.c'; therefore, be
+     sure to set the `AC_LIBOBJ' replacement directory properly (see
+     *note Generic Functions::, `AC_CONFIG_LIBOBJ_DIR').
+
+     If the system has the `getloadavg' function, define
+     `HAVE_GETLOADAVG', and set `GETLOADAVG_LIBS' to any libraries
+     necessary to get that function.  Also add `GETLOADAVG_LIBS' to
+     `LIBS'.  Otherwise, require an `AC_LIBOBJ' replacement for
+     `getloadavg' with source code in `DIR/getloadavg.c', and possibly
+     define several other C preprocessor macros and output variables:
+
+       1. Define `C_GETLOADAVG'.
+
+       2. Define `SVR4', `DGUX', `UMAX', or `UMAX4_3' if on those
+          systems.
+
+       3. If `nlist.h' is found, define `HAVE_NLIST_H'.
+
+       4. If `struct nlist' has an `n_un.n_name' member, define
+          `HAVE_STRUCT_NLIST_N_UN_N_NAME'.  The obsolete symbol
+          `NLIST_NAME_UNION' is still defined, but do not depend upon
+          it.
+
+       5. Programs may need to be installed set-group-ID (or
+          set-user-ID) for `getloadavg' to work.  In this case, define
+          `GETLOADAVG_PRIVILEGED', set the output variable `NEED_SETGID'
+          to `true' (and otherwise to `false'), and set `KMEM_GROUP' to
+          the name of the group that should own the installed program.
+
+     The `AC_FUNC_GETLOADAVG' macro is obsolescent.  New programs should
+     use Gnulib's `getloadavg' module.  *Note Gnulib::.
+
+ -- Macro: AC_FUNC_GETMNTENT
+     Check for `getmntent' in the standard C library, and then in the
+     `sun', `seq', and `gen' libraries, for UNICOS, IRIX 4, PTX, and
+     UnixWare, respectively.  Then, if `getmntent' is available, define
+     `HAVE_GETMNTENT' and set `ac_cv_func_getmntent' to `yes'.
+     Otherwise set `ac_cv_func_getmntent' to `no'.
+
+     The result of this macro can be overridden by setting the cache
+     variable `ac_cv_search_getmntent'.
+
+ -- Macro: AC_FUNC_GETPGRP
+     Define `GETPGRP_VOID' if it is an error to pass 0 to `getpgrp';
+     this is the Posix behavior.  On older BSD systems, you must pass 0
+     to `getpgrp', as it takes an argument and behaves like Posix's
+     `getpgid'.
+
+          #ifdef GETPGRP_VOID
+            pid = getpgrp ();
+          #else
+            pid = getpgrp (0);
+          #endif
+
+     This macro does not check whether `getpgrp' exists at all; if you
+     need to work in that situation, first call `AC_CHECK_FUNC' for
+     `getpgrp'.
+
+     The result of this macro is cached in the `ac_cv_func_getpgrp_void'
+     variable.
+
+     This macro is obsolescent, as current systems have a `getpgrp'
+     whose signature conforms to Posix.  New programs need not use this
+     macro.
+
+ -- Macro: AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
+     If `link' is a symbolic link, then `lstat' should treat `link/'
+     the same as `link/.'.  However, many older `lstat' implementations
+     incorrectly ignore trailing slashes.
+
+     It is safe to assume that if `lstat' incorrectly ignores trailing
+     slashes, then other symbolic-link-aware functions like `unlink'
+     also incorrectly ignore trailing slashes.
+
+     If `lstat' behaves properly, define
+     `LSTAT_FOLLOWS_SLASHED_SYMLINK', otherwise require an `AC_LIBOBJ'
+     replacement of `lstat'.
+
+     The result of this macro is cached in the
+     `ac_cv_func_lstat_dereferences_slashed_symlink' variable.
+
+     The `AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK' macro is obsolescent.
+     New programs should use Gnulib's `lstat' module.  *Note Gnulib::.
+
+ -- Macro: AC_FUNC_MALLOC
+     If the `malloc' function is compatible with the GNU C library
+     `malloc' (i.e., `malloc (0)' returns a valid pointer), define
+     `HAVE_MALLOC' to 1.  Otherwise define `HAVE_MALLOC' to 0, ask for
+     an `AC_LIBOBJ' replacement for `malloc', and define `malloc' to
+     `rpl_malloc' so that the native `malloc' is not used in the main
+     project.
+
+     Typically, the replacement file `malloc.c' should look like (note
+     the `#undef malloc'):
+
+     #include <config.h>
+     #undef malloc
+
+     #include <sys/types.h>
+
+     void *malloc ();
+
+     /* Allocate an N-byte block of memory from the heap.
+        If N is zero, allocate a 1-byte block.  */
+
+     void *
+     rpl_malloc (size_t n)
+     {
+       if (n == 0)
+         n = 1;
+       return malloc (n);
+     }
+
+     The result of this macro is cached in the
+     `ac_cv_func_malloc_0_nonnull' variable.
+
+ -- Macro: AC_FUNC_MBRTOWC
+     Define `HAVE_MBRTOWC' to 1 if the function `mbrtowc' and the type
+     `mbstate_t' are properly declared.
+
+     The result of this macro is cached in the `ac_cv_func_mbrtowc'
+     variable.
+
+ -- Macro: AC_FUNC_MEMCMP
+     If the `memcmp' function is not available, or does not work on
+     8-bit data (like the one on SunOS 4.1.3), or fails when comparing
+     16 bytes or more and with at least one buffer not starting on a
+     4-byte boundary (such as the one on NeXT x86 OpenStep), require an
+     `AC_LIBOBJ' replacement for `memcmp'.
+
+     The result of this macro is cached in the
+     `ac_cv_func_memcmp_working' variable.
+
+     This macro is obsolescent, as current systems have a working
+     `memcmp'.  New programs need not use this macro.
+
+ -- Macro: AC_FUNC_MKTIME
+     If the `mktime' function is not available, or does not work
+     correctly, require an `AC_LIBOBJ' replacement for `mktime'.  For
+     the purposes of this test, `mktime' should conform to the Posix
+     standard and should be the inverse of `localtime'.
+
+     The result of this macro is cached in the
+     `ac_cv_func_working_mktime' variable.
+
+     The `AC_FUNC_MKTIME' macro is obsolescent.  New programs should
+     use Gnulib's `mktime' module.  *Note Gnulib::.
+
+ -- Macro: AC_FUNC_MMAP
+     If the `mmap' function exists and works correctly, define
+     `HAVE_MMAP'.  This checks only private fixed mapping of
+     already-mapped memory.
+
+     The result of this macro is cached in the
+     `ac_cv_func_mmap_fixed_mapped' variable.
+
+ -- Macro: AC_FUNC_OBSTACK
+     If the obstacks are found, define `HAVE_OBSTACK', else require an
+     `AC_LIBOBJ' replacement for `obstack'.
+
+     The result of this macro is cached in the `ac_cv_func_obstack'
+     variable.
+
+ -- Macro: AC_FUNC_REALLOC
+     If the `realloc' function is compatible with the GNU C library
+     `realloc' (i.e., `realloc (NULL, 0)' returns a valid pointer),
+     define `HAVE_REALLOC' to 1.  Otherwise define `HAVE_REALLOC' to 0,
+     ask for an `AC_LIBOBJ' replacement for `realloc', and define
+     `realloc' to `rpl_realloc' so that the native `realloc' is not
+     used in the main project.  See `AC_FUNC_MALLOC' for details.
+
+     The result of this macro is cached in the
+     `ac_cv_func_realloc_0_nonnull' variable.
+
+ -- Macro: AC_FUNC_SELECT_ARGTYPES
+     Determines the correct type to be passed for each of the `select'
+     function's arguments, and defines those types in
+     `SELECT_TYPE_ARG1', `SELECT_TYPE_ARG234', and `SELECT_TYPE_ARG5'
+     respectively.  `SELECT_TYPE_ARG1' defaults to `int',
+     `SELECT_TYPE_ARG234' defaults to `int *', and `SELECT_TYPE_ARG5'
+     defaults to `struct timeval *'.
+
+     This macro is obsolescent, as current systems have a `select' whose
+     signature conforms to Posix.  New programs need not use this macro.
+
+ -- Macro: AC_FUNC_SETPGRP
+     If `setpgrp' takes no argument (the Posix version), define
+     `SETPGRP_VOID'.  Otherwise, it is the BSD version, which takes two
+     process IDs as arguments.  This macro does not check whether
+     `setpgrp' exists at all; if you need to work in that situation,
+     first call `AC_CHECK_FUNC' for `setpgrp'.
+
+     The result of this macro is cached in the `ac_cv_func_setpgrp_void'
+     variable.
+
+     This macro is obsolescent, as current systems have a `setpgrp'
+     whose signature conforms to Posix.  New programs need not use this
+     macro.
+
+ -- Macro: AC_FUNC_STAT
+ -- Macro: AC_FUNC_LSTAT
+     Determine whether `stat' or `lstat' have the bug that it succeeds
+     when given the zero-length file name as argument.  The `stat' and
+     `lstat' from SunOS 4.1.4 and the Hurd (as of 1998-11-01) do this.
+
+     If it does, then define `HAVE_STAT_EMPTY_STRING_BUG' (or
+     `HAVE_LSTAT_EMPTY_STRING_BUG') and ask for an `AC_LIBOBJ'
+     replacement of it.
+
+     The results of these macros are cached in the
+     `ac_cv_func_stat_empty_string_bug' and the
+     `ac_cv_func_lstat_empty_string_bug' variables, respectively.
+
+     These macros are obsolescent, as no current systems have the bug.
+     New programs need not use these macros.
+
+ -- Macro: AC_FUNC_STRCOLL
+     If the `strcoll' function exists and works correctly, define
+     `HAVE_STRCOLL'.  This does a bit more than
+     `AC_CHECK_FUNCS(strcoll)', because some systems have incorrect
+     definitions of `strcoll' that should not be used.
+
+     The result of this macro is cached in the
+     `ac_cv_func_strcoll_works' variable.
+
+ -- Macro: AC_FUNC_STRERROR_R
+     If `strerror_r' is available, define `HAVE_STRERROR_R', and if it
+     is declared, define `HAVE_DECL_STRERROR_R'.  If it returns a `char
+     *' message, define `STRERROR_R_CHAR_P'; otherwise it returns an
+     `int' error number.  The Thread-Safe Functions option of Posix
+     requires `strerror_r' to return `int', but many systems
+     (including, for example, version 2.2.4 of the GNU C Library)
+     return a `char *' value that is not necessarily equal to the
+     buffer argument.
+
+     The result of this macro is cached in the
+     `ac_cv_func_strerror_r_char_p' variable.
+
+ -- Macro: AC_FUNC_STRFTIME
+     Check for `strftime' in the `intl' library, for SCO Unix.  Then,
+     if `strftime' is available, define `HAVE_STRFTIME'.
+
+     This macro is obsolescent, as no current systems require the `intl'
+     library for `strftime'.  New programs need not use this macro.
+
+ -- Macro: AC_FUNC_STRTOD
+     If the `strtod' function does not exist or doesn't work correctly,
+     ask for an `AC_LIBOBJ' replacement of `strtod'.  In this case,
+     because `strtod.c' is likely to need `pow', set the output
+     variable `POW_LIB' to the extra library needed.
+
+     This macro caches its result in the `ac_cv_func_strtod' variable
+     and depends upon the result in the `ac_cv_func_pow' variable.
+
+     The `AC_FUNC_STRTOD' macro is obsolescent.  New programs should
+     use Gnulib's `strtod' module.  *Note Gnulib::.
+
+ -- Macro: AC_FUNC_STRTOLD
+     If the `strtold' function exists and conforms to C99, define
+     `HAVE_STRTOLD'.
+
+     This macro caches its result in the `ac_cv_func_strtold' variable.
+
+ -- Macro: AC_FUNC_STRNLEN
+     If the `strnlen' function is not available, or is buggy (like the
+     one from AIX 4.3), require an `AC_LIBOBJ' replacement for it.
+
+     This macro caches its result in the `ac_cv_func_strnlen_working'
+     variable.
+
+ -- Macro: AC_FUNC_UTIME_NULL
+     If `utime (FILE, NULL)' sets FILE's timestamp to the present,
+     define `HAVE_UTIME_NULL'.
+
+     This macro caches its result in the `ac_cv_func_utime_null'
+     variable.
+
+     This macro is obsolescent, as all current systems have a `utime'
+     that behaves this way.  New programs need not use this macro.
+
+ -- Macro: AC_FUNC_VPRINTF
+     If `vprintf' is found, define `HAVE_VPRINTF'.  Otherwise, if
+     `_doprnt' is found, define `HAVE_DOPRNT'.  (If `vprintf' is
+     available, you may assume that `vfprintf' and `vsprintf' are also
+     available.)
+
+     This macro is obsolescent, as all current systems have `vprintf'.
+     New programs need not use this macro.
+
+ -- Macro: AC_REPLACE_FNMATCH
+     If the `fnmatch' function does not conform to Posix (see
+     `AC_FUNC_FNMATCH'), ask for its `AC_LIBOBJ' replacement.
+
+     The files `fnmatch.c', `fnmatch_loop.c', and `fnmatch_.h' in the
+     `AC_LIBOBJ' replacement directory are assumed to contain a copy of
+     the source code of GNU `fnmatch'.  If necessary, this source code
+     is compiled as an `AC_LIBOBJ' replacement, and the `fnmatch_.h'
+     file is linked to `fnmatch.h' so that it can be included in place
+     of the system `<fnmatch.h>'.
+
+     This macro caches its result in the `ac_cv_func_fnmatch_works'
+     variable.
+
+     This macro is obsolescent, as it assumes the use of particular
+     source files.  New programs should use Gnulib's `fnmatch-posix'
+     module, which provides this macro along with the source files.
+     *Note Gnulib::.
+
+File: autoconf.info,  Node: Generic Functions,  Prev: Particular Functions,  Up: Library Functions
+
+5.5.3 Generic Function Checks
+-----------------------------
+
+These macros are used to find functions not covered by the "particular"
+test macros.  If the functions might be in libraries other than the
+default C library, first call `AC_CHECK_LIB' for those libraries.  If
+you need to check the behavior of a function as well as find out
+whether it is present, you have to write your own test for it (*note
+Writing Tests::).
+
+ -- Macro: AC_CHECK_FUNC (FUNCTION, [ACTION-IF-FOUND],
+          [ACTION-IF-NOT-FOUND])
+     If C function FUNCTION is available, run shell commands
+     ACTION-IF-FOUND, otherwise ACTION-IF-NOT-FOUND.  If you just want
+     to define a symbol if the function is available, consider using
+     `AC_CHECK_FUNCS' instead.  This macro checks for functions with C
+     linkage even when `AC_LANG(C++)' has been called, since C is more
+     standardized than C++.  (*note Language Choice::, for more
+     information about selecting the language for checks.)
+
+     This macro caches its result in the `ac_cv_func_FUNCTION' variable.
+
+ -- Macro: AC_CHECK_FUNCS (FUNCTION..., [ACTION-IF-FOUND],
+          [ACTION-IF-NOT-FOUND])
+     For each FUNCTION enumerated in the blank-or-newline-separated
+     argument list, define `HAVE_FUNCTION' (in all capitals) if it is
+     available.  If ACTION-IF-FOUND is given, it is additional shell
+     code to execute when one of the functions is found.  You can give
+     it a value of `break' to break out of the loop on the first match.
+     If ACTION-IF-NOT-FOUND is given, it is executed when one of the
+     functions is not found.
+
+     Results are cached for each FUNCTION as in `AC_CHECK_FUNC'.
+
+ -- Macro: AC_CHECK_FUNCS_ONCE (FUNCTION...)
+     For each FUNCTION enumerated in the blank-or-newline-separated
+     argument list, define `HAVE_FUNCTION' (in all capitals) if it is
+     available.  This is a once-only variant of `AC_CHECK_FUNCS'.  It
+     generates the checking code at most once, so that `configure' is
+     smaller and faster; but the checks cannot be conditionalized and
+     are always done once, early during the `configure' run.
+
+
+   Autoconf follows a philosophy that was formed over the years by those
+who have struggled for portability: isolate the portability issues in
+specific files, and then program as if you were in a Posix environment.
+Some functions may be missing or unfixable, and your package must be
+ready to replace them.
+
+   Suitable replacements for many such problem functions are available
+from Gnulib (*note Gnulib::).
+
+ -- Macro: AC_LIBOBJ (FUNCTION)
+     Specify that `FUNCTION.c' must be included in the executables to
+     replace a missing or broken implementation of FUNCTION.
+
+     Technically, it adds `FUNCTION.$ac_objext' to the output variable
+     `LIBOBJS' if it is not already in, and calls `AC_LIBSOURCE' for
+     `FUNCTION.c'.  You should not directly change `LIBOBJS', since
+     this is not traceable.
+
+ -- Macro: AC_LIBSOURCE (FILE)
+     Specify that FILE might be needed to compile the project.  If you
+     need to know what files might be needed by a `configure.ac', you
+     should trace `AC_LIBSOURCE'.  FILE must be a literal.
+
+     This macro is called automatically from `AC_LIBOBJ', but you must
+     call it explicitly if you pass a shell variable to `AC_LIBOBJ'.  In
+     that case, since shell variables cannot be traced statically, you
+     must pass to `AC_LIBSOURCE' any possible files that the shell
+     variable might cause `AC_LIBOBJ' to need.  For example, if you
+     want to pass a variable `$foo_or_bar' to `AC_LIBOBJ' that holds
+     either `"foo"' or `"bar"', you should do:
+
+          AC_LIBSOURCE([foo.c])
+          AC_LIBSOURCE([bar.c])
+          AC_LIBOBJ([$foo_or_bar])
+
+     There is usually a way to avoid this, however, and you are
+     encouraged to simply call `AC_LIBOBJ' with literal arguments.
+
+     Note that this macro replaces the obsolete `AC_LIBOBJ_DECL', with
+     slightly different semantics: the old macro took the function name,
+     e.g., `foo', as its argument rather than the file name.
+
+ -- Macro: AC_LIBSOURCES (FILES)
+     Like `AC_LIBSOURCE', but accepts one or more FILES in a
+     comma-separated M4 list.  Thus, the above example might be
+     rewritten:
+
+          AC_LIBSOURCES([foo.c, bar.c])
+          AC_LIBOBJ([$foo_or_bar])
+
+ -- Macro: AC_CONFIG_LIBOBJ_DIR (DIRECTORY)
+     Specify that `AC_LIBOBJ' replacement files are to be found in
+     DIRECTORY, a name relative to the top level of the source tree.
+     The replacement directory defaults to `.', the top level
+     directory, and the most typical value is `lib', corresponding to
+     `AC_CONFIG_LIBOBJ_DIR([lib])'.
+
+     `configure' might need to know the replacement directory for the
+     following reasons: (i) some checks use the replacement files, (ii)
+     some macros bypass broken system headers by installing links to the
+     replacement headers (iii) when used in conjunction with Automake,
+     within each makefile, DIRECTORY is used as a relative path from
+     `$(top_srcdir)' to each object named in `LIBOBJS' and `LTLIBOBJS',
+     etc.
+
+
+   It is common to merely check for the existence of a function, and ask
+for its `AC_LIBOBJ' replacement if missing.  The following macro is a
+convenient shorthand.
+
+ -- Macro: AC_REPLACE_FUNCS (FUNCTION...)
+     Like `AC_CHECK_FUNCS', but uses `AC_LIBOBJ(FUNCTION)' as
+     ACTION-IF-NOT-FOUND.  You can declare your replacement function by
+     enclosing the prototype in `#ifndef HAVE_FUNCTION'.  If the system
+     has the function, it probably declares it in a header file you
+     should be including, so you shouldn't redeclare it lest your
+     declaration conflict.
+
+File: autoconf.info,  Node: Header Files,  Next: Declarations,  Prev: Library Functions,  Up: Existing Tests
+

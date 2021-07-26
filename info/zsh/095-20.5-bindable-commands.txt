@@ -1,0 +1,190 @@
+20.5 Bindable Commands
+======================
+
+
+In addition to the context-dependent completions provided, which are
+expected to work in an intuitively obvious way, there are a few widgets
+implementing special behaviour which can be bound separately to keys.
+The following is a list of these and their default bindings.
+
+_bash_completions
+     This function is used by two widgets, _bash_complete-word and
+     _bash_list-choices.  It exists to provide compatibility with
+     completion bindings in bash.  The last character of the binding
+     determines what is completed: '!', command names; '$', environment
+     variables; '@', host names; '/', file names; '~' user names.  In
+     bash, the binding preceded by '\e' gives completion, and preceded
+     by '^X' lists options.  As some of these bindings clash with
+     standard zsh bindings, only '\e~' and '^X~' are bound by default.
+     To add the rest, the following should be added to .zshrc after
+     compinit has been run:
+
+          for key in '!' '$' '@' '/' '~'; do
+            bindkey "\e$key" _bash_complete-word
+            bindkey "^X$key" _bash_list-choices
+          done
+
+     This includes the bindings for '~' in case they were already bound
+     to something else; the completion code does not override user
+     bindings.
+
+_correct_filename (^XC)
+     Correct the filename path at the cursor position.  Allows up to six
+     errors in the name.  Can also be called with an argument to correct
+     a filename path, independently of zle; the correction is printed on
+     standard output.
+
+_correct_word (^Xc)
+     Performs correction of the current argument using the usual
+     contextual completions as possible choices.  This stores the string
+     'correct-word' in the FUNCTION field of the context name and then
+     calls the _correct completer.
+
+_expand_alias (^Xa)
+     This function can be used as a completer and as a bindable command.
+     It expands the word the cursor is on if it is an alias.  The types
+     of alias expanded can be controlled with the styles regular, global
+     and disabled.
+
+     When used as a bindable command there is one additional feature
+     that can be selected by setting the complete style to 'true'.  In
+     this case, if the word is not the name of an alias, _expand_alias
+     tries to complete the word to a full alias name without expanding
+     it.  It leaves the cursor directly after the completed word so that
+     invoking _expand_alias once more will expand the now-complete alias
+     name.
+
+_expand_word (^Xe)
+     Performs expansion on the current word: equivalent to the standard
+     expand-word command, but using the _expand completer.  Before
+     calling it, the FUNCTION field of the context is set to
+     'expand-word'.
+
+_generic
+     This function is not defined as a widget and not bound by default.
+     However, it can be used to define a widget and will then store the
+     name of the widget in the FUNCTION field of the context and call
+     the completion system.  This allows custom completion widgets with
+     their own set of style settings to be defined easily.  For example,
+     to define a widget that performs normal completion and starts menu
+     selection:
+
+          zle -C foo complete-word _generic
+          bindkey '...' foo
+          zstyle ':completion:foo:*' menu yes select=1
+
+     Note in particular that the completer style may be set for the
+     context in order to change the set of functions used to generate
+     possible matches.  If _generic is called with arguments, those are
+     passed through to _main_complete as the list of completers in place
+     of those defined by the completer style.
+
+_history_complete_word (\e/)
+     Complete words from the shell's command history.  This uses the
+     list, remove-all-dups, sort, and stop styles.
+
+_most_recent_file (^Xm)
+     Complete the name of the most recently modified file matching the
+     pattern on the command line (which may be blank).  If given a
+     numeric argument N, complete the Nth most recently modified file.
+     Note the completion, if any, is always unique.
+
+_next_tags (^Xn)
+     This command alters the set of matches used to that for the next
+     tag, or set of tags, either as given by the tag-order style or as
+     set by default; these matches would otherwise not be available.
+     Successive invocations of the command cycle through all possible
+     sets of tags.
+
+_read_comp (^X^R)
+     Prompt the user for a string, and use that to perform completion on
+     the current word.  There are two possibilities for the string.
+     First, it can be a set of words beginning '_', for example '_files
+     -/', in which case the function with any arguments will be called
+     to generate the completions.  Unambiguous parts of the function
+     name will be completed automatically (normal completion is not
+     available at this point) until a space is typed.
+
+     Second, any other string will be passed as a set of arguments to
+     compadd and should hence be an expression specifying what should be
+     completed.
+
+     A very restricted set of editing commands is available when reading
+     the string: 'DEL' and '^H' delete the last character; '^U' deletes
+     the line, and '^C' and '^G' abort the function, while 'RET' accepts
+     the completion.  Note the string is used verbatim as a command
+     line, so arguments must be quoted in accordance with standard shell
+     rules.
+
+     Once a string has been read, the next call to _read_comp will use
+     the existing string instead of reading a new one.  To force a new
+     string to be read, call _read_comp with a numeric argument.
+
+_complete_debug (^X?)
+     This widget performs ordinary completion, but captures in a
+     temporary file a trace of the shell commands executed by the
+     completion system.  Each completion attempt gets its own file.  A
+     command to view each of these files is pushed onto the editor
+     buffer stack.
+
+_complete_help (^Xh)
+     This widget displays information about the context names, the tags,
+     and the completion functions used when completing at the current
+     cursor position.  If given a numeric argument other than 1 (as in
+     'ESC-2 ^Xh'), then the styles used and the contexts for which they
+     are used will be shown, too.
+
+     Note that the information about styles may be incomplete; it
+     depends on the information available from the completion functions
+     called, which in turn is determined by the user's own styles and
+     other settings.
+
+_complete_help_generic
+     Unlike other commands listed here, this must be created as a normal
+     ZLE widget rather than a completion widget (i.e.  with zle -N).  It
+     is used for generating help with a widget bound to the _generic
+     widget that is described above.
+
+     If this widget is created using the name of the function, as it is
+     by default, then when executed it will read a key sequence.  This
+     is expected to be bound to a call to a completion function that
+     uses the _generic widget.  That widget will be executed, and
+     information provided in the same format that the _complete_help
+     widget displays for contextual completion.
+
+     If the widget's name contains debug, for example if it is created
+     as 'zle -N _complete_debug_generic _complete_help_generic', it will
+     read and execute the keystring for a generic widget as before, but
+     then generate debugging information as done by _complete_debug for
+     contextual completion.
+
+     If the widget's name contains noread, it will not read a keystring
+     but instead arrange that the next use of a generic widget run in
+     the same shell will have the effect as described above.
+
+     The widget works by setting the shell parameter
+     ZSH_TRACE_GENERIC_WIDGET which is read by _generic.  Unsetting the
+     parameter cancels any pending effect of the noread form.
+
+     For example, after executing the following:
+
+          zle -N _complete_debug_generic _complete_help_generic
+          bindkey '^x:' _complete_debug_generic
+
+     typing 'C-x :' followed by the key sequence for a generic widget
+     will cause trace output for that widget to be saved to a file.
+
+_complete_tag (^Xt)
+     This widget completes symbol tags created by the etags or ctags
+     programmes (note there is no connection with the completion
+     system's tags) stored in a file TAGS, in the format used by etags,
+     or tags, in the format created by ctags.  It will look back up the
+     path hierarchy for the first occurrence of either file; if both
+     exist, the file TAGS is preferred.  You can specify the full path
+     to a TAGS or tags file by setting the parameter $TAGSFILE or
+     $tagsfile respectively.  The corresponding completion tags used are
+     etags and vtags, after emacs and vi respectively.
+
+
+File: zsh.info,  Node: Completion Functions,  Next: Completion System Variables,  Prev: Bindable Commands,  Up: Completion System
+

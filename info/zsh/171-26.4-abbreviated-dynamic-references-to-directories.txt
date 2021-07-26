@@ -1,0 +1,185 @@
+26.4 Abbreviated dynamic references to directories
+==================================================
+
+
+The dynamic directory naming system is described in the subsection
+_Dynamic named directories_ of *note Filename Expansion::.  In this, a
+reference to ~[...] is expanded by a function found by the hooks
+mechanism.
+
+The contributed function zsh_directory_name_generic provides a system
+allowing the user to refer to directories with only a limited amount of
+new code.  It supports all three of the standard interfaces for
+directory naming: converting from a name to a directory, converting in
+the reverse direction to find a short name, and completion of names.
+
+The main feature of this function is a path-like syntax, combining
+abbreviations at multiple levels separated by ":".  As an example,
+~[g:p:s] might specify:
+g
+     The top level directory for your git area.  This first component
+     has to match, or the function will retrun indicating another
+     directory name hook function should be tried.
+
+p
+     The name of a project within your git area.
+
+s
+     The source area within that project.
+
+   This allows you to collapse references to long hierarchies to a very
+compact form, particularly if the hierarchies are similar across
+different areas of the disk.
+
+Name components may be completed: if a description is shown at the top
+of the list of completions, it includes the path to which previous
+components expand, while the description for an individual completion
+shows the path segment it would add.  No additional configuration is
+needed for this as the completion system is aware of the dynamic
+directory name mechanism.
+
+
+26.4.1 Usage
+------------
+
+
+To use the function, first define a wrapper function for your specific
+case.  We'll assume it's to be autoloaded.  This can have any name but
+we'll refer to it as zdn_mywrapper.  This wrapper function will define
+various variables and then call this function with the same arguments
+that the wrapper function gets.  This configuration is described below.
+
+Then arrange for the wrapper to be run as a zsh_directory_name hook:
+
+     autoload -Uz add-zsh-hook zsh_diretory_name_generic zdn_mywrapper
+     add-zsh-hook -U zsh_directory_name zdn_mywrapper
+
+
+26.4.2 Configuration
+--------------------
+
+
+The wrapper function should define a local associative array zdn_top.
+Alternatively, this can be set with a style called mapping.  The context
+for the style is :zdn:WRAPPER-NAME where WRAPPER-NAME is the function
+calling zsh_directory_name_generic; for example:
+
+     zstyle :zdn:zdn_mywrapper: mapping zdn_mywrapper_top
+
+The keys in this associative array correspond to the first component of
+the name.  The values are matching directories.  They may have an
+optional suffix with a slash followed by a colon and the name of a
+variable in the same format to give the next component.  (The slash
+before the colon is to disambiguate the case where a colon is needed in
+the path for a drive.  There is otherwise no syntax for escaping this,
+so path components whose names start with a colon are not supported.)  A
+special component :default: specifies a variable in the form /:VAR (the
+path section is ignored and so is usually empty) that will be used for
+the next component if no variable is given for the path.  Variables
+referred to within zdn_top have the same format as zdn_top itself, but
+contain relative paths.
+
+For example,
+
+     local -A zdn_top=(
+       g   ~/git
+       ga  ~/alternate/git
+       gs  /scratch/$USER/git/:second2
+       :default: /:second1
+     )
+
+This specifies the behaviour of a directory referred to as ~[g:...] or
+~[ga:...] or ~[gs:...].  Later path components are optional; in that
+case ~[g] expands to ~/git, and so on.  gs expands to /scratch/$USER/git
+and uses the associative array second2 to match the second component; g
+and ga use the associative array second1 to match the second component.
+
+When expanding a name to a directory, if the first component is not g or
+ga or gs, it is not an error; the function simply returns 1 so that a
+later hook function can be tried.  However, matching the first component
+commits the function, so if a later component does not match, an error
+is printed (though this still does not stop later hooks from being
+executed).
+
+For components after the first, a relative path is expected, but note
+that multiple levels may still appear.  Here is an example of second1:
+
+     local -A second1=(
+       p   myproject
+       s   somproject
+       os  otherproject/subproject/:third
+     )
+
+The path as found from zdn_top is extended with the matching directory,
+so ~[g:p] becomes ~/git/myproject.  The slash between is added
+automatically (it's not possible to have a later component modify the
+name of a directory already matched).  Only os specifies a variable for
+a third component, and there's no :default:, so it's an error to use a
+name like ~[g:p:x] or ~[ga:s:y] because there's nowhere to look up the x
+or y.
+
+The associative arrays need to be visible within this function; the
+generic function therefore uses internal variable names beginning _zdn_
+in order to avoid clashes.  Note that the variable reply needs to be
+passed back to the shell, so should not be local in the calling
+function.
+
+The function does not test whether directories assembled by component
+actually exist; this allows the system to work across automounted file
+systems.  The error from the command trying to use a non-existent
+directory should be sufficient to indicate the problem.
+
+
+26.4.3 Complete example
+-----------------------
+
+
+Here is a full fictitious but usable autoloadable definition of the
+example function defined by the code above.  So ~[gs:p:s] expands to
+/scratch/$USER/git/myscratchproject/top/srcdir (with $USER also
+expanded).
+
+     local -A zdn_top=(
+       g   ~/git
+       ga  ~/alternate/git
+       gs  /scratch/$USER/git/:second2
+       :default: /:second1
+     )
+
+     local -A second1=(
+       p   myproject
+       s   somproject
+       os  otherproject/subproject/:third
+     )
+
+     local -A second2=(
+       p   myscratchproject
+       s   somescratchproject
+     )
+
+     local -A third=(
+       s   top/srcdir
+       d   top/documentation
+     )
+
+     # autoload not needed if you did this at initialisation...
+     autoload -Uz zsh_directory_name_generic
+     zsh_directory_name_generic "$@
+
+It is also possible to use global associative arrays, suitably named,
+and set the style for the context of your wrapper function to refer to
+this.  Then your set up code would contain the following:
+
+     typeset -A zdn_mywrapper_top=(...)
+     # ... and so on for other associative arrays ...
+     zstyle ':zdn:zdn_mywrapper:' mapping zdn_mywrapper_top
+     autoload -Uz add-zsh-hook zsh_directory_name_generic zdn_mywrapper
+     add-zsh-hook -U zsh_directory_name zdn_mywrapper
+
+and the function zdn_mywrapper would contain only the following:
+
+     zsh_directory_name_generic "$@"
+
+
+File: zsh.info,  Node: Version Control Information,  Next: Prompt Themes,  Prev: Other Directory Functions,  Up: User Contributions
+

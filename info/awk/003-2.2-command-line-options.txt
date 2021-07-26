@@ -1,0 +1,388 @@
+2.2 Command-Line Options
+========================
+
+Options begin with a dash and consist of a single character.  GNU-style
+long options consist of two dashes and a keyword.  The keyword can be
+abbreviated, as long as the abbreviation allows the option to be
+uniquely identified.  If the option takes an argument, either the
+keyword is immediately followed by an equals sign ('=') and the
+argument's value, or the keyword and the argument's value are separated
+by whitespace.  If a particular option with a value is given more than
+once, it is the last value that counts.
+
+   Each long option for 'gawk' has a corresponding POSIX-style short
+option.  The long and short options are interchangeable in all contexts.
+The following list describes options mandated by the POSIX standard:
+
+'-F FS'
+'--field-separator FS'
+     Set the 'FS' variable to FS (*note Field Separators::).
+
+'-f SOURCE-FILE'
+'--file SOURCE-FILE'
+     Read the 'awk' program source from SOURCE-FILE instead of in the
+     first nonoption argument.  This option may be given multiple times;
+     the 'awk' program consists of the concatenation of the contents of
+     each specified SOURCE-FILE.
+
+'-v VAR=VAL'
+'--assign VAR=VAL'
+     Set the variable VAR to the value VAL _before_ execution of the
+     program begins.  Such variable values are available inside the
+     'BEGIN' rule (*note Other Arguments::).
+
+     The '-v' option can only set one variable, but it can be used more
+     than once, setting another variable each time, like this: 'awk
+     -v foo=1 -v bar=2 ...'.
+
+          CAUTION: Using '-v' to set the values of the built-in
+          variables may lead to surprising results.  'awk' will reset
+          the values of those variables as it needs to, possibly
+          ignoring any initial value you may have given.
+
+'-W GAWK-OPT'
+     Provide an implementation-specific option.  This is the POSIX
+     convention for providing implementation-specific options.  These
+     options also have corresponding GNU-style long options.  Note that
+     the long options may be abbreviated, as long as the abbreviations
+     remain unique.  The full list of 'gawk'-specific options is
+     provided next.
+
+'--'
+     Signal the end of the command-line options.  The following
+     arguments are not treated as options even if they begin with '-'.
+     This interpretation of '--' follows the POSIX argument parsing
+     conventions.
+
+     This is useful if you have file names that start with '-', or in
+     shell scripts, if you have file names that will be specified by the
+     user that could start with '-'.  It is also useful for passing
+     options on to the 'awk' program; see *note Getopt Function::.
+
+   The following list describes 'gawk'-specific options:
+
+'-b'
+'--characters-as-bytes'
+     Cause 'gawk' to treat all input data as single-byte characters.  In
+     addition, all output written with 'print' or 'printf' is treated as
+     single-byte characters.
+
+     Normally, 'gawk' follows the POSIX standard and attempts to process
+     its input data according to the current locale (*note Locales::).
+     This can often involve converting multibyte characters into wide
+     characters (internally), and can lead to problems or confusion if
+     the input data does not contain valid multibyte characters.  This
+     option is an easy way to tell 'gawk', "Hands off my data!"
+
+'-c'
+'--traditional'
+     Specify "compatibility mode", in which the GNU extensions to the
+     'awk' language are disabled, so that 'gawk' behaves just like BWK
+     'awk'.  *Note POSIX/GNU::, which summarizes the extensions.  Also
+     see *note Compatibility Mode::.
+
+'-C'
+'--copyright'
+     Print the short version of the General Public License and then
+     exit.
+
+'-d'[FILE]
+'--dump-variables'['='FILE]
+     Print a sorted list of global variables, their types, and final
+     values to FILE.  If no FILE is provided, print this list to a file
+     named 'awkvars.out' in the current directory.  No space is allowed
+     between the '-d' and FILE, if FILE is supplied.
+
+     Having a list of all global variables is a good way to look for
+     typographical errors in your programs.  You would also use this
+     option if you have a large program with a lot of functions, and you
+     want to be sure that your functions don't inadvertently use global
+     variables that you meant to be local.  (This is a particularly easy
+     mistake to make with simple variable names like 'i', 'j', etc.)
+
+'-D'[FILE]
+'--debug'['='FILE]
+     Enable debugging of 'awk' programs (*note Debugging::).  By
+     default, the debugger reads commands interactively from the
+     keyboard (standard input).  The optional FILE argument allows you
+     to specify a file with a list of commands for the debugger to
+     execute noninteractively.  No space is allowed between the '-D' and
+     FILE, if FILE is supplied.
+
+'-e' PROGRAM-TEXT
+'--source' PROGRAM-TEXT
+     Provide program source code in the PROGRAM-TEXT.  This option
+     allows you to mix source code in files with source code that you
+     enter on the command line.  This is particularly useful when you
+     have library functions that you want to use from your command-line
+     programs (*note AWKPATH Variable::).
+
+     Note that 'gawk' treats each string as if it ended with a newline
+     character (even if it doesn't).  This makes building the total
+     program easier.
+
+          CAUTION: At the moment, there is no requirement that each
+          PROGRAM-TEXT be a full syntactic unit.  I.e., the following
+          currently works:
+
+               $ gawk -e 'BEGIN { a = 5 ;' -e 'print a }'
+               -| 5
+
+          However, this could change in the future, so it's not a good
+          idea to rely upon this feature.
+
+'-E' FILE
+'--exec' FILE
+     Similar to '-f', read 'awk' program text from FILE.  There are two
+     differences from '-f':
+
+        * This option terminates option processing; anything else on the
+          command line is passed on directly to the 'awk' program.
+
+        * Command-line variable assignments of the form 'VAR=VALUE' are
+          disallowed.
+
+     This option is particularly necessary for World Wide Web CGI
+     applications that pass arguments through the URL; using this option
+     prevents a malicious (or other) user from passing in options,
+     assignments, or 'awk' source code (via '-e') to the CGI
+     application.(1)  This option should be used with '#!' scripts
+     (*note Executable Scripts::), like so:
+
+          #! /usr/local/bin/gawk -E
+
+          AWK PROGRAM HERE ...
+
+'-g'
+'--gen-pot'
+     Analyze the source program and generate a GNU 'gettext' portable
+     object template file on standard output for all string constants
+     that have been marked for translation.  *Note
+     Internationalization::, for information about this option.
+
+'-h'
+'--help'
+     Print a "usage" message summarizing the short- and long-style
+     options that 'gawk' accepts and then exit.
+
+'-i' SOURCE-FILE
+'--include' SOURCE-FILE
+     Read an 'awk' source library from SOURCE-FILE.  This option is
+     completely equivalent to using the '@include' directive inside your
+     program.  It is very similar to the '-f' option, but there are two
+     important differences.  First, when '-i' is used, the program
+     source is not loaded if it has been previously loaded, whereas with
+     '-f', 'gawk' always loads the file.  Second, because this option is
+     intended to be used with code libraries, 'gawk' does not recognize
+     such files as constituting main program input.  Thus, after
+     processing an '-i' argument, 'gawk' still expects to find the main
+     source code via the '-f' option or on the command line.
+
+'-l' EXT
+'--load' EXT
+     Load a dynamic extension named EXT.  Extensions are stored as
+     system shared libraries.  This option searches for the library
+     using the 'AWKLIBPATH' environment variable.  The correct library
+     suffix for your platform will be supplied by default, so it need
+     not be specified in the extension name.  The extension
+     initialization routine should be named 'dl_load()'.  An alternative
+     is to use the '@load' keyword inside the program to load a shared
+     library.  This advanced feature is described in detail in *note
+     Dynamic Extensions::.
+
+'-L'[VALUE]
+'--lint'['='VALUE]
+     Warn about constructs that are dubious or nonportable to other
+     'awk' implementations.  No space is allowed between the '-L' and
+     VALUE, if VALUE is supplied.  Some warnings are issued when 'gawk'
+     first reads your program.  Others are issued at runtime, as your
+     program executes.  With an optional argument of 'fatal', lint
+     warnings become fatal errors.  This may be drastic, but its use
+     will certainly encourage the development of cleaner 'awk' programs.
+     With an optional argument of 'invalid', only warnings about things
+     that are actually invalid are issued.  (This is not fully
+     implemented yet.)
+
+     Some warnings are only printed once, even if the dubious constructs
+     they warn about occur multiple times in your 'awk' program.  Thus,
+     when eliminating problems pointed out by '--lint', you should take
+     care to search for all occurrences of each inappropriate construct.
+     As 'awk' programs are usually short, doing so is not burdensome.
+
+'-M'
+'--bignum'
+     Select arbitrary-precision arithmetic on numbers.  This option has
+     no effect if 'gawk' is not compiled to use the GNU MPFR and MP
+     libraries (*note Arbitrary Precision Arithmetic::).
+
+'-n'
+'--non-decimal-data'
+     Enable automatic interpretation of octal and hexadecimal values in
+     input data (*note Nondecimal Data::).
+
+          CAUTION: This option can severely break old programs.  Use
+          with care.  Also note that this option may disappear in a
+          future version of 'gawk'.
+
+'-N'
+'--use-lc-numeric'
+     Force the use of the locale's decimal point character when parsing
+     numeric input data (*note Locales::).
+
+'-o'[FILE]
+'--pretty-print'['='FILE]
+     Enable pretty-printing of 'awk' programs.  Implies '--no-optimize'.
+     By default, the output program is created in a file named
+     'awkprof.out' (*note Profiling::).  The optional FILE argument
+     allows you to specify a different file name for the output.  No
+     space is allowed between the '-o' and FILE, if FILE is supplied.
+
+          NOTE: In the past, this option would also execute your
+          program.  This is no longer the case.
+
+'-O'
+'--optimize'
+     Enable 'gawk''s default optimizations on the internal
+     representation of the program.  At the moment, this includes simple
+     constant folding and tail recursion elimination in function calls.
+
+     These optimizations are enabled by default.  This option remains
+     primarily for backwards compatibility.  However, it may be used to
+     cancel the effect of an earlier '-s' option (see later in this
+     list).
+
+'-p'[FILE]
+'--profile'['='FILE]
+     Enable profiling of 'awk' programs (*note Profiling::).  Implies
+     '--no-optimize'.  By default, profiles are created in a file named
+     'awkprof.out'.  The optional FILE argument allows you to specify a
+     different file name for the profile file.  No space is allowed
+     between the '-p' and FILE, if FILE is supplied.
+
+     The profile contains execution counts for each statement in the
+     program in the left margin, and function call counts for each
+     function.
+
+'-P'
+'--posix'
+     Operate in strict POSIX mode.  This disables all 'gawk' extensions
+     (just like '--traditional') and disables all extensions not allowed
+     by POSIX. *Note Common Extensions:: for a summary of the extensions
+     in 'gawk' that are disabled by this option.  Also, the following
+     additional restrictions apply:
+
+        * Newlines are not allowed after '?' or ':' (*note Conditional
+          Exp::).
+
+        * Specifying '-Ft' on the command line does not set the value of
+          'FS' to be a single TAB character (*note Field Separators::).
+
+        * The locale's decimal point character is used for parsing input
+          data (*note Locales::).
+
+     If you supply both '--traditional' and '--posix' on the command
+     line, '--posix' takes precedence.  'gawk' issues a warning if both
+     options are supplied.
+
+'-r'
+'--re-interval'
+     Allow interval expressions (*note Regexp Operators::) in regexps.
+     This is now 'gawk''s default behavior.  Nevertheless, this option
+     remains (both for backward compatibility and for use in combination
+     with '--traditional').
+
+'-s'
+'--no-optimize'
+     Disable 'gawk''s default optimizations on the internal
+     representation of the program.
+
+'-S'
+'--sandbox'
+     Disable the 'system()' function, input redirections with 'getline',
+     output redirections with 'print' and 'printf', and dynamic
+     extensions.  This is particularly useful when you want to run 'awk'
+     scripts from questionable sources and need to make sure the scripts
+     can't access your system (other than the specified input data
+     file).
+
+'-t'
+'--lint-old'
+     Warn about constructs that are not available in the original
+     version of 'awk' from Version 7 Unix (*note V7/SVR3.1::).
+
+'-V'
+'--version'
+     Print version information for this particular copy of 'gawk'.  This
+     allows you to determine if your copy of 'gawk' is up to date with
+     respect to whatever the Free Software Foundation is currently
+     distributing.  It is also useful for bug reports (*note Bugs::).
+
+   As long as program text has been supplied, any other options are
+flagged as invalid with a warning message but are otherwise ignored.
+
+   In compatibility mode, as a special case, if the value of FS supplied
+to the '-F' option is 't', then 'FS' is set to the TAB character
+('"\t"').  This is true only for '--traditional' and not for '--posix'
+(*note Field Separators::).
+
+   The '-f' option may be used more than once on the command line.  If
+it is, 'awk' reads its program source from all of the named files, as if
+they had been concatenated together into one big file.  This is useful
+for creating libraries of 'awk' functions.  These functions can be
+written once and then retrieved from a standard place, instead of having
+to be included in each individual program.  The '-i' option is similar
+in this regard.  (As mentioned in *note Definition Syntax::, function
+names must be unique.)
+
+   With standard 'awk', library functions can still be used, even if the
+program is entered at the keyboard, by specifying '-f /dev/tty'.  After
+typing your program, type 'Ctrl-d' (the end-of-file character) to
+terminate it.  (You may also use '-f -' to read program source from the
+standard input, but then you will not be able to also use the standard
+input as a source of data.)
+
+   Because it is clumsy using the standard 'awk' mechanisms to mix
+source file and command-line 'awk' programs, 'gawk' provides the '-e'
+option.  This does not require you to preempt the standard input for
+your source code; it allows you to easily mix command-line and library
+source code (*note AWKPATH Variable::).  As with '-f', the '-e' and '-i'
+options may also be used multiple times on the command line.
+
+   If no '-f' or '-e' option is specified, then 'gawk' uses the first
+nonoption command-line argument as the text of the program source code.
+
+   If the environment variable 'POSIXLY_CORRECT' exists, then 'gawk'
+behaves in strict POSIX mode, exactly as if you had supplied '--posix'.
+Many GNU programs look for this environment variable to suppress
+extensions that conflict with POSIX, but 'gawk' behaves differently: it
+suppresses all extensions, even those that do not conflict with POSIX,
+and behaves in strict POSIX mode.  If '--lint' is supplied on the
+command line and 'gawk' turns on POSIX mode because of
+'POSIXLY_CORRECT', then it issues a warning message indicating that
+POSIX mode is in effect.  You would typically set this variable in your
+shell's startup file.  For a Bourne-compatible shell (such as Bash), you
+would add these lines to the '.profile' file in your home directory:
+
+     POSIXLY_CORRECT=true
+     export POSIXLY_CORRECT
+
+   For a C shell-compatible shell,(2) you would add this line to the
+'.login' file in your home directory:
+
+     setenv POSIXLY_CORRECT true
+
+   Having 'POSIXLY_CORRECT' set is not recommended for daily use, but it
+is good for testing the portability of your programs to other
+environments.
+
+   ---------- Footnotes ----------
+
+   (1) For more detail, please see Section 4.4 of RFC 3875
+(http://www.ietf.org/rfc/rfc3875).  Also see the explanatory note sent
+to the 'gawk' bug mailing list
+(https://lists.gnu.org/archive/html/bug-gawk/2014-11/msg00022.html).
+
+   (2) Not recommended.
+
+File: gawk.info,  Node: Other Arguments,  Next: Naming Standard Input,  Prev: Options,  Up: Invoking Gawk
+

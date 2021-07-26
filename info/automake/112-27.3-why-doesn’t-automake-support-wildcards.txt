@@ -1,0 +1,68 @@
+27.3 Why doesn’t Automake support wildcards?
+============================================
+
+Developers are lazy.  They would often like to use wildcards in
+‘Makefile.am’s, so that they would not need to remember to update
+‘Makefile.am’s every time they add, delete, or rename a file.
+
+   There are several objections to this:
+   • When using CVS (or similar) developers need to remember they have
+     to run ‘cvs add’ or ‘cvs rm’ anyway.  Updating ‘Makefile.am’
+     accordingly quickly becomes a reflex.
+
+     Conversely, if your application doesn’t compile because you forgot
+     to add a file in ‘Makefile.am’, it will help you remember to ‘cvs
+     add’ it.
+
+   • Using wildcards makes it easy to distribute files by mistake.  For
+     instance, some code a developer is experimenting with (a test case,
+     say) that should not be part of the distribution.
+
+   • Using wildcards it’s easy to omit some files by mistake.  For
+     instance, one developer creates a new file, uses it in many places,
+     but forgets to commit it.  Another developer then checks out the
+     incomplete project and is able to run ‘make dist’ successfully,
+     even though a file is missing.  By listing files, ‘make dist’
+     _will_ complain.
+
+   • Wildcards are not portable to some non-GNU ‘make’ implementations,
+     e.g., NetBSD ‘make’ will not expand globs such as ‘*’ in
+     prerequisites of a target.
+
+   • Finally, it’s really hard to _forget_ to add a file to
+     ‘Makefile.am’: files that are not listed in ‘Makefile.am’ are not
+     compiled or installed, so you can’t even test them.
+
+   Still, these are philosophical objections, and as such you may
+disagree, or find enough value in wildcards to dismiss all of them.
+Before you start writing a patch against Automake to teach it about
+wildcards, let’s see the main technical issue: portability.
+
+   Although ‘$(wildcard ...)’ works with GNU ‘make’, it is not portable
+to other ‘make’ implementations.
+
+   The only way Automake could support ‘$(wildcard ...)’ is by expanding
+‘$(wildcard ...)’ when ‘automake’ is run.  The resulting ‘Makefile.in’s
+would be portable since they would list all files and not use
+‘$(wildcard ...)’.  However that means developers would need to remember
+to run ‘automake’ each time they add, delete, or rename files.
+
+   Compared to editing ‘Makefile.am’, this is a very small gain.  Sure,
+it’s easier and faster to type ‘automake; make’ than to type ‘emacs
+Makefile.am; make’.  But nobody bothered enough to write a patch to add
+support for this syntax.  Some people use scripts to generate file lists
+in ‘Makefile.am’ or in separate ‘Makefile’ fragments.
+
+   Even if you don’t care about portability, and are tempted to use
+‘$(wildcard ...)’ anyway because you target only GNU Make, you should
+know there are many places where Automake needs to know exactly which
+files should be processed.  As Automake doesn’t know how to expand
+‘$(wildcard ...)’, you cannot use it in these places.  ‘$(wildcard ...)’
+is a black box comparable to ‘AC_SUBST’ed variables as far Automake is
+concerned.
+
+   You can get warnings about ‘$(wildcard ...’) constructs using the
+‘-Wportability’ flag.
+
+File: automake.info,  Node: Limitations on File Names,  Next: Errors with distclean,  Prev: Wildcards,  Up: FAQ
+

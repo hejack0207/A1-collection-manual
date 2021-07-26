@@ -1,0 +1,108 @@
+3.3 The Uniform Naming Scheme
+=============================
+
+Automake variables generally follow a “uniform naming scheme” that makes
+it easy to decide how programs (and other derived objects) are built,
+and how they are installed.  This scheme also supports ‘configure’ time
+determination of what should be built.
+
+   At ‘make’ time, certain variables are used to determine which objects
+are to be built.  The variable names are made of several pieces that are
+concatenated together.
+
+   The piece that tells ‘automake’ what is being built is commonly
+called the “primary”.  For instance, the primary ‘PROGRAMS’ holds a list
+of programs that are to be compiled and linked.
+
+   A different set of names is used to decide where the built objects
+should be installed.  These names are prefixes to the primary, and they
+indicate which standard directory should be used as the installation
+directory.  The standard directory names are given in the GNU standards
+(*note (standards)Directory Variables::).  Automake extends this list
+with ‘pkgdatadir’, ‘pkgincludedir’, ‘pkglibdir’, and ‘pkglibexecdir’;
+these are the same as the non-‘pkg’ versions, but with ‘$(PACKAGE)’
+appended.  For instance, ‘pkglibdir’ is defined as
+‘$(libdir)/$(PACKAGE)’.
+
+   For each primary, there is one additional variable named by
+prepending ‘EXTRA_’ to the primary name.  This variable is used to list
+objects that may or may not be built, depending on what ‘configure’
+decides.  This variable is required because Automake must statically
+know the entire list of objects that may be built in order to generate a
+‘Makefile.in’ that will work in all cases.
+
+   For instance, ‘cpio’ decides at configure time which programs should
+be built.  Some of the programs are installed in ‘bindir’, and some are
+installed in ‘sbindir’:
+
+     EXTRA_PROGRAMS = mt rmt
+     bin_PROGRAMS = cpio pax
+     sbin_PROGRAMS = $(MORE_PROGRAMS)
+
+   Defining a primary without a prefix as a variable, e.g., ‘PROGRAMS’,
+is an error.
+
+   Note that the common ‘dir’ suffix is left off when constructing the
+variable names; thus one writes ‘bin_PROGRAMS’ and not
+‘bindir_PROGRAMS’.
+
+   Not every sort of object can be installed in every directory.
+Automake will flag those attempts it finds in error (but see below how
+to override the check if you really need to).  Automake will also
+diagnose obvious misspellings in directory names.
+
+   Sometimes the standard directories—even as augmented by Automake—are
+not enough.  In particular it is sometimes useful, for clarity, to
+install objects in a subdirectory of some predefined directory.  To this
+end, Automake allows you to extend the list of possible installation
+directories.  A given prefix (e.g., ‘zar’) is valid if a variable of the
+same name with ‘dir’ appended is defined (e.g., ‘zardir’).
+
+   For instance, the following snippet will install ‘file.xml’ into
+‘$(datadir)/xml’.
+
+     xmldir = $(datadir)/xml
+     xml_DATA = file.xml
+
+   This feature can also be used to override the sanity checks Automake
+performs to diagnose suspicious directory/primary couples (in the
+unlikely case these checks are undesirable, and you really know what
+you’re doing).  For example, Automake would error out on this input:
+
+     # Forbidden directory combinations, automake will error out on this.
+     pkglib_PROGRAMS = foo
+     doc_LIBRARIES = libquux.a
+
+but it will succeed with this:
+
+     # Work around forbidden directory combinations.  Do not use this
+     # without a very good reason!
+     my_execbindir = $(pkglibdir)
+     my_doclibdir = $(docdir)
+     my_execbin_PROGRAMS = foo
+     my_doclib_LIBRARIES = libquux.a
+
+   The ‘exec’ substring of the ‘my_execbindir’ variable lets the files
+be installed at the right time (*note The Two Parts of Install::).
+
+   The special prefix ‘noinst_’ indicates that the objects in question
+should be built but not installed at all.  This is usually used for
+objects required to build the rest of your package, for instance static
+libraries (*note A Library::), or helper scripts.
+
+   The special prefix ‘check_’ indicates that the objects in question
+should not be built until the ‘make check’ command is run.  Those
+objects are not installed either.
+
+   The current primary names are ‘PROGRAMS’, ‘LIBRARIES’, ‘LTLIBRARIES’,
+‘LISP’, ‘PYTHON’, ‘JAVA’, ‘SCRIPTS’, ‘DATA’, ‘HEADERS’, ‘MANS’, and
+‘TEXINFOS’.
+
+   Some primaries also allow additional prefixes that control other
+aspects of ‘automake’’s behavior.  The currently defined prefixes are
+‘dist_’, ‘nodist_’, ‘nobase_’, and ‘notrans_’.  These prefixes are
+explained later (*note Program and Library Variables::) (*note Man
+Pages::).
+
+File: automake.info,  Node: Length Limitations,  Next: Canonicalization,  Prev: Uniform,  Up: Generalities
+

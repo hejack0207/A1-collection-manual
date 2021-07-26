@@ -1,0 +1,344 @@
+19.2 Writing `testsuite.at'
+===========================
+
+The `testsuite.at' is a Bourne shell script making use of special
+Autotest M4 macros.  It often contains a call to `AT_INIT' near its
+beginning followed by one call to `m4_include' per source file for
+tests.  Each such included file, or the remainder of `testsuite.at' if
+include files are not used, contain a sequence of test groups.  Each
+test group begins with a call to `AT_SETUP', then an arbitrary number
+of shell commands or calls to `AT_CHECK', and then completes with a
+call to `AT_CLEANUP'.  Multiple test groups can be categorized by a
+call to `AT_BANNER'.
+
+   All of the public Autotest macros have all-uppercase names in the
+namespace `^AT_' to prevent them from accidentally conflicting with
+other text; Autoconf also reserves the namespace `^_AT_' for internal
+macros.  All shell variables used in the testsuite for internal
+purposes have mostly-lowercase names starting with `at_'.  Autotest
+also uses here-document delimiters in the namespace `^_AT[A-Z]', and
+makes use of the file system namespace `^at-'.
+
+   Since Autoconf is built on top of M4sugar (*note Programming in
+M4sugar::) and M4sh (*note Programming in M4sh::), you must also be
+aware of those namespaces (`^_?\(m4\|AS\)_').  In general, you _should
+not use_ the namespace of a package that does not own the macro or
+shell code you are writing.
+
+ -- Macro: AT_INIT ([NAME])
+     Initialize Autotest.  Giving a NAME to the test suite is
+     encouraged if your package includes several test suites.  Before
+     this macro is called, `AT_PACKAGE_STRING' and
+     `AT_PACKAGE_BUGREPORT' must be defined, which are used to display
+     information about the testsuite to the user.  Typically, these
+     macros are provided by a file `package.m4' built by `make' (*note
+     Making testsuite Scripts::), in order to inherit the package name,
+     version, and bug reporting address from `configure.ac'.
+
+ -- Macro: AT_COPYRIGHT (COPYRIGHT-NOTICE)
+     State that, in addition to the Free Software Foundation's
+     copyright on the Autotest macros, parts of your test suite are
+     covered by COPYRIGHT-NOTICE.
+
+     The COPYRIGHT-NOTICE shows up in both the head of `testsuite' and
+     in `testsuite --version'.
+
+ -- Macro: AT_ARG_OPTION (OPTIONS, HELP-TEXT, [ACTION-IF-GIVEN],
+          [ACTION-IF-NOT-GIVEN])
+     Accept options from the space-separated list OPTIONS, a list that
+     has leading dashes removed from the options.  Long options will be
+     prefixed with `--', single-character options with `-'.  The first
+     word in this list is the primary OPTION, any others are assumed to
+     be short-hand aliases.  The variable associated with it is
+     `at_arg_OPTION', with any dashes in OPTION replaced with
+     underscores.
+
+     If the user passes `--OPTION' to the `testsuite', the variable
+     will be set to `:'.  If the user does not pass the option, or
+     passes `--no-OPTION', then the variable will be set to `false'.
+
+     ACTION-IF-GIVEN is run each time the option is encountered; here,
+     the variable `at_optarg' will be set to `:' or `false' as
+     appropriate.  `at_optarg' is actually just a copy of
+     `at_arg_OPTION'.
+
+     ACTION-IF-NOT-GIVEN will be run once after option parsing is
+     complete and if no option from OPTIONS was used.
+
+     HELP-TEXT is added to the end of the list of options shown in
+     `testsuite --help' (*note AS_HELP_STRING::).
+
+     It is recommended that you use a package-specific prefix to OPTIONS
+     names in order to avoid clashes with future Autotest built-in
+     options.
+
+ -- Macro: AT_ARG_OPTION_ARG (OPTIONS, HELP-TEXT, [ACTION-IF-GIVEN],
+          [ACTION-IF-NOT-GIVEN])
+     Accept options with arguments from the space-separated list
+     OPTIONS, a list that has leading dashes removed from the options.
+     Long options will be prefixed with `--', single-character options
+     with `-'.  The first word in this list is the primary OPTION, any
+     others are assumed to be short-hand aliases.  The variable
+     associated with it is `at_arg_OPTION', with any dashes in OPTION
+     replaced with underscores.
+
+     If the user passes `--OPTION=ARG' or `--OPTION ARG' to the
+     `testsuite', the variable will be set to `ARG'.
+
+     ACTION-IF-GIVEN is run each time the option is encountered; here,
+     the variable `at_optarg' will be set to `ARG'.  `at_optarg' is
+     actually just a copy of `at_arg_OPTION'.
+
+     ACTION-IF-NOT-GIVEN will be run once after option parsing is
+     complete and if no option from OPTIONS was used.
+
+     HELP-TEXT is added to the end of the list of options shown in
+     `testsuite --help' (*note AS_HELP_STRING::).
+
+     It is recommended that you use a package-specific prefix to OPTIONS
+     names in order to avoid clashes with future Autotest built-in
+     options.
+
+ -- Macro: AT_COLOR_TESTS
+     Enable colored test results by default when the output is
+     connected to a terminal.
+
+ -- Macro: AT_TESTED (EXECUTABLES)
+     Log the file name and answer to `--version' of each program in
+     space-separated list EXECUTABLES.  Several invocations register
+     new executables, in other words, don't fear registering one program
+     several times.
+
+     Autotest test suites rely on `PATH' to find the tested program.
+     This avoids the need to generate absolute names of the various
+     tools, and makes it possible to test installed programs.
+     Therefore, knowing which programs are being exercised is crucial
+     to understanding problems in the test suite itself, or its
+     occasional misuses.  It is a good idea to also subscribe foreign
+     programs you depend upon, to avoid incompatible diagnostics.
+
+
+ -- Macro: AT_BANNER (TEST-CATEGORY-NAME)
+     This macro identifies the start of a category of related test
+     groups.  When the resulting `testsuite' is invoked with more than
+     one test group to run, its output will include a banner containing
+     TEST-CATEGORY-NAME prior to any tests run from that category.  The
+     banner should be no more than about 40 or 50 characters.  A blank
+     banner indicates uncategorized tests; an empty line will be
+     inserted after tests from an earlier category, effectively ending
+     that category.
+
+ -- Macro: AT_SETUP (TEST-GROUP-NAME)
+     This macro starts a group of related tests, all to be executed in
+     the same subshell.  It accepts a single argument, which holds a
+     few words (no more than about 30 or 40 characters) quickly
+     describing the purpose of the test group being started.
+     TEST-GROUP-NAME must not expand to unbalanced quotes, although
+     quadrigraphs can be used.
+
+ -- Macro: AT_KEYWORDS (KEYWORDS)
+     Associate the space-separated list of KEYWORDS to the enclosing
+     test group.  This makes it possible to run "slices" of the test
+     suite.  For instance, if some of your test groups exercise some
+     `foo' feature, then using `AT_KEYWORDS(foo)' lets you run
+     `./testsuite -k foo' to run exclusively these test groups.  The
+     TEST-GROUP-NAME of the test group is automatically recorded to
+     `AT_KEYWORDS'.
+
+     Several invocations within a test group accumulate new keywords.
+     In other words, don't fear registering the same keyword several
+     times in a test group.
+
+ -- Macro: AT_CAPTURE_FILE (FILE)
+     If the current test group fails, log the contents of FILE.
+     Several identical calls within one test group have no additional
+     effect.
+
+ -- Macro: AT_FAIL_IF (SHELL-CONDITION)
+     Make the test group fail and skip the rest of its execution, if
+     SHELL-CONDITION is true.  SHELL-CONDITION is a shell expression
+     such as a `test' command.  Tests before `AT_FAIL_IF' will be
+     executed and may still cause the test group to be skipped.  You
+     can instantiate this macro many times from within the same test
+     group.
+
+     You should use this macro only for very simple failure conditions.
+     If the SHELL-CONDITION could emit any kind of output you should
+     instead use `AT_CHECK' like
+          AT_CHECK([if SHELL-CONDITION; then exit 99; fi])
+     so that such output is properly recorded in the `testsuite.log'
+     file.
+
+ -- Macro: AT_SKIP_IF (SHELL-CONDITION)
+     Determine whether the test should be skipped because it requires
+     features that are unsupported on the machine under test.
+     SHELL-CONDITION is a shell expression such as a `test' command.
+     Tests before `AT_SKIP_IF' will be executed and may still cause the
+     test group to fail.  You can instantiate this macro many times
+     from within the same test group.
+
+     You should use this macro only for very simple skip conditions.
+     If the SHELL-CONDITION could emit any kind of output you should
+     instead use `AT_CHECK' like
+          AT_CHECK([if SHELL-CONDITION; then exit 77; fi])
+     so that such output is properly recorded in the `testsuite.log'
+     file.
+
+ -- Macro: AT_XFAIL_IF (SHELL-CONDITION)
+     Determine whether the test is expected to fail because it is a
+     known bug (for unsupported features, you should skip the test).
+     SHELL-CONDITION is a shell expression such as a `test' command;
+     you can instantiate this macro many times from within the same
+     test group, and one of the conditions is enough to turn the test
+     into an expected failure.
+
+ -- Macro: AT_CLEANUP
+     End the current test group.
+
+
+ -- Macro: AT_DATA (FILE, CONTENTS)
+     Initialize an input data FILE with given CONTENTS.  Of course, the
+     CONTENTS have to be properly quoted between square brackets to
+     protect against included commas or spurious M4 expansion.
+     CONTENTS must be empty or end with a newline.  FILE must be a
+     single shell word that expands into a single file name.
+
+ -- Macro: AT_CHECK (COMMANDS, [STATUS = `0'], [STDOUT], [STDERR],
+          [RUN-IF-FAIL], [RUN-IF-PASS])
+ -- Macro: AT_CHECK_UNQUOTED (COMMANDS, [STATUS = `0'], [STDOUT],
+          [STDERR], [RUN-IF-FAIL], [RUN-IF-PASS])
+     Execute a test by performing given shell COMMANDS in a subshell.
+     COMMANDS is output as-is, so shell expansions are honored.  These
+     commands should normally exit with STATUS, while producing expected
+     STDOUT and STDERR contents.  If COMMANDS exit with unexpected
+     status 77, then the rest of the test group is skipped.  If
+     COMMANDS exit with unexpected status 99, then the test group is
+     immediately failed.  Otherwise, if this test fails, run shell
+     commands RUN-IF-FAIL or, if this test passes, run shell commands
+     RUN-IF-PASS, both inside the current shell execution environment.
+     At the beginning of RUN-IF-FAIL and RUN-IF-PASS, the status of
+     COMMANDS is available in the `at_status' shell variable.
+
+     This macro must be invoked in between `AT_SETUP' and `AT_CLEANUP'.
+
+     If STATUS is the literal `ignore', then the corresponding exit
+     status is not checked, except for the special cases of 77 (skip)
+     and 99 (hard failure).  The existence of hard failures allows one
+     to mark a test as an expected failure with `AT_XFAIL_IF' because a
+     feature has not yet been implemented, but to still distinguish
+     between gracefully handling the missing feature and dumping core.
+     A hard failure also inhibits post-test actions in RUN-IF-FAIL.
+
+     If the value of the STDOUT or STDERR parameter is one of the
+     literals in the following table, then the test treats the output
+     according to the rules of that literal.  Otherwise, the value of
+     the parameter is treated as text that must exactly match the
+     output given by COMMANDS on standard output and standard error
+     (including an empty parameter for no output); any differences are
+     captured in the testsuite log and the test is failed (unless an
+     unexpected exit status of 77 skipped the test instead).  The
+     difference between `AT_CHECK' and `AT_CHECK_UNQUOTED' is that only
+     the latter performs shell variable expansion (`$'), command
+     substitution (``'), and backslash escaping (`\') on comparison
+     text given in the STDOUT and STDERR arguments; if the text
+     includes a trailing newline, this would be the same as if it were
+     specified via an unquoted here-document.  (However, there is no
+     difference in the interpretation of COMMANDS).
+
+    `ignore'
+          The content of the output is ignored, but still captured in
+          the test group log (if the testsuite is run with option `-v',
+          the test group log is displayed as the test is run; if the
+          test group later fails, the test group log is also copied
+          into the overall testsuite log).  This action is valid for
+          both STDOUT and STDERR.
+
+    `ignore-nolog'
+          The content of the output is ignored, and nothing is captured
+          in the log files.  If COMMANDS are likely to produce binary
+          output (including long lines) or large amounts of output,
+          then logging the output can make it harder to locate details
+          related to subsequent tests within the group, and could
+          potentially corrupt terminal display of a user running
+          `testsuite -v'.
+
+    `stdout'
+          For the STDOUT parameter, capture the content of standard
+          output to both the file `stdout' and the test group log.
+          Subsequent commands in the test group can then post-process
+          the file.  This action is often used when it is desired to
+          use `grep' to look for a substring in the output, or when the
+          output must be post-processed to normalize error messages
+          into a common form.
+
+    `stderr'
+          Like `stdout', except that it only works for the STDERR
+          parameter, and the standard error capture file will be named
+          `stderr'.
+
+    `stdout-nolog'
+    `stderr-nolog'
+          Like `stdout' or `stderr', except that the captured output is
+          not duplicated into the test group log.  This action is
+          particularly useful for an intermediate check that produces
+          large amounts of data, which will be followed by another
+          check that filters down to the relevant data, as it makes it
+          easier to locate details in the log.
+
+    `expout'
+          For the STDOUT parameter, compare standard output contents
+          with the previously created file `expout', and list any
+          differences in the testsuite log.
+
+    `experr'
+          Like `expout', except that it only works for the STDERR
+          parameter, and the standard error contents are compared with
+          `experr'.
+
+ -- Macro: AT_CHECK_EUNIT (MODULE, TEST-SPEC, [ERLFLAGS],
+          [RUN-IF-FAIL], [RUN-IF-PASS])
+     Initialize and execute an Erlang module named MODULE that performs
+     tests following the TEST-SPEC EUnit test specification.  TEST-SPEC
+     must be a valid EUnit test specification, as defined in the EUnit
+     Reference Manual (http://erlang.org/doc/apps/eunit/index.html).
+     ERLFLAGS are optional command-line options passed to the Erlang
+     interpreter to execute the test Erlang module.  Typically,
+     ERLFLAGS defines at least the paths to directories containing the
+     compiled Erlang modules under test, as `-pa path1 path2 ...'.
+
+     For example, the unit tests associated with Erlang module `testme',
+     which compiled code is in subdirectory `src', can be performed
+     with:
+
+          AT_CHECK_EUNIT([testme_testsuite], [{module, testme}],
+                         [-pa "${abs_top_builddir}/src"])
+
+     This macro must be invoked in between `AT_SETUP' and `AT_CLEANUP'.
+
+     Variables `ERL', `ERLC', and (optionally) `ERLCFLAGS' must be
+     defined as the path of the Erlang interpreter, the path of the
+     Erlang compiler, and the command-line flags to pass to the
+     compiler, respectively.  Those variables should be configured in
+     `configure.ac' using the `AC_ERLANG_PATH_ERL' and
+     `AC_ERLANG_PATH_ERLC' macros, and the configured values of those
+     variables are automatically defined in the testsuite.  If `ERL' or
+     `ERLC' is not defined, the test group is skipped.
+
+     If the EUnit library cannot be found, i.e. if module `eunit' cannot
+     be loaded, the test group is skipped.  Otherwise, if TEST-SPEC is
+     an invalid EUnit test specification, the test group fails.
+     Otherwise, if the EUnit test passes, shell commands RUN-IF-PASS
+     are executed or, if the EUnit test fails, shell commands
+     RUN-IF-FAIL are executed and the test group fails.
+
+     Only the generated test Erlang module is automatically compiled and
+     executed.  If TEST-SPEC involves testing other Erlang modules,
+     e.g. module `testme' in the example above, those modules must be
+     already compiled.
+
+     If the testsuite is run in verbose mode, with option `--verbose',
+     EUnit is also run in verbose mode to output more details about
+     individual unit tests.
+
+File: autoconf.info,  Node: testsuite Invocation,  Next: Making testsuite Scripts,  Prev: Writing Testsuites,  Up: Using Autotest
+

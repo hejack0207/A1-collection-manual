@@ -1,0 +1,397 @@
+23.3 User Functions
+===================
+
+
+This section describes functions that are designed to be called directly
+by the user.  The first part describes those functions associated with
+the user's calendar; the second part describes the use in glob
+qualifiers.
+
+
+23.3.1 Calendar system functions
+--------------------------------
+
+
+
+calendar [ -abdDsv ] [ -C CALFILE ] [ -n NUM ] [ -S SHOWPROG ]
+         [ [ START ] END ]
+calendar -r [ -abdDrsv ] [ -C CALFILE ] [ -n NUM ] [ -S SHOWPROG ]
+         [ START ]
+     Show events in the calendar.
+
+     With no arguments, show events from the start of today until the
+     end of the next working day after today.  In other words, if today
+     is Friday, Saturday, or Sunday, show up to the end of the following
+     Monday, otherwise show today and tomorrow.
+
+     If END is given, show events from the start of today up to the time
+     and date given, which is in the format described in the previous
+     section.  Note that if this is a date the time is assumed to be
+     midnight at the start of the date, so that effectively this shows
+     all events before the given date.
+
+     END may start with a +, in which case the remainder of the
+     specification is a relative time format as described in the
+     previous section indicating the range of time from the start time
+     that is to be included.
+
+     If START is also given, show events starting from that time and
+     date.  The word now can be used to indicate the current time.
+
+     To implement an alert when events are due, include calendar -s in
+     your ~/.zshrc file.
+
+     Options:
+
+     -a
+          Show all items in the calendar, regardless of the start and
+          end.
+
+     -b
+          Brief: don't display continuation lines (i.e.  indented lines
+          following the line with the date/time), just the first line.
+
+     -B LINES
+          Brief: display at most the first LINES lines of the calendar
+          entry.  '-B 1' is equivalent to '-b'.
+
+     -C CALFILE
+          Explicitly specify a calendar file instead of the value of the
+          calendar-file style or the default ~/calendar.
+
+     -d
+          Move any events that have passed from the calendar file to the
+          "done" file, as given by the done-file style or the default
+          which is the calendar file with .done appended.  This option
+          is implied by the -s option.
+
+     -D
+          Turns off the option -d, even if the -s option is also
+          present.
+
+     -n NUM, -NUM
+          Show at least NUM events, if present in the calendar file,
+          regardless of the start and end.
+
+     -r
+          Show all the remaining options in the calendar, ignoring the
+          given END time.  The START time is respected; any argument
+          given is treated as a START time.
+
+     -s
+          Use the shell's sched command to schedule a timed event that
+          will warn the user when an event is due.  Note that the sched
+          command only runs if the shell is at an interactive prompt; a
+          foreground task blocks the scheduled task from running until
+          it is finished.
+
+          The timed event usually runs the programme calendar_show to
+          show the event, as described in *note Calendar Utility
+          Functions::.
+
+          By default, a warning of the event is shown five minutes
+          before it is due.  The warning period can be configured by the
+          style warn-time or for a single calendar entry by including
+          WARN RELTIME in the first line of the entry, where RELTIME is
+          one of the usual relative time formats.
+
+          A repeated event may be indicated by including RPT RELDATE in
+          the first line of the entry.  After the scheduled event has
+          been displayed it will be re-entered into the calendar file at
+          a time RELDATE after the existing event.  Note that this is
+          currently the only use made of the repeat count, so that it is
+          not possible to query the schedule for a recurrence of an
+          event in the calendar until the previous event has passed.
+
+          If RPT is used, it is also possible to specify that certain
+          recurrences of an event are rescheduled or cancelled.  This is
+          done with the OCCURRENCE keyword, followed by whitespace and
+          the date and time of the occurrence in the regular sequence,
+          followed by whitespace and either the date and time of the
+          rescheduled event or the exact string CANCELLED.  In this case
+          the date and time must be in exactly the "date with local
+          time" format used by the text/calendar MIME type (RFC 2445),
+          <YYYY><MM><DD>T<HH><MM><SS> (note the presence of the literal
+          character T).  The first word (the regular recurrence) may be
+          something other than a proper date/time to indicate that the
+          event is additional to the normal sequence; a convention that
+          retains the formatting appearance is XXXXXXXXTXXXXXX.
+
+          Furthermore, it is useful to record the next regular
+          recurrence (as then the displayed date may be for a
+          rescheduled event so cannot be used for calculating the
+          regular sequence).  This is specified by RECURRENCE and a time
+          or date in the same format.  calendar_add adds such an
+          indication when it encounters a recurring event that does not
+          include one, based on the headline date/time.
+
+          If calendar_add is used to update occurrences the UID keyword
+          described there should be present in both the existing entry
+          and the added occurrence in order to identify recurring event
+          sequences.
+
+          For example,
+
+               Thu May 6, 2010 11:00 Informal chat RPT 1 week
+                 # RECURRENCE 20100506T110000
+                 # OCCURRENCE 20100513T110000 20100513T120000
+                 # OCCURRENCE 20100520T110000 CANCELLED
+
+          The event that occurs at 11:00 on 13th May 2010 is rescheduled
+          an hour later.  The event that occurs a week later is
+          cancelled.  The occurrences are given on a continuation line
+          starting with a # character so will not usually be displayed
+          as part of the event.  As elsewhere, no account of time zones
+          is taken with the times.  After the next event occurs the
+          headline date/time will be 'Thu May 13, 2010 12:00' while the
+          RECURRENCE date/time will be '20100513T110000' (note that
+          cancelled and moved events are not taken account of in the
+          RECURRENCE, which records what the next regular recurrence is,
+          but they are accounted for in the headline date/time).
+
+          It is safe to run calendar -s to reschedule an existing event
+          (if the calendar file has changed, for example), and also to
+          have it running in multiples instances of the shell since the
+          calendar file is locked when in use.
+
+          By default, expired events are moved to the "done" file; see
+          the -d option.  Use -D to prevent this.
+
+     -S SHOWPROG
+          Explicitly specify a programme to be used for showing events
+          instead of the value of the show-prog style or the default
+          calendar_show.
+
+     -v
+          Verbose: show more information about stages of processing.
+          This is useful for confirming that the function has
+          successfully parsed the dates in the calendar file.
+
+calendar_add [ -BL ] EVENT ...
+     Adds a single event to the calendar in the appropriate location.
+     The event can contain multiple lines, as described in *note
+     Calendar File and Date Formats::.  Using this function ensures that
+     the calendar file is sorted in date and time order.  It also makes
+     special arrangements for locking the file while it is altered.  The
+     old calendar is left in a file with the suffix .old.
+
+     The option -B indicates that backing up the calendar file will be
+     handled by the caller and should not be performed by calendar_add.
+     The option -L indicates that calendar_add does not need to lock the
+     calendar file as it is already locked.  These options will not
+     usually be needed by users.
+
+     If the style reformat-date is true, the date and time of the new
+     entry will be rewritten into the standard date format: see the
+     descriptions of this style and the style date-format.
+
+     The function can use a unique identifier stored with each event to
+     ensure that updates to existing events are treated correctly.  The
+     entry should contain the word UID, followed by whitespace, followed
+     by a word consisting entirely of hexadecimal digits of arbitrary
+     length (all digits are significant, including leading zeroes).  As
+     the UID is not directly useful to the user, it is convenient to
+     hide it on an indented continuation line starting with a #, for
+     example:
+
+          Aug 31, 2007 09:30  Celebrate the end of the holidays
+            # UID 045B78A0
+
+     The second line will not be shown by the calendar function.
+
+     It is possible to specify the RPT keyword followed by CANCELLED
+     instead of a relative time.  This causes any matched event or
+     series of events to be cancelled (the original event does not have
+     to be marked as recurring in order to be cancelled by this method).
+     A UID is required in order to match an existing event in the
+     calendar.
+
+     calendar_add will attempt to manage recurrences and occurrences of
+     repeating events as described for event scheduling by calendar -s
+     above.  To reschedule or cancel a single event calendar_add should
+     be called with an entry that includes the correct UID but does
+     _not_ include the RPT keyword as this is taken to mean the entry
+     applies to a series of repeating events and hence replaces all
+     existing information.  Each rescheduled or cancelled occurrence
+     must have an OCCURRENCE keyword in the entry passed to calendar_add
+     which will be merged into the calendar file.  Any existing
+     reference to the occurrence is replaced.  An occurrence that does
+     not refer to a valid existing event is added as a one-off
+     occurrence to the same calendar entry.
+
+calendar_edit
+     This calls the user's editor to edit the calendar file.  If there
+     are arguments, they are taken as the editor to use (the file name
+     is appended to the commands); otherwise, the editor is given by the
+     variable VISUAL, if set, else the variable EDITOR.
+
+     If the calendar scheduler was running, then after editing the file
+     calendar -s is called to update it.
+
+     This function locks out the calendar system during the edit.  Hence
+     it should be used to edit the calendar file if there is any
+     possibility of a calendar event occurring meanwhile.  Note this can
+     lead to another shell with calendar functions enabled hanging
+     waiting for a lock, so it is necessary to quit the editor as soon
+     as possible.
+
+calendar_parse CALENDAR-ENTRY
+     This is the internal function that analyses the parts of a calendar
+     entry, which is passed as the only argument.  The function returns
+     status 1 if the argument could not be parsed as a calendar entry
+     and status 2 if the wrong number of arguments were passed; it also
+     sets the parameter reply to an empty associative array.  Otherwise,
+     it returns status 0 and sets elements of the associative array
+     reply as follows:
+
+     time
+          The time as a string of digits in the same units as
+          $EPOCHSECONDS
+     schedtime
+          The regularly scheduled time.  This may differ from the actual
+          event time time if this is a recurring event and the next
+          occurrence has been rescheduled.  Then time gives the actual
+          time and schedtime the time of the regular recurrence before
+          modification.
+     text1
+          The text from the line not including the date and time of the
+          event, but including any WARN or RPT keywords and values.
+     warntime
+          Any warning time given by the WARN keyword as a string of
+          digits containing the time at which to warn in the same units
+          as $EPOCHSECONDS.  (Note this is an absolute time, not the
+          relative time passed down.)  Not set no WARN keyword and value
+          were matched.
+     warnstr
+          The raw string matched after the WARN keyword, else unset.
+     rpttime
+          Any recurrence time given by the RPT keyword as a string of
+          digits containing the time of the recurrence in the same units
+          as $EPOCHSECONDS.  (Note this is an absolute time.)  Not set
+          if no RPT keyword and value were matched.
+     schedrpttime
+          The next regularly scheduled occurrence of a recurring event
+          before modification.  This may differ from rpttime, which is
+          the actual time of the event that may have been rescheduled
+          from the regular time.
+     rptstr
+          The raw string matched after the RPT keyword, else unset.
+     text2
+          The text from the line after removal of the date and any
+          keywords and values.
+
+calendar_showdate [ -r ] [ -f FMT ] DATE-SPEC ...
+     The given DATE-SPEC is interpreted and the corresponding date and
+     time printed.  If the initial DATE-SPEC begins with a + or - it is
+     treated as relative to the current time; DATE-SPECs after the first
+     are treated as relative to the date calculated so far and a leading
+     + is optional in that case.  This allows one to use the system as a
+     date calculator.  For example, calendar_showdate '+1 month, 1st
+     Friday' shows the date of the first Friday of next month.
+
+     With the option -r nothing is printed but the value of the date and
+     time in seconds since the epoch is stored in the parameter REPLY.
+
+     With the option -f FMT the given date/time conversion format is
+     passed to strftime; see notes on the date-format style below.
+
+     In order to avoid ambiguity with negative relative date
+     specifications, options must occur in separate words; in other
+     words, -r and -f should not be combined in the same word.
+
+calendar_sort
+     Sorts the calendar file into date and time order.  The old calendar
+     is left in a file with the suffix .old.
+
+
+23.3.2 Glob qualifiers
+----------------------
+
+
+age
+     The function age can be autoloaded and use separately from the
+     calendar system, although it uses the function calendar_scandate
+     for date formatting.  It requires the zsh/stat builtin, but uses
+     only the builtin zstat.
+
+     age selects files having a given modification time for use as a
+     glob qualifier.  The format of the date is the same as that
+     understood by the calendar system, described in *note Calendar File
+     and Date Formats::.
+
+     The function can take one or two arguments, which can be supplied
+     either directly as command or arguments, or separately as shell
+     parameters.
+
+          print *(e:age 2006/10/04 2006/10/09:)
+
+     The example above matches all files modified between the start of
+     those dates.  The second argument may alternatively be a relative
+     time introduced by a +:
+
+          print *(e:age 2006/10/04 +5d:)
+
+     The example above is equivalent to the previous example.
+
+     In addition to the special use of days of the week, today and
+     yesterday, times with no date may be specified; these apply to
+     today.  Obviously such uses become problematic around midnight.
+
+          print *(e-age 12:00 13:30-)
+
+     The example above shows files modified between 12:00 and 13:00
+     today.
+
+          print *(e:age 2006/10/04:)
+
+     The example above matches all files modified on that date.  If the
+     second argument is omitted it is taken to be exactly 24 hours after
+     the first argument (even if the first argument contains a time).
+
+          print *(e-age 2006/10/04:10:15 2006/10/04:10:45-)
+
+     The example above supplies times.  Note that whitespace within the
+     time and date specification must be quoted to ensure age receives
+     the correct arguments, hence the use of the additional colon to
+     separate the date and time.
+
+          AGEREF=2006/10/04:10:15
+          AGEREF2=2006/10/04:10:45
+          print *(+age)
+
+     This shows the same example before using another form of argument
+     passing.  The dates and times in the parameters AGEREF and AGEREF2
+     stay in effect until unset, but will be overridden if any argument
+     is passed as an explicit argument to age.  Any explicit argument
+     causes both parameters to be ignored.
+
+     Instead of an explicit date and time, it's possible to use the
+     modification time of a file as the date and time for either
+     argument by introducing the file name with a colon:
+
+          print *(e-age :file1-)
+
+     matches all files created on the same day (24 hours starting from
+     midnight) as file1.
+
+          print *(e-age :file1 :file2-)
+
+     matches all files modified no earlier than file1 and no later than
+     file2; precision here is to the nearest second.
+
+after
+before
+     The functions after and before are simpler versions of age that
+     take just one argument.  The argument is parsed similarly to an
+     argument of age; if it is not given the variable AGEREF is
+     consulted.  As the names of the functions suggest, a file matches
+     if its modification time is after or before the time and date
+     specified.  If a time only is given the date is today.
+
+     The two following examples are therefore equivalent:
+          print *(e-after 12:00-)
+          print *(e-after today:12:00-)
+
+
+File: zsh.info,  Node: Calendar Styles,  Next: Calendar Utility Functions,  Prev: Calendar System User Functions,  Up: Calendar Function System
+

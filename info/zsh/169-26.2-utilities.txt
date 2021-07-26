@@ -1,0 +1,342 @@
+26.2 Utilities
+==============
+
+
+
+26.2.1 Accessing On-Line Help
+-----------------------------
+
+
+The key sequence ESC h is normally bound by ZLE to execute the run-help
+widget (see *note Zsh Line Editor::).  This invokes the run-help command
+with the command word from the current input line as its argument.  By
+default, run-help is an alias for the man command, so this often fails
+when the command word is a shell builtin or a user-defined function.  By
+redefining the run-help alias, one can improve the on-line help provided
+by the shell.
+
+The helpfiles utility, found in the Util directory of the distribution,
+is a Perl program that can be used to process the zsh manual to produce
+a separate help file for each shell builtin and for many other shell
+features as well.  The autoloadable run-help function, found in
+Functions/Misc, searches for these helpfiles and performs several other
+tests to produce the most complete help possible for the command.
+
+Help files are installed by default to a subdirectory of /usr/share/zsh
+or /usr/local/share/zsh.
+
+To create your own help files with helpfiles, choose or create a
+directory where the individual command help files will reside.  For
+example, you might choose ~/zsh_help.  If you unpacked the zsh
+distribution in your home directory, you would use the commands:
+
+     mkdir ~/zsh_help
+     perl ~/zsh-5.7.1/Util/helpfiles ~/zsh_help
+
+The HELPDIR parameter tells run-help where to look for the help files.
+When unset, it uses the default installation path.  To use your own set
+of help files, set this to the appropriate path in one of your startup
+files:
+
+     HELPDIR=~/zsh_help
+
+To use the run-help function, you need to add lines something like the
+following to your .zshrc or equivalent startup file:
+
+     unalias run-help
+     autoload run-help
+
+Note that in order for 'autoload run-help' to work, the run-help file
+must be in one of the directories named in your fpath array (see *note
+Parameters Used By The Shell::).  This should already be the case if you
+have a standard zsh installation; if it is not, copy
+Functions/Misc/run-help to an appropriate directory.
+
+
+26.2.2 Recompiling Functions
+----------------------------
+
+
+If you frequently edit your zsh functions, or periodically update your
+zsh installation to track the latest developments, you may find that
+function digests compiled with the zcompile builtin are frequently out
+of date with respect to the function source files.  This is not usually
+a problem, because zsh always looks for the newest file when loading a
+function, but it may cause slower shell startup and function loading.
+Also, if a digest file is explicitly used as an element of fpath, zsh
+won't check whether any of its source files has changed.
+
+The zrecompile autoloadable function, found in Functions/Misc, can be
+used to keep function digests up to date.
+
+zrecompile [ -qt ] [ NAME ... ]
+zrecompile [ -qt ] -p ARG ... [ -- ARG ... ]
+     This tries to find *.zwc files and automatically re-compile them if
+     at least one of the original files is newer than the compiled file.
+     This works only if the names stored in the compiled files are full
+     paths or are relative to the directory that contains the .zwc file.
+
+     In the first form, each NAME is the name of a compiled file or a
+     directory containing *.zwc files that should be checked.  If no
+     arguments are given, the directories and *.zwc files in fpath are
+     used.
+
+     When -t is given, no compilation is performed, but a return status
+     of zero (true) is set if there are files that need to be
+     re-compiled and non-zero (false) otherwise.  The -q option quiets
+     the chatty output that describes what zrecompile is doing.
+
+     Without the -t option, the return status is zero if all files that
+     needed re-compilation could be compiled and non-zero if compilation
+     for at least one of the files failed.
+
+     If the -p option is given, the ARGs are interpreted as one or more
+     sets of arguments for zcompile, separated by '--'.  For example:
+
+          zrecompile -p \
+                     -R ~/.zshrc -- \
+                     -M ~/.zcompdump -- \
+                     ~/zsh/comp.zwc ~/zsh/Completion/*/_*
+
+     This compiles ~/.zshrc into ~/.zshrc.zwc if that doesn't exist or
+     if it is older than ~/.zshrc.  The compiled file will be marked for
+     reading instead of mapping.  The same is done for ~/.zcompdump and
+     ~/.zcompdump.zwc, but this compiled file is marked for mapping.
+     The last line re-creates the file ~/zsh/comp.zwc if any of the
+     files matching the given pattern is newer than it.
+
+     Without the -p option, zrecompile does not create function digests
+     that do not already exist, nor does it add new functions to the
+     digest.
+
+The following shell loop is an example of a method for creating function
+digests for all functions in your fpath, assuming that you have write
+permission to the directories:
+
+     for ((i=1; i <= $#fpath; ++i)); do
+       dir=$fpath[i]
+       zwc=${dir:t}.zwc
+       if [[ $dir == (.|..) || $dir == (.|..)/* ]]; then
+         continue
+       fi
+       files=($dir/*(N-.))
+       if [[ -w $dir:h && -n $files ]]; then
+         files=(${${(M)files%/*/*}#/})
+         if ( cd $dir:h &&
+              zrecompile -p -U -z $zwc $files ); then
+           fpath[i]=$fpath[i].zwc
+         fi
+       fi
+     done
+
+The -U and -z options are appropriate for functions in the default zsh
+installation fpath; you may need to use different options for your
+personal function directories.
+
+Once the digests have been created and your fpath modified to refer to
+them, you can keep them up to date by running zrecompile with no
+arguments.
+
+
+26.2.3 Keyboard Definition
+--------------------------
+
+
+The large number of possible combinations of keyboards, workstations,
+terminals, emulators, and window systems makes it impossible for zsh to
+have built-in key bindings for every situation.  The zkbd utility, found
+in Functions/Misc, can help you quickly create key bindings for your
+configuration.
+
+Run zkbd either as an autoloaded function, or as a shell script:
+
+     zsh -f ~/zsh-5.7.1/Functions/Misc/zkbd
+
+When you run zkbd, it first asks you to enter your terminal type; if the
+default it offers is correct, just press return.  It then asks you to
+press a number of different keys to determine characteristics of your
+keyboard and terminal; zkbd warns you if it finds anything out of the
+ordinary, such as a Delete key that sends neither ^H nor ^?.
+
+The keystrokes read by zkbd are recorded as a definition for an
+associative array named key, written to a file in the subdirectory .zkbd
+within either your HOME or ZDOTDIR directory.  The name of the file is
+composed from the TERM, VENDOR and OSTYPE parameters, joined by hyphens.
+
+You may read this file into your .zshrc or another startup file with the
+'source' or '.' commands, then reference the key parameter in bindkey
+commands, like this:
+
+     source ${ZDOTDIR:-$HOME}/.zkbd/$TERM-$VENDOR-$OSTYPE
+     [[ -n ${key[Left]} ]] && bindkey "${key[Left]}" backward-char
+     [[ -n ${key[Right]} ]] && bindkey "${key[Right]}" forward-char
+     # etc.
+
+Note that in order for 'autoload zkbd' to work, the zkdb file must be in
+one of the directories named in your fpath array (see *note Parameters
+Used By The Shell::).  This should already be the case if you have a
+standard zsh installation; if it is not, copy Functions/Misc/zkbd to an
+appropriate directory.
+
+
+26.2.4 Dumping Shell State
+--------------------------
+
+
+Occasionally you may encounter what appears to be a bug in the shell,
+particularly if you are using a beta version of zsh or a development
+release.  Usually it is sufficient to send a description of the problem
+to one of the zsh mailing lists (see *note Mailing Lists::), but
+sometimes one of the zsh developers will need to recreate your
+environment in order to track the problem down.
+
+The script named reporter, found in the Util directory of the
+distribution, is provided for this purpose.  (It is also possible to
+autoload reporter, but reporter is not installed in fpath by default.)
+This script outputs a detailed dump of the shell state, in the form of
+another script that can be read with 'zsh -f' to recreate that state.
+
+To use reporter, read the script into your shell with the '.' command
+and redirect the output into a file:
+
+     . ~/zsh-5.7.1/Util/reporter > zsh.report
+
+You should check the zsh.report file for any sensitive information such
+as passwords and delete them by hand before sending the script to the
+developers.  Also, as the output can be voluminous, it's best to wait
+for the developers to ask for this information before sending it.
+
+You can also use reporter to dump only a subset of the shell state.
+This is sometimes useful for creating startup files for the first time.
+Most of the output from reporter is far more detailed than usually is
+necessary for a startup file, but the aliases, options, and zstyles
+states may be useful because they include only changes from the
+defaults.  The bindings state may be useful if you have created any of
+your own keymaps, because reporter arranges to dump the keymap creation
+commands as well as the bindings for every keymap.
+
+As is usual with automated tools, if you create a startup file with
+reporter, you should edit the results to remove unnecessary commands.
+Note that if you're using the new completion system, you should _not_
+dump the functions state to your startup files with reporter; use the
+compdump function instead (see *note Completion System::).
+
+reporter [ STATE ... ]
+     Print to standard output the indicated subset of the current shell
+     state.  The STATE arguments may be one or more of:
+
+     all
+          Output everything listed below.
+     aliases
+          Output alias definitions.
+     bindings
+          Output ZLE key maps and bindings.
+     completion
+          Output old-style compctl commands.  New completion is covered
+          by functions and zstyles.
+     functions
+          Output autoloads and function definitions.
+     limits
+          Output limit commands.
+     options
+          Output setopt commands.
+     styles
+          Same as zstyles.
+     variables
+          Output shell parameter assignments, plus export commands for
+          any environment variables.
+     zstyles
+          Output zstyle commands.
+
+     If the STATE is omitted, all is assumed.
+
+     With the exception of 'all', every STATE can be abbreviated by any
+     prefix, even a single letter; thus a is the same as aliases, z is
+     the same as zstyles, etc.
+
+
+26.2.5 Manipulating Hook Functions
+----------------------------------
+
+
+add-zsh-hook [ -L | -dD ] [ -Uzk ] HOOK FUNCTION
+     Several functions are special to the shell, as described in the
+     section Special Functions, *note Functions::, in that they are
+     automatically called at specific points during shell execution.
+     Each has an associated array consisting of names of functions to be
+     called at the same point; these are so-called 'hook functions'.
+     The shell function add-zsh-hook provides a simple way of adding or
+     removing functions from the array.
+
+     HOOK is one of chpwd, periodic, precmd, preexec, zshaddhistory,
+     zshexit, or zsh_directory_name, the special functions in question.
+     Note that zsh_directory_name is called in a different way from the
+     other functions, but may still be manipulated as a hook.
+
+     FUNCTION is name of an ordinary shell function.  If no options are
+     given this will be added to the array of functions to be executed
+     in the given context.  Functions are invoked in the order they were
+     added.
+
+     If the option -L is given, the current values for the hook arrays
+     are listed with typeset.
+
+     If the option -d is given, the FUNCTION is removed from the array
+     of functions to be executed.
+
+     If the option -D is given, the FUNCTION is treated as a pattern and
+     any matching names of functions are removed from the array of
+     functions to be executed.
+
+     The options -U, -z and -k are passed as arguments to autoload for
+     FUNCTION.  For functions contributed with zsh, the options -Uz are
+     appropriate.
+
+add-zle-hook-widget [ -L | -dD ] [ -Uzk ] HOOK WIDGETNAME
+     Several widget names are special to the line editor, as described
+     in the section Special Widgets, *note Zle Widgets::, in that they
+     are automatically called at specific points during editing.  Unlike
+     function hooks, these do not use a predefined array of other names
+     to call at the same point; the shell function add-zle-hook-widget
+     maintains a similar array and arranges for the special widget to
+     invoke those additional widgets.
+
+     HOOK is one of isearch-exit, isearch-update, line-pre-redraw,
+     line-init, line-finish, history-line-set, or keymap-select,
+     corresponding to each of the special widgets zle-isearch-exit, etc.
+     The special widget names are also accepted as the HOOK argument.
+
+     WIDGETNAME is the name of a ZLE widget.  If no options are given
+     this is added to the array of widgets to be invoked in the given
+     hook context.  Widgets are invoked in the order they were added,
+     with
+          zle WIDGETNAME -Nw -- "$@"
+
+     Note that this means that the 'WIDGET' special parameter tracks the
+     WIDGETNAME when the widget function is called, rather than tracking
+     the name of the corresponding special hook widget.
+
+     If the option -d is given, the WIDGETNAME is removed from the array
+     of widgets to be executed.
+
+     If the option -D is given, the WIDGETNAME is treated as a pattern
+     and any matching names of widgets are removed from the array.
+
+     If WIDGETNAME does not name an existing widget when added to the
+     array, it is assumed that a shell function also named WIDGETNAME is
+     meant to provide the implementation of the widget.  This name is
+     therefore marked for autoloading, and the options -U, -z and -k are
+     passed as arguments to autoload as with add-zsh-hook.  The widget
+     is also created with 'zle -N WIDGETNAME' to cause the corresponding
+     function to be loaded the first time the hook is called.
+
+     The arrays of WIDGETNAME are currently maintained in zstyle
+     contexts, one for each HOOK context, with a style of 'widgets'.  If
+     the -L option is given, this set of styles is listed with 'zstyle
+     -L'.  This implementation may change, and the special widgets that
+     refer to the styles are created only if add-zle-hook-widget is
+     called to add at least one widget, so if this function is used for
+     any hooks, then all hooks should be managed only via this function.
+
+File: zsh.info,  Node: Recent Directories,  Next: Other Directory Functions,  Prev: Utilities,  Up: User Contributions
+

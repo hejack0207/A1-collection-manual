@@ -1,0 +1,76 @@
+24.3 TCP User-defined Functions
+===============================
+
+
+Certain functions, if defined by the user, will be called by the
+function system in certain contexts.  This facility depends on the
+module zsh/parameter, which is usually available in interactive shells
+as the completion system depends on it.  None of the functions need be
+defined; they simply provide convenient hooks when necessary.
+
+Typically, these are called after the requested action has been taken,
+so that the various parameters will reflect the new state.
+
+tcp_on_alias ALIAS FD
+     When an alias is defined, this function will be called with two
+     arguments: the name of the alias, and the file descriptor of the
+     corresponding session.
+
+tcp_on_awol SESS FD
+     If the function tcp_fd_handler is handling input from the line
+     editor and detects that the file descriptor is no longer reusable,
+     by default it removes it from the list of file descriptors handled
+     by this method and prints a message.  If the function tcp_on_awol
+     is defined it is called immediately before this point.  It may
+     return status 100, which indicates that the normal handling should
+     still be performed; any other return status indicates that no
+     further action should be taken and the tcp_fd_handler should return
+     immediately with the given status.  Typically the action of
+     tcp_on_awol will be to close the session.
+
+     The variable TCP_INVALIDATE_ZLE will be a non-empty string if it is
+     necessary to invalidate the line editor display using 'zle -I'
+     before printing output from the function.
+
+     ('AWOL' is military jargon for 'absent without leave' or some
+     variation.  It has no pre-existing technical meaning known to the
+     author.)
+
+tcp_on_close SESS FD
+     This is called with the name of a session being closed and the file
+     descriptor which corresponded to that session.  Both will be
+     invalid by the time the function is called.
+
+tcp_on_open SESS FD
+     This is called after a new session has been defined with the
+     session name and file descriptor as arguments.  If it returns a
+     non-zero status, opening the session is assumed to fail and the
+     session is closed again; however, tcp_open will continue to attempt
+     to open any remaining sessions given on the command line.
+
+tcp_on_rename OLDSESS FD NEWSESS
+     This is called after a session has been renamed with the three
+     arguments old session name, file descriptor, new session name.
+
+tcp_on_spam SESS COMMAND ...
+     This is called once for each session spammed, just _before_ a
+     command is executed for a session by tcp_spam.  The arguments are
+     the session name followed by the command list to be executed.  If
+     tcp_spam was called with the option -t, the first command will be
+     tcp_send.
+
+     This function is called after $TCP_SESS is set to reflect the
+     session to be spammed, but before any use of it is made.  Hence it
+     is possible to alter the value of $TCP_SESS within this function.
+     For example, the session arguments to tcp_spam could include extra
+     information to be stripped off and processed in tcp_on_spam.
+
+     If the function sets the parameter $REPLY to 'done', the command
+     line is not executed; in addition, no prompt is printed for the -v
+     option to tcp_spam.
+
+tcp_on_unalias ALIAS FD
+     This is called with the name of an alias and the corresponding
+     session's file descriptor after an alias has been deleted.
+
+

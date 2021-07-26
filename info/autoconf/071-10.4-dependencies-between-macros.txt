@@ -1,0 +1,239 @@
+10.4 Dependencies Between Macros
+================================
+
+Some Autoconf macros depend on other macros having been called first in
+order to work correctly.  Autoconf provides a way to ensure that certain
+macros are called if needed and a way to warn the user if macros are
+called in an order that might cause incorrect operation.
+
+* Menu:
+
+* Prerequisite Macros::         Ensuring required information
+* Suggested Ordering::          Warning about possible ordering problems
+* One-Shot Macros::             Ensuring a macro is called only once
+
+File: autoconf.info,  Node: Prerequisite Macros,  Next: Suggested Ordering,  Up: Dependencies Between Macros
+
+10.4.1 Prerequisite Macros
+--------------------------
+
+A macro that you write might need to use values that have previously
+been computed by other macros.  For example, `AC_DECL_YYTEXT' examines
+the output of `flex' or `lex', so it depends on `AC_PROG_LEX' having
+been called first to set the shell variable `LEX'.
+
+   Rather than forcing the user of the macros to keep track of the
+dependencies between them, you can use the `AC_REQUIRE' macro to do it
+automatically.  `AC_REQUIRE' can ensure that a macro is only called if
+it is needed, and only called once.
+
+ -- Macro: AC_REQUIRE (MACRO-NAME)
+     If the M4 macro MACRO-NAME has not already been called, call it
+     (without any arguments).  Make sure to quote MACRO-NAME with
+     square brackets.  MACRO-NAME must have been defined using
+     `AC_DEFUN' or else contain a call to `AC_PROVIDE' to indicate that
+     it has been called.
+
+     `AC_REQUIRE' must be used inside a macro defined by `AC_DEFUN'; it
+     must not be called from the top level.  Also, it does not make
+     sense to require a macro that takes parameters.
+
+   `AC_REQUIRE' is often misunderstood.  It really implements
+dependencies between macros in the sense that if one macro depends upon
+another, the latter is expanded _before_ the body of the former.  To be
+more precise, the required macro is expanded before the outermost
+defined macro in the current expansion stack.  In particular,
+`AC_REQUIRE([FOO])' is not replaced with the body of `FOO'.  For
+instance, this definition of macros:
+
+     AC_DEFUN([TRAVOLTA],
+     [test "$body_temperature_in_celsius" -gt "38" &&
+       dance_floor=occupied])
+     AC_DEFUN([NEWTON_JOHN],
+     [test "x$hair_style" = xcurly &&
+       dance_floor=occupied])
+
+     AC_DEFUN([RESERVE_DANCE_FLOOR],
+     [if date | grep '^Sat.*pm' >/dev/null 2>&1; then
+       AC_REQUIRE([TRAVOLTA])
+       AC_REQUIRE([NEWTON_JOHN])
+     fi])
+
+with this `configure.ac'
+
+     AC_INIT([Dance Manager], [1.0], [bug-dance@example.org])
+     RESERVE_DANCE_FLOOR
+     if test "x$dance_floor" = xoccupied; then
+       AC_MSG_ERROR([cannot pick up here, let's move])
+     fi
+
+does not leave you with a better chance to meet a kindred soul at other
+times than Saturday night since it expands into:
+
+     test "$body_temperature_in_Celsius" -gt "38" &&
+       dance_floor=occupied
+     test "x$hair_style" = xcurly &&
+       dance_floor=occupied
+     fi
+     if date | grep '^Sat.*pm' >/dev/null 2>&1; then
+
+
+     fi
+
+   This behavior was chosen on purpose: (i) it prevents messages in
+required macros from interrupting the messages in the requiring macros;
+(ii) it avoids bad surprises when shell conditionals are used, as in:
+
+     if ...; then
+       AC_REQUIRE([SOME_CHECK])
+     fi
+     ...
+     SOME_CHECK
+
+   However, this implementation can lead to another class of problems.
+Consider the case where an outer macro first expands, then indirectly
+requires, an inner macro:
+
+     AC_DEFUN([TESTA], [[echo in A
+     if test -n "$SEEN_A" ; then echo duplicate ; fi
+     SEEN_A=:]])
+     AC_DEFUN([TESTB], [AC_REQUIRE([TESTA])[echo in B
+     if test -z "$SEEN_A" ; then echo bug ; fi]])
+     AC_DEFUN([TESTC], [AC_REQUIRE([TESTB])[echo in C]])
+     AC_DEFUN([OUTER], [[echo in OUTER]
+     TESTA
+     TESTC])
+     OUTER
+
+Prior to Autoconf 2.64, the implementation of `AC_REQUIRE' recognized
+that `TESTB' needed to be hoisted prior to the expansion of `OUTER',
+but because `TESTA' had already been directly expanded, it failed to
+hoist `TESTA'.  Therefore, the expansion of `TESTB' occurs prior to its
+prerequisites, leading to the following output:
+
+     in B
+     bug
+     in OUTER
+     in A
+     in C
+
+Newer Autoconf is smart enough to recognize this situation, and hoists
+`TESTA' even though it has already been expanded, but issues a syntax
+warning in the process.  This is because the hoisted expansion of
+`TESTA' defeats the purpose of using `AC_REQUIRE' to avoid redundant
+code, and causes its own set of problems if the hoisted macro is not
+idempotent:
+
+     in A
+     in B
+     in OUTER
+     in A
+     duplicate
+     in C
+
+   The bug is not in Autoconf, but in the macro definitions.  If you
+ever pass a particular macro name to `AC_REQUIRE', then you are implying
+that the macro only needs to be expanded once.  But to enforce this,
+either the macro must be declared with `AC_DEFUN_ONCE' (although this
+only helps in Autoconf 2.64 or newer), or all uses of that macro should
+be through `AC_REQUIRE'; directly expanding the macro defeats the point
+of using `AC_REQUIRE' to eliminate redundant expansion.  In the
+example, this rule of thumb was violated because `TESTB' requires
+`TESTA' while `OUTER' directly expands it.  One way of fixing the bug
+is to factor `TESTA' into two macros, the portion designed for direct
+and repeated use (here, named `TESTA'), and the portion designed for
+one-shot output and used only inside `AC_REQUIRE' (here, named
+`TESTA_PREREQ').  Then, by fixing all clients to use the correct
+calling convention according to their needs:
+
+     AC_DEFUN([TESTA], [AC_REQUIRE([TESTA_PREREQ])[echo in A]])
+     AC_DEFUN([TESTA_PREREQ], [[echo in A_PREREQ
+     if test -n "$SEEN_A" ; then echo duplicate ; fi
+     SEEN_A=:]])
+     AC_DEFUN([TESTB], [AC_REQUIRE([TESTA_PREREQ])[echo in B
+     if test -z "$SEEN_A" ; then echo bug ; fi]])
+     AC_DEFUN([TESTC], [AC_REQUIRE([TESTB])[echo in C]])
+     AC_DEFUN([OUTER], [[echo in OUTER]
+     TESTA
+     TESTC])
+     OUTER
+
+the resulting output will then obey all dependency rules and avoid any
+syntax warnings, whether the script is built with old or new Autoconf
+versions:
+
+     in A_PREREQ
+     in B
+     in OUTER
+     in A
+     in C
+
+   The helper macros `AS_IF' and `AS_CASE' may be used to enforce
+expansion of required macros outside of shell conditional constructs.
+You are furthermore encouraged, although not required, to put all
+`AC_REQUIRE' calls at the beginning of a macro.  You can use `dnl' to
+avoid the empty lines they leave.
+
+File: autoconf.info,  Node: Suggested Ordering,  Next: One-Shot Macros,  Prev: Prerequisite Macros,  Up: Dependencies Between Macros
+
+10.4.2 Suggested Ordering
+-------------------------
+
+Some macros should be run before another macro if both are called, but
+neither _requires_ that the other be called.  For example, a macro that
+changes the behavior of the C compiler should be called before any
+macros that run the C compiler.  Many of these dependencies are noted in
+the documentation.
+
+   Autoconf provides the `AC_BEFORE' macro to warn users when macros
+with this kind of dependency appear out of order in a `configure.ac'
+file.  The warning occurs when creating `configure' from
+`configure.ac', not when running `configure'.
+
+   For example, `AC_PROG_CPP' checks whether the C compiler can run the
+C preprocessor when given the `-E' option.  It should therefore be
+called after any macros that change which C compiler is being used,
+such as `AC_PROG_CC'.  So `AC_PROG_CC' contains:
+
+     AC_BEFORE([$0], [AC_PROG_CPP])dnl
+
+This warns the user if a call to `AC_PROG_CPP' has already occurred
+when `AC_PROG_CC' is called.
+
+ -- Macro: AC_BEFORE (THIS-MACRO-NAME, CALLED-MACRO-NAME)
+     Make M4 print a warning message to the standard error output if
+     CALLED-MACRO-NAME has already been called.  THIS-MACRO-NAME should
+     be the name of the macro that is calling `AC_BEFORE'.  The macro
+     CALLED-MACRO-NAME must have been defined using `AC_DEFUN' or else
+     contain a call to `AC_PROVIDE' to indicate that it has been called.
+
+File: autoconf.info,  Node: One-Shot Macros,  Prev: Suggested Ordering,  Up: Dependencies Between Macros
+
+10.4.3 One-Shot Macros
+----------------------
+
+Some macros should be called only once, either because calling them
+multiple time is unsafe, or because it is bad style.  For instance
+Autoconf ensures that `AC_CANONICAL_BUILD' and cousins (*note
+Canonicalizing::) are evaluated only once, because it makes no sense to
+run these expensive checks more than once.  Such one-shot macros can be
+defined using `AC_DEFUN_ONCE'.
+
+ -- Macro: AC_DEFUN_ONCE (MACRO-NAME, MACRO-BODY)
+     Declare macro MACRO-NAME like `AC_DEFUN' would (*note Macro
+     Definitions::), but add additional logic that guarantees that only
+     the first use of the macro (whether by direct expansion or
+     `AC_REQUIRE') causes an expansion of MACRO-BODY; the expansion
+     will occur before the start of any enclosing macro defined by
+     `AC_DEFUN'.  Subsequent expansions are silently ignored.
+     Generally, it does not make sense for MACRO-BODY to use parameters
+     such as `$1'.
+
+   Prior to Autoconf 2.64, a macro defined by `AC_DEFUN_ONCE' would
+emit a warning if it was directly expanded a second time, so for
+portability, it is better to use `AC_REQUIRE' than direct invocation of
+MACRO-NAME inside a macro defined by `AC_DEFUN' (*note Prerequisite
+Macros::).
+
+File: autoconf.info,  Node: Obsoleting Macros,  Next: Coding Style,  Prev: Dependencies Between Macros,  Up: Writing Autoconf Macros
+

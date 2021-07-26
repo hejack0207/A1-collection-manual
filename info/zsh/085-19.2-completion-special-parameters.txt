@@ -1,0 +1,362 @@
+19.2 Completion Special Parameters
+==================================
+
+
+The parameters ZLE_REMOVE_SUFFIX_CHARS and ZLE_SPACE_SUFFIX_CHARS are
+used by the completion mechanism, but are not special.  See *note
+Parameters Used By The Shell::.
+
+Inside completion widgets, and any functions called from them, some
+parameters have special meaning; outside these functions they are not
+special to the shell in any way.  These parameters are used to pass
+information between the completion code and the completion widget.  Some
+of the builtin commands and the condition codes use or change the
+current values of these parameters.  Any existing values will be hidden
+during execution of completion widgets; except for compstate, the
+parameters are reset on each function exit (including nested function
+calls from within the completion widget) to the values they had when the
+function was entered.
+
+CURRENT
+     This is the number of the current word, i.e.  the word the cursor
+     is currently on in the words array.  Note that this value is only
+     correct if the ksharrays option is not set.
+
+IPREFIX
+     Initially this will be set to the empty string.  This parameter
+     functions like PREFIX; it contains a string which precedes the one
+     in PREFIX and is not considered part of the list of matches.
+     Typically, a string is transferred from the beginning of PREFIX to
+     the end of IPREFIX, for example:
+
+          IPREFIX=${PREFIX%%\=*}=
+          PREFIX=${PREFIX#*=}
+
+     causes the part of the prefix up to and including the first equal
+     sign not to be treated as part of a matched string.  This can be
+     done automatically by the compset builtin, see below.
+
+ISUFFIX
+     As IPREFIX, but for a suffix that should not be considered part of
+     the matches; note that the ISUFFIX string follows the SUFFIX
+     string.
+
+PREFIX
+     Initially this will be set to the part of the current word from the
+     beginning of the word up to the position of the cursor; it may be
+     altered to give a common prefix for all matches.
+
+QIPREFIX
+     This parameter is read-only and contains the quoted string up to
+     the word being completed.  E.g.  when completing '"foo', this
+     parameter contains the double quote.  If the -q option of compset
+     is used (see below), and the original string was '"foo bar' with
+     the cursor on the 'bar', this parameter contains '"foo '.
+
+QISUFFIX
+     Like QIPREFIX, but containing the suffix.
+
+SUFFIX
+     Initially this will be set to the part of the current word from the
+     cursor position to the end; it may be altered to give a common
+     suffix for all matches.  It is most useful when the option
+     COMPLETE_IN_WORD is set, as otherwise the whole word on the command
+     line is treated as a prefix.
+
+compstate
+     This is an associative array with various keys and values that the
+     completion code uses to exchange information with the completion
+     widget.  The keys are:
+
+     all_quotes
+          The -q option of the compset builtin command (see below)
+          allows a quoted string to be broken into separate words; if
+          the cursor is on one of those words, that word will be
+          completed, possibly invoking 'compset -q' recursively.  With
+          this key it is possible to test the types of quoted strings
+          which are currently broken into parts in this fashion.  Its
+          value contains one character for each quoting level.  The
+          characters are a single quote or a double quote for strings
+          quoted with these characters, a dollars sign for strings
+          quoted with $'...' and a backslash for strings not starting
+          with a quote character.  The first character in the value
+          always corresponds to the innermost quoting level.
+
+     context
+          This will be set by the completion code to the overall context
+          in which completion is attempted.  Possible values are:
+
+          array_value
+               when completing inside the value of an array parameter
+               assignment; in this case the words array contains the
+               words inside the parentheses.
+
+          brace_parameter
+               when completing the name of a parameter in a parameter
+               expansion beginning with ${.  This context will also be
+               set when completing parameter flags following ${(; the
+               full command line argument is presented and the handler
+               must test the value to be completed to ascertain that
+               this is the case.
+
+          assign_parameter
+               when completing the name of a parameter in a parameter
+               assignment.
+
+          command
+               when completing for a normal command (either in command
+               position or for an argument of the command).
+
+          condition
+               when completing inside a '[[...]]'  conditional
+               expression; in this case the words array contains only
+               the words inside the conditional expression.
+
+          math
+               when completing in a mathematical environment such as a
+               '((...))'  construct.
+
+          parameter
+               when completing the name of a parameter in a parameter
+               expansion beginning with $ but not ${.
+
+          redirect
+               when completing after a redirection operator.
+
+          subscript
+               when completing inside a parameter subscript.
+
+          value
+               when completing the value of a parameter assignment.
+
+     exact
+          Controls the behaviour when the REC_EXACT option is set.  It
+          will be set to accept if an exact match would be accepted, and
+          will be unset otherwise.
+
+          If it was set when at least one match equal to the string on
+          the line was generated, the match is accepted.
+
+     exact_string
+          The string of an exact match if one was found, otherwise
+          unset.
+
+     ignored
+          The number of words that were ignored because they matched one
+          of the patterns given with the -F option to the compadd
+          builtin command.
+
+     insert
+          This controls the manner in which a match is inserted into the
+          command line.  On entry to the widget function, if it is unset
+          the command line is not to be changed; if set to unambiguous,
+          any prefix common to all matches is to be inserted; if set to
+          automenu-unambiguous, the common prefix is to be inserted and
+          the next invocation of the completion code may start menu
+          completion (due to the AUTO_MENU option being set); if set to
+          menu or automenu menu completion will be started for the
+          matches currently generated (in the latter case this will
+          happen because the AUTO_MENU is set).  The value may also
+          contain the string 'tab' when the completion code would
+          normally not really do completion, but only insert the TAB
+          character.
+
+          On exit it may be set to any of the values above (where
+          setting it to the empty string is the same as unsetting it),
+          or to a number, in which case the match whose number is given
+          will be inserted into the command line.  Negative numbers
+          count backward from the last match (with '-1' selecting the
+          last match) and out-of-range values are wrapped around, so
+          that a value of zero selects the last match and a value one
+          more than the maximum selects the first.  Unless the value of
+          this key ends in a space, the match is inserted as in a menu
+          completion, i.e.  without automatically appending a space.
+
+          Both menu and automenu may also specify the number of the
+          match to insert, given after a colon.  For example, 'menu:2'
+          says to start menu completion, beginning with the second
+          match.
+
+          Note that a value containing the substring 'tab' makes the
+          matches generated be ignored and only the TAB be inserted.
+
+          Finally, it may also be set to all, which makes all matches
+          generated be inserted into the line.
+
+     insert_positions
+          When the completion system inserts an unambiguous string into
+          the line, there may be multiple places where characters are
+          missing or where the character inserted differs from at least
+          one match.  The value of this key contains a colon separated
+          list of all these positions, as indexes into the command line.
+
+     last_prompt
+          If this is set to a non-empty string for every match added,
+          the completion code will move the cursor back to the previous
+          prompt after the list of completions has been displayed.
+          Initially this is set or unset according to the
+          ALWAYS_LAST_PROMPT option.
+
+     list
+          This controls whether or how the list of matches will be
+          displayed.  If it is unset or empty they will never be listed;
+          if its value begins with list, they will always be listed; if
+          it begins with autolist or ambiguous, they will be listed when
+          the AUTO_LIST or LIST_AMBIGUOUS options respectively would
+          normally cause them to be.
+
+          If the substring force appears in the value, this makes the
+          list be shown even if there is only one match.  Normally, the
+          list would be shown only if there are at least two matches.
+
+          The value contains the substring packed if the LIST_PACKED
+          option is set.  If this substring is given for all matches
+          added to a group, this group will show the LIST_PACKED
+          behavior.  The same is done for the LIST_ROWS_FIRST option
+          with the substring rows.
+
+          Finally, if the value contains the string explanations, only
+          the explanation strings, if any, will be listed and if it
+          contains messages, only the messages (added with the -x option
+          of compadd) will be listed.  If it contains both explanations
+          and messages both kinds of explanation strings will be listed.
+          It will be set appropriately on entry to a completion widget
+          and may be changed there.
+
+     list_lines
+          This gives the number of lines that are needed to display the
+          full list of completions.  Note that to calculate the total
+          number of lines to display you need to add the number of lines
+          needed for the command line to this value, this is available
+          as the value of the BUFFERLINES special parameter.
+
+     list_max
+          Initially this is set to the value of the LISTMAX parameter.
+          It may be set to any other value; when the widget exits this
+          value will be used in the same way as the value of LISTMAX.
+
+     nmatches
+          The number of matches generated and accepted by the completion
+          code so far.
+
+     old_insert
+          On entry to the widget this will be set to the number of the
+          match of an old list of completions that is currently inserted
+          into the command line.  If no match has been inserted, this is
+          unset.
+
+          As with old_list, the value of this key will only be used if
+          it is the string keep.  If it was set to this value by the
+          widget and there was an old match inserted into the command
+          line, this match will be kept and if the value of the insert
+          key specifies that another match should be inserted, this will
+          be inserted after the old one.
+
+     old_list
+          This is set to yes if there is still a valid list of
+          completions from a previous completion at the time the widget
+          is invoked.  This will usually be the case if and only if the
+          previous editing operation was a completion widget or one of
+          the builtin completion functions.  If there is a valid list
+          and it is also currently shown on the screen, the value of
+          this key is shown.
+
+          After the widget has exited the value of this key is only used
+          if it was set to keep.  In this case the completion code will
+          continue to use this old list.  If the widget generated new
+          matches, they will not be used.
+
+     parameter
+          The name of the parameter when completing in a subscript or in
+          the value of a parameter assignment.
+
+     pattern_insert
+          Normally this is set to menu, which specifies that menu
+          completion will be used whenever a set of matches was
+          generated using pattern matching.  If it is set to any other
+          non-empty string by the user and menu completion is not
+          selected by other option settings, the code will instead
+          insert any common prefix for the generated matches as with
+          normal completion.
+
+     pattern_match
+          Locally controls the behaviour given by the GLOB_COMPLETE
+          option.  Initially it is set to '*' if and only if the option
+          is set.  The completion widget may set it to this value, to an
+          empty string (which has the same effect as unsetting it), or
+          to any other non-empty string.  If it is non-empty, unquoted
+          metacharacters on the command line will be treated as
+          patterns; if it is '*', then additionally a wildcard '*' is
+          assumed at the cursor position; if it is empty or unset,
+          metacharacters will be treated literally.
+
+          Note that the matcher specifications given to the compadd
+          builtin command are not used if this is set to a non-empty
+          string.
+
+     quote
+          When completing inside quotes, this contains the quotation
+          character (i.e.  either a single quote, a double quote, or a
+          backtick).  Otherwise it is unset.
+
+     quoting
+          When completing inside single quotes, this is set to the
+          string single; inside double quotes, the string double; inside
+          backticks, the string backtick.  Otherwise it is unset.
+
+     redirect
+          The redirection operator when completing in a redirection
+          position, i.e.  one of <, >, etc.
+
+     restore
+          This is set to auto before a function is entered, which forces
+          the special parameters mentioned above (words, CURRENT,
+          PREFIX, IPREFIX, SUFFIX, and ISUFFIX) to be restored to their
+          previous values when the function exits.  If a function unsets
+          it or sets it to any other string, they will not be restored.
+
+     to_end
+          Specifies the occasions on which the cursor is moved to the
+          end of a string when a match is inserted.  On entry to a
+          widget function, it may be single if this will happen when a
+          single unambiguous match was inserted or match if it will
+          happen any time a match is inserted (for example, by menu
+          completion; this is likely to be the effect of the
+          ALWAYS_TO_END option).
+
+          On exit, it may be set to single as above.  It may also be set
+          to always, or to the empty string or unset; in those cases the
+          cursor will be moved to the end of the string always or never
+          respectively.  Any other string is treated as match.
+
+     unambiguous
+          This key is read-only and will always be set to the common
+          (unambiguous) prefix the completion code has generated for all
+          matches added so far.
+
+     unambiguous_cursor
+          This gives the position the cursor would be placed at if the
+          common prefix in the unambiguous key were inserted, relative
+          to the value of that key.  The cursor would be placed before
+          the character whose index is given by this key.
+
+     unambiguous_positions
+          This contains all positions where characters in the
+          unambiguous string are missing or where the character inserted
+          differs from at least one of the matches.  The positions are
+          given as indexes into the string given by the value of the
+          unambiguous key.
+
+     vared
+          If completion is called while editing a line using the vared
+          builtin, the value of this key is set to the name of the
+          parameter given as an argument to vared.  This key is only set
+          while a vared command is active.
+
+words
+     This array contains the words present on the command line currently
+     being edited.
+
+
+File: zsh.info,  Node: Completion Builtin Commands,  Next: Completion Condition Codes,  Prev: Completion Special Parameters,  Up: Completion Widgets
+

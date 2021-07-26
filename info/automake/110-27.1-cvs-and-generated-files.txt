@@ -1,0 +1,177 @@
+27.1 CVS and generated files
+============================
+
+Background: distributed generated Files
+---------------------------------------
+
+Packages made with Autoconf and Automake ship with some generated files
+like ‘configure’ or ‘Makefile.in’.  These files were generated on the
+developer’s machine and are distributed so that end-users do not have to
+install the maintainer tools required to rebuild them.  Other generated
+files like Lex scanners, Yacc parsers, or Info documentation, are
+usually distributed on similar grounds.
+
+   Automake output rules in ‘Makefile’s to rebuild these files.  For
+instance, ‘make’ will run ‘autoconf’ to rebuild ‘configure’ whenever
+‘configure.ac’ is changed.  This makes development safer by ensuring a
+‘configure’ is never out-of-date with respect to ‘configure.ac’.
+
+   As generated files shipped in packages are up-to-date, and because
+‘tar’ preserves times-tamps, these rebuild rules are not triggered when
+a user unpacks and builds a package.
+
+Background: CVS and Timestamps
+------------------------------
+
+Unless you use CVS keywords (in which case files must be updated at
+commit time), CVS preserves timestamp during ‘cvs commit’ and ‘cvs
+import -d’ operations.
+
+   When you check out a file using ‘cvs checkout’ its timestamp is set
+to that of the revision that is being checked out.
+
+   However, during ‘cvs update’, files will have the date of the update,
+not the original timestamp of this revision.  This is meant to make sure
+that ‘make’ notices sources files have been updated.
+
+   This timestamp shift is troublesome when both sources and generated
+files are kept under CVS.  Because CVS processes files in lexical order,
+‘configure.ac’ will appear newer than ‘configure’ after a ‘cvs update’
+that updates both files, even if ‘configure’ was newer than
+‘configure.ac’ when it was checked in.  Calling ‘make’ will then trigger
+a spurious rebuild of ‘configure’.
+
+Living with CVS in Autoconfiscated Projects
+-------------------------------------------
+
+There are basically two clans amongst maintainers: those who keep all
+distributed files under CVS, including generated files, and those who
+keep generated files _out_ of CVS.
+
+All Files in CVS
+................
+
+   • The CVS repository contains all distributed files so you know
+     exactly what is distributed, and you can checkout any prior version
+     entirely.
+
+   • Maintainers can see how generated files evolve (for instance, you
+     can see what happens to your ‘Makefile.in’s when you upgrade
+     Automake and make sure they look OK).
+
+   • Users do not need the autotools to build a checkout of the project,
+     it works just like a released tarball.
+
+   • If users use ‘cvs update’ to update their copy, instead of ‘cvs
+     checkout’ to fetch a fresh one, timestamps will be inaccurate.
+     Some rebuild rules will be triggered and attempt to run developer
+     tools such as ‘autoconf’ or ‘automake’.
+
+     Calls to such tools are all wrapped into a call to the ‘missing’
+     script discussed later (*note maintainer-mode::), so that the user
+     will see more descriptive warnings about missing or out-of-date
+     tools, and possible suggestions about how to obtain them, rather
+     than just some “command not found” error, or (worse) some obscure
+     message from some older version of the required tool they happen to
+     have installed.
+
+     Maintainers interested in keeping their package buildable from a
+     CVS checkout even for those users that lack maintainer-specific
+     tools might want to provide an helper script (or to enhance their
+     existing bootstrap script) to fix the timestamps after a ‘cvs
+     update’ or a ‘git checkout’, to prevent spurious rebuilds.  In case
+     of a project committing the Autotools-generated files, as well as
+     the generated ‘.info’ files, such script might look something like
+     this:
+
+          #!/bin/sh
+          # fix-timestamp.sh: prevents useless rebuilds after "cvs update"
+          sleep 1
+          # aclocal-generated aclocal.m4 depends on locally-installed
+          # '.m4' macro files, as well as on 'configure.ac'
+          touch aclocal.m4
+          sleep 1
+          # autoconf-generated configure depends on aclocal.m4 and on
+          # configure.ac
+          touch configure
+          # so does autoheader-generated config.h.in
+          touch config.h.in
+          # and all the automake-generated Makefile.in files
+          touch `find . -name Makefile.in -print`
+          # finally, the makeinfo-generated '.info' files depend on the
+          # corresponding '.texi' files
+          touch doc/*.info
+
+   • In distributed development, developers are likely to have different
+     version of the maintainer tools installed.  In this case rebuilds
+     triggered by timestamp lossage will lead to spurious changes to
+     generated files.  There are several solutions to this:
+
+        • All developers should use the same versions, so that the
+          rebuilt files are identical to files in CVS.  (This starts to
+          be difficult when each project you work on uses different
+          versions.)
+        • Or people use a script to fix the timestamp after a checkout
+          (the GCC folks have such a script).
+        • Or ‘configure.ac’ uses ‘AM_MAINTAINER_MODE’, which will
+          disable all of these rebuild rules by default.  This is
+          further discussed in *note maintainer-mode::.
+
+   • Although we focused on spurious rebuilds, the converse can also
+     happen.  CVS’s timestamp handling can also let you think an
+     out-of-date file is up-to-date.
+
+     For instance, suppose a developer has modified ‘Makefile.am’ and
+     has rebuilt ‘Makefile.in’, and then decides to do a last-minute
+     change to ‘Makefile.am’ right before checking in both files
+     (without rebuilding ‘Makefile.in’ to account for the change).
+
+     This last change to ‘Makefile.am’ makes the copy of ‘Makefile.in’
+     out-of-date.  Since CVS processes files alphabetically, when
+     another developer ‘cvs update’s his or her tree, ‘Makefile.in’ will
+     happen to be newer than ‘Makefile.am’.  This other developer will
+     not see that ‘Makefile.in’ is out-of-date.
+
+Generated Files out of CVS
+..........................
+
+One way to get CVS and ‘make’ working peacefully is to never store
+generated files in CVS, i.e., do not CVS-control files that are
+‘Makefile’ targets (also called _derived_ files).
+
+   This way developers are not annoyed by changes to generated files.
+It does not matter if they all have different versions (assuming they
+are compatible, of course).  And finally, timestamps are not lost,
+changes to sources files can’t be missed as in the
+‘Makefile.am’/‘Makefile.in’ example discussed earlier.
+
+   The drawback is that the CVS repository is not an exact copy of what
+is distributed and that users now need to install various development
+tools (maybe even specific versions) before they can build a checkout.
+But, after all, CVS’s job is versioning, not distribution.
+
+   Allowing developers to use different versions of their tools can also
+hide bugs during distributed development.  Indeed, developers will be
+using (hence testing) their own generated files, instead of the
+generated files that will be released actually.  The developer who
+prepares the tarball might be using a version of the tool that produces
+bogus output (for instance a non-portable C file), something other
+developers could have noticed if they weren’t using their own versions
+of this tool.
+
+Third-party Files
+-----------------
+
+Another class of files not discussed here (because they do not cause
+timestamp issues) are files that are shipped with a package, but
+maintained elsewhere.  For instance, tools like ‘gettextize’ and
+‘autopoint’ (from Gettext) or ‘libtoolize’ (from Libtool), will install
+or update files in your package.
+
+   These files, whether they are kept under CVS or not, raise similar
+concerns about version mismatch between developers’ tools.  The Gettext
+manual has a section about this, see *note CVS Issues: (gettext)CVS
+Issues.
+
+File: automake.info,  Node: maintainer-mode,  Next: Wildcards,  Prev: CVS,  Up: FAQ
+

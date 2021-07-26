@@ -1,0 +1,224 @@
+15.4 Using the TAP test protocol
+================================
+
+* Menu:
+
+* Introduction to TAP::
+* Use TAP with the Automake test harness::
+* Incompatibilities with other TAP parsers and drivers::
+* Links and external resources on TAP::
+
+File: automake.info,  Node: Introduction to TAP,  Next: Use TAP with the Automake test harness,  Up: Using the TAP test protocol
+
+15.4.1 Introduction to TAP
+--------------------------
+
+TAP, the Test Anything Protocol, is a simple text-based interface
+between testing modules or programs and a test harness.  The tests (also
+called “TAP producers” in this context) write test results in a simple
+format on standard output; a test harness (also called “TAP consumer”)
+will parse and interpret these results, and properly present them to the
+user, and/or register them for later analysis.  The exact details of how
+this is accomplished can vary among different test harnesses.  The
+Automake harness will present the results on the console in the usual
+fashion (*note Testsuite progress on console::), and will use the ‘.trs’
+files (*note Basics of test metadata::) to store the test results and
+related metadata.  Apart from that, it will try to remain as much
+compatible as possible with pre-existing and widespread utilities, such
+as the ‘prove’ utility
+(http://search.cpan.org/~andya/Test-Harness/bin/prove), at least for the
+simpler usages.
+
+   TAP started its life as part of the test harness for Perl, but today
+it has been (mostly) standardized, and has various independent
+implementations in different languages; among them, C, C++, Perl,
+Python, PHP, and Java.  For a semi-official specification of the TAP
+protocol, please refer to the documentation of ‘Test::Harness::TAP’
+(http://search.cpan.org/~petdance/Test-Harness/lib/Test/Harness/TAP.pod).
+
+   The most relevant real-world usages of TAP are obviously in the
+testsuites of ‘perl’ and of many perl modules.  Still, also other
+important third-party packages, such as ‘git’ (http://git-scm.com/), use
+TAP in their testsuite.
+
+File: automake.info,  Node: Use TAP with the Automake test harness,  Next: Incompatibilities with other TAP parsers and drivers,  Prev: Introduction to TAP,  Up: Using the TAP test protocol
+
+15.4.2 Use TAP with the Automake test harness
+---------------------------------------------
+
+Currently, the TAP driver that comes with Automake requires some by-hand
+steps on the developer’s part (this situation should hopefully be
+improved in future Automake versions).  You’ll have to grab the
+‘tap-driver.sh’ script from the Automake distribution by hand, copy it
+in your source tree, and use the Automake support for third-party test
+drivers to instruct the harness to use the ‘tap-driver.sh’ script and
+the awk program found by ‘AM_INIT_AUTOMAKE’ to run your TAP-producing
+tests.  See the example below for clarification.
+
+   Apart from the options common to all the Automake test drivers (*note
+Command-line arguments for test drivers::), the ‘tap-driver.sh’ supports
+the following options, whose names are chosen for enhanced compatibility
+with the ‘prove’ utility.
+
+‘--ignore-exit’
+     Causes the test driver to ignore the exit status of the test
+     scripts; by default, the driver will report an error if the script
+     exits with a non-zero status.  This option has effect also on
+     non-zero exit statuses due to termination by a signal.
+‘--comments’
+     Instruct the test driver to display TAP diagnostic (i.e., lines
+     beginning with the ‘#’ character) in the testsuite progress output
+     too; by default, TAP diagnostic is only copied to the ‘.log’ file.
+‘--no-comments’
+     Revert the effects of ‘--comments’.
+‘--merge’
+     Instruct the test driver to merge the test scripts’ standard error
+     into their standard output.  This is necessary if you want to
+     ensure that diagnostics from the test scripts are displayed in the
+     correct order relative to test results; this can be of great help
+     in debugging (especially if your test scripts are shell scripts run
+     with shell tracing active).  As a downside, this option might cause
+     the test harness to get confused if anything that appears on
+     standard error looks like a test result.
+‘--no-merge’
+     Revert the effects of ‘--merge’.
+‘--diagnostic-string=STRING’
+     Change the string that introduces TAP diagnostic from the default
+     value of “‘#’” to ‘STRING’.  This can be useful if your TAP-based
+     test scripts produce verbose output on which they have limited
+     control (because, say, the output comes from other tools invoked in
+     the scripts), and it might contain text that gets spuriously
+     interpreted as TAP diagnostic: such an issue can be solved by
+     redefining the string that activates TAP diagnostic to a value you
+     know won’t appear by chance in the tests’ output.  Note however
+     that this feature is non-standard, as the “official” TAP protocol
+     does not allow for such a customization; so don’t use it if you can
+     avoid it.
+
+Here is an example of how the TAP driver can be set up and used.
+
+     % cat configure.ac
+     AC_INIT([GNU Try Tap], [1.0], [bug-automake@gnu.org])
+     AC_CONFIG_AUX_DIR([build-aux])
+     AM_INIT_AUTOMAKE([foreign -Wall -Werror])
+     AC_CONFIG_FILES([Makefile])
+     AC_REQUIRE_AUX_FILE([tap-driver.sh])
+     AC_OUTPUT
+
+     % cat Makefile.am
+     TEST_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+                       $(top_srcdir)/build-aux/tap-driver.sh
+     TESTS = foo.test bar.test baz.test
+     EXTRA_DIST = $(TESTS)
+
+     % cat foo.test
+     #!/bin/sh
+     echo 1..4 # Number of tests to be executed.
+     echo 'ok 1 - Swallows fly'
+     echo 'not ok 2 - Caterpillars fly # TODO metamorphosis in progress'
+     echo 'ok 3 - Pigs fly # SKIP not enough acid'
+     echo '# I just love word plays ...'
+     echo 'ok 4 - Flies fly too :-)'
+
+     % cat bar.test
+     #!/bin/sh
+     echo 1..3
+     echo 'not ok 1 - Bummer, this test has failed.'
+     echo 'ok 2 - This passed though.'
+     echo 'Bail out! Ennui kicking in, sorry...'
+     echo 'ok 3 - This will not be seen.'
+
+     % cat baz.test
+     #!/bin/sh
+     echo 1..1
+     echo ok 1
+     # Exit with error, even if all the tests have been successful.
+     exit 7
+
+     % cp PREFIX/share/automake-APIVERSION/tap-driver.sh .
+     % autoreconf -vi && ./configure && make check
+     ...
+     PASS: foo.test 1 - Swallows fly
+     XFAIL: foo.test 2 - Caterpillars fly # TODO metamorphosis in progress
+     SKIP: foo.test 3 - Pigs fly # SKIP not enough acid
+     PASS: foo.test 4 - Flies fly too :-)
+     FAIL: bar.test 1 - Bummer, this test has failed.
+     PASS: bar.test 2 - This passed though.
+     ERROR: bar.test - Bail out! Ennui kicking in, sorry...
+     PASS: baz.test 1
+     ERROR: baz.test - exited with status 7
+     ...
+     Please report to bug-automake@gnu.org
+     ...
+     % echo exit status: $?
+     exit status: 1
+
+     % env TEST_LOG_DRIVER_FLAGS='--comments --ignore-exit' \
+           TESTS='foo.test baz.test' make -e check
+     ...
+     PASS: foo.test 1 - Swallows fly
+     XFAIL: foo.test 2 - Caterpillars fly # TODO metamorphosis in progress
+     SKIP: foo.test 3 - Pigs fly # SKIP not enough acid
+     # foo.test: I just love word plays...
+     PASS: foo.test 4 - Flies fly too :-)
+     PASS: baz.test 1
+     ...
+     % echo exit status: $?
+     exit status: 0
+
+File: automake.info,  Node: Incompatibilities with other TAP parsers and drivers,  Next: Links and external resources on TAP,  Prev: Use TAP with the Automake test harness,  Up: Using the TAP test protocol
+
+15.4.3 Incompatibilities with other TAP parsers and drivers
+-----------------------------------------------------------
+
+For implementation or historical reasons, the TAP driver and harness as
+implemented by Automake have some minors incompatibilities with the
+mainstream versions, which you should be aware of.
+
+   • A ‘Bail out!’ directive doesn’t stop the whole testsuite, but only
+     the test script it occurs in.  This doesn’t follow TAP
+     specifications, but on the other hand it maximizes compatibility
+     (and code sharing) with the “hard error” concept of the default
+     testsuite driver.
+   • The ‘version’ and ‘pragma’ directives are not supported.
+   • The ‘--diagnostic-string’ option of our driver allows to modify the
+     string that introduces TAP diagnostic from the default value of
+     “‘#’”.  The standard TAP protocol has currently no way to allow
+     this, so if you use it your diagnostic will be lost to more
+     compliant tools like ‘prove’ and ‘Test::Harness’
+   • And there are probably some other small and yet undiscovered
+     incompatibilities, especially in corner cases or with rare usages.
+
+File: automake.info,  Node: Links and external resources on TAP,  Prev: Incompatibilities with other TAP parsers and drivers,  Up: Using the TAP test protocol
+
+15.4.4 Links and external resources on TAP
+------------------------------------------
+
+Here are some links to more extensive official or third-party
+documentation and resources about the TAP protocol and related tools and
+libraries.
+   •  ‘Test::Harness::TAP’
+     (http://search.cpan.org/~petdance/Test-Harness/lib/Test/Harness/TAP.pod),
+     the (mostly) official documentation about the TAP format and
+     protocol.
+   •  ‘prove’ (http://search.cpan.org/~andya/Test-Harness/bin/prove),
+     the most famous command-line TAP test driver, included in the
+     distribution of ‘perl’ and ‘Test::Harness’
+     (http://search.cpan.org/~andya/Test-Harness/lib/Test/Harness.pm).
+   • The TAP wiki (http://testanything.org/wiki/index.php/Main_Page).
+   • A “gentle introduction” to testing for perl coders:
+     ‘Test::Tutorial’
+     (http://search.cpan.org/dist/Test-Simple/lib/Test/Tutorial.pod).
+   •  ‘Test::Simple’
+     (http://search.cpan.org/~mschwern/Test-Simple/lib/Test/Simple.pm)
+     and ‘Test::More’
+     (http://search.cpan.org/~mschwern/Test-Simple/lib/Test/More.pm),
+     the standard perl testing libraries, which are based on TAP.
+   • C TAP Harness
+     (http://www.eyrie.org/~eagle/software/c-tap-harness/), a C-based
+     project implementing both a TAP producer and a TAP consumer.
+   • tap4j (http://www.tap4j.org/), a Java-based project implementing
+     both a TAP producer and a TAP consumer.
+
+File: automake.info,  Node: DejaGnu Tests,  Next: Install Tests,  Prev: Using the TAP test protocol,  Up: Tests
+

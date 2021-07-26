@@ -1,0 +1,122 @@
+7.2 Setting Output Variables
+============================
+
+Another way to record the results of tests is to set "output
+variables", which are shell variables whose values are substituted into
+files that `configure' outputs.  The two macros below create new output
+variables.  *Note Preset Output Variables::, for a list of output
+variables that are always available.
+
+ -- Macro: AC_SUBST (VARIABLE, [VALUE])
+     Create an output variable from a shell variable.  Make `AC_OUTPUT'
+     substitute the variable VARIABLE into output files (typically one
+     or more makefiles).  This means that `AC_OUTPUT' replaces
+     instances of `@VARIABLE@' in input files with the value that the
+     shell variable VARIABLE has when `AC_OUTPUT' is called.  The value
+     can contain any non-`NUL' character, including newline.  If you
+     are using Automake 1.11 or newer, for newlines in values you might
+     want to consider using `AM_SUBST_NOTMAKE' to prevent `automake'
+     from adding a line `VARIABLE = @VARIABLE@' to the `Makefile.in'
+     files (*note Automake: (automake)Optional.).
+
+     Variable occurrences should not overlap: e.g., an input file should
+     not contain `@VAR1@VAR2@' if VAR1 and VAR2 are variable names.
+     The substituted value is not rescanned for more output variables;
+     occurrences of `@VARIABLE@' in the value are inserted literally
+     into the output file.  (The algorithm uses the special marker
+     `|#_!!_#|' internally, so neither the substituted value nor the
+     output file may contain `|#_!!_#|'.)
+
+     If VALUE is given, in addition assign it to VARIABLE.
+
+     The string VARIABLE is passed to `m4_pattern_allow' (*note
+     Forbidden Patterns::).
+
+ -- Macro: AC_SUBST_FILE (VARIABLE)
+     Another way to create an output variable from a shell variable.
+     Make `AC_OUTPUT' insert (without substitutions) the contents of
+     the file named by shell variable VARIABLE into output files.  This
+     means that `AC_OUTPUT' replaces instances of `@VARIABLE@' in
+     output files (such as `Makefile.in') with the contents of the file
+     that the shell variable VARIABLE names when `AC_OUTPUT' is called.
+     Set the variable to `/dev/null' for cases that do not have a file
+     to insert.  This substitution occurs only when the `@VARIABLE@' is
+     on a line by itself, optionally surrounded by spaces and tabs.  The
+     substitution replaces the whole line, including the spaces, tabs,
+     and the terminating newline.
+
+     This macro is useful for inserting makefile fragments containing
+     special dependencies or other `make' directives for particular host
+     or target types into makefiles.  For example, `configure.ac' could
+     contain:
+
+          AC_SUBST_FILE([host_frag])
+          host_frag=$srcdir/conf/sun4.mh
+
+     and then a `Makefile.in' could contain:
+
+          @host_frag@
+
+     The string VARIABLE is passed to `m4_pattern_allow' (*note
+     Forbidden Patterns::).
+
+   Running `configure' in varying environments can be extremely
+dangerous.  If for instance the user runs `CC=bizarre-cc ./configure',
+then the cache, `config.h', and many other output files depend upon
+`bizarre-cc' being the C compiler.  If for some reason the user runs
+`./configure' again, or if it is run via `./config.status --recheck',
+(*Note Automatic Remaking::, and *note config.status Invocation::),
+then the configuration can be inconsistent, composed of results
+depending upon two different compilers.
+
+   Environment variables that affect this situation, such as `CC'
+above, are called "precious variables", and can be declared as such by
+`AC_ARG_VAR'.
+
+ -- Macro: AC_ARG_VAR (VARIABLE, DESCRIPTION)
+     Declare VARIABLE is a precious variable, and include its
+     DESCRIPTION in the variable section of `./configure --help'.
+
+     Being precious means that
+        - VARIABLE is substituted via `AC_SUBST'.
+
+        - The value of VARIABLE when `configure' was launched is saved
+          in the cache, including if it was not specified on the command
+          line but via the environment.  Indeed, while `configure' can
+          notice the definition of `CC' in `./configure CC=bizarre-cc',
+          it is impossible to notice it in `CC=bizarre-cc ./configure',
+          which, unfortunately, is what most users do.
+
+          We emphasize that it is the _initial_ value of VARIABLE which
+          is saved, not that found during the execution of `configure'.
+          Indeed, specifying `./configure FOO=foo' and letting
+          `./configure' guess that `FOO' is `foo' can be two different
+          things.
+
+        - VARIABLE is checked for consistency between two `configure'
+          runs.  For instance:
+
+               $ ./configure --silent --config-cache
+               $ CC=cc ./configure --silent --config-cache
+               configure: error: `CC' was not set in the previous run
+               configure: error: changes in the environment can compromise \
+               the build
+               configure: error: run `make distclean' and/or \
+               `rm config.cache' and start over
+
+          and similarly if the variable is unset, or if its content is
+          changed.  If the content has white space changes only, then
+          the error is degraded to a warning only, but the old value is
+          reused.
+
+        - VARIABLE is kept during automatic reconfiguration (*note
+          config.status Invocation::) as if it had been passed as a
+          command line argument, including when no cache is used:
+
+               $ CC=/usr/bin/cc ./configure var=raboof --silent
+               $ ./config.status --recheck
+               running CONFIG_SHELL=/bin/sh /bin/sh ./configure var=raboof \
+                 CC=/usr/bin/cc  --no-create --no-recursion
+
+File: autoconf.info,  Node: Special Chars in Variables,  Next: Caching Results,  Prev: Setting Output Variables,  Up: Results
+

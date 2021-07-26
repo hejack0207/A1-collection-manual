@@ -1,0 +1,85 @@
+7.7 Text search across multiple lines
+=====================================
+
+This section uses 'N' and 'D' commands to search for consecutive words
+spanning multiple lines.  *Note Multiline techniques::.
+
+   These examples deal with finding doubled occurrences of words in a
+document.
+
+   Finding doubled words in a single line is easy using GNU 'grep' and
+similarly with GNU 'sed':
+
+     $ cat two-cities-dup1.txt
+     It was the best of times,
+     it was the worst of times,
+     it was the the age of wisdom,
+     it was the age of foolishness,
+
+     $ grep -E '\b(\w+)\s+\1\b' two-cities-dup1.txt
+     it was the the age of wisdom,
+
+     $ grep -n -E '\b(\w+)\s+\1\b' two-cities-dup1.txt
+     3:it was the the age of wisdom,
+
+     $ sed -En '/\b(\w+)\s+\1\b/p' two-cities-dup1.txt
+     it was the the age of wisdom,
+
+     $ sed -En '/\b(\w+)\s+\1\b/{=;p}' two-cities-dup1.txt
+     3
+     it was the the age of wisdom,
+
+   * The regular expression '\b\w+\s+' searches for word-boundary
+     ('\b'), followed by one-or-more word-characters ('\w+'), followed
+     by whitespace ('\s+').  *Note regexp extensions::.
+
+   * Adding parentheses around the '(\w+)' expression creates a
+     subexpression.  The regular expression pattern '(PATTERN)\s+\1'
+     defines a subexpression (in the parentheses) followed by a
+     back-reference, separated by whitespace.  A successful match means
+     the PATTERN was repeated twice in succession.  *Note
+     Back-references and Subexpressions::.
+
+   * The word-boundery expression ('\b') at both ends ensures partial
+     words are not matched (e.g.  'the then' is not a desired match).
+
+   * The '-E' option enables extended regular expression syntax,
+     alleviating the need to add backslashes before the parenthesis.
+     *Note ERE syntax::.
+
+   When the doubled word span two lines the above regular expression
+will not find them as 'grep' and 'sed' operate line-by-line.
+
+   By using 'N' and 'D' commands, 'sed' can apply regular expressions on
+multiple lines (that is, multiple lines are stored in the pattern space,
+and the regular expression works on it):
+
+     $ cat two-cities-dup2.txt
+     It was the best of times, it was the
+     worst of times, it was the
+     the age of wisdom,
+     it was the age of foolishness,
+
+     $ sed -En '{N; /\b(\w+)\s+\1\b/{=;p} ; D}'  two-cities-dup2.txt
+     3
+     worst of times, it was the
+     the age of wisdom,
+
+   * The 'N' command appends the next line to the pattern space (thus
+     ensuring it contains two consecutive lines in every cycle).
+
+   * The regular expression uses '\s+' for word separator which matches
+     both spaces and newlines.
+
+   * The regular expression matches, the entire pattern space is printed
+     with 'p'.  No lines are printed by default due to the '-n' option.
+
+   * The 'D' removes the first line from the pattern space (up until the
+     first newline), readying it for the next cycle.
+
+   See the GNU 'coreutils' manual for an alternative solution using 'tr
+-s' and 'uniq' at
+<https://gnu.org/s/coreutils/manual/html_node/Squeezing-and-deleting.html>.
+
+File: sed.info,  Node: Line length adjustment,  Next: tac,  Prev: Text search across multiple lines,  Up: Examples
+

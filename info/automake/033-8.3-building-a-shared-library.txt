@@ -1,0 +1,432 @@
+8.3 Building a Shared Library
+=============================
+
+Building shared libraries portably is a relatively complex matter.  For
+this reason, GNU Libtool (*note Introduction: (libtool)Top.) was created
+to help build shared libraries in a platform-independent way.
+
+* Menu:
+
+* Libtool Concept::             Introducing Libtool
+* Libtool Libraries::           Declaring Libtool Libraries
+* Conditional Libtool Libraries::  Building Libtool Libraries Conditionally
+* Conditional Libtool Sources::  Choosing Library Sources Conditionally
+* Libtool Convenience Libraries::  Building Convenience Libtool Libraries
+* Libtool Modules::             Building Libtool Modules
+* Libtool Flags::               Using _LIBADD, _LDFLAGS, and _LIBTOOLFLAGS
+* LTLIBOBJS::                   Using $(LTLIBOBJS) and $(LTALLOCA)
+* Libtool Issues::              Common Issues Related to Libtool’s Use
+
+File: automake.info,  Node: Libtool Concept,  Next: Libtool Libraries,  Up: A Shared Library
+
+8.3.1 The Libtool Concept
+-------------------------
+
+Libtool abstracts shared and static libraries into a unified concept
+henceforth called “libtool libraries”.  Libtool libraries are files
+using the ‘.la’ suffix, and can designate a static library, a shared
+library, or maybe both.  Their exact nature cannot be determined until
+‘./configure’ is run: not all platforms support all kinds of libraries,
+and users can explicitly select which libraries should be built.
+(However the package’s maintainers can tune the default, *note The
+‘AC_PROG_LIBTOOL’ macro: (libtool)AC_PROG_LIBTOOL.)
+
+   Because object files for shared and static libraries must be compiled
+differently, libtool is also used during compilation.  Object files
+built by libtool are called “libtool objects”: these are files using the
+‘.lo’ suffix.  Libtool libraries are built from these libtool objects.
+
+   You should not assume anything about the structure of ‘.la’ or ‘.lo’
+files and how libtool constructs them: this is libtool’s concern, and
+the last thing one wants is to learn about libtool’s guts.  However the
+existence of these files matters, because they are used as targets and
+dependencies in ‘Makefile’s rules when building libtool libraries.
+There are situations where you may have to refer to these, for instance
+when expressing dependencies for building source files conditionally
+(*note Conditional Libtool Sources::).
+
+   People considering writing a plug-in system, with dynamically loaded
+modules, should look into ‘libltdl’: libtool’s dlopening library (*note
+Using libltdl: (libtool)Using libltdl.).  This offers a portable
+dlopening facility to load libtool libraries dynamically, and can also
+achieve static linking where unavoidable.
+
+   Before we discuss how to use libtool with Automake in details, it
+should be noted that the libtool manual also has a section about how to
+use Automake with libtool (*note Using Automake with Libtool:
+(libtool)Using Automake.).
+
+File: automake.info,  Node: Libtool Libraries,  Next: Conditional Libtool Libraries,  Prev: Libtool Concept,  Up: A Shared Library
+
+8.3.2 Building Libtool Libraries
+--------------------------------
+
+Automake uses libtool to build libraries declared with the ‘LTLIBRARIES’
+primary.  Each ‘_LTLIBRARIES’ variable is a list of libtool libraries to
+build.  For instance, to create a libtool library named ‘libgettext.la’,
+and install it in ‘libdir’, write:
+
+     lib_LTLIBRARIES = libgettext.la
+     libgettext_la_SOURCES = gettext.c gettext.h ...
+
+   Automake predefines the variable ‘pkglibdir’, so you can use
+‘pkglib_LTLIBRARIES’ to install libraries in ‘$(libdir)/@PACKAGE@/’.
+
+   If ‘gettext.h’ is a public header file that needs to be installed in
+order for people to use the library, it should be declared using a
+‘_HEADERS’ variable, not in ‘libgettext_la_SOURCES’.  Headers listed in
+the latter should be internal headers that are not part of the public
+interface.
+
+     lib_LTLIBRARIES = libgettext.la
+     libgettext_la_SOURCES = gettext.c ...
+     include_HEADERS = gettext.h ...
+
+   A package can build and install such a library along with other
+programs that use it.  This dependency should be specified using
+‘LDADD’.  The following example builds a program named ‘hello’ that is
+linked with ‘libgettext.la’.
+
+     lib_LTLIBRARIES = libgettext.la
+     libgettext_la_SOURCES = gettext.c ...
+
+     bin_PROGRAMS = hello
+     hello_SOURCES = hello.c ...
+     hello_LDADD = libgettext.la
+
+Whether ‘hello’ is statically or dynamically linked with ‘libgettext.la’
+is not yet known: this will depend on the configuration of libtool and
+the capabilities of the host.
+
+File: automake.info,  Node: Conditional Libtool Libraries,  Next: Conditional Libtool Sources,  Prev: Libtool Libraries,  Up: A Shared Library
+
+8.3.3 Building Libtool Libraries Conditionally
+----------------------------------------------
+
+Like conditional programs (*note Conditional Programs::), there are two
+main ways to build conditional libraries: using Automake conditionals or
+using Autoconf ‘AC_SUBST’itutions.
+
+   The important implementation detail you have to be aware of is that
+the place where a library will be installed matters to libtool: it needs
+to be indicated _at link-time_ using the ‘-rpath’ option.
+
+   For libraries whose destination directory is known when Automake
+runs, Automake will automatically supply the appropriate ‘-rpath’ option
+to libtool.  This is the case for libraries listed explicitly in some
+installable ‘_LTLIBRARIES’ variables such as ‘lib_LTLIBRARIES’.
+
+   However, for libraries determined at configure time (and thus
+mentioned in ‘EXTRA_LTLIBRARIES’), Automake does not know the final
+installation directory.  For such libraries you must add the ‘-rpath’
+option to the appropriate ‘_LDFLAGS’ variable by hand.
+
+   The examples below illustrate the differences between these two
+methods.
+
+   Here is an example where ‘WANTEDLIBS’ is an ‘AC_SUBST’ed variable set
+at ‘./configure’-time to either ‘libfoo.la’, ‘libbar.la’, both, or none.
+Although ‘$(WANTEDLIBS)’ appears in the ‘lib_LTLIBRARIES’, Automake
+cannot guess it relates to ‘libfoo.la’ or ‘libbar.la’ at the time it
+creates the link rule for these two libraries.  Therefore the ‘-rpath’
+argument must be explicitly supplied.
+
+     EXTRA_LTLIBRARIES = libfoo.la libbar.la
+     lib_LTLIBRARIES = $(WANTEDLIBS)
+     libfoo_la_SOURCES = foo.c ...
+     libfoo_la_LDFLAGS = -rpath '$(libdir)'
+     libbar_la_SOURCES = bar.c ...
+     libbar_la_LDFLAGS = -rpath '$(libdir)'
+
+   Here is how the same ‘Makefile.am’ would look using Automake
+conditionals named ‘WANT_LIBFOO’ and ‘WANT_LIBBAR’.  Now Automake is
+able to compute the ‘-rpath’ setting itself, because it’s clear that
+both libraries will end up in ‘$(libdir)’ if they are installed.
+
+     lib_LTLIBRARIES =
+     if WANT_LIBFOO
+     lib_LTLIBRARIES += libfoo.la
+     endif
+     if WANT_LIBBAR
+     lib_LTLIBRARIES += libbar.la
+     endif
+     libfoo_la_SOURCES = foo.c ...
+     libbar_la_SOURCES = bar.c ...
+
+File: automake.info,  Node: Conditional Libtool Sources,  Next: Libtool Convenience Libraries,  Prev: Conditional Libtool Libraries,  Up: A Shared Library
+
+8.3.4 Libtool Libraries with Conditional Sources
+------------------------------------------------
+
+Conditional compilation of sources in a library can be achieved in the
+same way as conditional compilation of sources in a program (*note
+Conditional Sources::).  The only difference is that ‘_LIBADD’ should be
+used instead of ‘_LDADD’ and that it should mention libtool objects
+(‘.lo’ files).
+
+   So, to mimic the ‘hello’ example from *note Conditional Sources::, we
+could build a ‘libhello.la’ library using either ‘hello-linux.c’ or
+‘hello-generic.c’ with the following ‘Makefile.am’.
+
+     lib_LTLIBRARIES = libhello.la
+     libhello_la_SOURCES = hello-common.c
+     EXTRA_libhello_la_SOURCES = hello-linux.c hello-generic.c
+     libhello_la_LIBADD = $(HELLO_SYSTEM)
+     libhello_la_DEPENDENCIES = $(HELLO_SYSTEM)
+
+And make sure ‘configure’ defines ‘HELLO_SYSTEM’ as either
+‘hello-linux.lo’ or ‘hello-generic.lo’.
+
+   Or we could simply use an Automake conditional as follows.
+
+     lib_LTLIBRARIES = libhello.la
+     libhello_la_SOURCES = hello-common.c
+     if LINUX
+     libhello_la_SOURCES += hello-linux.c
+     else
+     libhello_la_SOURCES += hello-generic.c
+     endif
+
+File: automake.info,  Node: Libtool Convenience Libraries,  Next: Libtool Modules,  Prev: Conditional Libtool Sources,  Up: A Shared Library
+
+8.3.5 Libtool Convenience Libraries
+-----------------------------------
+
+Sometimes you want to build libtool libraries that should not be
+installed.  These are called “libtool convenience libraries” and are
+typically used to encapsulate many sublibraries, later gathered into one
+big installed library.
+
+   Libtool convenience libraries are declared by directory-less
+variables such as ‘noinst_LTLIBRARIES’, ‘check_LTLIBRARIES’, or even
+‘EXTRA_LTLIBRARIES’.  Unlike installed libtool libraries they do not
+need an ‘-rpath’ flag at link time (actually this is the only
+difference).
+
+   Convenience libraries listed in ‘noinst_LTLIBRARIES’ are always
+built.  Those listed in ‘check_LTLIBRARIES’ are built only upon ‘make
+check’.  Finally, libraries listed in ‘EXTRA_LTLIBRARIES’ are never
+built explicitly: Automake outputs rules to build them, but if the
+library does not appear as a Makefile dependency anywhere it won’t be
+built (this is why ‘EXTRA_LTLIBRARIES’ is used for conditional
+compilation).
+
+   Here is a sample setup merging libtool convenience libraries from
+subdirectories into one main ‘libtop.la’ library.
+
+     # -- Top-level Makefile.am --
+     SUBDIRS = sub1 sub2 ...
+     lib_LTLIBRARIES = libtop.la
+     libtop_la_SOURCES =
+     libtop_la_LIBADD = \
+       sub1/libsub1.la \
+       sub2/libsub2.la \
+       ...
+
+     # -- sub1/Makefile.am --
+     noinst_LTLIBRARIES = libsub1.la
+     libsub1_la_SOURCES = ...
+
+     # -- sub2/Makefile.am --
+     # showing nested convenience libraries
+     SUBDIRS = sub2.1 sub2.2 ...
+     noinst_LTLIBRARIES = libsub2.la
+     libsub2_la_SOURCES =
+     libsub2_la_LIBADD = \
+       sub21/libsub21.la \
+       sub22/libsub22.la \
+       ...
+
+   When using such setup, beware that ‘automake’ will assume ‘libtop.la’
+is to be linked with the C linker.  This is because ‘libtop_la_SOURCES’
+is empty, so ‘automake’ picks C as default language.  If
+‘libtop_la_SOURCES’ was not empty, ‘automake’ would select the linker as
+explained in *note How the Linker is Chosen::.
+
+   If one of the sublibraries contains non-C source, it is important
+that the appropriate linker be chosen.  One way to achieve this is to
+pretend that there is such a non-C file among the sources of the
+library, thus forcing ‘automake’ to select the appropriate linker.  Here
+is the top-level ‘Makefile’ of our example updated to force C++ linking.
+
+     SUBDIRS = sub1 sub2 ...
+     lib_LTLIBRARIES = libtop.la
+     libtop_la_SOURCES =
+     # Dummy C++ source to cause C++ linking.
+     nodist_EXTRA_libtop_la_SOURCES = dummy.cxx
+     libtop_la_LIBADD = \
+       sub1/libsub1.la \
+       sub2/libsub2.la \
+       ...
+
+   ‘EXTRA_*_SOURCES’ variables are used to keep track of source files
+that might be compiled (this is mostly useful when doing conditional
+compilation using ‘AC_SUBST’, *note Conditional Libtool Sources::), and
+the ‘nodist_’ prefix means the listed sources are not to be distributed
+(*note Program and Library Variables::).  In effect the file ‘dummy.cxx’
+does not need to exist in the source tree.  Of course if you have some
+real source file to list in ‘libtop_la_SOURCES’ there is no point in
+cheating with ‘nodist_EXTRA_libtop_la_SOURCES’.
+
+File: automake.info,  Node: Libtool Modules,  Next: Libtool Flags,  Prev: Libtool Convenience Libraries,  Up: A Shared Library
+
+8.3.6 Libtool Modules
+---------------------
+
+These are libtool libraries meant to be dlopened.  They are indicated to
+libtool by passing ‘-module’ at link-time.
+
+     pkglib_LTLIBRARIES = mymodule.la
+     mymodule_la_SOURCES = doit.c
+     mymodule_la_LDFLAGS = -module
+
+   Ordinarily, Automake requires that a library’s name start with ‘lib’.
+However, when building a dynamically loadable module you might wish to
+use a "nonstandard" name.  Automake will not complain about such
+nonstandard names if it knows the library being built is a libtool
+module, i.e., if ‘-module’ explicitly appears in the library’s
+‘_LDFLAGS’ variable (or in the common ‘AM_LDFLAGS’ variable when no
+per-library ‘_LDFLAGS’ variable is defined).
+
+   As always, ‘AC_SUBST’ variables are black boxes to Automake since
+their values are not yet known when ‘automake’ is run.  Therefore if
+‘-module’ is set via such a variable, Automake cannot notice it and will
+proceed as if the library was an ordinary libtool library, with strict
+naming.
+
+   If ‘mymodule_la_SOURCES’ is not specified, then it defaults to the
+single file ‘mymodule.c’ (*note Default _SOURCES::).
+
+File: automake.info,  Node: Libtool Flags,  Next: LTLIBOBJS,  Prev: Libtool Modules,  Up: A Shared Library
+
+8.3.7 ‘_LIBADD’, ‘_LDFLAGS’, and ‘_LIBTOOLFLAGS’
+------------------------------------------------
+
+As shown in previous sections, the ‘LIBRARY_LIBADD’ variable should be
+used to list extra libtool objects (‘.lo’ files) or libtool libraries
+(‘.la’) to add to LIBRARY.
+
+   The ‘LIBRARY_LDFLAGS’ variable is the place to list additional
+libtool linking flags, such as ‘-version-info’, ‘-static’, and a lot
+more.  *Note Link mode: (libtool)Link mode.
+
+   The ‘libtool’ command has two kinds of options: mode-specific options
+and generic options.  Mode-specific options such as the aforementioned
+linking flags should be lumped with the other flags passed to the tool
+invoked by ‘libtool’ (hence the use of ‘LIBRARY_LDFLAGS’ for libtool
+linking flags).  Generic options include ‘--tag=TAG’ and ‘--silent’
+(*note Invoking ‘libtool’: (libtool)Invoking libtool. for more options)
+should appear before the mode selection on the command line; in
+‘Makefile.am’s they should be listed in the ‘LIBRARY_LIBTOOLFLAGS’
+variable.
+
+   If ‘LIBRARY_LIBTOOLFLAGS’ is not defined, then the variable
+‘AM_LIBTOOLFLAGS’ is used instead.
+
+   These flags are passed to libtool after the ‘--tag=TAG’ option
+computed by Automake (if any), so ‘LIBRARY_LIBTOOLFLAGS’ (or
+‘AM_LIBTOOLFLAGS’) is a good place to override or supplement the
+‘--tag=TAG’ setting.
+
+   The libtool rules also use a ‘LIBTOOLFLAGS’ variable that should not
+be set in ‘Makefile.am’: this is a user variable (*note Flag Variables
+Ordering::.  It allows users to run ‘make LIBTOOLFLAGS=--silent’, for
+instance.  Note that the verbosity of ‘libtool’ can also be influenced
+by the Automake support for silent rules (*note Automake Silent
+Rules::).
+
+File: automake.info,  Node: LTLIBOBJS,  Next: Libtool Issues,  Prev: Libtool Flags,  Up: A Shared Library
+
+8.3.8 ‘LTLIBOBJS’ and ‘LTALLOCA’
+--------------------------------
+
+Where an ordinary library might include ‘$(LIBOBJS)’ or ‘$(ALLOCA)’
+(*note LIBOBJS::), a libtool library must use ‘$(LTLIBOBJS)’ or
+‘$(LTALLOCA)’.  This is required because the object files that libtool
+operates on do not necessarily end in ‘.o’.
+
+   Nowadays, the computation of ‘LTLIBOBJS’ from ‘LIBOBJS’ is performed
+automatically by Autoconf (*note ‘AC_LIBOBJ’ vs. ‘LIBOBJS’:
+(autoconf)AC_LIBOBJ vs LIBOBJS.).
+
+File: automake.info,  Node: Libtool Issues,  Prev: LTLIBOBJS,  Up: A Shared Library
+
+8.3.9 Common Issues Related to Libtool’s Use
+--------------------------------------------
+
+* Menu:
+
+* Error required file ltmain.sh not found::  The need to run libtoolize
+* Objects created both with libtool and without::  Avoid a specific build race
+
+File: automake.info,  Node: Error required file ltmain.sh not found,  Next: Objects created both with libtool and without,  Up: Libtool Issues
+
+8.3.9.1 Error: ‘required file `./ltmain.sh' not found’
+......................................................
+
+Libtool comes with a tool called ‘libtoolize’ that will install
+libtool’s supporting files into a package.  Running this command will
+install ‘ltmain.sh’.  You should execute it before ‘aclocal’ and
+‘automake’.
+
+   People upgrading old packages to newer autotools are likely to face
+this issue because older Automake versions used to call ‘libtoolize’.
+Therefore old build scripts do not call ‘libtoolize’.
+
+   Since Automake 1.6, it has been decided that running ‘libtoolize’ was
+none of Automake’s business.  Instead, that functionality has been moved
+into the ‘autoreconf’ command (*note Using ‘autoreconf’:
+(autoconf)autoreconf Invocation.).  If you do not want to remember what
+to run and when, just learn the ‘autoreconf’ command.  Hopefully,
+replacing existing ‘bootstrap’ or ‘autogen.sh’ scripts by a call to
+‘autoreconf’ should also free you from any similar incompatible change
+in the future.
+
+File: automake.info,  Node: Objects created both with libtool and without,  Prev: Error required file ltmain.sh not found,  Up: Libtool Issues
+
+8.3.9.2 Objects ‘created with both libtool and without’
+.......................................................
+
+Sometimes, the same source file is used both to build a libtool library
+and to build another non-libtool target (be it a program or another
+library).
+
+   Let’s consider the following ‘Makefile.am’.
+
+     bin_PROGRAMS = prog
+     prog_SOURCES = prog.c foo.c ...
+
+     lib_LTLIBRARIES = libfoo.la
+     libfoo_la_SOURCES = foo.c ...
+
+(In this trivial case the issue could be avoided by linking ‘libfoo.la’
+with ‘prog’ instead of listing ‘foo.c’ in ‘prog_SOURCES’.  But let’s
+assume we really want to keep ‘prog’ and ‘libfoo.la’ separate.)
+
+   Technically, it means that we should build ‘foo.$(OBJEXT)’ for
+‘prog’, and ‘foo.lo’ for ‘libfoo.la’.  The problem is that in the course
+of creating ‘foo.lo’, libtool may erase (or replace) ‘foo.$(OBJEXT)’,
+and this cannot be avoided.
+
+   Therefore, when Automake detects this situation it will complain with
+a message such as
+     object 'foo.$(OBJEXT)' created both with libtool and without
+
+   A workaround for this issue is to ensure that these two objects get
+different basenames.  As explained in *note Renamed Objects::, this
+happens automatically when per-targets flags are used.
+
+     bin_PROGRAMS = prog
+     prog_SOURCES = prog.c foo.c ...
+     prog_CFLAGS = $(AM_CFLAGS)
+
+     lib_LTLIBRARIES = libfoo.la
+     libfoo_la_SOURCES = foo.c ...
+
+Adding ‘prog_CFLAGS = $(AM_CFLAGS)’ is almost a no-op, because when the
+‘prog_CFLAGS’ is defined, it is used instead of ‘AM_CFLAGS’.  However as
+a side effect it will cause ‘prog.c’ and ‘foo.c’ to be compiled as
+‘prog-prog.$(OBJEXT)’ and ‘prog-foo.$(OBJEXT)’, which solves the issue.
+
+File: automake.info,  Node: Program and Library Variables,  Next: Default _SOURCES,  Prev: A Shared Library,  Up: Programs
+

@@ -1,0 +1,563 @@
+9.2 Data Representation
+=======================
+
+Scheme is a latently-typed language; this means that the system cannot,
+in general, determine the type of a given expression at compile time.
+Types only become apparent at run time.  Variables do not have fixed
+types; a variable may hold a pair at one point, an integer at the next,
+and a thousand-element vector later.  Instead, values, not variables,
+have fixed types.
+
+   In order to implement standard Scheme functions like ‘pair?’ and
+‘string?’ and provide garbage collection, the representation of every
+value must contain enough information to accurately determine its type
+at run time.  Often, Scheme systems also use this information to
+determine whether a program has attempted to apply an operation to an
+inappropriately typed value (such as taking the ‘car’ of a string).
+
+   Because variables, pairs, and vectors may hold values of any type,
+Scheme implementations use a uniform representation for values — a
+single type large enough to hold either a complete value or a pointer to
+a complete value, along with the necessary typing information.
+
+   The following sections will present a simple typing system, and then
+make some refinements to correct its major weaknesses.  We then conclude
+with a discussion of specific choices that Guile has made regarding
+garbage collection and data representation.
+
+* Menu:
+
+* A Simple Representation::     
+* Faster Integers::             
+* Cheaper Pairs::               
+* Conservative GC::          
+* The SCM Type in Guile::
+
+File: guile.info,  Node: A Simple Representation,  Next: Faster Integers,  Up: Data Representation
+
+9.2.1 A Simple Representation
+-----------------------------
+
+The simplest way to represent Scheme values in C would be to represent
+each value as a pointer to a structure containing a type indicator,
+followed by a union carrying the real value.  Assuming that ‘SCM’ is the
+name of our universal type, we can write:
+
+     enum type { integer, pair, string, vector, ... };
+
+     typedef struct value *SCM;
+
+     struct value {
+       enum type type;
+       union {
+         int integer;
+         struct { SCM car, cdr; } pair;
+         struct { int length; char *elts; } string;
+         struct { int length; SCM  *elts; } vector;
+         ...
+       } value;
+     };
+   with the ellipses replaced with code for the remaining Scheme types.
+
+   This representation is sufficient to implement all of Scheme’s
+semantics.  If X is an ‘SCM’ value:
+   • To test if X is an integer, we can write ‘X->type == integer’.
+   • To find its value, we can write ‘X->value.integer’.
+   • To test if X is a vector, we can write ‘X->type == vector’.
+   • If we know X is a vector, we can write ‘X->value.vector.elts[0]’ to
+     refer to its first element.
+   • If we know X is a pair, we can write ‘X->value.pair.car’ to extract
+     its car.
+
+File: guile.info,  Node: Faster Integers,  Next: Cheaper Pairs,  Prev: A Simple Representation,  Up: Data Representation
+
+9.2.2 Faster Integers
+---------------------
+
+Unfortunately, the above representation has a serious disadvantage.  In
+order to return an integer, an expression must allocate a ‘struct
+value’, initialize it to represent that integer, and return a pointer to
+it.  Furthermore, fetching an integer’s value requires a memory
+reference, which is much slower than a register reference on most
+processors.  Since integers are extremely common, this representation is
+too costly, in both time and space.  Integers should be very cheap to
+create and manipulate.
+
+   One possible solution comes from the observation that, on many
+architectures, heap-allocated data (i.e., what you get when you call
+‘malloc’) must be aligned on an eight-byte boundary.  (Whether or not
+the machine actually requires it, we can write our own allocator for
+‘struct value’ objects that assures this is true.)  In this case, the
+lower three bits of the structure’s address are known to be zero.
+
+   This gives us the room we need to provide an improved representation
+for integers.  We make the following rules:
+   • If the lower three bits of an ‘SCM’ value are zero, then the SCM
+     value is a pointer to a ‘struct value’, and everything proceeds as
+     before.
+   • Otherwise, the ‘SCM’ value represents an integer, whose value
+     appears in its upper bits.
+
+   Here is C code implementing this convention:
+     enum type { pair, string, vector, ... };
+
+     typedef struct value *SCM;
+
+     struct value {
+       enum type type;
+       union {
+         struct { SCM car, cdr; } pair;
+         struct { int length; char *elts; } string;
+         struct { int length; SCM  *elts; } vector;
+         ...
+       } value;
+     };
+
+     #define POINTER_P(x) (((int) (x) & 7) == 0)
+     #define INTEGER_P(x) (! POINTER_P (x))
+
+     #define GET_INTEGER(x)  ((int) (x) >> 3)
+     #define MAKE_INTEGER(x) ((SCM) (((x) << 3) | 1))
+
+   Notice that ‘integer’ no longer appears as an element of ‘enum type’,
+and the union has lost its ‘integer’ member.  Instead, we use the
+‘POINTER_P’ and ‘INTEGER_P’ macros to make a coarse classification of
+values into integers and non-integers, and do further type testing as
+before.
+
+   Here’s how we would answer the questions posed above (again, assume X
+is an ‘SCM’ value):
+   • To test if X is an integer, we can write ‘INTEGER_P (X)’.
+   • To find its value, we can write ‘GET_INTEGER (X)’.
+   • To test if X is a vector, we can write:
+            POINTER_P (X) && X->type == vector
+     Given the new representation, we must make sure X is truly a
+     pointer before we dereference it to determine its complete type.
+   • If we know X is a vector, we can write ‘X->value.vector.elts[0]’ to
+     refer to its first element, as before.
+   • If we know X is a pair, we can write ‘X->value.pair.car’ to extract
+     its car, just as before.
+
+   This representation allows us to operate more efficiently on integers
+than the first.  For example, if X and Y are known to be integers, we
+can compute their sum as follows:
+     MAKE_INTEGER (GET_INTEGER (X) + GET_INTEGER (Y))
+   Now, integer math requires no allocation or memory references.  Most
+real Scheme systems actually implement addition and other operations
+using an even more efficient algorithm, but this essay isn’t about
+bit-twiddling.  (Hint: how do you decide when to overflow to a bignum?
+How would you do it in assembly?)
+
+File: guile.info,  Node: Cheaper Pairs,  Next: Conservative GC,  Prev: Faster Integers,  Up: Data Representation
+
+9.2.3 Cheaper Pairs
+-------------------
+
+However, there is yet another issue to confront.  Most Scheme heaps
+contain more pairs than any other type of object; Jonathan Rees said at
+one point that pairs occupy 45% of the heap in his Scheme
+implementation, Scheme 48.  However, our representation above spends
+three ‘SCM’-sized words per pair — one for the type, and two for the CAR
+and CDR.  Is there any way to represent pairs using only two words?
+
+   Let us refine the convention we established earlier.  Let us assert
+that:
+   • If the bottom three bits of an ‘SCM’ value are ‘#b000’, then it is
+     a pointer, as before.
+   • If the bottom three bits are ‘#b001’, then the upper bits are an
+     integer.  This is a bit more restrictive than before.
+   • If the bottom two bits are ‘#b010’, then the value, with the bottom
+     three bits masked out, is the address of a pair.
+
+   Here is the new C code:
+     enum type { string, vector, ... };
+
+     typedef struct value *SCM;
+
+     struct value {
+       enum type type;
+       union {
+         struct { int length; char *elts; } string;
+         struct { int length; SCM  *elts; } vector;
+         ...
+       } value;
+     };
+
+     struct pair {
+       SCM car, cdr;
+     };
+
+     #define POINTER_P(x) (((int) (x) & 7) == 0)
+
+     #define INTEGER_P(x)  (((int) (x) & 7) == 1)
+     #define GET_INTEGER(x)  ((int) (x) >> 3)
+     #define MAKE_INTEGER(x) ((SCM) (((x) << 3) | 1))
+
+     #define PAIR_P(x) (((int) (x) & 7) == 2)
+     #define GET_PAIR(x) ((struct pair *) ((int) (x) & ~7))
+
+   Notice that ‘enum type’ and ‘struct value’ now only contain
+provisions for vectors and strings; both integers and pairs have become
+special cases.  The code above also assumes that an ‘int’ is large
+enough to hold a pointer, which isn’t generally true.
+
+   Our list of examples is now as follows:
+   • To test if X is an integer, we can write ‘INTEGER_P (X)’; this is
+     as before.
+   • To find its value, we can write ‘GET_INTEGER (X)’, as before.
+   • To test if X is a vector, we can write:
+            POINTER_P (X) && X->type == vector
+     We must still make sure that X is a pointer to a ‘struct value’
+     before dereferencing it to find its type.
+   • If we know X is a vector, we can write ‘X->value.vector.elts[0]’ to
+     refer to its first element, as before.
+   • We can write ‘PAIR_P (X)’ to determine if X is a pair, and then
+     write ‘GET_PAIR (X)->car’ to refer to its car.
+
+   This change in representation reduces our heap size by 15%.  It also
+makes it cheaper to decide if a value is a pair, because no memory
+references are necessary; it suffices to check the bottom two bits of
+the ‘SCM’ value.  This may be significant when traversing lists, a
+common activity in a Scheme system.
+
+   Again, most real Scheme systems use a slightly different
+implementation; for example, if GET_PAIR subtracts off the low bits of
+‘x’, instead of masking them off, the optimizer will often be able to
+combine that subtraction with the addition of the offset of the
+structure member we are referencing, making a modified pointer as fast
+to use as an unmodified pointer.
+
+File: guile.info,  Node: Conservative GC,  Next: The SCM Type in Guile,  Prev: Cheaper Pairs,  Up: Data Representation
+
+9.2.4 Conservative Garbage Collection
+-------------------------------------
+
+Aside from the latent typing, the major source of constraints on a
+Scheme implementation’s data representation is the garbage collector.
+The collector must be able to traverse every live object in the heap, to
+determine which objects are not live, and thus collectable.
+
+   There are many ways to implement this.  Guile’s garbage collection is
+built on a library, the Boehm-Demers-Weiser conservative garbage
+collector (BDW-GC). The BDW-GC “just works”, for the most part.  But
+since it is interesting to know how these things work, we include here a
+high-level description of what the BDW-GC does.
+
+   Garbage collection has two logical phases: a “mark” phase, in which
+the set of live objects is enumerated, and a “sweep” phase, in which
+objects not traversed in the mark phase are collected.  Correct
+functioning of the collector depends on being able to traverse the
+entire set of live objects.
+
+   In the mark phase, the collector scans the system’s global variables
+and the local variables on the stack to determine which objects are
+immediately accessible by the C code.  It then scans those objects to
+find the objects they point to, and so on.  The collector logically sets
+a “mark bit” on each object it finds, so each object is traversed only
+once.
+
+   When the collector can find no unmarked objects pointed to by marked
+objects, it assumes that any objects that are still unmarked will never
+be used by the program (since there is no path of dereferences from any
+global or local variable that reaches them) and deallocates them.
+
+   In the above paragraphs, we did not specify how the garbage collector
+finds the global and local variables; as usual, there are many different
+approaches.  Frequently, the programmer must maintain a list of pointers
+to all global variables that refer to the heap, and another list
+(adjusted upon entry to and exit from each function) of local variables,
+for the collector’s benefit.
+
+   The list of global variables is usually not too difficult to
+maintain, since global variables are relatively rare.  However, an
+explicitly maintained list of local variables (in the author’s personal
+experience) is a nightmare to maintain.  Thus, the BDW-GC uses a
+technique called “conservative garbage collection”, to make the local
+variable list unnecessary.
+
+   The trick to conservative collection is to treat the stack as an
+ordinary range of memory, and assume that _every_ word on the stack is a
+pointer into the heap.  Thus, the collector marks all objects whose
+addresses appear anywhere in the stack, without knowing for sure how
+that word is meant to be interpreted.
+
+   In addition to the stack, the BDW-GC will also scan static data
+sections.  This means that global variables are also scanned when
+looking for live Scheme objects.
+
+   Obviously, such a system will occasionally retain objects that are
+actually garbage, and should be freed.  In practice, this is not a
+problem.  The alternative, an explicitly maintained list of local
+variable addresses, is effectively much less reliable, due to programmer
+error.  Interested readers should see the BDW-GC web page at
+<http://www.hboehm.info/gc/>, for more information.
+
+File: guile.info,  Node: The SCM Type in Guile,  Prev: Conservative GC,  Up: Data Representation
+
+9.2.5 The SCM Type in Guile
+---------------------------
+
+Guile classifies Scheme objects into two kinds: those that fit entirely
+within an ‘SCM’, and those that require heap storage.
+
+   The former class are called “immediates”.  The class of immediates
+includes small integers, characters, boolean values, the empty list, the
+mysterious end-of-file object, and some others.
+
+   The remaining types are called, not surprisingly, “non-immediates”.
+They include pairs, procedures, strings, vectors, and all other data
+types in Guile.  For non-immediates, the ‘SCM’ word contains a pointer
+to data on the heap, with further information about the object in
+question is stored in that data.
+
+   This section describes how the ‘SCM’ type is actually represented and
+used at the C level.  Interested readers should see ‘libguile/tags.h’
+for an exposition of how Guile stores type information.
+
+   In fact, there are two basic C data types to represent objects in
+Guile: ‘SCM’ and ‘scm_t_bits’.
+
+* Menu:
+
+* Relationship between SCM and scm_t_bits::
+* Immediate objects::
+* Non-immediate objects::
+* Allocating Cells::
+* Heap Cell Type Information::
+* Accessing Cell Entries::
+
+File: guile.info,  Node: Relationship between SCM and scm_t_bits,  Next: Immediate objects,  Up: The SCM Type in Guile
+
+9.2.5.1 Relationship between ‘SCM’ and ‘scm_t_bits’
+...................................................
+
+A variable of type ‘SCM’ is guaranteed to hold a valid Scheme object.  A
+variable of type ‘scm_t_bits’, on the other hand, may hold a
+representation of a ‘SCM’ value as a C integral type, but may also hold
+any C value, even if it does not correspond to a valid Scheme object.
+
+   For a variable X of type ‘SCM’, the Scheme object’s type information
+is stored in a form that is not directly usable.  To be able to work on
+the type encoding of the scheme value, the ‘SCM’ variable has to be
+transformed into the corresponding representation as a ‘scm_t_bits’
+variable Y by using the ‘SCM_UNPACK’ macro.  Once this has been done,
+the type of the scheme object X can be derived from the content of the
+bits of the ‘scm_t_bits’ value Y, in the way illustrated by the example
+earlier in this chapter (*note Cheaper Pairs::).  Conversely, a valid
+bit encoding of a Scheme value as a ‘scm_t_bits’ variable can be
+transformed into the corresponding ‘SCM’ value using the ‘SCM_PACK’
+macro.
+
+File: guile.info,  Node: Immediate objects,  Next: Non-immediate objects,  Prev: Relationship between SCM and scm_t_bits,  Up: The SCM Type in Guile
+
+9.2.5.2 Immediate objects
+.........................
+
+A Scheme object may either be an immediate, i.e. carrying all necessary
+information by itself, or it may contain a reference to a “cell” with
+additional information on the heap.  Although in general it should be
+irrelevant for user code whether an object is an immediate or not,
+within Guile’s own code the distinction is sometimes of importance.
+Thus, the following low level macro is provided:
+
+ -- Macro: int SCM_IMP (SCM X)
+     A Scheme object is an immediate if it fulfills the ‘SCM_IMP’
+     predicate, otherwise it holds an encoded reference to a heap cell.
+     The result of the predicate is delivered as a C style boolean
+     value.  User code and code that extends Guile should normally not
+     be required to use this macro.
+
+Summary:
+   • Given a Scheme object X of unknown type, check first with ‘SCM_IMP
+     (X)’ if it is an immediate object.
+   • If so, all of the type and value information can be determined from
+     the ‘scm_t_bits’ value that is delivered by ‘SCM_UNPACK (X)’.
+
+   There are a number of special values in Scheme, most of them
+documented elsewhere in this manual.  It’s not quite the right place to
+put them, but for now, here’s a list of the C names given to some of
+these values:
+
+ -- Macro: SCM SCM_EOL
+     The Scheme empty list object, or “End Of List” object, usually
+     written in Scheme as ‘'()’.
+
+ -- Macro: SCM SCM_EOF_VAL
+     The Scheme end-of-file value.  It has no standard written
+     representation, for obvious reasons.
+
+ -- Macro: SCM SCM_UNSPECIFIED
+     The value returned by some (but not all) expressions that the
+     Scheme standard says return an “unspecified” value.
+
+     This is sort of a weirdly literal way to take things, but the
+     standard read-eval-print loop prints nothing when the expression
+     returns this value, so it’s not a bad idea to return this when you
+     can’t think of anything else helpful.
+
+ -- Macro: SCM SCM_UNDEFINED
+     The “undefined” value.  Its most important property is that is not
+     equal to any valid Scheme value.  This is put to various internal
+     uses by C code interacting with Guile.
+
+     For example, when you write a C function that is callable from
+     Scheme and which takes optional arguments, the interpreter passes
+     ‘SCM_UNDEFINED’ for any arguments you did not receive.
+
+     We also use this to mark unbound variables.
+
+ -- Macro: int SCM_UNBNDP (SCM X)
+     Return true if X is ‘SCM_UNDEFINED’.  Note that this is not a check
+     to see if X is ‘SCM_UNBOUND’.  History will not be kind to us.
+
+File: guile.info,  Node: Non-immediate objects,  Next: Allocating Cells,  Prev: Immediate objects,  Up: The SCM Type in Guile
+
+9.2.5.3 Non-immediate objects
+.............................
+
+A Scheme object of type ‘SCM’ that does not fulfill the ‘SCM_IMP’
+predicate holds an encoded reference to a heap cell.  This reference can
+be decoded to a C pointer to a heap cell using the ‘SCM2PTR’ macro.  The
+encoding of a pointer to a heap cell into a ‘SCM’ value is done using
+the ‘PTR2SCM’ macro.
+
+ -- Macro: scm_t_cell * SCM2PTR (SCM X)
+     Extract and return the heap cell pointer from a non-immediate ‘SCM’
+     object X.
+
+ -- Macro: SCM PTR2SCM (scm_t_cell * X)
+     Return a ‘SCM’ value that encodes a reference to the heap cell
+     pointer X.
+
+   Note that it is also possible to transform a non-immediate ‘SCM’
+value by using ‘SCM_UNPACK’ into a ‘scm_t_bits’ variable.  However, the
+result of ‘SCM_UNPACK’ may not be used as a pointer to a ‘scm_t_cell’:
+only ‘SCM2PTR’ is guaranteed to transform a ‘SCM’ object into a valid
+pointer to a heap cell.  Also, it is not allowed to apply ‘PTR2SCM’ to
+anything that is not a valid pointer to a heap cell.
+
+Summary:
+   • Only use ‘SCM2PTR’ on ‘SCM’ values for which ‘SCM_IMP’ is false!
+   • Don’t use ‘(scm_t_cell *) SCM_UNPACK (X)’!  Use ‘SCM2PTR (X)’
+     instead!
+   • Don’t use ‘PTR2SCM’ for anything but a cell pointer!
+
+File: guile.info,  Node: Allocating Cells,  Next: Heap Cell Type Information,  Prev: Non-immediate objects,  Up: The SCM Type in Guile
+
+9.2.5.4 Allocating Cells
+........................
+
+Guile provides both ordinary cells with two slots, and double cells with
+four slots.  The following two function are the most primitive way to
+allocate such cells.
+
+   If the caller intends to use it as a header for some other type, she
+must pass an appropriate magic value in WORD_0, to mark it as a member
+of that type, and pass whatever value as WORD_1, etc that the type
+expects.  You should generally not need these functions, unless you are
+implementing a new datatype, and thoroughly understand the code in
+‘<libguile/tags.h>’.
+
+   If you just want to allocate pairs, use ‘scm_cons’.
+
+ -- Function: SCM scm_cell (scm_t_bits word_0, scm_t_bits word_1)
+     Allocate a new cell, initialize the two slots with WORD_0 and
+     WORD_1, and return it.
+
+     Note that WORD_0 and WORD_1 are of type ‘scm_t_bits’.  If you want
+     to pass a ‘SCM’ object, you need to use ‘SCM_UNPACK’.
+
+ -- Function: SCM scm_double_cell (scm_t_bits word_0, scm_t_bits word_1,
+          scm_t_bits word_2, scm_t_bits word_3)
+     Like ‘scm_cell’, but allocates a double cell with four slots.
+
+File: guile.info,  Node: Heap Cell Type Information,  Next: Accessing Cell Entries,  Prev: Allocating Cells,  Up: The SCM Type in Guile
+
+9.2.5.5 Heap Cell Type Information
+..................................
+
+Heap cells contain a number of entries, each of which is either a scheme
+object of type ‘SCM’ or a raw C value of type ‘scm_t_bits’.  Which of
+the cell entries contain Scheme objects and which contain raw C values
+is determined by the first entry of the cell, which holds the cell type
+information.
+
+ -- Macro: scm_t_bits SCM_CELL_TYPE (SCM X)
+     For a non-immediate Scheme object X, deliver the content of the
+     first entry of the heap cell referenced by X.  This value holds the
+     information about the cell type.
+
+ -- Macro: void SCM_SET_CELL_TYPE (SCM X, scm_t_bits T)
+     For a non-immediate Scheme object X, write the value T into the
+     first entry of the heap cell referenced by X.  The value T must
+     hold a valid cell type.
+
+File: guile.info,  Node: Accessing Cell Entries,  Prev: Heap Cell Type Information,  Up: The SCM Type in Guile
+
+9.2.5.6 Accessing Cell Entries
+..............................
+
+For a non-immediate Scheme object X, the object type can be determined
+by reading the cell type entry using the ‘SCM_CELL_TYPE’ macro.  For
+each different type of cell it is known which cell entries hold Scheme
+objects and which cell entries hold raw C data.  To access the different
+cell entries appropriately, the following macros are provided.
+
+ -- Macro: scm_t_bits SCM_CELL_WORD (SCM X, unsigned int N)
+     Deliver the cell entry N of the heap cell referenced by the
+     non-immediate Scheme object X as raw data.  It is illegal, to
+     access cell entries that hold Scheme objects by using these macros.
+     For convenience, the following macros are also provided.
+        • SCM_CELL_WORD_0 (X) ⇒ SCM_CELL_WORD (X, 0)
+        • SCM_CELL_WORD_1 (X) ⇒ SCM_CELL_WORD (X, 1)
+        • ...
+        • SCM_CELL_WORD_N (X) ⇒ SCM_CELL_WORD (X, N)
+
+ -- Macro: SCM SCM_CELL_OBJECT (SCM X, unsigned int N)
+     Deliver the cell entry N of the heap cell referenced by the
+     non-immediate Scheme object X as a Scheme object.  It is illegal,
+     to access cell entries that do not hold Scheme objects by using
+     these macros.  For convenience, the following macros are also
+     provided.
+        • SCM_CELL_OBJECT_0 (X) ⇒ SCM_CELL_OBJECT (X, 0)
+        • SCM_CELL_OBJECT_1 (X) ⇒ SCM_CELL_OBJECT (X, 1)
+        • ...
+        • SCM_CELL_OBJECT_N (X) ⇒ SCM_CELL_OBJECT (X, N)
+
+ -- Macro: void SCM_SET_CELL_WORD (SCM X, unsigned int N, scm_t_bits W)
+     Write the raw C value W into entry number N of the heap cell
+     referenced by the non-immediate Scheme value X.  Values that are
+     written into cells this way may only be read from the cells using
+     the ‘SCM_CELL_WORD’ macros or, in case cell entry 0 is written,
+     using the ‘SCM_CELL_TYPE’ macro.  For the special case of cell
+     entry 0 it has to be made sure that W contains a cell type
+     information which does not describe a Scheme object.  For
+     convenience, the following macros are also provided.
+        • SCM_SET_CELL_WORD_0 (X, W) ⇒ SCM_SET_CELL_WORD (X, 0, W)
+        • SCM_SET_CELL_WORD_1 (X, W) ⇒ SCM_SET_CELL_WORD (X, 1, W)
+        • ...
+        • SCM_SET_CELL_WORD_N (X, W) ⇒ SCM_SET_CELL_WORD (X, N, W)
+
+ -- Macro: void SCM_SET_CELL_OBJECT (SCM X, unsigned int N, SCM O)
+     Write the Scheme object O into entry number N of the heap cell
+     referenced by the non-immediate Scheme value X.  Values that are
+     written into cells this way may only be read from the cells using
+     the ‘SCM_CELL_OBJECT’ macros or, in case cell entry 0 is written,
+     using the ‘SCM_CELL_TYPE’ macro.  For the special case of cell
+     entry 0 the writing of a Scheme object into this cell is only
+     allowed if the cell forms a Scheme pair.  For convenience, the
+     following macros are also provided.
+        • SCM_SET_CELL_OBJECT_0 (X, O) ⇒ SCM_SET_CELL_OBJECT (X, 0, O)
+        • SCM_SET_CELL_OBJECT_1 (X, O) ⇒ SCM_SET_CELL_OBJECT (X, 1, O)
+        • ...
+        • SCM_SET_CELL_OBJECT_N (X, O) ⇒ SCM_SET_CELL_OBJECT (X, N, O)
+
+Summary:
+   • For a non-immediate Scheme object X of unknown type, get the type
+     information by using ‘SCM_CELL_TYPE (X)’.
+   • As soon as the cell type information is available, only use the
+     appropriate access methods to read and write data to the different
+     cell entries.
+
+File: guile.info,  Node: A Virtual Machine for Guile,  Next: Compiling to the Virtual Machine,  Prev: Data Representation,  Up: Guile Implementation
+

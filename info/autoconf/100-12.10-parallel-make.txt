@@ -1,0 +1,117 @@
+12.10 Parallel Make
+===================
+
+Support for parallel execution in `make' implementation varies.
+Generally, using GNU make is your best bet.
+
+   When NetBSD or FreeBSD `make' are run in parallel mode, they will
+reuse the same shell for multiple commands within one recipe.  This can
+have various unexpected consequences.  For example, changes of
+directories or variables persist between recipes, so that:
+
+     all:
+             @var=value; cd /; pwd; echo $$var; echo $$$$
+             @pwd; echo $$var; echo $$$$
+
+may output the following with `make -j1', at least on NetBSD up to 5.1
+and FreeBSD up to 8.2:
+
+     /
+     value
+     32235
+     /
+     value
+     32235
+
+while without `-j1', or with `-B', the output looks less surprising:
+
+     /
+     value
+     32238
+     /tmp
+
+     32239
+
+Another consequence is that, if one command in a recipe uses `exit 0'
+to indicate a successful exit, the shell will be gone and the remaining
+commands of this recipe will not be executed.
+
+   The BSD `make' implementations, when run in parallel mode, will also
+pass the `Makefile' recipes to the shell through its standard input,
+thus making it unusable from the recipes:
+
+     $ cat Makefile
+     read:
+             @read line; echo LINE: $$line
+     $ echo foo | make read
+     LINE: foo
+     $ echo foo | make -j1 read # NetBSD 5.1 and FreeBSD 8.2
+     LINE:
+
+Moreover, when FreeBSD `make' (up at least to 8.2) is run in parallel
+mode, it implements the `@' and `-' "recipe modifiers" by dynamically
+modifying the active shell flags.  This behavior has the effects of
+potentially clobbering the exit status of recipes silenced with the `@'
+modifier if they also unset the `errexit' shell flag, and of mangling
+the output in unexpected ways:
+
+     $ cat Makefile
+     a:
+             @echo $$-; set +e; false
+     b:
+             -echo $$-; false; echo set -
+     $ make a; echo status: $?
+     ehBc
+     *** Error code 1
+     status: 1
+     $ make -j1 a; echo status: $?
+     ehB
+     status: 0
+     $ make b
+     echo $-; echo set -
+     hBc
+     set -
+     $ make -j1 b
+     echo $-; echo hvB
+
+You can avoid all these issues by using the `-B' option to enable
+compatibility semantics.  However, that will effectively also disable
+all parallelism as that will cause prerequisites to be updated in the
+order they are listed in a rule.
+
+   Some make implementations (among them, FreeBSD `make', NetBSD
+`make', and Solaris `dmake'), when invoked with a `-jN' option, connect
+the standard output and standard error of all their child processes to
+pipes or temporary regular files.  This can lead to subtly different
+semantics in the behavior of the spawned processes.  For example, even
+if the `make' standard output is connected to a tty, the recipe command
+will not be:
+
+     $ cat Makefile
+     all:
+             @test -t 1 && echo "Is a tty" || echo "Is not a tty"
+     $ make -j 2 # FreeBSD 8.2 make
+     Is not a tty
+     $ make -j 2 # NetBSD 5.1 make
+     --- all ---
+     Is not a tty
+     $ dmake -j 2 # Solaris 10 dmake
+     HOSTNAME --> 1 job
+     HOSTNAME --> Job output
+     Is not a tty
+
+On the other hand:
+
+     $ make -j 2 # GNU make, Heirloom make
+     Is a tty
+
+The above examples also show additional status output produced in
+parallel mode for targets being updated by Solaris `dmake' and NetBSD
+`make' (but _not_ by FreeBSD `make').
+
+   Furthermore, parallel runs of those `make' implementations will
+route standard error from commands that they spawn into their own
+standard output, and may remove leading whitespace from output lines.
+
+File: autoconf.info,  Node: Comments in Make Rules,  Next: Newlines in Make Rules,  Prev: Parallel Make,  Up: Portable Make
+

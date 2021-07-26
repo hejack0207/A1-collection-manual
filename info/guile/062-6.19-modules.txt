@@ -1,0 +1,1009 @@
+6.19 Modules
+============
+
+When programs become large, naming conflicts can occur when a function
+or global variable defined in one file has the same name as a function
+or global variable in another file.  Even just a _similarity_ between
+function names can cause hard-to-find bugs, since a programmer might
+type the wrong function name.
+
+   The approach used to tackle this problem is called _information
+encapsulation_, which consists of packaging functional units into a
+given name space that is clearly separated from other name spaces.
+
+   The language features that allow this are usually called _the module
+system_ because programs are broken up into modules that are compiled
+separately (or loaded separately in an interpreter).
+
+   Older languages, like C, have limited support for name space
+manipulation and protection.  In C a variable or function is public by
+default, and can be made local to a module with the ‘static’ keyword.
+But you cannot reference public variables and functions from another
+module with different names.
+
+   More advanced module systems have become a common feature in recently
+designed languages: ML, Python, Perl, and Modula 3 all allow the
+_renaming_ of objects from a foreign module, so they will not clutter
+the global name space.
+
+   In addition, Guile offers variables as first-class objects.  They can
+be used for interacting with the module system.
+
+* Menu:
+
+* General Information about Modules::  Guile module basics.
+* Using Guile Modules::         How to use existing modules.
+* Creating Guile Modules::      How to package your code into modules.
+* Modules and the File System:: Installing modules in the file system.
+* R6RS Version References::     Using version numbers with modules.
+* R6RS Libraries::              The library and import forms.
+* Variables::                   First-class variables.
+* Module System Reflection::    First-class modules.
+* Accessing Modules from C::    How to work with modules with C code.
+* provide and require::         The SLIB feature mechanism.
+* Environments::                R5RS top-level environments.
+
+File: guile.info,  Node: General Information about Modules,  Next: Using Guile Modules,  Up: Modules
+
+6.19.1 General Information about Modules
+----------------------------------------
+
+A Guile module can be thought of as a collection of named procedures,
+variables and macros.  More precisely, it is a set of “bindings” of
+symbols (names) to Scheme objects.
+
+   Within a module, all bindings are visible.  Certain bindings can be
+declared “public”, in which case they are added to the module’s
+so-called “export list”; this set of public bindings is called the
+module’s “public interface” (*note Creating Guile Modules::).
+
+   A client module “uses” a providing module’s bindings by either
+accessing the providing module’s public interface, or by building a
+custom interface (and then accessing that).  In a custom interface, the
+client module can “select” which bindings to access and can also
+algorithmically “rename” bindings.  In contrast, when using the
+providing module’s public interface, the entire export list is available
+without renaming (*note Using Guile Modules::).
+
+   All Guile modules have a unique “module name”, for example ‘(ice-9
+popen)’ or ‘(srfi srfi-11)’.  Module names are lists of one or more
+symbols.
+
+   When Guile goes to use an interface from a module, for example
+‘(ice-9 popen)’, Guile first looks to see if it has loaded ‘(ice-9
+popen)’ for any reason.  If the module has not been loaded yet, Guile
+searches a “load path” for a file that might define it, and loads that
+file.
+
+   The following subsections go into more detail on using, creating,
+installing, and otherwise manipulating modules and the module system.
+
+File: guile.info,  Node: Using Guile Modules,  Next: Creating Guile Modules,  Prev: General Information about Modules,  Up: Modules
+
+6.19.2 Using Guile Modules
+--------------------------
+
+To use a Guile module is to access either its public interface or a
+custom interface (*note General Information about Modules::).  Both
+types of access are handled by the syntactic form ‘use-modules’, which
+accepts one or more interface specifications and, upon evaluation,
+arranges for those interfaces to be available to the current module.
+This process may include locating and loading code for a given module if
+that code has not yet been loaded, following ‘%load-path’ (*note Modules
+and the File System::).
+
+   An “interface specification” has one of two forms.  The first
+variation is simply to name the module, in which case its public
+interface is the one accessed.  For example:
+
+     (use-modules (ice-9 popen))
+
+   Here, the interface specification is ‘(ice-9 popen)’, and the result
+is that the current module now has access to ‘open-pipe’, ‘close-pipe’,
+‘open-input-pipe’, and so on (*note Pipes::).
+
+   Note in the previous example that if the current module had already
+defined ‘open-pipe’, that definition would be overwritten by the
+definition in ‘(ice-9 popen)’.  For this reason (and others), there is a
+second variation of interface specification that not only names a module
+to be accessed, but also selects bindings from it and renames them to
+suit the current module’s needs.  For example:
+
+     (use-modules ((ice-9 popen)
+                   #:select ((open-pipe . pipe-open) close-pipe)
+                   #:renamer (symbol-prefix-proc 'unixy:)))
+
+or more simply:
+
+     (use-modules ((ice-9 popen)
+                   #:select ((open-pipe . pipe-open) close-pipe)
+                   #:prefix unixy:))
+
+   Here, the interface specification is more complex than before, and
+the result is that a custom interface with only two bindings is created
+and subsequently accessed by the current module.  The mapping of old to
+new names is as follows:
+
+     (ice-9 popen) sees:             current module sees:
+     open-pipe                       unixy:pipe-open
+     close-pipe                      unixy:close-pipe
+
+   This example also shows how to use the convenience procedure
+‘symbol-prefix-proc’.
+
+   You can also directly refer to bindings in a module by using the ‘@’
+syntax.  For example, instead of using the ‘use-modules’ statement from
+above and writing ‘unixy:pipe-open’ to refer to the ‘pipe-open’ from the
+‘(ice-9 popen)’, you could also write ‘(@ (ice-9 popen) open-pipe)’.
+Thus an alternative to the complete ‘use-modules’ statement would be
+
+     (define unixy:pipe-open (@ (ice-9 popen) open-pipe))
+     (define unixy:close-pipe (@ (ice-9 popen) close-pipe))
+
+   There is also ‘@@’, which can be used like ‘@’, but does not check
+whether the variable that is being accessed is actually exported.  Thus,
+‘@@’ can be thought of as the impolite version of ‘@’ and should only be
+used as a last resort or for debugging, for example.
+
+   Note that just as with a ‘use-modules’ statement, any module that has
+not yet been loaded will be loaded when referenced by a ‘@’ or ‘@@’
+form.
+
+   You can also use the ‘@’ and ‘@@’ syntaxes as the target of a ‘set!’
+when the binding refers to a variable.
+
+ -- Scheme Procedure: symbol-prefix-proc prefix-sym
+     Return a procedure that prefixes its arg (a symbol) with
+     PREFIX-SYM.
+
+ -- syntax: use-modules spec ...
+     Resolve each interface specification SPEC into an interface and
+     arrange for these to be accessible by the current module.  The
+     return value is unspecified.
+
+     SPEC can be a list of symbols, in which case it names a module
+     whose public interface is found and used.
+
+     SPEC can also be of the form:
+
+           (MODULE-NAME [#:select SELECTION]
+                        [#:prefix PREFIX]
+                        [#:renamer RENAMER])
+
+     in which case a custom interface is newly created and used.
+     MODULE-NAME is a list of symbols, as above; SELECTION is a list of
+     selection-specs; PREFIX is a symbol that is prepended to imported
+     names; and RENAMER is a procedure that takes a symbol and returns
+     its new name.  A selection-spec is either a symbol or a pair of
+     symbols ‘(ORIG . SEEN)’, where ORIG is the name in the used module
+     and SEEN is the name in the using module.  Note that SEEN is also
+     modified by PREFIX and RENAMER.
+
+     The ‘#:select’, ‘#:prefix’, and ‘#:renamer’ clauses are optional.
+     If all are omitted, the returned interface has no bindings.  If the
+     ‘#:select’ clause is omitted, PREFIX and RENAMER operate on the
+     used module’s public interface.
+
+     In addition to the above, SPEC can also include a ‘#:version’
+     clause, of the form:
+
+           #:version VERSION-SPEC
+
+     where VERSION-SPEC is an R6RS-compatible version reference.  An
+     error will be signaled in the case in which a module with the same
+     name has already been loaded, if that module specifies a version
+     and that version is not compatible with VERSION-SPEC.  *Note R6RS
+     Version References::, for more on version references.
+
+     If the module name is not resolvable, ‘use-modules’ will signal an
+     error.
+
+ -- syntax: @ module-name binding-name
+     Refer to the binding named BINDING-NAME in module MODULE-NAME.  The
+     binding must have been exported by the module.
+
+ -- syntax: @@ module-name binding-name
+     Refer to the binding named BINDING-NAME in module MODULE-NAME.  The
+     binding must not have been exported by the module.  This syntax is
+     only intended for debugging purposes or as a last resort.
+
+File: guile.info,  Node: Creating Guile Modules,  Next: Modules and the File System,  Prev: Using Guile Modules,  Up: Modules
+
+6.19.3 Creating Guile Modules
+-----------------------------
+
+When you want to create your own modules, you have to take the following
+steps:
+
+   • Create a Scheme source file and add all variables and procedures
+     you wish to export, or which are required by the exported
+     procedures.
+
+   • Add a ‘define-module’ form at the beginning.
+
+   • Export all bindings which should be in the public interface, either
+     by using ‘define-public’ or ‘export’ (both documented below).
+
+ -- syntax: define-module module-name option ...
+     MODULE-NAME is a list of one or more symbols.
+
+          (define-module (ice-9 popen))
+
+     ‘define-module’ makes this module available to Guile programs under
+     the given MODULE-NAME.
+
+     OPTION ... are keyword/value pairs which specify more about the
+     defined module.  The recognized options and their meaning are shown
+     in the following table.
+
+     ‘#:use-module INTERFACE-SPECIFICATION’
+          Equivalent to a ‘(use-modules INTERFACE-SPECIFICATION)’ (*note
+          Using Guile Modules::).
+
+     ‘#:autoload MODULE SYMBOL-LIST’
+          Load MODULE when any of SYMBOL-LIST are accessed.  For
+          example,
+
+               (define-module (my mod)
+                 #:autoload (srfi srfi-1) (partition delete-duplicates))
+               ...
+               (if something
+                   (set! foo (delete-duplicates ...)))
+
+          When a module is autoloaded, all its bindings become
+          available.  SYMBOL-LIST is just those that will first trigger
+          the load.
+
+          An autoload is a good way to put off loading a big module
+          until it’s really needed, for instance for faster startup or
+          if it will only be needed in certain circumstances.
+
+          ‘@’ can do a similar thing (*note Using Guile Modules::), but
+          in that case an ‘@’ form must be written every time a binding
+          from the module is used.
+
+     ‘#:export LIST’
+          Export all identifiers in LIST which must be a list of symbols
+          or pairs of symbols.  This is equivalent to ‘(export LIST)’ in
+          the module body.
+
+     ‘#:re-export LIST’
+          Re-export all identifiers in LIST which must be a list of
+          symbols or pairs of symbols.  The symbols in LIST must be
+          imported by the current module from other modules.  This is
+          equivalent to ‘re-export’ below.
+
+     ‘#:replace LIST’
+          Export all identifiers in LIST (a list of symbols or pairs of
+          symbols) and mark them as “replacing bindings”.  In the module
+          user’s name space, this will have the effect of replacing any
+          binding with the same name that is not also “replacing”.
+          Normally a replacement results in an “override” warning
+          message, ‘#:replace’ avoids that.
+
+          In general, a module that exports a binding for which the
+          ‘(guile)’ module already has a definition should use
+          ‘#:replace’ instead of ‘#:export’.  ‘#:replace’, in a sense,
+          lets Guile know that the module _purposefully_ replaces a core
+          binding.  It is important to note, however, that this binding
+          replacement is confined to the name space of the module user.
+          In other words, the value of the core binding in question
+          remains unchanged for other modules.
+
+          Note that although it is often a good idea for the replaced
+          binding to remain compatible with a binding in ‘(guile)’, to
+          avoid surprising the user, sometimes the bindings will be
+          incompatible.  For example, SRFI-19 exports its own version of
+          ‘current-time’ (*note SRFI-19 Time::) which is not compatible
+          with the core ‘current-time’ function (*note Time::).  Guile
+          assumes that a user importing a module knows what she is
+          doing, and uses ‘#:replace’ for this binding rather than
+          ‘#:export’.
+
+          A ‘#:replace’ clause is equivalent to ‘(export! LIST)’ in the
+          module body.
+
+          The ‘#:duplicates’ (see below) provides fine-grain control
+          about duplicate binding handling on the module-user side.
+
+     ‘#:version LIST’
+          Specify a version for the module in the form of LIST, a list
+          of zero or more exact, nonnegative integers.  The
+          corresponding ‘#:version’ option in the ‘use-modules’ form
+          allows callers to restrict the value of this option in various
+          ways.
+
+     ‘#:duplicates LIST’
+          Tell Guile to handle duplicate bindings for the bindings
+          imported by the current module according to the policy defined
+          by LIST, a list of symbols.  LIST must contain symbols
+          representing a duplicate binding handling policy chosen among
+          the following:
+
+          ‘check’
+               Raises an error when a binding is imported from more than
+               one place.
+          ‘warn’
+               Issue a warning when a binding is imported from more than
+               one place and leave the responsibility of actually
+               handling the duplication to the next duplicate binding
+               handler.
+          ‘replace’
+               When a new binding is imported that has the same name as
+               a previously imported binding, then do the following:
+
+                 1. If the old binding was said to be “replacing” (via
+                    the ‘#:replace’ option above) and the new binding is
+                    not replacing, the keep the old binding.
+                 2. If the old binding was not said to be replacing and
+                    the new binding is replacing, then replace the old
+                    binding with the new one.
+                 3. If neither the old nor the new binding is replacing,
+                    then keep the old one.
+
+          ‘warn-override-core’
+               Issue a warning when a core binding is being overwritten
+               and actually override the core binding with the new one.
+          ‘first’
+               In case of duplicate bindings, the firstly imported
+               binding is always the one which is kept.
+          ‘last’
+               In case of duplicate bindings, the lastly imported
+               binding is always the one which is kept.
+          ‘noop’
+               In case of duplicate bindings, leave the responsibility
+               to the next duplicate handler.
+
+          If LIST contains more than one symbol, then the duplicate
+          binding handlers which appear first will be used first when
+          resolving a duplicate binding situation.  As mentioned above,
+          some resolution policies may explicitly leave the
+          responsibility of handling the duplication to the next handler
+          in LIST.
+
+          If GOOPS has been loaded before the ‘#:duplicates’ clause is
+          processed, there are additional strategies available for
+          dealing with generic functions.  *Note Merging Generics::, for
+          more information.
+
+          The default duplicate binding resolution policy is given by
+          the ‘default-duplicate-binding-handler’ procedure, and is
+
+               (replace warn-override-core warn last)
+
+     ‘#:pure’
+          Create a “pure” module, that is a module which does not
+          contain any of the standard procedure bindings except for the
+          syntax forms.  This is useful if you want to create “safe”
+          modules, that is modules which do not know anything about
+          dangerous procedures.
+
+ -- syntax: export variable ...
+     Add all VARIABLEs (which must be symbols or pairs of symbols) to
+     the list of exported bindings of the current module.  If VARIABLE
+     is a pair, its ‘car’ gives the name of the variable as seen by the
+     current module and its ‘cdr’ specifies a name for the binding in
+     the current module’s public interface.
+
+ -- syntax: define-public ...
+     Equivalent to ‘(begin (define foo ...) (export foo))’.
+
+ -- syntax: re-export variable ...
+     Add all VARIABLEs (which must be symbols or pairs of symbols) to
+     the list of re-exported bindings of the current module.  Pairs of
+     symbols are handled as in ‘export’.  Re-exported bindings must be
+     imported by the current module from some other module.
+
+ -- syntax: export! variable ...
+     Like ‘export’, but marking the exported variables as replacing.
+     Using a module with replacing bindings will cause any existing
+     bindings to be replaced without issuing any warnings.  See the
+     discussion of ‘#:replace’ above.
+
+File: guile.info,  Node: Modules and the File System,  Next: R6RS Version References,  Prev: Creating Guile Modules,  Up: Modules
+
+6.19.4 Modules and the File System
+----------------------------------
+
+Typical programs only use a small subset of modules installed on a Guile
+system.  In order to keep startup time down, Guile only loads modules
+when a program uses them, on demand.
+
+   When a program evaluates ‘(use-modules (ice-9 popen))’, and the
+module is not loaded, Guile searches for a conventionally-named file
+from in the “load path”.
+
+   In this case, loading ‘(ice-9 popen)’ will eventually cause Guile to
+run ‘(primitive-load-path "ice-9/popen")’.  ‘primitive-load-path’ will
+search for a file ‘ice-9/popen’ in the ‘%load-path’ (*note Load
+Paths::).  For each directory in ‘%load-path’, Guile will try to find
+the file name, concatenated with the extensions from ‘%load-extensions’.
+By default, this will cause Guile to ‘stat’ ‘ice-9/popen.scm’, and then
+‘ice-9/popen’.  *Note Load Paths::, for more on ‘primitive-load-path’.
+
+   If a corresponding compiled ‘.go’ file is found in the
+‘%load-compiled-path’ or in the fallback path, and is as fresh as the
+source file, it will be loaded instead of the source file.  If no
+compiled file is found, Guile may try to compile the source file and
+cache away the resulting ‘.go’ file.  *Note Compilation::, for more on
+compilation.
+
+   Once Guile finds a suitable source or compiled file is found, the
+file will be loaded.  If, after loading the file, the module under
+consideration is still not defined, Guile will signal an error.
+
+   For more information on where and how to install Scheme modules,
+*Note Installing Site Packages::.
+
+File: guile.info,  Node: R6RS Version References,  Next: R6RS Libraries,  Prev: Modules and the File System,  Up: Modules
+
+6.19.5 R6RS Version References
+------------------------------
+
+Guile’s module system includes support for locating modules based on a
+declared version specifier of the same form as the one described in R6RS
+(*note R6RS Library Form: (r6rs)Library form.).  By using the
+‘#:version’ keyword in a ‘define-module’ form, a module may specify a
+version as a list of zero or more exact, nonnegative integers.
+
+   This version can then be used to locate the module during the module
+search process.  Client modules and callers of the ‘use-modules’
+function may specify constraints on the versions of target modules by
+providing a “version reference”, which has one of the following forms:
+
+      (SUB-VERSION-REFERENCE ...)
+      (and VERSION-REFERENCE ...)
+      (or VERSION-REFERENCE ...)
+      (not VERSION-REFERENCE)
+
+   in which SUB-VERSION-REFERENCE is in turn one of:
+
+      (SUB-VERSION)
+      (>= SUB-VERSION)
+      (<= SUB-VERSION)
+      (and SUB-VERSION-REFERENCE ...)
+      (or SUB-VERSION-REFERENCE ...)
+      (not SUB-VERSION-REFERENCE)
+
+   in which SUB-VERSION is an exact, nonnegative integer as above.  A
+version reference matches a declared module version if each element of
+the version reference matches a corresponding element of the module
+version, according to the following rules:
+
+   • The ‘and’ sub-form matches a version or version element if every
+     element in the tail of the sub-form matches the specified version
+     or version element.
+
+   • The ‘or’ sub-form matches a version or version element if any
+     element in the tail of the sub-form matches the specified version
+     or version element.
+
+   • The ‘not’ sub-form matches a version or version element if the tail
+     of the sub-form does not match the version or version element.
+
+   • The ‘>=’ sub-form matches a version element if the element is
+     greater than or equal to the SUB-VERSION in the tail of the
+     sub-form.
+
+   • The ‘<=’ sub-form matches a version element if the version is less
+     than or equal to the SUB-VERSION in the tail of the sub-form.
+
+   • A SUB-VERSION matches a version element if one is EQV? to the
+     other.
+
+   For example, a module declared as:
+
+      (define-module (mylib mymodule) #:version (1 2 0))
+
+   would be successfully loaded by any of the following ‘use-modules’
+expressions:
+
+      (use-modules ((mylib mymodule) #:version (1 2 (>= 0))))
+      (use-modules ((mylib mymodule) #:version (or (1 2 0) (1 2 1))))
+      (use-modules ((mylib mymodule) #:version ((and (>= 1) (not 2)) 2 0)))
+
+File: guile.info,  Node: R6RS Libraries,  Next: Variables,  Prev: R6RS Version References,  Up: Modules
+
+6.19.6 R6RS Libraries
+---------------------
+
+In addition to the API described in the previous sections, you also have
+the option to create modules using the portable ‘library’ form described
+in R6RS (*note R6RS Library Form: (r6rs)Library form.), and to import
+libraries created in this format by other programmers.  Guile’s R6RS
+library implementation takes advantage of the flexibility built into the
+module system by expanding the R6RS library form into a corresponding
+Guile ‘define-module’ form that specifies equivalent import and export
+requirements and includes the same body expressions.  The library
+expression:
+
+       (library (mylib (1 2))
+         (export mybinding)
+         (import (otherlib (3))))
+
+   is equivalent to the module definition:
+
+       (define-module (mylib)
+         #:version (1 2)
+         #:use-module ((otherlib) #:version (3))
+         #:export (mybinding))
+
+   Central to the mechanics of R6RS libraries is the concept of import
+and export “levels”, which control the visibility of bindings at various
+phases of a library’s lifecycle — macros necessary to expand forms in
+the library’s body need to be available at expand time; variables used
+in the body of a procedure exported by the library must be available at
+runtime.  R6RS specifies the optional ‘for’ sub-form of an _import set_
+specification (see below) as a mechanism by which a library author can
+indicate that a particular library import should take place at a
+particular phase with respect to the lifecycle of the importing library.
+
+   Guile’s library implementation uses a technique called “implicit
+phasing” (first described by Abdulaziz Ghuloum and R. Kent Dybvig),
+which allows the expander and compiler to automatically determine the
+necessary visibility of a binding imported from another library.  As
+such, the ‘for’ sub-form described below is ignored by Guile (but may be
+required by Schemes in which phasing is explicit).
+
+ -- Scheme Syntax: library name (export export-spec ...) (import
+          import-spec ...) body ...
+     Defines a new library with the specified name, exports, and
+     imports, and evaluates the specified body expressions in this
+     library’s environment.
+
+     The library NAME is a non-empty list of identifiers, optionally
+     ending with a version specification of the form described above
+     (*note Creating Guile Modules::).
+
+     Each EXPORT-SPEC is the name of a variable defined or imported by
+     the library, or must take the form ‘(rename (internal-name
+     external-name) ...)’, where the identifier INTERNAL-NAME names a
+     variable defined or imported by the library and EXTERNAL-NAME is
+     the name by which the variable is seen by importing libraries.
+
+     Each IMPORT-SPEC must be either an “import set” (see below) or must
+     be of the form ‘(for import-set import-level ...)’, where each
+     IMPORT-LEVEL is one of:
+
+            run
+            expand
+            (meta LEVEL)
+
+     where LEVEL is an integer.  Note that since Guile does not require
+     explicit phase specification, any IMPORT-SETs found inside of ‘for’
+     sub-forms will be “unwrapped” during expansion and processed as if
+     they had been specified directly.
+
+     Import sets in turn take one of the following forms:
+
+            LIBRARY-REFERENCE
+            (library LIBRARY-REFERENCE)
+            (only IMPORT-SET IDENTIFIER ...)
+            (except IMPORT-SET IDENTIFIER ...)
+            (prefix IMPORT-SET IDENTIFIER)
+            (rename IMPORT-SET (INTERNAL-IDENTIFIER EXTERNAL-IDENTIFIER) ...)
+
+     where LIBRARY-REFERENCE is a non-empty list of identifiers ending
+     with an optional version reference (*note R6RS Version
+     References::), and the other sub-forms have the following
+     semantics, defined recursively on nested IMPORT-SETs:
+
+        • The ‘library’ sub-form is used to specify libraries for import
+          whose names begin with the identifier “library.”
+
+        • The ‘only’ sub-form imports only the specified IDENTIFIERs
+          from the given IMPORT-SET.
+
+        • The ‘except’ sub-form imports all of the bindings exported by
+          IMPORT-SET except for those that appear in the specified list
+          of IDENTIFIERs.
+
+        • The ‘prefix’ sub-form imports all of the bindings exported by
+          IMPORT-SET, first prefixing them with the specified
+          IDENTIFIER.
+
+        • The ‘rename’ sub-form imports all of the identifiers exported
+          by IMPORT-SET.  The binding for each INTERNAL-IDENTIFIER among
+          these identifiers is made visible to the importing library as
+          the corresponding EXTERNAL-IDENTIFIER; all other bindings are
+          imported using the names provided by IMPORT-SET.
+
+     Note that because Guile translates R6RS libraries into module
+     definitions, an import specification may be used to declare a
+     dependency on a native Guile module — although doing so may make
+     your libraries less portable to other Schemes.
+
+ -- Scheme Syntax: import import-spec ...
+     Import into the current environment the libraries specified by the
+     given import specifications, where each IMPORT-SPEC takes the same
+     form as in the ‘library’ form described above.
+
+File: guile.info,  Node: Variables,  Next: Module System Reflection,  Prev: R6RS Libraries,  Up: Modules
+
+6.19.7 Variables
+----------------
+
+Each module has its own hash table, sometimes known as an “obarray”,
+that maps the names defined in that module to their corresponding
+variable objects.
+
+   A variable is a box-like object that can hold any Scheme value.  It
+is said to be “undefined” if its box holds a special Scheme value that
+denotes undefined-ness (which is different from all other Scheme values,
+including for example ‘#f’); otherwise the variable is “defined”.
+
+   On its own, a variable object is anonymous.  A variable is said to be
+“bound” when it is associated with a name in some way, usually a symbol
+in a module obarray.  When this happens, the name is said to be bound to
+the variable, in that module.
+
+   (That’s the theory, anyway.  In practice, defined-ness and bound-ness
+sometimes get confused, because Lisp and Scheme implementations have
+often conflated — or deliberately drawn no distinction between — a name
+that is unbound and a name that is bound to a variable whose value is
+undefined.  We will try to be clear about the difference and explain any
+confusion where it is unavoidable.)
+
+   Variables do not have a read syntax.  Most commonly they are created
+and bound implicitly by ‘define’ expressions: a top-level ‘define’
+expression of the form
+
+     (define NAME VALUE)
+
+creates a variable with initial value VALUE and binds it to the name
+NAME in the current module.  But they can also be created dynamically by
+calling one of the constructor procedures ‘make-variable’ and
+‘make-undefined-variable’.
+
+ -- Scheme Procedure: make-undefined-variable
+ -- C Function: scm_make_undefined_variable ()
+     Return a variable that is initially unbound.
+
+ -- Scheme Procedure: make-variable init
+ -- C Function: scm_make_variable (init)
+     Return a variable initialized to value INIT.
+
+ -- Scheme Procedure: variable-bound? var
+ -- C Function: scm_variable_bound_p (var)
+     Return ‘#t’ if VAR is bound to a value, or ‘#f’ otherwise.  Throws
+     an error if VAR is not a variable object.
+
+ -- Scheme Procedure: variable-ref var
+ -- C Function: scm_variable_ref (var)
+     Dereference VAR and return its value.  VAR must be a variable
+     object; see ‘make-variable’ and ‘make-undefined-variable’.
+
+ -- Scheme Procedure: variable-set! var val
+ -- C Function: scm_variable_set_x (var, val)
+     Set the value of the variable VAR to VAL.  VAR must be a variable
+     object, VAL can be any value.  Return an unspecified value.
+
+ -- Scheme Procedure: variable-unset! var
+ -- C Function: scm_variable_unset_x (var)
+     Unset the value of the variable VAR, leaving VAR unbound.
+
+ -- Scheme Procedure: variable? obj
+ -- C Function: scm_variable_p (obj)
+     Return ‘#t’ if OBJ is a variable object, else return ‘#f’.
+
+File: guile.info,  Node: Module System Reflection,  Next: Accessing Modules from C,  Prev: Variables,  Up: Modules
+
+6.19.8 Module System Reflection
+-------------------------------
+
+The previous sections have described a declarative view of the module
+system.  You can also work with it programmatically by accessing and
+modifying various parts of the Scheme objects that Guile uses to
+implement the module system.
+
+   At any time, there is a “current module”.  This module is the one
+where a top-level ‘define’ and similar syntax will add new bindings.
+You can find other module objects with ‘resolve-module’, for example.
+
+   These module objects can be used as the second argument to ‘eval’.
+
+ -- Scheme Procedure: current-module
+ -- C Function: scm_current_module ()
+     Return the current module object.
+
+ -- Scheme Procedure: set-current-module module
+ -- C Function: scm_set_current_module (module)
+     Set the current module to MODULE and return the previous current
+     module.
+
+ -- Scheme Procedure: save-module-excursion thunk
+     Call THUNK within a ‘dynamic-wind’ such that the module that is
+     current at invocation time is restored when THUNK’s dynamic extent
+     is left (*note Dynamic Wind::).
+
+     More precisely, if THUNK escapes non-locally, the current module
+     (at the time of escape) is saved, and the original current module
+     (at the time THUNK’s dynamic extent was last entered) is restored.
+     If THUNK’s dynamic extent is re-entered, then the current module is
+     saved, and the previously saved inner module is set current again.
+
+ -- Scheme Procedure: resolve-module name [autoload=#t] [version=#f]
+          [#:ensure=#t]
+ -- C Function: scm_resolve_module (name)
+     Find the module named NAME and return it.  When it has not already
+     been defined and AUTOLOAD is true, try to auto-load it.  When it
+     can’t be found that way either, create an empty module if ENSURE is
+     true, otherwise return ‘#f’.  If VERSION is true, ensure that the
+     resulting module is compatible with the given version reference
+     (*note R6RS Version References::).  The name is a list of symbols.
+
+ -- Scheme Procedure: resolve-interface name [#:select=#f] [#:hide='()]
+          [#:prefix=#f] [#:renamer=#f] [#:version=#f]
+     Find the module named NAME as with ‘resolve-module’ and return its
+     interface.  The interface of a module is also a module object, but
+     it contains only the exported bindings.
+
+ -- Scheme Procedure: module-uses module
+     Return a list of the interfaces used by MODULE.
+
+ -- Scheme Procedure: module-use! module interface
+     Add INTERFACE to the front of the use-list of MODULE.  Both
+     arguments should be module objects, and INTERFACE should very
+     likely be a module returned by ‘resolve-interface’.
+
+ -- Scheme Procedure: reload-module module
+     Revisit the source file that corresponds to MODULE.  Raises an
+     error if no source file is associated with the given module.
+
+   As mentioned in the previous section, modules contain a mapping
+between identifiers (as symbols) and storage locations (as variables).
+Guile defines a number of procedures to allow access to this mapping.
+If you are programming in C, *note Accessing Modules from C::.
+
+ -- Scheme Procedure: module-variable module name
+     Return the variable bound to NAME (a symbol) in MODULE, or ‘#f’ if
+     NAME is unbound.
+
+ -- Scheme Procedure: module-add! module name var
+     Define a new binding between NAME (a symbol) and VAR (a variable)
+     in MODULE.
+
+ -- Scheme Procedure: module-ref module name
+     Look up the value bound to NAME in MODULE.  Like ‘module-variable’,
+     but also does a ‘variable-ref’ on the resulting variable, raising
+     an error if NAME is unbound.
+
+ -- Scheme Procedure: module-define! module name value
+     Locally bind NAME to VALUE in MODULE.  If NAME was already locally
+     bound in MODULE, i.e., defined locally and not by an imported
+     module, the value stored in the existing variable will be updated.
+     Otherwise, a new variable will be added to the module, via
+     ‘module-add!’.
+
+ -- Scheme Procedure: module-set! module name value
+     Update the binding of NAME in MODULE to VALUE, raising an error if
+     NAME is not already bound in MODULE.
+
+   There are many other reflective procedures available in the default
+environment.  If you find yourself using one of them, please contact the
+Guile developers so that we can commit to stability for that interface.
+
+File: guile.info,  Node: Accessing Modules from C,  Next: provide and require,  Prev: Module System Reflection,  Up: Modules
+
+6.19.9 Accessing Modules from C
+-------------------------------
+
+The last sections have described how modules are used in Scheme code,
+which is the recommended way of creating and accessing modules.  You can
+also work with modules from C, but it is more cumbersome.
+
+   The following procedures are available.
+
+ -- C Function: SCM scm_c_call_with_current_module (SCM MODULE, SCM
+          (*FUNC)(void *), void *DATA)
+     Call FUNC and make MODULE the current module during the call.  The
+     argument DATA is passed to FUNC.  The return value of
+     ‘scm_c_call_with_current_module’ is the return value of FUNC.
+
+ -- C Function: SCM scm_public_variable (SCM MODULE_NAME, SCM NAME)
+ -- C Function: SCM scm_c_public_variable (const char *MODULE_NAME,
+          const char *NAME)
+     Find a the variable bound to the symbol NAME in the public
+     interface of the module named MODULE_NAME.
+
+     MODULE_NAME should be a list of symbols, when represented as a
+     Scheme object, or a space-separated string, in the ‘const char *’
+     case.  See ‘scm_c_define_module’ below, for more examples.
+
+     Signals an error if no module was found with the given name.  If
+     NAME is not bound in the module, just returns ‘#f’.
+
+ -- C Function: SCM scm_private_variable (SCM MODULE_NAME, SCM NAME)
+ -- C Function: SCM scm_c_private_variable (const char *MODULE_NAME,
+          const char *NAME)
+     Like ‘scm_public_variable’, but looks in the internals of the
+     module named MODULE_NAME instead of the public interface.
+     Logically, these procedures should only be called on modules you
+     write.
+
+ -- C Function: SCM scm_public_lookup (SCM MODULE_NAME, SCM NAME)
+ -- C Function: SCM scm_c_public_lookup (const char *MODULE_NAME, const
+          char *NAME)
+ -- C Function: SCM scm_private_lookup (SCM MODULE_NAME, SCM NAME)
+ -- C Function: SCM scm_c_private_lookup (const char *MODULE_NAME, const
+          char *NAME)
+     Like ‘scm_public_variable’ or ‘scm_private_variable’, but if the
+     NAME is not bound in the module, signals an error.  Returns a
+     variable, always.
+
+          static SCM eval_string_var;
+
+          /* NOTE: It is important that the call to 'my_init'
+             happens-before all calls to 'my_eval_string'. */
+          void my_init (void)
+          {
+            eval_string_var = scm_c_public_lookup ("ice-9 eval-string",
+                                                   "eval-string");
+          }
+
+          SCM my_eval_string (SCM str)
+          {
+            return scm_call_1 (scm_variable_ref (eval_string_var), str);
+          }
+
+ -- C Function: SCM scm_public_ref (SCM MODULE_NAME, SCM NAME)
+ -- C Function: SCM scm_c_public_ref (const char *MODULE_NAME, const
+          char *NAME)
+ -- C Function: SCM scm_private_ref (SCM MODULE_NAME, SCM NAME)
+ -- C Function: SCM scm_c_private_ref (const char *MODULE_NAME, const
+          char *NAME)
+     Like ‘scm_public_lookup’ or ‘scm_private_lookup’, but additionally
+     dereferences the variable.  If the variable object is unbound,
+     signals an error.  Returns the value bound to NAME in MODULE_NAME.
+
+   In addition, there are a number of other lookup-related procedures.
+We suggest that you use the ‘scm_public_’ and ‘scm_private_’ family of
+procedures instead, if possible.
+
+ -- C Function: SCM scm_c_lookup (const char *NAME)
+     Return the variable bound to the symbol indicated by NAME in the
+     current module.  If there is no such binding or the symbol is not
+     bound to a variable, signal an error.
+
+ -- C Function: SCM scm_lookup (SCM NAME)
+     Like ‘scm_c_lookup’, but the symbol is specified directly.
+
+ -- C Function: SCM scm_c_module_lookup (SCM MODULE, const char *NAME)
+ -- C Function: SCM scm_module_lookup (SCM MODULE, SCM NAME)
+     Like ‘scm_c_lookup’ and ‘scm_lookup’, but the specified module is
+     used instead of the current one.
+
+ -- C Function: SCM scm_module_variable (SCM MODULE, SCM NAME)
+     Like ‘scm_module_lookup’, but if the binding does not exist, just
+     returns ‘#f’ instead of raising an error.
+
+   To define a value, use ‘scm_define’:
+
+ -- C Function: SCM scm_c_define (const char *NAME, SCM VAL)
+     Bind the symbol indicated by NAME to a variable in the current
+     module and set that variable to VAL.  When NAME is already bound to
+     a variable, use that.  Else create a new variable.
+
+ -- C Function: SCM scm_define (SCM NAME, SCM VAL)
+     Like ‘scm_c_define’, but the symbol is specified directly.
+
+ -- C Function: SCM scm_c_module_define (SCM MODULE, const char *NAME,
+          SCM VAL)
+ -- C Function: SCM scm_module_define (SCM MODULE, SCM NAME, SCM VAL)
+     Like ‘scm_c_define’ and ‘scm_define’, but the specified module is
+     used instead of the current one.
+
+   In some rare cases, you may need to access the variable that
+‘scm_module_define’ would have accessed, without changing the binding of
+the existing variable, if one is present.  In that case, use
+‘scm_module_ensure_local_variable’:
+
+ -- C Function: SCM scm_module_ensure_local_variable (SCM MODULE, SCM
+          SYM)
+     Like ‘scm_module_define’, but if the SYM is already locally bound
+     in that module, the variable’s existing binding is not reset.
+     Returns a variable.
+
+ -- C Function: SCM scm_module_reverse_lookup (SCM MODULE, SCM VARIABLE)
+     Find the symbol that is bound to VARIABLE in MODULE.  When no such
+     binding is found, return ‘#f’.
+
+ -- C Function: SCM scm_c_define_module (const char *NAME, void
+          (*INIT)(void *), void *DATA)
+     Define a new module named NAME and make it current while INIT is
+     called, passing it DATA.  Return the module.
+
+     The parameter NAME is a string with the symbols that make up the
+     module name, separated by spaces.  For example, ‘"foo bar"’ names
+     the module ‘(foo bar)’.
+
+     When there already exists a module named NAME, it is used
+     unchanged, otherwise, an empty module is created.
+
+ -- C Function: SCM scm_c_resolve_module (const char *NAME)
+     Find the module name NAME and return it.  When it has not already
+     been defined, try to auto-load it.  When it can’t be found that way
+     either, create an empty module.  The name is interpreted as for
+     ‘scm_c_define_module’.
+
+ -- C Function: SCM scm_c_use_module (const char *NAME)
+     Add the module named NAME to the uses list of the current module,
+     as with ‘(use-modules NAME)’.  The name is interpreted as for
+     ‘scm_c_define_module’.
+
+ -- C Function: void scm_c_export (const char *NAME, ...)
+     Add the bindings designated by NAME, ...  to the public interface
+     of the current module.  The list of names is terminated by ‘NULL’.
+
+File: guile.info,  Node: provide and require,  Next: Environments,  Prev: Accessing Modules from C,  Up: Modules
+
+6.19.10 provide and require
+---------------------------
+
+Aubrey Jaffer, mostly to support his portable Scheme library SLIB,
+implemented a provide/require mechanism for many Scheme implementations.
+Library files in SLIB _provide_ a feature, and when user programs
+_require_ that feature, the library file is loaded in.
+
+   For example, the file ‘random.scm’ in the SLIB package contains the
+line
+
+     (provide 'random)
+
+   so to use its procedures, a user would type
+
+     (require 'random)
+
+   and they would magically become available, _but still have the same
+names!_  So this method is nice, but not as good as a full-featured
+module system.
+
+   When SLIB is used with Guile, provide and require can be used to
+access its facilities.
+
+File: guile.info,  Node: Environments,  Prev: provide and require,  Up: Modules
+
+6.19.11 Environments
+--------------------
+
+Scheme, as defined in R5RS, does _not_ have a full module system.
+However it does define the concept of a top-level “environment”.  Such
+an environment maps identifiers (symbols) to Scheme objects such as
+procedures and lists: *note About Closure::.  In other words, it
+implements a set of “bindings”.
+
+   Environments in R5RS can be passed as the second argument to ‘eval’
+(*note Fly Evaluation::).  Three procedures are defined to return
+environments: ‘scheme-report-environment’, ‘null-environment’ and
+‘interaction-environment’ (*note Fly Evaluation::).
+
+   In addition, in Guile any module can be used as an R5RS environment,
+i.e., passed as the second argument to ‘eval’.
+
+   Note: the following two procedures are available only when the
+‘(ice-9 r5rs)’ module is loaded:
+
+     (use-modules (ice-9 r5rs))
+
+ -- Scheme Procedure: scheme-report-environment version
+ -- Scheme Procedure: null-environment version
+     VERSION must be the exact integer ‘5’, corresponding to revision 5
+     of the Scheme report (the Revised^5 Report on Scheme).
+     ‘scheme-report-environment’ returns a specifier for an environment
+     that is empty except for all bindings defined in the report that
+     are either required or both optional and supported by the
+     implementation.  ‘null-environment’ returns a specifier for an
+     environment that is empty except for the (syntactic) bindings for
+     all syntactic keywords defined in the report that are either
+     required or both optional and supported by the implementation.
+
+     Currently Guile does not support values of VERSION for other
+     revisions of the report.
+
+     The effect of assigning (through the use of ‘eval’) a variable
+     bound in a ‘scheme-report-environment’ (for example ‘car’) is
+     unspecified.  Currently the environments specified by
+     ‘scheme-report-environment’ are not immutable in Guile.
+
+File: guile.info,  Node: Foreign Function Interface,  Next: Scheduling,  Prev: Modules,  Up: API Reference
+

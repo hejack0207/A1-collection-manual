@@ -1,0 +1,1416 @@
+26.7 ZLE Functions
+==================
+
+
+
+26.7.1 Widgets
+--------------
+
+
+These functions all implement user-defined ZLE widgets (see *note Zsh
+Line Editor::) which can be bound to keystrokes in interactive shells.
+To use them, your .zshrc should contain lines of the form
+
+     autoload FUNCTION
+     zle -N FUNCTION
+
+followed by an appropriate bindkey command to associate the function
+with a key sequence.  Suggested bindings are described below.
+
+bash-style word functions
+     If you are looking for functions to implement moving over and
+     editing words in the manner of bash, where only alphanumeric
+     characters are considered word characters, you can use the
+     functions described in the next section.  The following is
+     sufficient:
+
+          autoload -U select-word-style
+          select-word-style bash
+
+
+forward-word-match, backward-word-match
+kill-word-match, backward-kill-word-match
+transpose-words-match, capitalize-word-match
+up-case-word-match, down-case-word-match
+delete-whole-word-match, select-word-match
+select-word-style, match-word-context, match-words-by-style
+     The first eight '-match' functions are drop-in replacements for the
+     builtin widgets without the suffix.  By default they behave in a
+     similar way.  However, by the use of styles and the function
+     select-word-style, the way words are matched can be altered.
+     select-word-match is intended to be used as a text object in vi
+     mode but with custom word styles.  For comparison, the widgets
+     described in *note Text Objects:: use fixed definitions of words,
+     compatible with the vim editor.
+
+     The simplest way of configuring the functions is to use
+     select-word-style, which can either be called as a normal function
+     with the appropriate argument, or invoked as a user-defined widget
+     that will prompt for the first character of the word style to be
+     used.  The first time it is invoked, the first eight -match
+     functions will automatically replace the builtin versions, so they
+     do not need to be loaded explicitly.
+
+     The word styles available are as follows.  Only the first character
+     is examined.
+
+     bash
+          Word characters are alphanumeric characters only.
+
+     normal
+          As in normal shell operation: word characters are alphanumeric
+          characters plus any characters present in the string given by
+          the parameter $WORDCHARS.
+
+     shell
+          Words are complete shell command arguments, possibly including
+          complete quoted strings, or any tokens special to the shell.
+
+     whitespace
+          Words are any set of characters delimited by whitespace.
+
+     default
+          Restore the default settings; this is usually the same as
+          'normal'.
+
+     All but 'default' can be input as an upper case character, which
+     has the same effect but with subword matching turned on.  In this
+     case, words with upper case characters are treated specially: each
+     separate run of upper case characters, or an upper case character
+     followed by any number of other characters, is considered a word.
+     The style subword-range can supply an alternative character range
+     to the default '[:upper:]'; the value of the style is treated as
+     the contents of a '[...]' pattern (note that the outer brackets
+     should not be supplied, only those surrounding named ranges).
+
+     More control can be obtained using the zstyle command, as described
+     in *note The zsh/zutil Module::.  Each style is looked up in the
+     context :zle:WIDGET where WIDGET is the name of the user-defined
+     widget, not the name of the function implementing it, so in the
+     case of the definitions supplied by select-word-style the
+     appropriate contexts are :zle:forward-word, and so on.  The
+     function select-word-style itself always defines styles for the
+     context ':zle:*' which can be overridden by more specific (longer)
+     patterns as well as explicit contexts.
+
+     The style word-style specifies the rules to use.  This may have the
+     following values.
+
+     normal
+          Use the standard shell rules, i.e.  alphanumerics and
+          $WORDCHARS, unless overridden by the styles word-chars or
+          word-class.
+
+     specified
+          Similar to normal, but _only_ the specified characters, and
+          not also alphanumerics, are considered word characters.
+
+     unspecified
+          The negation of specified.  The given characters are those
+          which will _not_ be considered part of a word.
+
+     shell
+          Words are obtained by using the syntactic rules for generating
+          shell command arguments.  In addition, special tokens which
+          are never command arguments such as '()' are also treated as
+          words.
+
+     whitespace
+          Words are whitespace-delimited strings of characters.
+
+     The first three of those rules usually use $WORDCHARS, but the
+     value in the parameter can be overridden by the style word-chars,
+     which works in exactly the same way as $WORDCHARS.  In addition,
+     the style word-class uses character class syntax to group
+     characters and takes precedence over word-chars if both are set.
+     The word-class style does not include the surrounding brackets of
+     the character class; for example, '-:[:alnum:]' is a valid
+     word-class to include all alphanumerics plus the characters '-' and
+     ':'.  Be careful including ']', '^' and '-' as these are special
+     inside character classes.
+
+     word-style may also have '-subword' appended to its value to turn
+     on subword matching, as described above.
+
+     The style skip-chars is mostly useful for transpose-words and
+     similar functions.  If set, it gives a count of characters starting
+     at the cursor position which will not be considered part of the
+     word and are treated as space, regardless of what they actually
+     are.  For example, if
+
+          zstyle ':zle:transpose-words' skip-chars 1
+
+     has been set, and transpose-words-match is called with the cursor
+     on the X of fooXbar, where X can be any character, then the
+     resulting expression is barXfoo.
+
+     Finer grained control can be obtained by setting the style
+     word-context to an array of pairs of entries.  Each pair of entries
+     consists of a PATTERN and a SUBCONTEXT.  The shell argument the
+     cursor is on is matched against each PATTERN in turn until one
+     matches; if it does, the context is extended by a colon and the
+     corresponding SUBCONTEXT.  Note that the test is made against the
+     original word on the line, with no stripping of quotes.  Special
+     handling is done between words: the current context is examined and
+     if it contains the string between the word is set to a single
+     space; else if it is contains the string back, the word before the
+     cursor is considered, else the word after cursor is considered.
+     Some examples are given below.
+
+     The style skip-whitespace-first is only used with the forward-word
+     widget.  If it is set to true, then forward-word skips any
+     non-word-characters, followed by any non-word-characters: this is
+     similar to the behaviour of other word-orientated widgets, and also
+     that used by other editors, however it differs from the standard
+     zsh behaviour.  When using select-word-style the widget is set in
+     the context :zle:* to true if the word style is bash and false
+     otherwise.  It may be overridden by setting it in the more specific
+     context :zle:forward-word*.
+
+     Here are some examples of use of the styles, actually taken from
+     the simplified interface in select-word-style:
+
+          zstyle ':zle:*' word-style standard
+          zstyle ':zle:*' word-chars ''
+
+     Implements bash-style word handling for all widgets, i.e.  only
+     alphanumerics are word characters; equivalent to setting the
+     parameter WORDCHARS empty for the given context.
+
+          style ':zle:*kill*' word-style space
+
+     Uses space-delimited words for widgets with the word 'kill' in the
+     name.  Neither of the styles word-chars nor word-class is used in
+     this case.
+
+     Here are some examples of use of the word-context style to extend
+     the context.
+
+          zstyle ':zle:*' word-context \
+                 "*/*" filename "[[:space:]]" whitespace
+          zstyle ':zle:transpose-words:whitespace' word-style shell
+          zstyle ':zle:transpose-words:filename' word-style normal
+          zstyle ':zle:transpose-words:filename' word-chars ''
+
+     This provides two different ways of using transpose-words depending
+     on whether the cursor is on whitespace between words or on a
+     filename, here any word containing a /.  On whitespace, complete
+     arguments as defined by standard shell rules will be transposed.
+     In a filename, only alphanumerics will be transposed.  Elsewhere,
+     words will be transposed using the default style for
+     :zle:transpose-words.
+
+     The word matching and all the handling of zstyle settings is
+     actually implemented by the function match-words-by-style.  This
+     can be used to create new user-defined widgets.  The calling
+     function should set the local parameter curcontext to :zle:WIDGET,
+     create the local parameter matched_words and call
+     match-words-by-style with no arguments.  On return, matched_words
+     will be set to an array with the elements: (1) the start of the
+     line (2) the word before the cursor (3) any non-word characters
+     between that word and the cursor (4) any non-word character at the
+     cursor position plus any remaining non-word characters before the
+     next word, including all characters specified by the skip-chars
+     style, (5) the word at or following the cursor (6) any non-word
+     characters following that word (7) the remainder of the line.  Any
+     of the elements may be an empty string; the calling function should
+     test for this to decide whether it can perform its function.
+
+     If the variable matched_words is defined by the caller to
+     match-words-by-style as an associative array (local -A
+     matched_words), then the seven values given above should be
+     retrieved from it as elements named start, word-before-cursor,
+     ws-before-cursor, ws-after-cursor, word-after-cursor,
+     ws-after-word, and end.  In addition the element is-word-start is 1
+     if the cursor is on the start of a word or subword, or on white
+     space before it (the cases can be distinguished by testing the
+     ws-after-cursor element) and 0 otherwise.  This form is recommended
+     for future compatibility.
+
+     It is possible to pass options with arguments to
+     match-words-by-style to override the use of styles.  The options
+     are:
+     -w
+          WORD-STYLE
+     -s
+          SKIP-CHARS
+     -c
+          WORD-CLASS
+     -C
+          WORD-CHARS
+     -r
+          SUBWORD-RANGE
+
+     For example, match-words-by-style -w shell -c 0 may be used to
+     extract the command argument around the cursor.
+
+     The word-context style is implemented by the function
+     match-word-context.  This should not usually need to be called
+     directly.
+
+bracketed-paste-magic
+     The bracketed-paste widget (see *note Miscellaneous:: in *note Zle
+     Widgets::) inserts pasted text literally into the editor buffer
+     rather than interpret it as keystrokes.  This disables some common
+     usages where the self-insert widget is replaced in order to
+     accomplish some extra processing.  An example is the contributed
+     url-quote-magic widget described below.
+
+     The bracketed-paste-magic widget is meant to replace
+     bracketed-paste with a wrapper that re-enables these self-insert
+     actions, and other actions as selected by zstyles.  Therefore this
+     widget is installed with
+
+          autoload -Uz bracketed-paste-magic
+          zle -N bracketed-paste bracketed-paste-magic
+
+     Other than enabling some widget processing, bracketed-paste-magic
+     attempts to replicate bracketed-paste as faithfully as possible.
+
+     The following zstyles may be set to control processing of pasted
+     text.  All are looked up in the context ':bracketed-paste-magic'.
+
+     active-widgets
+          A list of patterns matching widget names that should be
+          activated during the paste.  All other key sequences are
+          processed as self-insert-unmeta.  The default is 'self-*' so
+          any user-defined widgets named with that prefix are active
+          along with the builtin self-insert.
+
+          If this style is not set (explicitly deleted) or set to an
+          empty value, no widgets are active and the pasted text is
+          inserted literally.  If the value includes 'undefined-key',
+          any unknown sequences are discarded from the pasted text.
+
+     inactive-keys
+          The inverse of active-widgets, a list of key sequences that
+          always use self-insert-unmeta even when bound to an active
+          widget.  Note that this is a list of literal key sequences,
+          not patterns.
+
+     paste-init
+          A list of function names, called in widget context (but not as
+          widgets).  The functions are called in order until one of them
+          returns a non-zero status.  The parameter 'PASTED' contains
+          the initial state of the pasted text.  All other ZLE
+          parameters such as 'BUFFER' have their normal values and
+          side-effects, and full history is available, so for example
+          paste-init functions may move words from BUFFER into PASTED to
+          make those words visible to the active-widgets.
+
+          A non-zero return from a paste-init function does _not_
+          prevent the paste itself from proceeding.
+
+          Loading bracketed-paste-magic defines backward-extend-paste, a
+          helper function for use in paste-init.
+
+               zstyle :bracketed-paste-magic paste-init \
+                      backward-extend-paste
+
+          When a paste would insert into the middle of a word or append
+          text to a word already on the line, backward-extend-paste
+          moves the prefix from LBUFFER into PASTED so that the
+          active-widgets see the full word so far.  This may be useful
+          with url-quote-magic.
+
+     paste-finish
+          Another list of function names called in order until one
+          returns non-zero.  These functions are called _after_ the
+          pasted text has been processed by the active-widgets, but
+          _before_ it is inserted into 'BUFFER'.  ZLE parameters have
+          their normal values and side-effects.
+
+          A non-zero return from a paste-finish function does _not_
+          prevent the paste itself from proceeding.
+
+          Loading bracketed-paste-magic also defines quote-paste, a
+          helper function for use in paste-finish.
+
+               zstyle :bracketed-paste-magic paste-finish \
+                      quote-paste
+               zstyle :bracketed-paste-magic:finish quote-style \
+                      qqq
+
+          When the pasted text is inserted into BUFFER, it is quoted per
+          the quote-style value.  To forcibly turn off the built-in
+          numeric prefix quoting of bracketed-paste, use:
+
+               zstyle :bracketed-paste-magic:finish quote-style \
+                      none
+
+     _Important:_ During active-widgets processing of the paste (after
+     paste-init and before paste-finish), BUFFER starts empty and
+     history is restricted, so cursor motions, etc., may not pass
+     outside of the pasted content.  Text assigned to BUFFER by the
+     active widgets is copied back into PASTED before paste-finish.
+
+copy-earlier-word
+     This widget works like a combination of insert-last-word and
+     copy-prev-shell-word.  Repeated invocations of the widget retrieve
+     earlier words on the relevant history line.  With a numeric
+     argument N, insert the Nth word from the history line; N may be
+     negative to count from the end of the line.
+
+     If insert-last-word has been used to retrieve the last word on a
+     previous history line, repeated invocations will replace that word
+     with earlier words from the same line.
+
+     Otherwise, the widget applies to words on the line currently being
+     edited.  The widget style can be set to the name of another widget
+     that should be called to retrieve words.  This widget must accept
+     the same three arguments as insert-last-word.
+
+cycle-completion-positions
+     After inserting an unambiguous string into the command line, the
+     new function based completion system may know about multiple places
+     in this string where characters are missing or differ from at least
+     one of the possible matches.  It will then place the cursor on the
+     position it considers to be the most interesting one, i.e.  the one
+     where one can disambiguate between as many matches as possible with
+     as little typing as possible.
+
+     This widget allows the cursor to be easily moved to the other
+     interesting spots.  It can be invoked repeatedly to cycle between
+     all positions reported by the completion system.
+
+delete-whole-word-match
+     This is another function which works like the -match functions
+     described immediately above, i.e.  using styles to decide the word
+     boundaries.  However, it is not a replacement for any existing
+     function.
+
+     The basic behaviour is to delete the word around the cursor.  There
+     is no numeric argument handling; only the single word around the
+     cursor is considered.  If the widget contains the string kill, the
+     removed text will be placed in the cutbuffer for future yanking.
+     This can be obtained by defining kill-whole-word-match as follows:
+
+          zle -N kill-whole-word-match delete-whole-word-match
+
+     and then binding the widget kill-whole-word-match.
+
+up-line-or-beginning-search, down-line-or-beginning-search
+     These widgets are similar to the builtin functions
+     up-line-or-search and down-line-or-search: if in a multiline buffer
+     they move up or down within the buffer, otherwise they search for a
+     history line matching the start of the current line.  In this case,
+     however, they search for a line which matches the current line up
+     to the current cursor position, in the manner of
+     history-beginning-search-backward and -forward, rather than the
+     first word on the line.
+
+edit-command-line
+     Edit the command line using your visual editor, as in ksh.
+
+          bindkey -M vicmd v edit-command-line
+
+expand-absolute-path
+     Expand the file name under the cursor to an absolute path,
+     resolving symbolic links.  Where possible, the initial path segment
+     is turned into a named directory or reference to a user's home
+     directory.
+
+history-search-end
+     This function implements the widgets
+     history-beginning-search-backward-end and
+     history-beginning-search-forward-end.  These commands work by first
+     calling the corresponding builtin widget (see *note History
+     Control::) and then moving the cursor to the end of the line.  The
+     original cursor position is remembered and restored before calling
+     the builtin widget a second time, so that the same search is
+     repeated to look farther through the history.
+
+     Although you autoload only one function, the commands to use it are
+     slightly different because it implements two widgets.
+
+          zle -N history-beginning-search-backward-end \
+                 history-search-end
+          zle -N history-beginning-search-forward-end \
+                 history-search-end
+          bindkey '\e^P' history-beginning-search-backward-end
+          bindkey '\e^N' history-beginning-search-forward-end
+
+history-beginning-search-menu
+     This function implements yet another form of history searching.
+     The text before the cursor is used to select lines from the
+     history, as for history-beginning-search-backward except that all
+     matches are shown in a numbered menu.  Typing the appropriate
+     digits inserts the full history line.  Note that leading zeroes
+     must be typed (they are only shown when necessary for removing
+     ambiguity).  The entire history is searched; there is no
+     distinction between forwards and backwards.
+
+     With a numeric argument, the search is not anchored to the start of
+     the line; the string typed by the use may appear anywhere in the
+     line in the history.
+
+     If the widget name contains '-end' the cursor is moved to the end
+     of the line inserted.  If the widget name contains '-space' any
+     space in the text typed is treated as a wildcard and can match
+     anything (hence a leading space is equivalent to giving a numeric
+     argument).  Both forms can be combined, for example:
+
+          zle -N history-beginning-search-menu-space-end \
+                 history-beginning-search-menu
+
+history-pattern-search
+     The function history-pattern-search implements widgets which prompt
+     for a pattern with which to search the history backwards or
+     forwards.  The pattern is in the usual zsh format, however the
+     first character may be ^ to anchor the search to the start of the
+     line, and the last character may be $ to anchor the search to the
+     end of the line.  If the search was not anchored to the end of the
+     line the cursor is positioned just after the pattern found.
+
+     The commands to create bindable widgets are similar to those in the
+     example immediately above:
+
+          autoload -U history-pattern-search
+          zle -N history-pattern-search-backward history-pattern-search
+          zle -N history-pattern-search-forward history-pattern-search
+
+incarg
+     Typing the keystrokes for this widget with the cursor placed on or
+     to the left of an integer causes that integer to be incremented by
+     one.  With a numeric argument, the number is incremented by the
+     amount of the argument (decremented if the numeric argument is
+     negative).  The shell parameter incarg may be set to change the
+     default increment to something other than one.
+
+          bindkey '^X+' incarg
+
+incremental-complete-word
+     This allows incremental completion of a word.  After starting this
+     command, a list of completion choices can be shown after every
+     character you type, which you can delete with ^H or DEL.  Pressing
+     return accepts the completion so far and returns you to normal
+     editing (that is, the command line is _not_ immediately executed).
+     You can hit TAB to do normal completion, ^G to abort back to the
+     state when you started, and ^D to list the matches.
+
+     This works only with the new function based completion system.
+
+          bindkey '^Xi' incremental-complete-word
+
+insert-composed-char
+     This function allows you to compose characters that don't appear on
+     the keyboard to be inserted into the command line.  The command is
+     followed by two keys corresponding to ASCII characters (there is no
+     prompt).  For accented characters, the two keys are a base
+     character followed by a code for the accent, while for other
+     special characters the two characters together form a mnemonic for
+     the character to be inserted.  The two-character codes are a subset
+     of those given by RFC 1345 (see for example
+     <http://www.faqs.org/rfcs/rfc1345.html>).
+
+     The function may optionally be followed by up to two characters
+     which replace one or both of the characters read from the keyboard;
+     if both characters are supplied, no input is read.  For example,
+     insert-composed-char a: can be used within a widget to insert an a
+     with umlaut into the command line.  This has the advantages over
+     use of a literal character that it is more portable.
+
+     For best results zsh should have been built with support for
+     multibyte characters (configured with --enable-multibyte); however,
+     the function works for the limited range of characters available in
+     single-byte character sets such as ISO-8859-1.
+
+     The character is converted into the local representation and
+     inserted into the command line at the cursor position.  (The
+     conversion is done within the shell, using whatever facilities the
+     C library provides.)  With a numeric argument, the character and
+     its code are previewed in the status line
+
+     The function may be run outside zle in which case it prints the
+     character (together with a newline) to standard output.  Input is
+     still read from keystrokes.
+
+     See insert-unicode-char for an alternative way of inserting Unicode
+     characters using their hexadecimal character number.
+
+     The set of accented characters is reasonably complete up to Unicode
+     character U+0180, the set of special characters less so.  However,
+     it is very sporadic from that point.  Adding new characters is
+     easy, however; see the function define-composed-chars.  Please send
+     any additions to zsh-workers@zsh.org.
+
+     The codes for the second character when used to accent the first
+     are as follows.  Note that not every character can take every
+     accent.
+     !
+          Grave.
+     '
+          Acute.
+     >
+          Circumflex.
+     ?
+          Tilde.  (This is not ~ as RFC 1345 does not assume that
+          character is present on the keyboard.)
+     -
+          Macron.  (A horizontal bar over the base character.)
+     (
+          Breve.  (A shallow dish shape over the base character.)
+     .
+          Dot above the base character, or in the case of i no dot, or
+          in the case of L and l a centered dot.
+     :
+          Diaeresis (Umlaut).
+     c
+          Cedilla.
+     _
+          Underline, however there are currently no underlined
+          characters.
+     /
+          Stroke through the base character.
+     "
+          Double acute (only supported on a few letters).
+     ;
+          Ogonek.  (A little forward facing hook at the bottom right of
+          the character.)
+     <
+          Caron.  (A little v over the letter.)
+     0
+          Circle over the base character.
+     2
+          Hook over the base character.
+     9
+          Horn over the base character.
+
+     The most common characters from the Arabic, Cyrillic, Greek and
+     Hebrew alphabets are available; consult RFC 1345 for the
+     appropriate sequences.  In addition, a set of two letter codes not
+     in RFC 1345 are available for the double-width characters
+     corresponding to ASCII characters from ! to ~ (0x21 to 0x7e) by
+     preceding the character with ^, for example ^A for a double-width
+     A.
+
+     The following other two-character sequences are understood.
+
+     ASCII characters
+          These are already present on most keyboards:
+          <(
+               Left square bracket
+          //
+               Backslash (solidus)
+          )>
+               Right square bracket
+          (!
+               Left brace (curly bracket)
+          !!
+               Vertical bar (pipe symbol)
+          !)
+               Right brace (curly bracket)
+          '?
+               Tilde
+
+     Special letters
+          Characters found in various variants of the Latin alphabet:
+          ss
+               Eszett (scharfes S)
+          D-, d-
+               Eth
+          TH, th
+               Thorn
+          kk
+               Kra
+          'n
+               'n
+          NG, ng
+               Ng
+          OI, oi
+               Oi
+          yr
+               yr
+          ED
+               ezh
+
+     Currency symbols
+          Ct
+               Cent
+          Pd
+               Pound sterling (also lira and others)
+          Cu
+               Currency
+          Ye
+               Yen
+          Eu
+               Euro (N.B. not in RFC 1345)
+
+     Punctuation characters
+          References to "right" quotes indicate the shape (like a 9
+          rather than 6) rather than their grammatical use.  (For
+          example, a "right" low double quote is used to open quotations
+          in German.)
+          !I
+               Inverted exclamation mark
+          BB
+               Broken vertical bar
+          SE
+               Section
+          Co
+               Copyright
+          -a
+               Spanish feminine ordinal indicator
+          <<
+               Left guillemet
+          --
+               Soft hyphen
+          Rg
+               Registered trade mark
+          PI
+               Pilcrow (paragraph)
+          -o
+               Spanish masculine ordinal indicator
+          >>
+               Right guillemet
+          ?I
+               Inverted question mark
+          -1
+               Hyphen
+          -N
+               En dash
+          -M
+               Em dash
+          -3
+               Horizontal bar
+          :3
+               Vertical ellipsis
+          .3
+               Horizontal midline ellipsis
+          !2
+               Double vertical line
+          =2
+               Double low line
+          '6
+               Left single quote
+          '9
+               Right single quote
+          .9
+               "Right" low quote
+          9'
+               Reversed "right" quote
+          "6
+               Left double quote
+          "9
+               Right double quote
+          :9
+               "Right" low double quote
+          9"
+               Reversed "right" double quote
+          /-
+               Dagger
+          /=
+               Double dagger
+
+     Mathematical symbols
+          DG
+               Degree
+          -2, +-, -+
+               - sign, +/- sign, -/+ sign
+          2S
+               Superscript 2
+          3S
+               Superscript 3
+          1S
+               Superscript 1
+          My
+               Micro
+          .M
+               Middle dot
+          14
+               Quarter
+          12
+               Half
+          34
+               Three quarters
+          *X
+               Multiplication
+          -:
+               Division
+          %0
+               Per mille
+          FA, TE, /0
+               For all, there exists, empty set
+          dP, DE, NB
+               Partial derivative, delta (increment), del (nabla)
+          (-, -)
+               Element of, contains
+          *P, +Z
+               Product, sum
+          *-, Ob, Sb
+               Asterisk, ring, bullet
+          RT, 0(, 00
+               Root sign, proportional to, infinity
+
+     Other symbols
+          cS, cH, cD, cC
+               Card suits: spades, hearts, diamonds, clubs
+          Md, M8, M2, Mb, Mx, MX
+               Musical notation: crotchet (quarter note), quaver (eighth
+               note), semiquavers (sixteenth notes), flag sign, natural
+               sign, sharp sign
+          Fm, Ml
+               Female, male
+
+     Accents on their own
+          '>
+               Circumflex (same as caret, ^)
+          '!
+               Grave (same as backtick, `)
+          ',
+               Cedilla
+          ':
+               Diaeresis (Umlaut)
+          'm
+               Macron
+          ''
+               Acute
+
+insert-files
+     This function allows you type a file pattern, and see the results
+     of the expansion at each step.  When you hit return, all expansions
+     are inserted into the command line.
+
+          bindkey '^Xf' insert-files
+
+insert-unicode-char
+     When first executed, the user inputs a set of hexadecimal digits.
+     This is terminated with another call to insert-unicode-char.  The
+     digits are then turned into the corresponding Unicode character.
+     For example, if the widget is bound to ^XU, the character sequence
+     '^XU 4 c ^XU' inserts L (Unicode U+004c).
+
+     See insert-composed-char for a way of inserting characters using a
+     two-character mnemonic.
+
+narrow-to-region [ -p PRE ] [ -P POST ]
+                 [ -S STATEPM | -R STATEPM | [ -l LBUFVAR ] [ -r RBUFVAR ] ]
+                 [ -n ] [ START END ]
+narrow-to-region-invisible
+     Narrow the editable portion of the buffer to the region between the
+     cursor and the mark, which may be in either order.  The region may
+     not be empty.
+
+     narrow-to-region may be used as a widget or called as a function
+     from a user-defined widget; by default, the text outside the
+     editable area remains visible.  A recursive-edit is performed and
+     the original widening status is then restored.  Various options and
+     arguments are available when it is called as a function.
+
+     The options -p PRETEXT and -P POSTTEXT may be used to replace the
+     text before and after the display for the duration of the function;
+     either or both may be an empty string.
+
+     If the option -n is also given, PRETEXT or POSTTEXT will only be
+     inserted if there is text before or after the region respectively
+     which will be made invisible.
+
+     Two numeric arguments may be given which will be used instead of
+     the cursor and mark positions.
+
+     The option -S STATEPM is used to narrow according to the other
+     options while saving the original state in the parameter with name
+     STATEPM, while the option -R STATEPM is used to restore the state
+     from the parameter; note in both cases the _name_ of the parameter
+     is required.  In the second case, other options and arguments are
+     irrelevant.  When this method is used, no recursive-edit is
+     performed; the calling widget should call this function with the
+     option -S, perform its own editing on the command line or pass
+     control to the user via 'zle recursive-edit', then call this
+     function with the option -R.  The argument STATEPM must be a
+     suitable name for an ordinary parameter, except that parameters
+     beginning with the prefix _ntr_ are reserved for use within
+     narrow-to-region.  Typically the parameter will be local to the
+     calling function.
+
+     The options -l LBUFVAR and -r RBUFVAR may be used to specify
+     parameters where the widget will store the resulting text from the
+     operation.  The parameter LBUFVAR will contain LBUFFER and RBUFVAR
+     will contain RBUFFER.  Neither of these two options may be used
+     with -S or -R.
+
+     narrow-to-region-invisible is a simple widget which calls
+     narrow-to-region with arguments which replace any text outside the
+     region with '...'.  It does not take any arguments.
+
+     The display is restored (and the widget returns) upon any zle
+     command which would usually cause the line to be accepted or
+     aborted.  Hence an additional such command is required to accept or
+     abort the current line.
+
+     The return status of both widgets is zero if the line was accepted,
+     else non-zero.
+
+     Here is a trivial example of a widget using this feature.
+          local state
+          narrow-to-region -p $'Editing restricted region\n' \
+            -P '' -S state
+          zle recursive-edit
+          narrow-to-region -R state
+
+predict-on
+     This set of functions implements predictive typing using history
+     search.  After predict-on, typing characters causes the editor to
+     look backward in the history for the first line beginning with what
+     you have typed so far.  After predict-off, editing returns to
+     normal for the line found.  In fact, you often don't even need to
+     use predict-off, because if the line doesn't match something in the
+     history, adding a key performs standard completion, and then
+     inserts itself if no completions were found.  However, editing in
+     the middle of a line is liable to confuse prediction; see the
+     toggle style below.
+
+     With the function based completion system (which is needed for
+     this), you should be able to type TAB at almost any point to
+     advance the cursor to the next ''interesting'' character position
+     (usually the end of the current word, but sometimes somewhere in
+     the middle of the word).  And of course as soon as the entire line
+     is what you want, you can accept with return, without needing to
+     move the cursor to the end first.
+
+     The first time predict-on is used, it creates several additional
+     widget functions:
+
+     delete-backward-and-predict
+          Replaces the backward-delete-char widget.  You do not need to
+          bind this yourself.
+     insert-and-predict
+          Implements predictive typing by replacing the self-insert
+          widget.  You do not need to bind this yourself.
+     predict-off
+          Turns off predictive typing.
+
+     Although you autoload only the predict-on function, it is necessary
+     to create a keybinding for predict-off as well.
+
+          zle -N predict-on
+          zle -N predict-off
+          bindkey '^X^Z' predict-on
+          bindkey '^Z' predict-off
+
+read-from-minibuffer
+     This is most useful when called as a function from inside a widget,
+     but will work correctly as a widget in its own right.  It prompts
+     for a value below the current command line; a value may be input
+     using all of the standard zle operations (and not merely the
+     restricted set available when executing, for example,
+     execute-named-cmd).  The value is then returned to the calling
+     function in the parameter $REPLY and the editing buffer restored to
+     its previous state.  If the read was aborted by a keyboard break
+     (typically ^G), the function returns status 1 and $REPLY is not
+     set.
+
+     If one argument is supplied to the function it is taken as a
+     prompt, otherwise '? ' is used.  If two arguments are supplied,
+     they are the prompt and the initial value of $LBUFFER, and if a
+     third argument is given it is the initial value of $RBUFFER.  This
+     provides a default value and starting cursor placement.  Upon
+     return the entire buffer is the value of $REPLY.
+
+     One option is available: '-k NUM' specifies that NUM characters are
+     to be read instead of a whole line.  The line editor is not invoked
+     recursively in this case, so depending on the terminal settings the
+     input may not be visible, and only the input keys are placed in
+     $REPLY, not the entire buffer.  Note that unlike the read builtin
+     NUM must be given; there is no default.
+
+     The name is a slight misnomer, as in fact the shell's own
+     minibuffer is not used.  Hence it is still possible to call
+     executed-named-cmd and similar functions while reading a value.
+
+replace-argument, replace-argument-edit
+     The function replace-argument can be used to replace a command line
+     argument in the current command line or, if the current command
+     line is empty, in the last command line executed (the new command
+     line is not executed).  Arguments are as delimited by standard
+     shell syntax,
+
+     If a numeric argument is given, that specifies the argument to be
+     replaced.  0 means the command name, as in history expansion.  A
+     negative numeric argument counts backward from the last word.
+
+     If no numeric argument is given, the current argument is replaced;
+     this is the last argument if the previous history line is being
+     used.
+
+     The function prompts for a replacement argument.
+
+     If the widget contains the string edit, for example is defined as
+
+          zle -N replace-argument-edit replace-argument
+
+     then the function presents the current value of the argument for
+     editing, otherwise the editing buffer for the replacement is
+     initially empty.
+
+replace-string, replace-pattern
+replace-string-again, replace-pattern-again
+     The function replace-string implements three widgets.  If defined
+     under the same name as the function, it prompts for two strings;
+     the first (source) string will be replaced by the second everywhere
+     it occurs in the line editing buffer.
+
+     If the widget name contains the word 'pattern', for example by
+     defining the widget using the command 'zle -N replace-pattern
+     replace-string', then the matching is performed using zsh patterns.
+     All zsh extended globbing patterns can be used in the source
+     string; note that unlike filename generation the pattern does not
+     need to match an entire word, nor do glob qualifiers have any
+     effect.  In addition, the replacement string can contain parameter
+     or command substitutions.  Furthermore, a '&' in the replacement
+     string will be replaced with the matched source string, and a
+     backquoted digit '\N' will be replaced by the Nth parenthesised
+     expression matched.  The form '\{N}' may be used to protect the
+     digit from following digits.
+
+     If the widget instead contains the word 'regex' (or 'regexp'), then
+     the matching is performed using regular expressions, respecting the
+     setting of the option RE_MATCH_PCRE (see the description of the
+     function regexp-replace below).  The special replacement facilities
+     described above for pattern matching are available.
+
+     By default the previous source or replacement string will not be
+     offered for editing.  However, this feature can be activated by
+     setting the style edit-previous in the context :zle:WIDGET (for
+     example, :zle:replace-string) to true.  In addition, a positive
+     numeric argument forces the previous values to be offered, a
+     negative or zero argument forces them not to be.
+
+     The function replace-string-again can be used to repeat the
+     previous replacement; no prompting is done.  As with
+     replace-string, if the name of the widget contains the word
+     'pattern' or 'regex', pattern or regular expression matching is
+     performed, else a literal string replacement.  Note that the
+     previous source and replacement text are the same whether pattern,
+     regular expression or string matching is used.
+
+     In addition, replace-string shows the previous replacement above
+     the prompt, so long as there was one during the current session; if
+     the source string is empty, that replacement will be repeated
+     without the widget prompting for a replacement string.
+
+     For example, starting from the line:
+
+          print This line contains fan and fond
+
+     and invoking replace-pattern with the source string 'f(?)n' and the
+     replacement string 'c\1r' produces the not very useful line:
+
+          print This line contains car and cord
+
+     The range of the replacement string can be limited by using the
+     narrow-to-region-invisible widget.  One limitation of the current
+     version is that undo will cycle through changes to the replacement
+     and source strings before undoing the replacement itself.
+
+send-invisible
+     This is similar to read-from-minibuffer in that it may be called as
+     a function from a widget or as a widget of its own, and
+     interactively reads input from the keyboard.  However, the input
+     being typed is concealed and a string of asterisks ('*') is shown
+     instead.  The value is saved in the parameter $INVISIBLE to which a
+     reference is inserted into the editing buffer at the restored
+     cursor position.  If the read was aborted by a keyboard break
+     (typically ^G) or another escape from editing such as push-line,
+     $INVISIBLE is set to empty and the original buffer is restored
+     unchanged.
+
+     If one argument is supplied to the function it is taken as a
+     prompt, otherwise 'Non-echoed text: ' is used (as in emacs).  If a
+     second and third argument are supplied they are used to begin and
+     end the reference to $INVISIBLE that is inserted into the buffer.
+     The default is to open with ${, then INVISIBLE, and close with },
+     but many other effects are possible.
+
+smart-insert-last-word
+     This function may replace the insert-last-word widget, like so:
+
+          zle -N insert-last-word smart-insert-last-word
+
+     With a numeric argument, or when passed command line arguments in a
+     call from another widget, it behaves like insert-last-word, except
+     that words in comments are ignored when INTERACTIVE_COMMENTS is
+     set.
+
+     Otherwise, the rightmost ''interesting'' word from the previous
+     command is found and inserted.  The default definition of
+     ''interesting'' is that the word contains at least one alphabetic
+     character, slash, or backslash.  This definition may be overridden
+     by use of the match style.  The context used to look up the style
+     is the widget name, so usually the context is :insert-last-word.
+     However, you can bind this function to different widgets to use
+     different patterns:
+
+          zle -N insert-last-assignment smart-insert-last-word
+          zstyle :insert-last-assignment match '[[:alpha:]][][[:alnum:]]#=*'
+          bindkey '\e=' insert-last-assignment
+
+     If no interesting word is found and the auto-previous style is set
+     to a true value, the search continues upward through the history.
+     When auto-previous is unset or false (the default), the widget must
+     be invoked repeatedly in order to search earlier history lines.
+
+transpose-lines
+     Only useful with a multi-line editing buffer; the lines here are
+     lines within the current on-screen buffer, not history lines.  The
+     effect is similar to the function of the same name in Emacs.
+
+     Transpose the current line with the previous line and move the
+     cursor to the start of the next line.  Repeating this (which can be
+     done by providing a positive numeric argument) has the effect of
+     moving the line above the cursor down by a number of lines.
+
+     With a negative numeric argument, requires two lines above the
+     cursor.  These two lines are transposed and the cursor moved to the
+     start of the previous line.  Using a numeric argument less than -1
+     has the effect of moving the line above the cursor up by minus that
+     number of lines.
+
+url-quote-magic
+     This widget replaces the built-in self-insert to make it easier to
+     type URLs as command line arguments.  As you type, the input
+     character is analyzed and, if it may need quoting, the current word
+     is checked for a URI scheme.  If one is found and the current word
+     is not already in quotes, a backslash is inserted before the input
+     character.
+
+     Styles to control quoting behavior:
+
+     url-metas
+          This style is looked up in the context
+          ':url-quote-magic:SCHEME' (where SCHEME is that of the current
+          URL, e.g.  "ftp").  The value is a string listing the
+          characters to be treated as globbing metacharacters when
+          appearing in a URL using that scheme.  The default is to quote
+          all zsh extended globbing characters, excluding '<' and '>'
+          but including braces (as in brace expansion).  See also
+          url-seps.
+
+     url-seps
+          Like url-metas, but lists characters that should be considered
+          command separators, redirections, history references, etc.
+          The default is to quote the standard set of shell separators,
+          excluding those that overlap with the extended globbing
+          characters, but including '<' and '>' and the first character
+          of $histchars.
+
+     url-globbers
+          This style is looked up in the context ':url-quote-magic'.
+          The values form a list of command names that are expected to
+          do their own globbing on the URL string.  This implies that
+          they are aliased to use the 'noglob' modifier.  When the first
+          word on the line matches one of the values _and_ the URL
+          refers to a local file (see url-local-schema), only the
+          url-seps characters are quoted; the url-metas are left alone,
+          allowing them to affect command-line parsing, completion, etc.
+          The default values are a literal 'noglob' plus (when the
+          zsh/parameter module is available) any commands aliased to the
+          helper function 'urlglobber' or its alias 'globurl'.
+
+     url-local-schema
+          This style is always looked up in the context ':urlglobber',
+          even though it is used by both url-quote-magic and urlglobber.
+          The values form a list of URI schema that should be treated as
+          referring to local files by their real local path names, as
+          opposed to files which are specified relative to a
+          web-server-defined document root.  The defaults are "ftp" and
+          "file".
+
+     url-other-schema
+          Like url-local-schema, but lists all other URI schema upon
+          which urlglobber and url-quote-magic should act.  If the URI
+          on the command line does not have a scheme appearing either in
+          this list or in url-local-schema, it is not magically quoted.
+          The default values are "http", "https", and "ftp".  When a
+          scheme appears both here and in url-local-schema, it is quoted
+          differently depending on whether the command name appears in
+          url-globbers.
+
+     Loading url-quote-magic also defines a helper function 'urlglobber'
+     and aliases 'globurl' to 'noglob urlglobber'.  This function takes
+     a local URL apart, attempts to pattern-match the local file portion
+     of the URL path, and then puts the results back into URL format
+     again.
+
+vi-pipe
+     This function reads a movement command from the keyboard and then
+     prompts for an external command.  The part of the buffer covered by
+     the movement is piped to the external command and then replaced by
+     the command's output.  If the movement command is bound to vi-pipe,
+     the current line is used.
+
+     The function serves as an example for reading a vi movement command
+     from within a user-defined widget.
+
+which-command
+     This function is a drop-in replacement for the builtin widget
+     which-command.  It has enhanced behaviour, in that it correctly
+     detects whether or not the command word needs to be expanded as an
+     alias; if so, it continues tracing the command word from the
+     expanded alias until it reaches the command that will be executed.
+
+     The style whence is available in the context :zle:$WIDGET; this may
+     be set to an array to give the command and options that will be
+     used to investigate the command word found.  The default is whence
+     -c.
+
+zcalc-auto-insert
+     This function is useful together with the zcalc function described
+     in *note Mathematical Functions::.  It should be bound to a key
+     representing a binary operator such as '+', '-', '*' or '/'.  When
+     running in zcalc, if the key occurs at the start of the line or
+     immediately following an open parenthesis, the text "ans " is
+     inserted before the representation of the key itself.  This allows
+     easy use of the answer from the previous calculation in the current
+     line.  The text to be inserted before the symbol typed can be
+     modified by setting the variable ZCALC_AUTO_INSERT_PREFIX.
+
+     Hence, for example, typing '+12' followed by return adds 12 to the
+     previous result.
+
+     If zcalc is in RPN mode (-r option) the effect of this binding is
+     automatically suppressed as operators alone on a line are
+     meaningful.
+
+     When not in zcalc, the key simply inserts the symbol itself.
+
+
+26.7.2 Utility Functions
+------------------------
+
+
+These functions are useful in constructing widgets.  They should be
+loaded with 'autoload -U FUNCTION' and called as indicated from
+user-defined widgets.
+
+split-shell-arguments
+     This function splits the line currently being edited into shell
+     arguments and whitespace.  The result is stored in the array reply.
+     The array contains all the parts of the line in order, starting
+     with any whitespace before the first argument, and finishing with
+     any whitespace after the last argument.  Hence (so long as the
+     option KSH_ARRAYS is not set) whitespace is given by odd indices in
+     the array and arguments by even indices.  Note that no stripping of
+     quotes is done; joining together all the elements of reply in order
+     is guaranteed to produce the original line.
+
+     The parameter REPLY is set to the index of the word in reply which
+     contains the character after the cursor, where the first element
+     has index 1.  The parameter REPLY2 is set to the index of the
+     character under the cursor in that word, where the first character
+     has index 1.
+
+     Hence reply, REPLY and REPLY2 should all be made local to the
+     enclosing function.
+
+     See the function modify-current-argument, described below, for an
+     example of how to call this function.
+
+modify-current-argument [ EXPR-USING-$ARG | FUNC ]
+     This function provides a simple method of allowing user-defined
+     widgets to modify the command line argument under the cursor (or
+     immediately to the left of the cursor if the cursor is between
+     arguments).
+
+     The argument can be an expression which when evaluated operates on
+     the shell parameter ARG, which will have been set to the command
+     line argument under the cursor.  The expression should be suitably
+     quoted to prevent it being evaluated too early.
+
+     Alternatively, if the argument does not contain the string ARG, it
+     is assumed to be a shell function, to which the current command
+     line argument is passed as the only argument.  The function should
+     set the variable REPLY to the new value for the command line
+     argument.  If the function returns non-zero status, so does the
+     calling function.
+
+     For example, a user-defined widget containing the following code
+     converts the characters in the argument under the cursor into all
+     upper case:
+
+          modify-current-argument '${(U)ARG}'
+
+     The following strips any quoting from the current word (whether
+     backslashes or one of the styles of quotes), and replaces it with
+     single quoting throughout:
+
+          modify-current-argument '${(qq)${(Q)ARG}}'
+
+     The following performs directory expansion on the command line
+     argument and replaces it by the absolute path:
+
+          expand-dir() {
+            REPLY=${~1}
+            REPLY=${REPLY:a}
+          }
+          modify-current-argument expand-dir
+
+     In practice the function expand-dir would probably not be defined
+     within the widget where modify-current-argument is called.
+
+
+26.7.3 Styles
+-------------
+
+
+The behavior of several of the above widgets can be controlled by the
+use of the zstyle mechanism.  In particular, widgets that interact with
+the completion system pass along their context to any completions that
+they invoke.
+
+break-keys
+     This style is used by the incremental-complete-word widget.  Its
+     value should be a pattern, and all keys matching this pattern will
+     cause the widget to stop incremental completion without the key
+     having any further effect.  Like all styles used directly by
+     incremental-complete-word, this style is looked up using the
+     context ':incremental'.
+
+completer
+     The incremental-complete-word and insert-and-predict widgets set up
+     their top-level context name before calling completion.  This
+     allows one to define different sets of completer functions for
+     normal completion and for these widgets.  For example, to use
+     completion, approximation and correction for normal completion,
+     completion and correction for incremental completion and only
+     completion for prediction one could use:
+
+          zstyle ':completion:*' completer \
+                  _complete _correct _approximate
+          zstyle ':completion:incremental:*' completer \
+                  _complete _correct
+          zstyle ':completion:predict:*' completer \
+                  _complete
+
+     It is a good idea to restrict the completers used in prediction,
+     because they may be automatically invoked as you type.  The _list
+     and _menu completers should never be used with prediction.  The
+     _approximate, _correct, _expand, and _match completers may be used,
+     but be aware that they may change characters anywhere in the word
+     behind the cursor, so you need to watch carefully that the result
+     is what you intended.
+
+cursor
+     The insert-and-predict widget uses this style, in the context
+     ':predict', to decide where to place the cursor after completion
+     has been tried.  Values are:
+
+     complete
+          The cursor is left where it was when completion finished, but
+          only if it is after a character equal to the one just inserted
+          by the user.  If it is after another character, this value is
+          the same as 'key'.
+
+     key
+          The cursor is left after the Nth occurrence of the character
+          just inserted, where N is the number of times that character
+          appeared in the word before completion was attempted.  In
+          short, this has the effect of leaving the cursor after the
+          character just typed even if the completion code found out
+          that no other characters need to be inserted at that position.
+
+     Any other value for this style unconditionally leaves the cursor at
+     the position where the completion code left it.
+
+list
+     When using the incremental-complete-word widget, this style says if
+     the matches should be listed on every key press (if they fit on the
+     screen).  Use the context prefix ':completion:incremental'.
+
+     The insert-and-predict widget uses this style to decide if the
+     completion should be shown even if there is only one possible
+     completion.  This is done if the value of this style is the string
+     always.  In this case the context is ':predict' (_not_
+     ':completion:predict').
+
+match
+     This style is used by smart-insert-last-word to provide a pattern
+     (using full EXTENDED_GLOB syntax) that matches an interesting word.
+     The context is the name of the widget to which
+     smart-insert-last-word is bound (see above).  The default behavior
+     of smart-insert-last-word is equivalent to:
+
+          zstyle :insert-last-word match '*[[:alpha:]/\\]*'
+
+     However, you might want to include words that contain spaces:
+
+          zstyle :insert-last-word match '*[[:alpha:][:space:]/\\]*'
+
+     Or include numbers as long as the word is at least two characters
+     long:
+
+          zstyle :insert-last-word match '*([[:digit:]]?|[[:alpha:]/\\])*'
+
+     The above example causes redirections like "2>" to be included.
+
+prompt
+     The incremental-complete-word widget shows the value of this style
+     in the status line during incremental completion.  The string value
+     may contain any of the following substrings in the manner of the
+     PS1 and other prompt parameters:
+
+     %c
+          Replaced by the name of the completer function that generated
+          the matches (without the leading underscore).
+
+     %l
+          When the list style is set, replaced by '...' if the list of
+          matches is too long to fit on the screen and with an empty
+          string otherwise.  If the list style is 'false' or not set,
+          '%l' is always removed.
+
+     %n
+          Replaced by the number of matches generated.
+
+     %s
+          Replaced by '-no match-', '-no prefix-', or an empty string if
+          there is no completion matching the word on the line, if the
+          matches have no common prefix different from the word on the
+          line, or if there is such a common prefix, respectively.
+
+     %u
+          Replaced by the unambiguous part of all matches, if there is
+          any, and if it is different from the word on the line.
+
+     Like 'break-keys', this uses the ':incremental' context.
+
+stop-keys
+     This style is used by the incremental-complete-word widget.  Its
+     value is treated similarly to the one for the break-keys style (and
+     uses the same context: ':incremental').  However, in this case all
+     keys matching the pattern given as its value will stop incremental
+     completion and will then execute their usual function.
+
+toggle
+     This boolean style is used by predict-on and its related widgets in
+     the context ':predict'.  If set to one of the standard 'true'
+     values, predictive typing is automatically toggled off in
+     situations where it is unlikely to be useful, such as when editing
+     a multi-line buffer or after moving into the middle of a line and
+     then deleting a character.  The default is to leave prediction
+     turned on until an explicit call to predict-off.
+
+verbose
+     This boolean style is used by predict-on and its related widgets in
+     the context ':predict'.  If set to one of the standard 'true'
+     values, these widgets display a message below the prompt when the
+     predictive state is toggled.  This is most useful in combination
+     with the toggle style.  The default does not display these
+     messages.
+
+widget
+     This style is similar to the command style: For widget functions
+     that use zle to call other widgets, this style can sometimes be
+     used to override the widget which is called.  The context for this
+     style is the name of the calling widget (_not_ the name of the
+     calling function, because one function may be bound to multiple
+     widget names).
+
+          zstyle :copy-earlier-word widget smart-insert-last-word
+
+     Check the documentation for the calling widget or function to
+     determine whether the widget style is used.
+
+
+File: zsh.info,  Node: Exception Handling,  Next: MIME Functions,  Prev: ZLE Functions,  Up: User Contributions
+

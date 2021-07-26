@@ -1,0 +1,293 @@
+3.5 Less Frequently-Used Commands
+=================================
+
+Though perhaps less frequently used than those in the previous section,
+some very small yet useful 'sed' scripts can be built with these
+commands.
+
+'y/SOURCE-CHARS/DEST-CHARS/'
+     Transliterate any characters in the pattern space which match any
+     of the SOURCE-CHARS with the corresponding character in DEST-CHARS.
+
+     Example: transliterate 'a-j' into '0-9':
+          $ echo hello world | sed 'y/abcdefghij/0123456789/'
+          74llo worl3
+
+     (The '/' characters may be uniformly replaced by any other single
+     character within any given 'y' command.)
+
+     Instances of the '/' (or whatever other character is used in its
+     stead), '\', or newlines can appear in the SOURCE-CHARS or
+     DEST-CHARS lists, provide that each instance is escaped by a '\'.
+     The SOURCE-CHARS and DEST-CHARS lists _must_ contain the same
+     number of characters (after de-escaping).
+
+     See the 'tr' command from GNU coreutils for similar functionality.
+
+'a TEXT'
+     Appending TEXT after a line.  This is a GNU extension to the
+     standard 'a' command - see below for details.
+
+     Example: Add the word 'hello' after the second line:
+          $ seq 3 | sed '2a hello'
+          1
+          2
+          hello
+          3
+
+     Leading whitespace after the 'a' command is ignored.  The text to
+     add is read until the end of the line.
+
+'a\'
+'TEXT'
+     Appending TEXT after a line.
+
+     Example: Add 'hello' after the second line (-| indicates printed
+     output lines):
+          $ seq 3 | sed '2a\
+          hello'
+          -|1
+          -|2
+          -|hello
+          -|3
+
+     The 'a' command queues the lines of text which follow this command
+     (each but the last ending with a '\', which are removed from the
+     output) to be output at the end of the current cycle, or when the
+     next input line is read.
+
+     As a GNU extension, this command accepts two addresses.
+
+     Escape sequences in TEXT are processed, so you should use '\\' in
+     TEXT to print a single backslash.
+
+     The commands resume after the last line without a backslash ('\') -
+     'world' in the following example:
+          $ seq 3 | sed '2a\
+          hello\
+          world
+          3s/./X/'
+          -|1
+          -|2
+          -|hello
+          -|world
+          -|X
+
+     As a GNU extension, the 'a' command and TEXT can be separated into
+     two '-e' parameters, enabling easier scripting:
+          $ seq 3 | sed -e '2a\' -e hello
+          1
+          2
+          hello
+          3
+
+          $ sed -e '2a\' -e "$VAR"
+
+'i TEXT'
+     insert TEXT before a line.  This is a GNU extension to the standard
+     'i' command - see below for details.
+
+     Example: Insert the word 'hello' before the second line:
+          $ seq 3 | sed '2i hello'
+          1
+          hello
+          2
+          3
+
+     Leading whitespace after the 'i' command is ignored.  The text to
+     add is read until the end of the line.
+
+'i\'
+'TEXT'
+     Immediately output the lines of text which follow this command.
+
+     Example: Insert 'hello' before the second line (-| indicates
+     printed output lines):
+          $ seq 3 | sed '2i\
+          hello'
+          -|1
+          -|hello
+          -|2
+          -|3
+
+     As a GNU extension, this command accepts two addresses.
+
+     Escape sequences in TEXT are processed, so you should use '\\' in
+     TEXT to print a single backslash.
+
+     The commands resume after the last line without a backslash ('\') -
+     'world' in the following example:
+          $ seq 3 | sed '2i\
+          hello\
+          world
+          s/./X/'
+          -|X
+          -|hello
+          -|world
+          -|X
+          -|X
+
+     As a GNU extension, the 'i' command and TEXT can be separated into
+     two '-e' parameters, enabling easier scripting:
+          $ seq 3 | sed -e '2i\' -e hello
+          1
+          hello
+          2
+          3
+
+          $ sed -e '2i\' -e "$VAR"
+
+'c TEXT'
+     Replaces the line(s) with TEXT.  This is a GNU extension to the
+     standard 'c' command - see below for details.
+
+     Example: Replace the 2nd to 9th lines with the word 'hello':
+          $ seq 10 | sed '2,9c hello'
+          1
+          hello
+          10
+
+     Leading whitespace after the 'c' command is ignored.  The text to
+     add is read until the end of the line.
+
+'c\'
+'TEXT'
+     Delete the lines matching the address or address-range, and output
+     the lines of text which follow this command.
+
+     Example: Replace 2nd to 4th lines with the words 'hello' and
+     'world' (-| indicates printed output lines):
+          $ seq 5 | sed '2,4c\
+          hello\
+          world'
+          -|1
+          -|hello
+          -|world
+          -|5
+
+     If no addresses are given, each line is replaced.
+
+     A new cycle is started after this command is done, since the
+     pattern space will have been deleted.  In the following example,
+     the 'c' starts a new cycle and the substitution command is not
+     performed on the replaced text:
+
+          $ seq 3 | sed '2c\
+          hello
+          s/./X/'
+          -|X
+          -|hello
+          -|X
+
+     As a GNU extension, the 'c' command and TEXT can be separated into
+     two '-e' parameters, enabling easier scripting:
+          $ seq 3 | sed -e '2c\' -e hello
+          1
+          hello
+          3
+
+          $ sed -e '2c\' -e "$VAR"
+
+'='
+     Print out the current input line number (with a trailing newline).
+
+          $ printf '%s\n' aaa bbb ccc | sed =
+          1
+          aaa
+          2
+          bbb
+          3
+          ccc
+
+     As a GNU extension, this command accepts two addresses.
+
+'l N'
+     Print the pattern space in an unambiguous form: non-printable
+     characters (and the '\' character) are printed in C-style escaped
+     form; long lines are split, with a trailing '\' character to
+     indicate the split; the end of each line is marked with a '$'.
+
+     N specifies the desired line-wrap length; a length of 0 (zero)
+     means to never wrap long lines.  If omitted, the default as
+     specified on the command line is used.  The N parameter is a GNU
+     'sed' extension.
+
+'r FILENAME'
+
+     Reads file FILENAME.  Example:
+
+          $ seq 3 | sed '2r/etc/hostname'
+          1
+          2
+          fencepost.gnu.org
+          3
+
+     Queue the contents of FILENAME to be read and inserted into the
+     output stream at the end of the current cycle, or when the next
+     input line is read.  Note that if FILENAME cannot be read, it is
+     treated as if it were an empty file, without any error indication.
+
+     As a GNU 'sed' extension, the special value '/dev/stdin' is
+     supported for the file name, which reads the contents of the
+     standard input.
+
+     As a GNU extension, this command accepts two addresses.  The file
+     will then be reread and inserted on each of the addressed lines.
+
+'w FILENAME'
+     Write the pattern space to FILENAME.  As a GNU 'sed' extension, two
+     special values of FILENAME are supported: '/dev/stderr', which
+     writes the result to the standard error, and '/dev/stdout', which
+     writes to the standard output.(1)
+
+     The file will be created (or truncated) before the first input line
+     is read; all 'w' commands (including instances of the 'w' flag on
+     successful 's' commands) which refer to the same FILENAME are
+     output without closing and reopening the file.
+
+'D'
+     If pattern space contains no newline, start a normal new cycle as
+     if the 'd' command was issued.  Otherwise, delete text in the
+     pattern space up to the first newline, and restart cycle with the
+     resultant pattern space, without reading a new line of input.
+
+'N'
+     Add a newline to the pattern space, then append the next line of
+     input to the pattern space.  If there is no more input then 'sed'
+     exits without processing any more commands.
+
+     When '-z' is used, a zero byte (the ascii 'NUL' character) is added
+     between the lines (instead of a new line).
+
+     By default 'sed' does not terminate if there is no 'next' input
+     line.  This is a GNU extension which can be disabled with
+     '--posix'.  *Note N command on the last line: N_command_last_line.
+
+'P'
+     Print out the portion of the pattern space up to the first newline.
+
+'h'
+     Replace the contents of the hold space with the contents of the
+     pattern space.
+
+'H'
+     Append a newline to the contents of the hold space, and then append
+     the contents of the pattern space to that of the hold space.
+
+'g'
+     Replace the contents of the pattern space with the contents of the
+     hold space.
+
+'G'
+     Append a newline to the contents of the pattern space, and then
+     append the contents of the hold space to that of the pattern space.
+
+'x'
+     Exchange the contents of the hold and pattern spaces.
+
+   ---------- Footnotes ----------
+
+   (1) This is equivalent to 'p' unless the '-i' option is being used.
+
+File: sed.info,  Node: Programming Commands,  Next: Extended Commands,  Prev: Other Commands,  Up: sed scripts
+

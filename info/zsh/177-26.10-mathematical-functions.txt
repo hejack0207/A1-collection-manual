@@ -1,0 +1,251 @@
+26.10 Mathematical Functions
+============================
+
+
+zcalc [ -erf ] [ EXPRESSION ... ]
+     A reasonably powerful calculator based on zsh's arithmetic
+     evaluation facility.  The syntax is similar to that of formulae in
+     most programming languages; see *note Arithmetic Evaluation:: for
+     details.
+
+     Non-programmers should note that, as in many other programming
+     languages, expressions involving only integers (whether constants
+     without a '.', variables containing such constants as strings, or
+     variables declared to be integers) are by default evaluated using
+     integer arithmetic, which is not how an ordinary desk calculator
+     operates.  To force floating point operation, pass the option -f;
+     see further notes below.
+
+     If the file ~/.zcalcrc exists it will be sourced inside the
+     function once it is set up and about to process the command line.
+     This can be used, for example, to set shell options; emulate -L zsh
+     and setopt extendedglob are in effect at this point.  Any failure
+     to source the file if it exists is treated as fatal.  As with other
+     initialisation files, the directory $ZDOTDIR is used instead of
+     $HOME if it is set.
+
+     The mathematical library zsh/mathfunc will be loaded if it is
+     available; see *note The zsh/mathfunc Module::.  The mathematical
+     functions correspond to the raw system libraries, so trigonometric
+     functions are evaluated using radians, and so on.
+
+     Each line typed is evaluated as an expression.  The prompt shows a
+     number, which corresponds to a positional parameter where the
+     result of that calculation is stored.  For example, the result of
+     the calculation on the line preceded by '4> ' is available as $4.
+     The last value calculated is available as ans.  Full command line
+     editing, including the history of previous calculations, is
+     available; the history is saved in the file ~/.zcalc_history.  To
+     exit, enter a blank line or type ':q' on its own ('q' is allowed
+     for historical compatibility).
+
+     A line ending with a single backslash is treated in the same
+     fashion as it is in command line editing: the backslash is removed,
+     the function prompts for more input (the prompt is preceded by
+     '...' to indicate this), and the lines are combined into one to get
+     the final result.  In addition, if the input so far contains more
+     open than close parentheses zcalc will prompt for more input.
+
+     If arguments are given to zcalc on start up, they are used to prime
+     the first few positional parameters.  A visual indication of this
+     is given when the calculator starts.
+
+     The constants PI (3.14159...)  and E (2.71828...)  are provided.
+     Parameter assignment is possible, but note that all parameters will
+     be put into the global namespace unless the :local special command
+     is used.  The function creates local variables whose names start
+     with _, so users should avoid doing so.  The variables ans (the
+     last answer) and stack (the stack in RPN mode) may be referred to
+     directly; stack is an array but elements of it are numeric.
+     Various other special variables are used locally with their
+     standard meaning, for example compcontext, match, mbegin, mend,
+     psvar.
+
+     The output base can be initialised by passing the option '-#BASE',
+     for example 'zcalc -#16' (the '#' may have to be quoted, depending
+     on the globbing options set).
+
+     If the option '-e' is set, the function runs non-interactively: the
+     arguments are treated as expressions to be evaluated as if entered
+     interactively line by line.
+
+     If the option '-f' is set, all numbers are treated as floating
+     point, hence for example the expression '3/4' evaluates to 0.75
+     rather than 0.  Options must appear in separate words.
+
+     If the option '-r' is set, RPN (Reverse Polish Notation) mode is
+     entered.  This has various additional properties:
+     Stack
+          Evaluated values are maintained in a stack; this is contained
+          in an array named stack with the most recent value in
+          ${stack[1]}.
+
+     Operators and functions
+          If the line entered matches an operator (+, -, *, /, **, ^, |
+          or &) or a function supplied by the zsh/mathfunc library, the
+          bottom element or elements of the stack are popped to use as
+          the argument or arguments.  The higher elements of stack
+          (least recent) are used as earlier arguments.  The result is
+          then pushed into ${stack[1]}.
+
+     Expressions
+          Other expressions are evaluated normally, printed, and added
+          to the stack as numeric values.  The syntax within expressions
+          on a single line is normal shell arithmetic (not RPN).
+
+     Stack listing
+          If an integer follows the option -r with no space, then on
+          every evaluation that many elements of the stack, where
+          available, are printed instead of just the most recent result.
+          Hence, for example, zcalc -r4 shows $stack[4] to $stack[1]
+          each time results are printed.
+
+     Duplication: =
+          The pseudo-operator = causes the most recent element of the
+          stack to be duplicated onto the stack.
+
+     pop
+          The pseudo-function pop causes the most recent element of the
+          stack to be popped.  A '>' on its own has the same effect.
+
+     >IDENT
+          The expression > followed (with no space) by a shell
+          identifier causes the most recent element of the stack to be
+          popped and assigned to the variable with that name.  The
+          variable is local to the zcalc function.
+
+     <IDENT
+          The expression < followed (with no space) by a shell
+          identifier causes the value of the variable with that name to
+          be pushed onto the stack.  IDENT may be an integer, in which
+          case the previous result with that number (as shown before the
+          > in the standard zcalc prompt) is put on the stack.
+
+     Exchange: xy
+          The pseudo-function xy causes the most recent two elements of
+          the stack to be exchanged.  '<>' has the same effect.
+
+     The prompt is configurable via the parameter ZCALCPROMPT, which
+     undergoes standard prompt expansion.  The index of the current
+     entry is stored locally in the first element of the array psvar,
+     which can be referred to in ZCALCPROMPT as '%1v'.  The default
+     prompt is '%1v> '.
+
+     The variable ZCALC_ACTIVE is set within the function and can be
+     tested by nested functions; it has the value rpn if RPN mode is
+     active, else 1.
+
+     A few special commands are available; these are introduced by a
+     colon.  For backward compatibility, the colon may be omitted for
+     certain commands.  Completion is available if compinit has been
+     run.
+
+     The output precision may be specified within zcalc by special
+     commands familiar from many calculators.
+     :norm
+          The default output format.  It corresponds to the printf %g
+          specification.  Typically this shows six decimal digits.
+
+     :sci DIGITS
+          Scientific notation, corresponding to the printf %g output
+          format with the precision given by DIGITS.  This produces
+          either fixed point or exponential notation depending on the
+          value output.
+
+     :fix DIGITS
+          Fixed point notation, corresponding to the printf %f output
+          format with the precision given by DIGITS.
+
+     :eng DIGITS
+          Exponential notation, corresponding to the printf %E output
+          format with the precision given by DIGITS.
+
+     :raw
+          Raw output: this is the default form of the output from a math
+          evaluation.  This may show more precision than the number
+          actually possesses.
+
+     Other special commands:
+     :!LINE...
+          Execute LINE... as a normal shell command line.  Note that it
+          is executed in the context of the function, i.e.  with local
+          variables.  Space is optional after :!.
+
+     :local ARG ...
+          Declare variables local to the function.  Other variables may
+          be used, too, but they will be taken from or put into the
+          global scope.
+
+     :function NAME [ BODY ]
+          Define a mathematical function or (with no BODY) delete it.
+          :function may be abbreviated to :func or simply :f.  The NAME
+          may contain the same characters as a shell function name.  The
+          function is defined using zmathfuncdef, see below.
+
+          Note that zcalc takes care of all quoting.  Hence for example:
+
+               :f cube $1 * $1 * $1
+
+          defines a function to cube the sole argument.  Functions so
+          defined, or indeed any functions defined directly or
+          indirectly using functions -M, are available to execute by
+          typing only the name on the line in RPN mode; this pops the
+          appropriate number of arguments off the stack to pass to the
+          function, i.e.  1 in the case of the example cube function.
+          If there are optional arguments only the mandatory arguments
+          are supplied by this means.
+
+     [#BASE]
+          This is not a special command, rather part of normal
+          arithmetic syntax; however, when this form appears on a line
+          by itself the default output radix is set to BASE.  Use, for
+          example, '[#16]' to display hexadecimal output preceded by an
+          indication of the base, or '[##16]' just to display the raw
+          number in the given base.  Bases themselves are always
+          specified in decimal.  '[#]' restores the normal output
+          format.  Note that setting an output base suppresses floating
+          point output; use '[#]' to return to normal operation.
+
+     $VAR
+          Print out the value of var literally; does not affect the
+          calculation.  To use the value of var, omit the leading '$'.
+
+     See the comments in the function for a few extra tips.
+
+min(ARG, ...)
+max(ARG, ...)
+sum(ARG, ...)
+zmathfunc
+     The function zmathfunc defines the three mathematical functions
+     min, max, and sum.  The functions min and max take one or more
+     arguments.  The function sum takes zero or more arguments.
+     Arguments can be of different types (ints and floats).
+
+     Not to be confused with the zsh/mathfunc module, described in *note
+     The zsh/mathfunc Module::.
+
+zmathfuncdef [ MATHFUNC [ BODY ] ]
+     A convenient front end to functions -M.
+
+     With two arguments, define a mathematical function named MATHFUNC
+     which can be used in any form of arithmetic evaluation.  BODY is a
+     mathematical expression to implement the function.  It may contain
+     references to position parameters $1, $2, ...  to refer to
+     mandatory parameters and ${1:-DEFVALUE} ...  to refer to optional
+     parameters.  Note that the forms must be strictly adhered to for
+     the function to calculate the correct number of arguments.  The
+     implementation is held in a shell function named
+     zsh_math_func_MATHFUNC; usually the user will not need to refer to
+     the shell function directly.  Any existing function of the same
+     name is silently replaced.
+
+     With one argument, remove the mathematical function MATHFUNC as
+     well as the shell function implementation.
+
+     With no arguments, list all MATHFUNC functions in a form suitable
+     for restoring the definition.  The functions have not necessarily
+     been defined by zmathfuncdef.
+
+
+File: zsh.info,  Node: User Configuration Functions,  Next: Other Functions,  Prev: Mathematical Functions,  Up: User Contributions
+

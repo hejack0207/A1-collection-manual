@@ -1,0 +1,190 @@
+9.2 Support for indirect variable names
+=======================================
+
+Often, it is convenient to write a macro that will emit shell code
+operating on a shell variable.  The simplest case is when the variable
+name is known.  But a more powerful idiom is writing shell code that can
+work through an indirection, where another variable or command
+substitution produces the name of the variable to actually manipulate.
+M4sh supports the notion of polymorphic shell variables, making it easy
+to write a macro that can deal with either literal or indirect variable
+names and output shell code appropriate for both use cases.  Behavior is
+undefined if expansion of an indirect variable does not result in a
+literal variable name.
+
+ -- Macro: AS_LITERAL_IF (EXPRESSION, [IF-LITERAL], [IF-NOT],
+          [IF-SIMPLE-REF = `IF-NOT'])
+ -- Macro: AS_LITERAL_WORD_IF (EXPRESSION, [IF-LITERAL], [IF-NOT],
+          [IF-SIMPLE-REF = `IF-NOT'])
+     If the expansion of EXPRESSION is definitely a shell literal,
+     expand IF-LITERAL.  If the expansion of EXPRESSION looks like it
+     might contain shell indirections (such as `$var' or ``expr`'),
+     then IF-NOT is expanded.  Sometimes, it is possible to output
+     optimized code if EXPRESSION consists only of shell variable
+     expansions (such as `${var}'), in which case IF-SIMPLE-REF can be
+     provided; but defaulting to IF-NOT should always be safe.
+     `AS_LITERAL_WORD_IF' only expands IF-LITERAL if EXPRESSION looks
+     like a single shell word, containing no whitespace; while
+     `AS_LITERAL_IF' allows whitespace in EXPRESSION.
+
+     In order to reduce the time spent recognizing whether an
+     EXPRESSION qualifies as a literal or a simple indirection, the
+     implementation is somewhat conservative: EXPRESSION must be a
+     single shell word (possibly after stripping whitespace),
+     consisting only of bytes that would have the same meaning whether
+     unquoted or enclosed in double quotes (for example, `a.b' results
+     in IF-LITERAL, even though it is not a valid shell variable name;
+     while both `'a'' and `[$]' result in IF-NOT, because they behave
+     differently than `"'a'"' and `"[$]"').  This macro can be used in
+     contexts for recognizing portable file names (such as in the
+     implementation of `AC_LIBSOURCE'), or coupled with some
+     transliterations for forming valid variable names (such as in the
+     implementation of `AS_TR_SH', which uses an additional
+     `m4_translit' to convert `.' to `_').
+
+     This example shows how to read the contents of the shell variable
+     `bar', exercising all three arguments to `AS_LITERAL_IF'.  It
+     results in a script that will output the line `hello' three times.
+
+          AC_DEFUN([MY_ACTION],
+          [AS_LITERAL_IF([$1],
+            [echo "$$1"],
+            [AS_VAR_COPY([var], [$1])
+             echo "$var"],
+            [eval 'echo "$'"$1"\"])])
+          foo=bar bar=hello
+          MY_ACTION([bar])
+          MY_ACTION([`echo bar`])
+          MY_ACTION([$foo])
+
+ -- Macro: AS_VAR_APPEND (VAR, TEXT)
+     Emit shell code to append the shell expansion of TEXT to the end
+     of the current contents of the polymorphic shell variable VAR,
+     taking advantage of shells that provide the `+=' extension for more
+     efficient scaling.
+
+     For situations where the final contents of VAR are relatively
+     short (less than 256 bytes), it is more efficient to use the
+     simpler code sequence of `VAR=${VAR}TEXT' (or its polymorphic
+     equivalent of `AS_VAR_COPY([t], [VAR])' and `AS_VAR_SET([VAR],
+     ["$t"TEXT])').  But in the case when the script will be repeatedly
+     appending text into `var', issues of scaling start to become
+     apparent.  A naive implementation requires execution time linear
+     to the length of the current contents of VAR as well as the length
+     of TEXT for a single append, for an overall quadratic scaling with
+     multiple appends.  This macro takes advantage of shells which
+     provide the extension `VAR+=TEXT', which can provide amortized
+     constant time for a single append, for an overall linear scaling
+     with multiple appends.  Note that unlike `AS_VAR_SET', this macro
+     requires that TEXT be quoted properly to avoid field splitting and
+     file name expansion.
+
+ -- Macro: AS_VAR_ARITH (VAR, EXPRESSION)
+     Emit shell code to compute the arithmetic expansion of EXPRESSION,
+     assigning the result as the contents of the polymorphic shell
+     variable VAR.  The code takes advantage of shells that provide
+     `$(())' for fewer forks, but uses `expr' as a fallback.
+     Therefore, the syntax for a valid EXPRESSION is rather limited:
+     all operators must occur as separate shell arguments and with
+     proper quoting, there is no portable equality operator, all
+     variables containing numeric values must be expanded prior to the
+     computation, all numeric values must be provided in decimal
+     without leading zeroes, and the first shell argument should not be
+     a negative number.  In the following example, this snippet will
+     print `(2+3)*4 == 20'.
+
+          bar=3
+          AS_VAR_ARITH([foo], [\( 2 + $bar \) \* 4])
+          echo "(2+$bar)*4 == $foo"
+
+ -- Macro: AS_VAR_COPY (DEST, SOURCE)
+     Emit shell code to assign the contents of the polymorphic shell
+     variable SOURCE to the polymorphic shell variable DEST.  For
+     example, executing this M4sh snippet will output `bar hi':
+
+          foo=bar bar=hi
+          AS_VAR_COPY([a], [foo])
+          AS_VAR_COPY([b], [$foo])
+          echo "$a $b"
+
+     When it is necessary to access the contents of an indirect variable
+     inside a shell double-quoted context, the recommended idiom is to
+     first copy the contents into a temporary literal shell variable.
+
+          for header in stdint_h inttypes_h ; do
+            AS_VAR_COPY([var], [ac_cv_header_$header])
+            echo "$header detected: $var"
+          done
+
+ -- Macro: AS_VAR_IF (VAR, [WORD], [IF-EQUAL], [IF-NOT-EQUAL])
+     Output a shell conditional statement.  If the contents of the
+     polymorphic shell variable VAR match the string WORD, execute
+     IF-EQUAL; otherwise execute IF-NOT-EQUAL.  WORD must be a single
+     shell word (typically a quoted string).  Avoids shell bugs if an
+     interrupt signal arrives while a command substitution in VAR is
+     being expanded.
+
+ -- Macro: AS_VAR_PUSHDEF (M4-NAME, VALUE)
+ -- Macro: AS_VAR_POPDEF (M4-NAME)
+     A common M4sh idiom involves composing shell variable names from
+     an m4 argument (for example, writing a macro that uses a cache
+     variable).  VALUE can be an arbitrary string, which will be
+     transliterated into a valid shell name by `AS_TR_SH'.  In order to
+     access the composed variable name based on VALUE, it is easier to
+     declare a temporary m4 macro M4-NAME with `AS_VAR_PUSHDEF', then
+     use that macro as the argument to subsequent `AS_VAR' macros as a
+     polymorphic variable name, and finally free the temporary macro
+     with `AS_VAR_POPDEF'.  These macros are often followed with `dnl',
+     to avoid excess newlines in the output.
+
+     Here is an involved example, that shows the power of writing
+     macros that can handle composed shell variable names:
+
+          m4_define([MY_CHECK_HEADER],
+          [AS_VAR_PUSHDEF([my_Header], [ac_cv_header_$1])dnl
+          AS_VAR_IF([my_Header], [yes], [echo "header $1 detected"])dnl
+          AS_VAR_POPDEF([my_Header])dnl
+          ])
+          MY_CHECK_HEADER([stdint.h])
+          for header in inttypes.h stdlib.h ; do
+            MY_CHECK_HEADER([$header])
+          done
+
+     In the above example, `MY_CHECK_HEADER' can operate on polymorphic
+     variable names.  In the first invocation, the m4 argument is
+     `stdint.h', which transliterates into a literal `stdint_h'.  As a
+     result, the temporary macro `my_Header' expands to the literal
+     shell name `ac_cv_header_stdint_h'.  In the second invocation, the
+     m4 argument to `MY_CHECK_HEADER' is `$header', and the temporary
+     macro `my_Header' expands to the indirect shell name
+     `$as_my_Header'.  During the shell execution of the for loop, when
+     `$header' contains `inttypes.h', then `$as_my_Header' contains
+     `ac_cv_header_inttypes_h'.  If this script is then run on a
+     platform where all three headers have been previously detected, the
+     output of the script will include:
+
+          header stdint.h detected
+          header inttypes.h detected
+          header stdlib.h detected
+
+ -- Macro: AS_VAR_SET (VAR, [VALUE])
+     Emit shell code to assign the contents of the polymorphic shell
+     variable VAR to the shell expansion of VALUE.  VALUE is not
+     subject to field splitting or file name expansion, so if command
+     substitution is used, it may be done with ``""`' rather than using
+     an intermediate variable (*note Shell Substitutions::).  However,
+     VALUE does undergo rescanning for additional macro names; behavior
+     is unspecified if late expansion results in any shell
+     meta-characters.
+
+ -- Macro: AS_VAR_SET_IF (VAR, [IF-SET], [IF-UNDEF])
+     Emit a shell conditional statement, which executes IF-SET if the
+     polymorphic shell variable `var' is set to any value, and IF-UNDEF
+     otherwise.
+
+ -- Macro: AS_VAR_TEST_SET (VAR)
+     Emit a shell statement that results in a successful exit status
+     only if the polymorphic shell variable `var' is set.
+
+File: autoconf.info,  Node: Initialization Macros,  Next: File Descriptor Macros,  Prev: Polymorphic Variables,  Up: Programming in M4sh
+

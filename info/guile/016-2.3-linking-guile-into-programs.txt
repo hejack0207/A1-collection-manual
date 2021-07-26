@@ -1,0 +1,54 @@
+2.3 Linking Guile into Programs
+===============================
+
+The Guile interpreter is available as an object library, to be linked
+into applications using Scheme as a configuration or extension language.
+
+   Here is ‘simple-guile.c’, source code for a program that will produce
+a complete Guile interpreter.  In addition to all usual functions
+provided by Guile, it will also offer the function ‘my-hostname’.
+
+     #include <stdlib.h>
+     #include <libguile.h>
+
+     static SCM
+     my_hostname (void)
+     {
+       char *s = getenv ("HOSTNAME");
+       if (s == NULL)
+         return SCM_BOOL_F;
+       else
+         return scm_from_locale_string (s);
+     }
+
+     static void
+     inner_main (void *data, int argc, char **argv)
+     {
+       scm_c_define_gsubr ("my-hostname", 0, 0, 0, my_hostname);
+       scm_shell (argc, argv);
+     }
+
+     int
+     main (int argc, char **argv)
+     {
+       scm_boot_guile (argc, argv, inner_main, 0);
+       return 0; /* never reached */
+     }
+
+   When Guile is correctly installed on your system, the above program
+can be compiled and linked like this:
+
+     $ gcc -o simple-guile simple-guile.c \
+         `pkg-config --cflags --libs guile-2.0`
+
+   When it is run, it behaves just like the ‘guile’ program except that
+you can also call the new ‘my-hostname’ function.
+
+     $ ./simple-guile
+     scheme@(guile-user)> (+ 1 2 3)
+     $1 = 6
+     scheme@(guile-user)> (my-hostname)
+     "burns"
+
+File: guile.info,  Node: Writing Guile Extensions,  Next: Using the Guile Module System,  Prev: Linking Guile into Programs,  Up: Hello Guile!
+

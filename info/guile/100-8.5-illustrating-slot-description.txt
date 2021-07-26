@@ -1,0 +1,102 @@
+8.5 Illustrating Slot Description
+=================================
+
+To illustrate slot description, we can redefine the ‘<my-complex>’ class
+seen before.  A definition could be:
+
+     (define-class <my-complex> (<number>)
+        (r #:init-value 0 #:getter get-r #:setter set-r! #:init-keyword #:r)
+        (i #:init-value 0 #:getter get-i #:setter set-i! #:init-keyword #:i))
+
+With this definition, the ‘r’ and ‘i’ slots are set to 0 by default, and
+can be initialised to other values by calling ‘make’ with the ‘#:r’ and
+‘#:i’ keywords.  Also the generic functions ‘get-r’, ‘set-r!’, ‘get-i’
+and ‘set-i!’ are automatically defined to read and write the slots.
+
+     (define c1 (make <my-complex> #:r 1 #:i 2))
+     (get-r c1) ⇒ 1
+     (set-r! c1 12)
+     (get-r c1) ⇒ 12
+     (define c2 (make <my-complex> #:r 2))
+     (get-r c2) ⇒ 2
+     (get-i c2) ⇒ 0
+
+   Accessors can both read and write a slot.  So, another definition of
+the ‘<my-complex>’ class, using the ‘#:accessor’ option, could be:
+
+     (define-class <my-complex> (<number>)
+        (r #:init-value 0 #:accessor real-part #:init-keyword #:r)
+        (i #:init-value 0 #:accessor imag-part #:init-keyword #:i))
+
+With this definition, the ‘r’ slot can be read with:
+     (real-part c)
+and set with:
+     (set! (real-part c) new-value)
+
+   Suppose now that we want to manipulate complex numbers with both
+rectangular and polar coordinates.  One solution could be to have a
+definition of complex numbers which uses one particular representation
+and some conversion functions to pass from one representation to the
+other.  A better solution is to use virtual slots, like this:
+
+     (define-class <my-complex> (<number>)
+        ;; True slots use rectangular coordinates
+        (r #:init-value 0 #:accessor real-part #:init-keyword #:r)
+        (i #:init-value 0 #:accessor imag-part #:init-keyword #:i)
+        ;; Virtual slots access do the conversion
+        (m #:accessor magnitude #:init-keyword #:magn
+           #:allocation #:virtual
+           #:slot-ref (lambda (o)
+                       (let ((r (slot-ref o 'r)) (i (slot-ref o 'i)))
+                         (sqrt (+ (* r r) (* i i)))))
+           #:slot-set! (lambda (o m)
+                         (let ((a (slot-ref o 'a)))
+                           (slot-set! o 'r (* m (cos a)))
+                           (slot-set! o 'i (* m (sin a))))))
+        (a #:accessor angle #:init-keyword #:angle
+           #:allocation #:virtual
+           #:slot-ref (lambda (o)
+                       (atan (slot-ref o 'i) (slot-ref o 'r)))
+           #:slot-set! (lambda(o a)
+                        (let ((m (slot-ref o 'm)))
+                           (slot-set! o 'r (* m (cos a)))
+                           (slot-set! o 'i (* m (sin a)))))))
+
+
+   In this class definition, the magnitude ‘m’ and angle ‘a’ slots are
+virtual, and are calculated, when referenced, from the normal (i.e.
+‘#:allocation #:instance’) slots ‘r’ and ‘i’, by calling the function
+defined in the relevant ‘#:slot-ref’ option.  Correspondingly, writing
+‘m’ or ‘a’ leads to calling the function defined in the ‘#:slot-set!’
+option.  Thus the following expression
+
+     (slot-set! c 'a 3)
+
+permits to set the angle of the ‘c’ complex number.
+
+     (define c (make <my-complex> #:r 12 #:i 20))
+     (real-part c) ⇒ 12
+     (angle c) ⇒ 1.03037682652431
+     (slot-set! c 'i 10)
+     (set! (real-part c) 1)
+     (describe c)
+     ⊣
+     #<<my-complex> 401e9b58> is an instance of class <my-complex>
+     Slots are:
+          r = 1
+          i = 10
+          m = 10.0498756211209
+          a = 1.47112767430373
+
+   Since initialization keywords have been defined for the four slots,
+we can now define the standard Scheme primitives ‘make-rectangular’ and
+‘make-polar’.
+
+     (define make-rectangular
+        (lambda (x y) (make <my-complex> #:r x #:i y)))
+
+     (define make-polar
+        (lambda (x y) (make <my-complex> #:magn x #:angle y)))
+
+File: guile.info,  Node: Methods and Generic Functions,  Next: Inheritance,  Prev: Slot Description Example,  Up: GOOPS
+

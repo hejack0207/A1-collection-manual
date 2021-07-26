@@ -1,0 +1,410 @@
+24.2 TCP User Functions
+=======================
+
+
+
+24.2.1 Basic I/O
+----------------
+
+
+tcp_open [ -qz ] HOST PORT [ SESS ]
+tcp_open [ -qz ] [ -s SESS | -l SESS[,...] ] ...
+tcp_open [ -qz ] [ -a FD | -f FD ] [ SESS ]
+     Open a new session.  In the first and simplest form, open a TCP
+     connection to host HOST at port PORT; numeric and symbolic forms
+     are understood for both.
+
+     If SESS is given, this becomes the name of the session which can be
+     used to refer to multiple different TCP connections.  If SESS is
+     not given, the function will invent a numeric name value (note this
+     is _not_ the same as the file descriptor to which the session is
+     attached).  It is recommended that session names not include
+     'funny' characters, where funny characters are not well-defined but
+     certainly do not include alphanumerics or underscores, and
+     certainly do include whitespace.
+
+     In the second case, one or more sessions to be opened are given by
+     name.  A single session name is given after -s and a
+     comma-separated list after -l; both options may be repeated as many
+     times as necessary.  A failure to open any session causes tcp_open
+     to abort.  The host and port are read from the file .ztcp_sessions
+     in the same directory as the user's zsh initialisation files, i.e.
+     usually the home directory, but $ZDOTDIR if that is set.  The file
+     consists of lines each giving a session name and the corresponding
+     host and port, in that order (note the session name comes first,
+     not last), separated by whitespace.
+
+     The third form allows passive and fake TCP connections.  If the
+     option -a is used, its argument is a file descriptor open for
+     listening for connections.  No function front-end is provided to
+     open such a file descriptor, but a call to 'ztcp -l PORT' will
+     create one with the file descriptor stored in the parameter $REPLY.
+     The listening port can be closed with 'ztcp -c FD'.  A call to
+     'tcp_open -a FD' will block until a remote TCP connection is made
+     to PORT on the local machine.  At this point, a session is created
+     in the usual way and is largely indistinguishable from an active
+     connection created with one of the first two forms.
+
+     If the option -f is used, its argument is a file descriptor which
+     is used directly as if it were a TCP session.  How well the
+     remainder of the TCP function system copes with this depends on
+     what actually underlies this file descriptor.  A regular file is
+     likely to be unusable; a FIFO (pipe) of some sort will work better,
+     but note that it is not a good idea for two different sessions to
+     attempt to read from the same FIFO at once.
+
+     If the option -q is given with any of the three forms, tcp_open
+     will not print informational messages, although it will in any case
+     exit with an appropriate status.
+
+     If the line editor (zle) is in use, which is typically the case if
+     the shell is interactive, tcp_open installs a handler inside zle
+     which will check for new data at the same time as it checks for
+     keyboard input.  This is convenient as the shell consumes no CPU
+     time while waiting; the test is performed by the operating system.
+     Giving the option -z to any of the forms of tcp_open prevents the
+     handler from being installed, so data must be read explicitly.
+     Note, however, this is not necessary for executing complete sets of
+     send and read commands from a function, as zle is not active at
+     this point.  Generally speaking, the handler is only active when
+     the shell is waiting for input at a command prompt or in the vared
+     builtin.  The option has no effect if zle is not active; '[[ -o
+     zle]]' will test for this.
+
+     The first session to be opened becomes the current session and
+     subsequent calls to tcp_open do not change it.  The current session
+     is stored in the parameter $TCP_SESS; see below for more detail
+     about the parameters used by the system.
+
+     The function tcp_on_open, if defined, is called when a session is
+     opened.  See the description below.
+
+tcp_close [ -qn ] [ -a | -l SESS[,...] | SESS ... ]
+     Close the named sessions, or the current session if none is given,
+     or all open sessions if -a is given.  The options -l and -s are
+     both handled for consistency with tcp_open, although the latter is
+     redundant.
+
+     If the session being closed is the current one, $TCP_SESS is unset,
+     leaving no current session, even if there are other sessions still
+     open.
+
+     If the session was opened with tcp_open -f, the file descriptor is
+     closed so long as it is in the range 0 to 9 accessible directly
+     from the command line.  If the option -n is given, no attempt will
+     be made to close file descriptors in this case.  The -n option is
+     not used for genuine ztcp session; the file descriptors are always
+     closed with the session.
+
+     If the option -q is given, no informational messages will be
+     printed.
+
+tcp_read [ -bdq ] [ -t TO ] [ -T TO ]
+         [ -a | -u FD[,...] | -l SESS[,...] | -s SESS ... ]
+     Perform a read operation on the current session, or on a list of
+     sessions if any are given with -u, -l or -s, or all open sessions
+     if the option -a is given.  Any of the -u, -l or -s options may be
+     repeated or mixed together.  The -u option specifies a file
+     descriptor directly (only those managed by this system are useful),
+     the other two specify sessions as described for tcp_open above.
+
+     The function checks for new data available on all the sessions
+     listed.  Unless the -b option is given, it will not block waiting
+     for new data.  Any one line of data from any of the available
+     sessions will be read, stored in the parameter $TCP_LINE, and
+     displayed to standard output unless $TCP_SILENT contains a
+     non-empty string.  When printed to standard output the string
+     $TCP_PROMPT will be shown at the start of the line; the default
+     form for this includes the name of the session being read.  See
+     below for more information on these parameters.  In this mode,
+     tcp_read can be called repeatedly until it returns status 2 which
+     indicates all pending input from all specified sessions has been
+     handled.
+
+     With the option -b, equivalent to an infinite timeout, the function
+     will block until a line is available to read from one of the
+     specified sessions.  However, only a single line is returned.
+
+     The option -d indicates that all pending input should be drained.
+     In this case tcp_read may process multiple lines in the manner
+     given above; only the last is stored in $TCP_LINE, but the complete
+     set is stored in the array $tcp_lines.  This is cleared at the
+     start of each call to tcp_read.
+
+     The options -t and -T specify a timeout in seconds, which may be a
+     floating point number for increased accuracy.  With -t the timeout
+     is applied before each line read.  With -T, the timeout applies to
+     the overall operation, possibly including multiple read operations
+     if the option -d is present; without this option, there is no
+     distinction between -t and -T.
+
+     The function does not print informational messages, but if the
+     option -q is given, no error message is printed for a non-existent
+     session.
+
+     A return status of 2 indicates a timeout or no data to read.  Any
+     other non-zero return status indicates some error condition.
+
+     See tcp_log for how to control where data is sent by tcp_read.
+
+tcp_send [ -cnq ] [ -s SESS | -l SESS[,...] ] DATA ...
+tcp_send [ -cnq ] -a DATA ...
+     Send the supplied data strings to all the specified sessions in
+     turn.  The underlying operation differs little from a 'print -r' to
+     the session's file descriptor, although it attempts to prevent the
+     shell from dying owing to a SIGPIPE caused by an attempt to write
+     to a defunct session.
+
+     The option -c causes tcp_send to behave like cat.  It reads lines
+     from standard input until end of input and sends them in turn to
+     the specified session(s) exactly as if they were given as DATA
+     arguments to individual tcp_send commands.
+
+     The option -n prevents tcp_send from putting a newline at the end
+     of the data strings.
+
+     The remaining options all behave as for tcp_read.
+
+     The data arguments are not further processed once they have been
+     passed to tcp_send; they are simply passed down to print -r.
+
+     If the parameter $TCP_OUTPUT is a non-empty string and logging is
+     enabled then the data sent to each session will be echoed to the
+     log file(s) with $TCP_OUTPUT in front where appropriate, much in
+     the manner of $TCP_PROMPT.
+
+
+24.2.2 Session Management
+-------------------------
+
+
+tcp_alias [ -q ] ALIAS=SESS ...
+tcp_alias [ -q ] [ ALIAS ... ]
+tcp_alias -d [ -q ] ALIAS ...
+     This function is not particularly well tested.
+
+     The first form creates an alias for a session name; ALIAS can then
+     be used to refer to the existing session SESS.  As many aliases may
+     be listed as required.
+
+     The second form lists any aliases specified, or all aliases if
+     none.
+
+     The third form deletes all the aliases listed.  The underlying
+     sessions are not affected.
+
+     The option -q suppresses an inconsistently chosen subset of error
+     messages.
+
+tcp_log [ -asc ] [ -n | -N ] [ LOGFILE ]
+     With an argument LOGFILE, all future input from tcp_read will be
+     logged to the named file.  Unless -a (append) is given, this file
+     will first be truncated or created empty.  With no arguments, show
+     the current status of logging.
+
+     With the option -s, per-session logging is enabled.  Input from
+     tcp_read is output to the file LOGFILE.SESS.  As the session is
+     automatically discriminated by the filename, the contents are raw
+     (no $TCP_PROMPT).  The option -a applies as above.  Per-session
+     logging and logging of all data in one file are not mutually
+     exclusive.
+
+     The option -c closes all logging, both complete and per-session
+     logs.
+
+     The options -n and -N respectively turn off or restore output of
+     data read by tcp_read to standard output; hence 'tcp_log -cn' turns
+     off all output by tcp_read.
+
+     The function is purely a convenient front end to setting the
+     parameters $TCP_LOG, $TCP_LOG_SESS, $TCP_SILENT, which are
+     described below.
+
+tcp_rename OLD NEW
+     Rename session OLD to session NEW.  The old name becomes invalid.
+
+tcp_sess [ SESS [ COMMAND [ ARG ... ] ] ]
+     With no arguments, list all the open sessions and associated file
+     descriptors.  The current session is marked with a star.  For use
+     in functions, direct access to the parameters $tcp_by_name,
+     $tcp_by_fd and $TCP_SESS is probably more convenient; see below.
+
+     With a SESS argument, set the current session to SESS.  This is
+     equivalent to changing $TCP_SESS directly.
+
+     With additional arguments, temporarily set the current session
+     while executing 'COMMAND ARG ...'.  COMMAND is re-evaluated so as
+     to expand aliases etc., but the remaining ARGs are passed through
+     as that appear to tcp_sess.  The original session is restored when
+     tcp_sess exits.
+
+
+24.2.3 Advanced I/O
+-------------------
+
+
+tcp_command SEND-OPTION ... SEND-ARGUMENT ...
+     This is a convenient front-end to tcp_send.  All arguments are
+     passed to tcp_send, then the function pauses waiting for data.
+     While data is arriving at least every $TCP_TIMEOUT (default 0.3)
+     seconds, data is handled and printed out according to the current
+     settings.  Status 0 is always returned.
+
+     This is generally only useful for interactive use, to prevent the
+     display becoming fragmented by output returned from the connection.
+     Within a programme or function it is generally better to handle
+     reading data by a more explicit method.
+
+tcp_expect [ -q ] [ -p VAR | -P VAR ] [ -t TO | -T TO ]
+           [ -a | -s SESS | -l SESS[,...] ] PATTERN ...
+     Wait for input matching any of the given PATTERNs from any of the
+     specified sessions.  Input is ignored until an input line matches
+     one of the given patterns; at this point status zero is returned,
+     the matching line is stored in $TCP_LINE, and the full set of lines
+     read during the call to tcp_expect is stored in the array
+     $tcp_expect_lines.
+
+     Sessions are specified in the same way as tcp_read: the default is
+     to use the current session, otherwise the sessions specified by -a,
+     -s, or -l are used.
+
+     Each PATTERN is a standard zsh extended-globbing pattern; note that
+     it needs to be quoted to avoid it being expanded immediately by
+     filename generation.  It must match the full line, so to match a
+     substring there must be a '*' at the start and end.  The line
+     matched against includes the $TCP_PROMPT added by tcp_read.  It is
+     possible to include the globbing flags '#b' or '#m' in the patterns
+     to make backreferences available in the parameters $MATCH, $match,
+     etc., as described in the base zsh documentation on pattern
+     matching.
+
+     Unlike tcp_read, the default behaviour of tcp_expect is to block
+     indefinitely until the required input is found.  This can be
+     modified by specifying a timeout with -t or -T; these function as
+     in tcp_read, specifying a per-read or overall timeout,
+     respectively, in seconds, as an integer or floating-point number.
+     As tcp_read, the function returns status 2 if a timeout occurs.
+
+     The function returns as soon as any one of the patterns given
+     match.  If the caller needs to know which of the patterns matched,
+     the option -p VAR can be used; on return, $var is set to the number
+     of the pattern using ordinary zsh indexing, i.e.  the first is 1,
+     and so on.  Note the absence of a '$' in front of VAR.  To avoid
+     clashes, the parameter cannot begin with '_expect'.  The index -1
+     is used if there is a timeout and 0 if there is no match.
+
+     The option -P VAR works similarly to -p, but instead of numerical
+     indexes the regular arguments must begin with a prefix followed by
+     a colon: that prefix is then used as a tag to which VAR is set when
+     the argument matches.  The tag timeout is used if there is a
+     timeout and the empty string if there is no match.  Note it is
+     acceptable for different arguments to start with the same prefix if
+     the matches do not need to be distinguished.
+
+     The option -q is passed directly down to tcp_read.
+
+     As all input is done via tcp_read, all the usual rules about output
+     of lines read apply.  One exception is that the parameter
+     $tcp_lines will only reflect the line actually matched by
+     tcp_expect; use $tcp_expect_lines for the full set of lines read
+     during the function call.
+
+tcp_proxy
+     This is a simple-minded function to accept a TCP connection and
+     execute a command with I/O redirected to the connection.  Extreme
+     caution should be taken as there is no security whatsoever and this
+     can leave your computer open to the world.  Ideally, it should only
+     be used behind a firewall.
+
+     The first argument is a TCP port on which the function will listen.
+
+     The remaining arguments give a command and its arguments to execute
+     with standard input, standard output and standard error redirected
+     to the file descriptor on which the TCP session has been accepted.
+     If no command is given, a new zsh is started.  This gives everyone
+     on your network direct access to your account, which in many cases
+     will be a bad thing.
+
+     The command is run in the background, so tcp_proxy can then accept
+     new connections.  It continues to accept new connections until
+     interrupted.
+
+tcp_spam [ -ertv ] [ -a | -s SESS | -l SESS[,...] ] CMD [ ARG ... ]
+     Execute 'CMD [ ARG ...  ]' for each session in turn.  Note this
+     executes the command and arguments; it does not send the command
+     line as data unless the -t (transmit) option is given.
+
+     The sessions may be selected explicitly with the standard -a, -s or
+     -l options, or may be chosen implicitly.  If none of the three
+     options is given the rules are: first, if the array $tcp_spam_list
+     is set, this is taken as the list of sessions, otherwise all
+     sessions are taken.  Second, any sessions given in the array
+     $tcp_no_spam_list are removed from the list of sessions.
+
+     Normally, any sessions added by the '-a' flag or when all sessions
+     are chosen implicitly are spammed in alphabetic order; sessions
+     given by the $tcp_spam_list array or on the command line are
+     spammed in the order given.  The -r flag reverses the order however
+     it was arrived it.
+
+     The -v flag specifies that a $TCP_PROMPT will be output before each
+     session.  This is output after any modification to TCP_SESS by the
+     user-defined tcp_on_spam function described below.  (Obviously that
+     function is able to generate its own output.)
+
+     If the option -e is present, the line given as 'CMD [ ARG ...  ]'
+     is executed using eval, otherwise it is executed without any
+     further processing.
+
+tcp_talk
+     This is a fairly simple-minded attempt to force input to the line
+     editor to go straight to the default TCP_SESS.
+
+     An escape string, $TCP_TALK_ESCAPE, default ':', is used to allow
+     access to normal shell operation.  If it is on its own at the start
+     of the line, or followed only by whitespace, the line editor
+     returns to normal operation.  Otherwise, the string and any
+     following whitespace are skipped and the remainder of the line
+     executed as shell input without any change of the line editor's
+     operating mode.
+
+     The current implementation is somewhat deficient in terms of use of
+     the command history.  For this reason, many users will prefer to
+     use some form of alternative approach for sending data easily to
+     the current session.  One simple approach is to alias some special
+     character (such as '%') to 'tcp_command --'.
+
+tcp_wait
+     The sole argument is an integer or floating point number which
+     gives the seconds to delay.  The shell will do nothing for that
+     period except wait for input on all TCP sessions by calling
+     tcp_read -a.  This is similar to the interactive behaviour at the
+     command prompt when zle handlers are installed.
+
+
+24.2.4 'One-shot' file transfer
+-------------------------------
+
+tcp_point PORT
+tcp_shoot HOST PORT
+     This pair of functions provide a simple way to transfer a file
+     between two hosts within the shell.  Note, however, that bulk data
+     transfer is currently done using cat.  tcp_point reads any data
+     arriving at PORT and sends it to standard output; tcp_shoot
+     connects to PORT on HOST and sends its standard input.  Any unused
+     PORT may be used; the standard mechanism for picking a port is to
+     think of a random four-digit number above 1024 until one works.
+
+     To transfer a file from host woodcock to host springes, on
+     springes:
+
+          tcp_point 8091 >output_file
+
+     and on woodcock:
+
+          tcp_shoot springes 8091 <input_file
+
+     As these two functions do not require tcp_open to set up a TCP
+     connection first, they may need to be autoloaded separately.
+
+

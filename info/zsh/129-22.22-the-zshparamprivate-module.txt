@@ -1,0 +1,85 @@
+22.22 The zsh/param/private Module
+==================================
+
+
+   The zsh/param/private module is used to create parameters whose scope
+is limited to the current function body, and _not_ to other functions
+called by the current function.
+
+This module provides a single autoloaded builtin:
+
+private [ {+|-}AHUahlprtux ] [ {+|-}EFLRZi [ N ] ] [ NAME[=VALUE] ... ]
+     The private builtin accepts all the same options and arguments as
+     local (*note Shell Builtin Commands::) except for the '-T' option.
+     Tied parameters may not be made private.
+
+     If used at the top level (outside a function scope), private
+     creates a normal parameter in the same manner as declare or
+     typeset.  A warning about this is printed if WARN_CREATE_GLOBAL is
+     set (*note Options::).  Used inside a function scope, private
+     creates a local parameter similar to one declared with local,
+     except having special properties noted below.
+
+     Special parameters which expose or manipulate internal shell state,
+     such as ARGC, argv, COLUMNS, LINES, UID, EUID, IFS, PROMPT, RANDOM,
+     SECONDS, etc., cannot be made private unless the '-h' option is
+     used to hide the special meaning of the parameter.  This may change
+     in the future.
+
+As with other typeset equivalents, private is both a builtin and a
+reserved word, so arrays may be assigned with parenthesized word list
+NAME=(VALUE...)  syntax.  However, the reserved word 'private' is not
+available until zsh/param/private is loaded, so care must be taken with
+order of execution and parsing for function definitions which use
+private.  To compensate for this, the module also adds the option '-P'
+to the 'local' builtin to declare private parameters.
+
+For example, this construction fails if zsh/param/private has not yet
+been loaded when 'bad_declaration' is defined:
+     bad_declaration() {
+       zmodload zsh/param/private
+       private array=( one two three )
+     }
+
+This construction works because local is already a keyword, and the
+module is loaded before the statement is executed:
+     good_declaration() {
+       zmodload zsh/param/private
+       local -P array=( one two three )
+     }
+
+The following is usable in scripts but may have trouble with autoload:
+     zmodload zsh/param/private
+     iffy_declaration() {
+       private array=( one two three )
+     }
+
+The private builtin may always be used with scalar assignments and for
+declarations without assignments.
+
+Parameters declared with private have the following properties:
+
+   * Within the function body where it is declared, the parameter
+     behaves as a local, except as noted above for tied or special
+     parameters.
+   * The type of a parameter declared private cannot be changed in the
+     scope where it was declared, even if the parameter is unset.  Thus
+     an array cannot be assigned to a private scalar, etc.
+   * Within any other function called by the declaring function, the
+     private parameter does _NOT_ hide other parameters of the same
+     name, so for example a global parameter of the same name is visible
+     and may be assigned or unset.  This includes calls to anonymous
+     functions, although that may also change in the future.
+   * An exported private remains in the environment of inner scopes but
+     appears unset for the current shell in those scopes.  Generally,
+     exporting private parameters should be avoided.
+
+Note that this differs from the static scope defined by compiled
+languages derived from C, in that the a new call to the same function
+creates a new scope, i.e., the parameter is still associated with the
+call stack rather than with the function definition.  It differs from
+ksh 'typeset -S' because the syntax used to define the function has no
+bearing on whether the parameter scope is respected.
+
+File: zsh.info,  Node: The zsh/regex Module,  Next: The zsh/sched Module,  Prev: The zsh/param/private Module,  Up: Zsh Modules
+

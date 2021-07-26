@@ -1,0 +1,61 @@
+27.8 Per-Object Flags Emulation
+===============================
+
+     One of my source files needs to be compiled with different flags.  How
+     do I do?
+
+   Automake supports per-program and per-library compilation flags (see
+*note Program and Library Variables:: and *note Flag Variables
+Ordering::).  With this you can define compilation flags that apply to
+all files compiled for a target.  For instance, in
+
+     bin_PROGRAMS = foo
+     foo_SOURCES = foo.c foo.h bar.c bar.h main.c
+     foo_CFLAGS = -some -flags
+
+‘foo-foo.o’, ‘foo-bar.o’, and ‘foo-main.o’ will all be compiled with
+‘-some -flags’.  (If you wonder about the names of these object files,
+see *note Renamed Objects::.)  Note that ‘foo_CFLAGS’ gives the flags to
+use when compiling all the C sources of the _program_ ‘foo’, it has
+nothing to do with ‘foo.c’ or ‘foo-foo.o’ specifically.
+
+   What if ‘foo.c’ needs to be compiled into ‘foo.o’ using some specific
+flags, that none of the other files requires?  Obviously per-program
+flags are not directly applicable here.  Something like per-object flags
+are expected, i.e., flags that would be used only when creating
+‘foo-foo.o’.  Automake does not support that, however this is easy to
+simulate using a library that contains only that object, and compiling
+this library with per-library flags.
+
+     bin_PROGRAMS = foo
+     foo_SOURCES = bar.c bar.h main.c
+     foo_CFLAGS = -some -flags
+     foo_LDADD = libfoo.a
+     noinst_LIBRARIES = libfoo.a
+     libfoo_a_SOURCES = foo.c foo.h
+     libfoo_a_CFLAGS = -some -other -flags
+
+   Here ‘foo-bar.o’ and ‘foo-main.o’ will all be compiled with ‘-some
+-flags’, while ‘libfoo_a-foo.o’ will be compiled using ‘-some -other
+-flags’.  Eventually, all three objects will be linked to form ‘foo’.
+
+   This trick can also be achieved using Libtool convenience libraries,
+for instance ‘noinst_LTLIBRARIES = libfoo.la’ (*note Libtool Convenience
+Libraries::).
+
+   Another tempting idea to implement per-object flags is to override
+the compile rules ‘automake’ would output for these files.  Automake
+will not define a rule for a target you have defined, so you could think
+about defining the ‘foo-foo.o: foo.c’ rule yourself.  We recommend
+against this, because this is error prone.  For instance, if you add
+such a rule to the first example, it will break the day you decide to
+remove ‘foo_CFLAGS’ (because ‘foo.c’ will then be compiled as ‘foo.o’
+instead of ‘foo-foo.o’, *note Renamed Objects::).  Also in order to
+support dependency tracking, the two ‘.o’/‘.obj’ extensions, and all the
+other flags variables involved in a compilation, you will end up
+modifying a copy of the rule previously output by ‘automake’ for this
+file.  If a new release of Automake generates a different rule, your
+copy will need to be updated by hand.
+
+File: automake.info,  Node: Multiple Outputs,  Next: Hard-Coded Install Paths,  Prev: Per-Object Flags,  Up: FAQ
+

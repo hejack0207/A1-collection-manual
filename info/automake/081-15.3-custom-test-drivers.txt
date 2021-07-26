@@ -1,0 +1,271 @@
+15.3 Custom Test Drivers
+========================
+
+* Menu:
+
+* Overview of Custom Test Drivers Support::
+* Declaring Custom Test Drivers::
+* API for Custom Test Drivers::
+
+File: automake.info,  Node: Overview of Custom Test Drivers Support,  Next: Declaring Custom Test Drivers,  Up: Custom Test Drivers
+
+15.3.1 Overview of Custom Test Drivers Support
+----------------------------------------------
+
+Starting from Automake version 1.12, the parallel test harness allows
+the package authors to use third-party custom test drivers, in case the
+default ones are inadequate for their purposes, or do not support their
+testing protocol of choice.
+
+   A custom test driver is expected to properly run the test programs
+passed to it (including the command-line arguments passed to those
+programs, if any), to analyze their execution and outcome, to create the
+‘.log’ and ‘.trs’ files associated to these test runs, and to display
+the test results on the console.  It is responsibility of the author of
+the test driver to ensure that it implements all the above steps
+meaningfully and correctly; Automake isn’t and can’t be of any help
+here.  On the other hand, the Automake-provided code for testsuite
+summary generation offers support for test drivers allowing several test
+results per test script, if they take care to register such results
+properly (*note Log files generation and test results recording::).
+
+   The exact details of how test scripts’ results are to be determined
+and analyzed is left to the individual drivers.  Some drivers might only
+consider the test script exit status (this is done for example by the
+default test driver used by the parallel test harness, described in the
+previous section).  Other drivers might implement more complex and
+advanced test protocols, which might require them to parse and
+interpreter the output emitted by the test script they’re running
+(examples of such protocols are TAP and SubUnit).
+
+   It’s very important to note that, even when using custom test
+drivers, most of the infrastructure described in the previous section
+about the parallel harness remains in place; this includes:
+
+   • list of test scripts defined in ‘TESTS’, and overridable at runtime
+     through the redefinition of ‘TESTS’ or ‘TEST_LOGS’;
+   • concurrency through the use of ‘make’’s option ‘-j’;
+   • per-test ‘.log’ and ‘.trs’ files, and generation of a summary
+     ‘.log’ file from them;
+   • ‘recheck’ target, ‘RECHECK_LOGS’ variable, and lazy reruns of
+     tests;
+   • inter-test dependencies;
+   • support for ‘check_*’ variables (‘check_PROGRAMS’,
+     ‘check_LIBRARIES’, ...);
+   • use of ‘VERBOSE’ environment variable to get verbose output on
+     testsuite failures;
+   • definition and honoring of ‘TESTS_ENVIRONMENT’,
+     ‘AM_TESTS_ENVIRONMENT’ and ‘AM_TESTS_FD_REDIRECT’ variables;
+   • definition of generic and extension-specific ‘LOG_COMPILER’ and
+     ‘LOG_FLAGS’ variables.
+
+On the other hand, the exact semantics of how (and if) testsuite output
+colorization, ‘XFAIL_TESTS’, and hard errors are supported and handled
+is left to the individual test drivers.
+
+File: automake.info,  Node: Declaring Custom Test Drivers,  Next: API for Custom Test Drivers,  Prev: Overview of Custom Test Drivers Support,  Up: Custom Test Drivers
+
+15.3.2 Declaring Custom Test Drivers
+------------------------------------
+
+Custom testsuite drivers are declared by defining the make variables
+‘LOG_DRIVER’ or ‘EXT_LOG_DRIVER’ (where EXT must be declared in
+‘TEST_EXTENSIONS’).  They must be defined to programs or scripts that
+will be used to drive the execution, logging, and outcome report of the
+tests with corresponding extensions (or of those with no registered
+extension in the case of ‘LOG_DRIVER’).  Clearly, multiple distinct test
+drivers can be declared in the same ‘Makefile.am’.  Note moreover that
+the ‘LOG_DRIVER’ variables are _not_ a substitute for the ‘LOG_COMPILER’
+variables: the two sets of variables can, and often do, usefully and
+legitimately coexist.
+
+   The developer-reserved variable ‘AM_LOG_DRIVER_FLAGS’ and the
+user-reserved variable ‘LOG_DRIVER_FLAGS’ can be used to define flags
+that will be passed to each invocation of ‘LOG_DRIVER’, with the
+user-defined flags obviously taking precedence over the
+developer-reserved ones.  Similarly, for each extension EXT declared in
+‘TEST_EXTENSIONS’, flags listed in ‘AM_EXT_LOG_DRIVER_FLAGS’ and
+‘EXT_LOG_DRIVER_FLAGS’ will be passed to invocations of
+‘EXT_LOG_DRIVER’.
+
+File: automake.info,  Node: API for Custom Test Drivers,  Prev: Declaring Custom Test Drivers,  Up: Custom Test Drivers
+
+15.3.3 API for Custom Test Drivers
+----------------------------------
+
+Note that _the APIs described here are still highly experimental_, and
+will very likely undergo tightenings and likely also extensive changes
+in the future, to accommodate for new features or to satisfy additional
+portability requirements.
+
+   The main characteristic of these APIs is that they are designed to
+share as much infrastructure, semantics, and implementation details as
+possible with the parallel test harness and its default driver.
+
+* Menu:
+
+* Command-line arguments for test drivers::
+* Log files generation and test results recording::
+* Testsuite progress output::
+
+File: automake.info,  Node: Command-line arguments for test drivers,  Next: Log files generation and test results recording,  Up: API for Custom Test Drivers
+
+15.3.3.1 Command-line arguments for test drivers
+................................................
+
+A custom driver can rely on various command-line options and arguments
+being passed to it automatically by the Automake-generated test harness.
+It is _mandatory_ that it understands all of them (even if the exact
+interpretation of the associated semantics can legitimately change
+between a test driver and another, and even be a no-op in some drivers).
+
+Here is the list of options:
+
+‘--test-name=NAME’
+     The name of the test, with VPATH prefix (if any) removed.  This can
+     have a suffix and a directory component (as in e.g.,
+     ‘sub/foo.test’), and is mostly meant to be used in console reports
+     about testsuite advancements and results (*note Testsuite progress
+     output::).
+‘--log-file=PATH.log’
+     The ‘.log’ file the test driver must create (*note Basics of test
+     metadata::).  If it has a directory component (as in e.g.,
+     ‘sub/foo.log’), the test harness will ensure that such directory
+     exists _before_ the test driver is called.
+‘--trs-file=PATH.trs’
+     The ‘.trs’ file the test driver must create (*note Basics of test
+     metadata::).  If it has a directory component (as in e.g.,
+     ‘sub/foo.trs’), the test harness will ensure that such directory
+     exists _before_ the test driver is called.
+‘--color-tests={yes|no}’
+     Whether the console output should be colorized or not (*note Simple
+     tests and color-tests::, to learn when this option gets activated
+     and when it doesn’t).
+‘--expect-failure={yes|no}’
+     Whether the tested program is expected to fail.
+‘--enable-hard-errors={yes|no}’
+     Whether “hard errors” in the tested program should be treated
+     differently from normal failures or not (the default should be
+     ‘yes’).  The exact meaning of “hard error” is highly dependent from
+     the test protocols or conventions in use.
+‘--’
+     Explicitly terminate the list of options.
+
+The first non-option argument passed to the test driver is the program
+to be run, and all the following ones are command-line options and
+arguments for this program.
+
+   Note that the exact semantics attached to the ‘--color-tests’,
+‘--expect-failure’ and ‘--enable-hard-errors’ options are left up to the
+individual test drivers.  Still, having a behaviour compatible or at
+least similar to that provided by the default driver is advised, as that
+would offer a better consistency and a more pleasant user experience.
+
+File: automake.info,  Node: Log files generation and test results recording,  Next: Testsuite progress output,  Prev: Command-line arguments for test drivers,  Up: API for Custom Test Drivers
+
+15.3.3.2 Log files generation and test results recording
+........................................................
+
+The test driver must correctly generate the files specified by the
+‘--log-file’ and ‘--trs-file’ option (even when the tested program fails
+or crashes).
+
+   The ‘.log’ file should ideally contain all the output produced by the
+tested program, plus optionally other information that might facilitate
+debugging or analysis of bug reports.  Apart from that, its format is
+basically free.
+
+   The ‘.trs’ file is used to register some metadata through the use of
+custom reStructuredText fields.  This metadata is expected to be
+employed in various ways by the parallel test harness; for example, to
+count the test results when printing the testsuite summary, or to decide
+which tests to re-run upon ‘make recheck’.  Unrecognized metadata in a
+‘.trs’ file is currently ignored by the harness, but this might change
+in the future.  The list of currently recognized metadata follows.
+
+‘:test-result:’
+     The test driver must use this field to register the results of
+     _each_ test case run by a test script file.  Several
+     ‘:test-result:’ fields can be present in the same ‘.trs’ file; this
+     is done in order to support test protocols that allow a single test
+     script to run more test cases.
+
+     The only recognized test results are currently ‘PASS’, ‘XFAIL’,
+     ‘SKIP’, ‘FAIL’, ‘XPASS’ and ‘ERROR’.  These results, when declared
+     with ‘:test-result:’, can be optionally followed by text holding
+     the name and/or a brief description of the corresponding test; the
+     harness will ignore such extra text when generating
+     ‘test-suite.log’ and preparing the testsuite summary.
+
+‘:recheck:’
+     If this field is present and defined to ‘no’, then the
+     corresponding test script will _not_ be run upon a ‘make recheck’.
+     What happens when two or more ‘:recheck:’ fields are present in the
+     same ‘.trs’ file is undefined behaviour.
+
+‘:copy-in-global-log:’
+     If this field is present and defined to ‘no’, then the content of
+     the ‘.log’ file will _not_ be copied into the global
+     ‘test-suite.log’.  We allow to forsake such copying because, while
+     it can be useful in debugging and analysis of bug report, it can
+     also be just a waste of space in normal situations, e.g., when a
+     test script is successful.  What happens when two or more
+     ‘:copy-in-global-log:’ fields are present in the same ‘.trs’ file
+     is undefined behaviour.
+
+‘:test-global-result:’
+     This is used to declare the "global result" of the script.
+     Currently, the value of this field is needed only to be reported
+     (more or less verbatim) in the generated global log file
+     ‘$(TEST_SUITE_LOG)’, so it’s quite free-form.  For example, a test
+     script which run 10 test cases, 6 of which pass and 4 of which are
+     skipped, could reasonably have a ‘PASS/SKIP’ value for this field,
+     while a test script which run 19 successful tests and one failed
+     test could have an ‘ALMOST PASSED’ value.  What happens when two or
+     more ‘:test-global-result:’ fields are present in the same ‘.trs’
+     file is undefined behaviour.
+
+Let’s see a small example.  Assume a ‘.trs’ file contains the following
+lines:
+
+     :test-result: PASS server starts
+     :global-log-copy: no
+     :test-result: PASS HTTP/1.1 request
+     :test-result: FAIL HTTP/1.0 request
+     :recheck: yes
+     :test-result: SKIP HTTPS request (TLS library wasn't available)
+     :test-result: PASS server stops
+
+Then the corresponding test script will be re-run by ‘make check’, will
+contribute with _five_ test results to the testsuite summary (three of
+these tests being successful, one failed, and one skipped), and the
+content of the corresponding ‘.log’ file will _not_ be copied in the
+global log file ‘test-suite.log’.
+
+File: automake.info,  Node: Testsuite progress output,  Prev: Log files generation and test results recording,  Up: API for Custom Test Drivers
+
+15.3.3.3 Testsuite progress output
+..................................
+
+A custom test driver also has the task of displaying, on the standard
+output, the test results as soon as they become available.  Depending on
+the protocol in use, it can also display the reasons for failures and
+skips, and, more generally, any useful diagnostic output (but remember
+that each line on the screen is precious, so that cluttering the screen
+with overly verbose information is bad idea).  The exact format of this
+progress output is left up to the test driver; in fact, a custom test
+driver might _theoretically_ even decide not to do any such report,
+leaving it all to the testsuite summary (that would be a very lousy
+idea, of course, and serves only to illustrate the flexibility that is
+granted here).
+
+   Remember that consistency is good; so, if possible, try to be
+consistent with the output of the built-in Automake test drivers,
+providing a similar “look & feel”.  In particular, the testsuite
+progress output should be colorized when the ‘--color-tests’ is passed
+to the driver.  On the other end, if you are using a known and
+widespread test protocol with well-established implementations, being
+consistent with those implementations’ output might be a good idea too.
+
+File: automake.info,  Node: Using the TAP test protocol,  Next: DejaGnu Tests,  Prev: Custom Test Drivers,  Up: Tests
+

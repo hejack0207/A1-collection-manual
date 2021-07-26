@@ -1,0 +1,170 @@
+3.8 Multiple commands syntax
+============================
+
+There are several methods to specify multiple commands in a 'sed'
+program.
+
+   Using newlines is most natural when running a sed script from a file
+(using the '-f' option).
+
+   On the command line, all 'sed' commands may be separated by newlines.
+Alternatively, you may specify each command as an argument to an '-e'
+option:
+
+     $ seq 6 | sed '1d
+     3d
+     5d'
+     2
+     4
+     6
+
+     $ seq 6 | sed -e 1d -e 3d -e 5d
+     2
+     4
+     6
+
+   A semicolon (';') may be used to separate most simple commands:
+
+     $ seq 6 | sed '1d;3d;5d'
+     2
+     4
+     6
+
+   The '{','}','b','t','T',':' commands can be separated with a
+semicolon (this is a non-portable GNU 'sed' extension).
+
+     $ seq 4 | sed '{1d;3d}'
+     2
+     4
+
+     $ seq 6 | sed '{1d;3d};5d'
+     2
+     4
+     6
+
+   Labels used in 'b','t','T',':' commands are read until a semicolon.
+Leading and trailing whitespace is ignored.  In the examples below the
+label is 'x'.  The first example works with GNU 'sed'.  The second is a
+portable equivalent.  For more information about branching and labels
+*note Branching and flow control::.
+
+     $ seq 3 | sed '/1/b x ; s/^/=/ ; :x ; 3d'
+     1
+     =2
+
+     $ seq 3 | sed -e '/1/bx' -e 's/^/=/' -e ':x' -e '3d'
+     1
+     =2
+
+3.8.1 Commands Requiring a newline
+----------------------------------
+
+The following commands cannot be separated by a semicolon and require a
+newline:
+
+'a','c','i' (append/change/insert)
+
+     All characters following 'a','c','i' commands are taken as the text
+     to append/change/insert.  Using a semicolon leads to undesirable
+     results:
+
+          $ seq 2 | sed '1aHello ; 2d'
+          1
+          Hello ; 2d
+          2
+
+     Separate the commands using '-e' or a newline:
+
+          $ seq 2 | sed -e 1aHello -e 2d
+          1
+          Hello
+
+          $ seq 2 | sed '1aHello
+          2d'
+          1
+          Hello
+
+     Note that specifying the text to add ('Hello') immediately after
+     'a','c','i' is itself a GNU 'sed' extension.  A portable,
+     POSIX-compliant alternative is:
+
+          $ seq 2 | sed '1a\
+          Hello
+          2d'
+          1
+          Hello
+
+'#' (comment)
+
+     All characters following '#' until the next newline are ignored.
+
+          $ seq 3 | sed '# this is a comment ; 2d'
+          1
+          2
+          3
+
+
+          $ seq 3 | sed '# this is a comment
+          2d'
+          1
+          3
+
+'r','R','w','W' (reading and writing files)
+
+     The 'r','R','w','W' commands parse the filename until end of the
+     line.  If whitespace, comments or semicolons are found, they will
+     be included in the filename, leading to unexpected results:
+
+          $ seq 2 | sed '1w hello.txt ; 2d'
+          1
+          2
+
+          $ ls -log
+          total 4
+          -rw-rw-r-- 1 2 Jan 23 23:03 hello.txt ; 2d
+
+          $ cat 'hello.txt ; 2d'
+          1
+
+     Note that 'sed' silently ignores read/write errors in
+     'r','R','w','W' commands (such as missing files).  In the following
+     example, 'sed' tries to read a file named ''hello.txt ; N''.  The
+     file is missing, and the error is silently ignored:
+
+          $ echo x | sed '1rhello.txt ; N'
+          x
+
+'e' (command execution)
+
+     Any characters following the 'e' command until the end of the line
+     will be sent to the shell.  If whitespace, comments or semicolons
+     are found, they will be included in the shell command, leading to
+     unexpected results:
+
+          $ echo a | sed '1e touch foo#bar'
+          a
+
+          $ ls -1
+          foo#bar
+
+          $ echo a | sed '1e touch foo ; s/a/b/'
+          sh: 1: s/a/b/: not found
+          a
+
+'s///[we]' (substitute with 'e' or 'w' flags)
+
+     In a substitution command, the 'w' flag writes the substitution
+     result to a file, and the 'e' flag executes the subsitution result
+     as a shell command.  As with the 'r/R/w/W/e' commands, these must
+     be terminated with a newline.  If whitespace, comments or
+     semicolons are found, they will be included in the shell command or
+     filename, leading to unexpected results:
+
+          $ echo a | sed 's/a/b/w1.txt#foo'
+          b
+
+          $ ls -1
+          1.txt#foo
+
+File: sed.info,  Node: sed addresses,  Next: sed regular expressions,  Prev: sed scripts,  Up: Top
+

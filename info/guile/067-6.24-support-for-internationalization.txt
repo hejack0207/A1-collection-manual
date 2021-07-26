@@ -1,0 +1,551 @@
+6.24 Support for Internationalization
+=====================================
+
+Guile provides internationalization(1) support for Scheme programs in
+two ways.  First, procedures to manipulate text and data in a way that
+conforms to particular cultural conventions (i.e., in a
+“locale-dependent” way) are provided in the ‘(ice-9 i18n)’.  Second,
+Guile allows the use of GNU ‘gettext’ to translate program message
+strings.
+
+* Menu:
+
+* i18n Introduction::             Introduction to Guile’s i18n support.
+* Text Collation::                Sorting strings and characters.
+* Character Case Mapping::        Case mapping.
+* Number Input and Output::       Parsing and printing numbers.
+* Accessing Locale Information::  Detailed locale information.
+* Gettext Support::               Translating message strings.
+
+   ---------- Footnotes ----------
+
+   (1) For concision and style, programmers often like to refer to
+internationalization as “i18n”.
+
+File: guile.info,  Node: i18n Introduction,  Next: Text Collation,  Prev: Internationalization,  Up: Internationalization
+
+6.24.1 Internationalization with Guile
+--------------------------------------
+
+In order to make use of the functions described thereafter, the ‘(ice-9
+i18n)’ module must be imported in the usual way:
+
+     (use-modules (ice-9 i18n))
+
+   The ‘(ice-9 i18n)’ module provides procedures to manipulate text and
+other data in a way that conforms to the cultural conventions chosen by
+the user.  Each region of the world or language has its own customs to,
+for instance, represent real numbers, classify characters, collate text,
+etc.  All these aspects comprise the so-called “cultural conventions” of
+that region or language.
+
+   Computer systems typically refer to a set of cultural conventions as
+a “locale”.  For each particular aspect that comprise those cultural
+conventions, a “locale category” is defined.  For instance, the way
+characters are classified is defined by the ‘LC_CTYPE’ category, while
+the language in which program messages are issued to the user is defined
+by the ‘LC_MESSAGES’ category (*note General Locale Information:
+Locales. for details).
+
+   The procedures provided by this module allow the development of
+programs that adapt automatically to any locale setting.  As we will see
+later, many of these procedures can optionally take a “locale object”
+argument.  This additional argument defines the locale settings that
+must be followed by the invoked procedure.  When it is omitted, then the
+current locale settings of the process are followed (*note ‘setlocale’:
+Locales.).
+
+   The following procedures allow the manipulation of such locale
+objects.
+
+ -- Scheme Procedure: make-locale category-list locale-name
+          [base-locale]
+ -- C Function: scm_make_locale (category_list, locale_name,
+          base_locale)
+     Return a reference to a data structure representing a set of locale
+     datasets.  LOCALE-NAME should be a string denoting a particular
+     locale (e.g., ‘"aa_DJ"’) and CATEGORY-LIST should be either a list
+     of locale categories or a single category as used with ‘setlocale’
+     (*note ‘setlocale’: Locales.).  Optionally, if ‘base-locale’ is
+     passed, it should be a locale object denoting settings for
+     categories not listed in CATEGORY-LIST.
+
+     The following invocation creates a locale object that combines the
+     use of Swedish for messages and character classification with the
+     default settings for the other categories (i.e., the settings of
+     the default ‘C’ locale which usually represents conventions in use
+     in the USA):
+
+          (make-locale (list LC_MESSAGES LC_CTYPE) "sv_SE")
+
+     The following example combines the use of Esperanto messages and
+     conventions with monetary conventions from Croatia:
+
+          (make-locale LC_MONETARY "hr_HR"
+                       (make-locale LC_ALL "eo_EO"))
+
+     A ‘system-error’ exception (*note Handling Errors::) is raised by
+     ‘make-locale’ when LOCALE-NAME does not match any of the locales
+     compiled on the system.  Note that on non-GNU systems, this error
+     may be raised later, when the locale object is actually used.
+
+ -- Scheme Procedure: locale? obj
+ -- C Function: scm_locale_p (obj)
+     Return true if OBJ is a locale object.
+
+ -- Scheme Variable: %global-locale
+ -- C Variable: scm_global_locale
+     This variable is bound to a locale object denoting the current
+     process locale as installed using ‘setlocale ()’ (*note Locales::).
+     It may be used like any other locale object, including as a third
+     argument to ‘make-locale’, for instance.
+
+File: guile.info,  Node: Text Collation,  Next: Character Case Mapping,  Prev: i18n Introduction,  Up: Internationalization
+
+6.24.2 Text Collation
+---------------------
+
+The following procedures provide support for text collation, i.e.,
+locale-dependent string and character sorting.
+
+ -- Scheme Procedure: string-locale<? s1 s2 [locale]
+ -- C Function: scm_string_locale_lt (s1, s2, locale)
+ -- Scheme Procedure: string-locale>? s1 s2 [locale]
+ -- C Function: scm_string_locale_gt (s1, s2, locale)
+ -- Scheme Procedure: string-locale-ci<? s1 s2 [locale]
+ -- C Function: scm_string_locale_ci_lt (s1, s2, locale)
+ -- Scheme Procedure: string-locale-ci>? s1 s2 [locale]
+ -- C Function: scm_string_locale_ci_gt (s1, s2, locale)
+     Compare strings S1 and S2 in a locale-dependent way.  If LOCALE is
+     provided, it should be locale object (as returned by ‘make-locale’)
+     and will be used to perform the comparison; otherwise, the current
+     system locale is used.  For the ‘-ci’ variants, the comparison is
+     made in a case-insensitive way.
+
+ -- Scheme Procedure: string-locale-ci=? s1 s2 [locale]
+ -- C Function: scm_string_locale_ci_eq (s1, s2, locale)
+     Compare strings S1 and S2 in a case-insensitive, and
+     locale-dependent way.  If LOCALE is provided, it should be a locale
+     object (as returned by ‘make-locale’) and will be used to perform
+     the comparison; otherwise, the current system locale is used.
+
+ -- Scheme Procedure: char-locale<? c1 c2 [locale]
+ -- C Function: scm_char_locale_lt (c1, c2, locale)
+ -- Scheme Procedure: char-locale>? c1 c2 [locale]
+ -- C Function: scm_char_locale_gt (c1, c2, locale)
+ -- Scheme Procedure: char-locale-ci<? c1 c2 [locale]
+ -- C Function: scm_char_locale_ci_lt (c1, c2, locale)
+ -- Scheme Procedure: char-locale-ci>? c1 c2 [locale]
+ -- C Function: scm_char_locale_ci_gt (c1, c2, locale)
+     Compare characters C1 and C2 according to either LOCALE (a locale
+     object as returned by ‘make-locale’) or the current locale.  For
+     the ‘-ci’ variants, the comparison is made in a case-insensitive
+     way.
+
+ -- Scheme Procedure: char-locale-ci=? c1 c2 [locale]
+ -- C Function: scm_char_locale_ci_eq (c1, c2, locale)
+     Return true if character C1 is equal to C2, in a case insensitive
+     way according to LOCALE or to the current locale.
+
+File: guile.info,  Node: Character Case Mapping,  Next: Number Input and Output,  Prev: Text Collation,  Up: Internationalization
+
+6.24.3 Character Case Mapping
+-----------------------------
+
+The procedures below provide support for “character case mapping”, i.e.,
+to convert characters or strings to their upper-case or lower-case
+equivalent.  Note that SRFI-13 provides procedures that look similar
+(*note Alphabetic Case Mapping::).  However, the SRFI-13 procedures are
+locale-independent.  Therefore, they do not take into account
+specificities of the customs in use in a particular language or region
+of the world.  For instance, while most languages using the Latin
+alphabet map lower-case letter “i” to upper-case letter “I”, Turkish
+maps lower-case “i” to “Latin capital letter I with dot above”.  The
+following procedures allow programmers to provide idiomatic character
+mapping.
+
+ -- Scheme Procedure: char-locale-downcase chr [locale]
+ -- C Function: scm_char_locale_upcase (chr, locale)
+     Return the lowercase character that corresponds to CHR according to
+     either LOCALE or the current locale.
+
+ -- Scheme Procedure: char-locale-upcase chr [locale]
+ -- C Function: scm_char_locale_downcase (chr, locale)
+     Return the uppercase character that corresponds to CHR according to
+     either LOCALE or the current locale.
+
+ -- Scheme Procedure: char-locale-titlecase chr [locale]
+ -- C Function: scm_char_locale_titlecase (chr, locale)
+     Return the titlecase character that corresponds to CHR according to
+     either LOCALE or the current locale.
+
+ -- Scheme Procedure: string-locale-upcase str [locale]
+ -- C Function: scm_string_locale_upcase (str, locale)
+     Return a new string that is the uppercase version of STR according
+     to either LOCALE or the current locale.
+
+ -- Scheme Procedure: string-locale-downcase str [locale]
+ -- C Function: scm_string_locale_downcase (str, locale)
+     Return a new string that is the down-case version of STR according
+     to either LOCALE or the current locale.
+
+ -- Scheme Procedure: string-locale-titlecase str [locale]
+ -- C Function: scm_string_locale_titlecase (str, locale)
+     Return a new string that is the titlecase version of STR according
+     to either LOCALE or the current locale.
+
+File: guile.info,  Node: Number Input and Output,  Next: Accessing Locale Information,  Prev: Character Case Mapping,  Up: Internationalization
+
+6.24.4 Number Input and Output
+------------------------------
+
+The following procedures allow programs to read and write numbers
+written according to a particular locale.  As an example, in English,
+“ten thousand and a half” is usually written ‘10,000.5’ while in French
+it is written ‘10 000,5’.  These procedures allow such differences to be
+taken into account.
+
+ -- Scheme Procedure: locale-string->integer str [base [locale]]
+ -- C Function: scm_locale_string_to_integer (str, base, locale)
+     Convert string STR into an integer according to either LOCALE (a
+     locale object as returned by ‘make-locale’) or the current process
+     locale.  If BASE is specified, then it determines the base of the
+     integer being read (e.g., ‘16’ for an hexadecimal number, ‘10’ for
+     a decimal number); by default, decimal numbers are read.  Return
+     two values (*note Multiple Values::): an integer (on success) or
+     ‘#f’, and the number of characters read from STR (‘0’ on failure).
+
+     This function is based on the C library’s ‘strtol’ function (*note
+     ‘strtol’: (libc)Parsing of Integers.).
+
+ -- Scheme Procedure: locale-string->inexact str [locale]
+ -- C Function: scm_locale_string_to_inexact (str, locale)
+     Convert string STR into an inexact number according to either
+     LOCALE (a locale object as returned by ‘make-locale’) or the
+     current process locale.  Return two values (*note Multiple
+     Values::): an inexact number (on success) or ‘#f’, and the number
+     of characters read from STR (‘0’ on failure).
+
+     This function is based on the C library’s ‘strtod’ function (*note
+     ‘strtod’: (libc)Parsing of Floats.).
+
+ -- Scheme Procedure: number->locale-string number [fraction-digits
+          [locale]]
+     Convert NUMBER (an inexact) into a string according to the cultural
+     conventions of either LOCALE (a locale object) or the current
+     locale.  By default, print as many fractional digits as necessary,
+     up to an upper bound.  Optionally, FRACTION-DIGITS may be bound to
+     an integer specifying the number of fractional digits to be
+     displayed.
+
+ -- Scheme Procedure: monetary-amount->locale-string amount intl?
+          [locale]
+     Convert AMOUNT (an inexact denoting a monetary amount) into a
+     string according to the cultural conventions of either LOCALE (a
+     locale object) or the current locale.  If INTL? is true, then the
+     international monetary format for the given locale is used (*note
+     international and locale monetary formats: (libc)Currency Symbol.).
+
+File: guile.info,  Node: Accessing Locale Information,  Next: Gettext Support,  Prev: Number Input and Output,  Up: Internationalization
+
+6.24.5 Accessing Locale Information
+-----------------------------------
+
+It is sometimes useful to obtain very specific information about a
+locale such as the word it uses for days or months, its format for
+representing floating-point figures, etc.  The ‘(ice-9 i18n)’ module
+provides support for this in a way that is similar to the libc functions
+‘nl_langinfo ()’ and ‘localeconv ()’ (*note accessing locale information
+from C: (libc)Locale Information.).  The available functions are listed
+below.
+
+ -- Scheme Procedure: locale-encoding [locale]
+     Return the name of the encoding (a string whose interpretation is
+     system-dependent) of either LOCALE or the current locale.
+
+   The following functions deal with dates and times.
+
+ -- Scheme Procedure: locale-day day [locale]
+ -- Scheme Procedure: locale-day-short day [locale]
+ -- Scheme Procedure: locale-month month [locale]
+ -- Scheme Procedure: locale-month-short month [locale]
+     Return the word (a string) used in either LOCALE or the current
+     locale to name the day (or month) denoted by DAY (or MONTH), an
+     integer between 1 and 7 (or 1 and 12).  The ‘-short’ variants
+     provide an abbreviation instead of a full name.
+
+ -- Scheme Procedure: locale-am-string [locale]
+ -- Scheme Procedure: locale-pm-string [locale]
+     Return a (potentially empty) string that is used to denote ante
+     meridiem (or post meridiem) hours in 12-hour format.
+
+ -- Scheme Procedure: locale-date+time-format [locale]
+ -- Scheme Procedure: locale-date-format [locale]
+ -- Scheme Procedure: locale-time-format [locale]
+ -- Scheme Procedure: locale-time+am/pm-format [locale]
+ -- Scheme Procedure: locale-era-date-format [locale]
+ -- Scheme Procedure: locale-era-date+time-format [locale]
+ -- Scheme Procedure: locale-era-time-format [locale]
+     These procedures return format strings suitable to ‘strftime’
+     (*note Time::) that may be used to display (part of) a date/time
+     according to certain constraints and to the conventions of either
+     LOCALE or the current locale (*note the ‘nl_langinfo ()’ items:
+     (libc)The Elegant and Fast Way.).
+
+ -- Scheme Procedure: locale-era [locale]
+ -- Scheme Procedure: locale-era-year [locale]
+     These functions return, respectively, the era and the year of the
+     relevant era used in LOCALE or the current locale.  Most locales do
+     not define this value.  In this case, the empty string is returned.
+     An example of a locale that does define this value is the Japanese
+     one.
+
+   The following procedures give information about number
+representation.
+
+ -- Scheme Procedure: locale-decimal-point [locale]
+ -- Scheme Procedure: locale-thousands-separator [locale]
+     These functions return a string denoting the representation of the
+     decimal point or that of the thousand separator (respectively) for
+     either LOCALE or the current locale.
+
+ -- Scheme Procedure: locale-digit-grouping [locale]
+     Return a (potentially circular) list of integers denoting how
+     digits of the integer part of a number are to be grouped, starting
+     at the decimal point and going to the left.  The list contains
+     integers indicating the size of the successive groups, from right
+     to left.  If the list is non-circular, then no grouping occurs for
+     digits beyond the last group.
+
+     For instance, if the returned list is a circular list that contains
+     only ‘3’ and the thousand separator is ‘","’ (as is the case with
+     English locales), then the number ‘12345678’ should be printed
+     ‘12,345,678’.
+
+   The following procedures deal with the representation of monetary
+amounts.  Some of them take an additional INTL? argument (a boolean)
+that tells whether the international or local monetary conventions for
+the given locale are to be used.
+
+ -- Scheme Procedure: locale-monetary-decimal-point [locale]
+ -- Scheme Procedure: locale-monetary-thousands-separator [locale]
+ -- Scheme Procedure: locale-monetary-grouping [locale]
+     These are the monetary counterparts of the above procedures.  These
+     procedures apply to monetary amounts.
+
+ -- Scheme Procedure: locale-currency-symbol intl? [locale]
+     Return the currency symbol (a string) of either LOCALE or the
+     current locale.
+
+     The following example illustrates the difference between the local
+     and international monetary formats:
+
+          (define us (make-locale LC_MONETARY "en_US"))
+          (locale-currency-symbol #f us)
+          ⇒ "-$"
+          (locale-currency-symbol #t us)
+          ⇒ "USD "
+
+ -- Scheme Procedure: locale-monetary-fractional-digits intl? [locale]
+     Return the number of fractional digits to be used when printing
+     monetary amounts according to either LOCALE or the current locale.
+     If the locale does not specify it, then ‘#f’ is returned.
+
+ -- Scheme Procedure: locale-currency-symbol-precedes-positive? intl?
+          [locale]
+ -- Scheme Procedure: locale-currency-symbol-precedes-negative? intl?
+          [locale]
+ -- Scheme Procedure: locale-positive-separated-by-space? intl? [locale]
+ -- Scheme Procedure: locale-negative-separated-by-space? intl? [locale]
+     These procedures return a boolean indicating whether the currency
+     symbol should precede a positive/negative number, and whether a
+     whitespace should be inserted between the currency symbol and a
+     positive/negative amount.
+
+ -- Scheme Procedure: locale-monetary-positive-sign [locale]
+ -- Scheme Procedure: locale-monetary-negative-sign [locale]
+     Return a string denoting the positive (respectively negative) sign
+     that should be used when printing a monetary amount.
+
+ -- Scheme Procedure: locale-positive-sign-position
+ -- Scheme Procedure: locale-negative-sign-position
+     These functions return a symbol telling where a sign of a
+     positive/negative monetary amount is to appear when printing it.
+     The possible values are:
+
+     ‘parenthesize’
+          The currency symbol and quantity should be surrounded by
+          parentheses.
+     ‘sign-before’
+          Print the sign string before the quantity and currency symbol.
+     ‘sign-after’
+          Print the sign string after the quantity and currency symbol.
+     ‘sign-before-currency-symbol’
+          Print the sign string right before the currency symbol.
+     ‘sign-after-currency-symbol’
+          Print the sign string right after the currency symbol.
+     ‘unspecified’
+          Unspecified.  We recommend you print the sign after the
+          currency symbol.
+
+   Finally, the two following procedures may be helpful when programming
+user interfaces:
+
+ -- Scheme Procedure: locale-yes-regexp [locale]
+ -- Scheme Procedure: locale-no-regexp [locale]
+     Return a string that can be used as a regular expression to
+     recognize a positive (respectively, negative) response to a yes/no
+     question.  For the C locale, the default values are typically
+     ‘"^[yY]"’ and ‘"^[nN]"’, respectively.
+
+     Here is an example:
+
+          (use-modules (ice-9 rdelim))
+          (format #t "Does Guile rock?~%")
+          (let lp ((answer (read-line)))
+            (cond ((string-match (locale-yes-regexp) answer)
+                   (format #t "High fives!~%"))
+                  ((string-match (locale-no-regexp) answer)
+                   (format #t "How about now? Does it rock yet?~%")
+                   (lp (read-line)))
+                  (else
+                   (format #t "What do you mean?~%")
+                   (lp (read-line)))))
+
+     For an internationalized yes/no string output, ‘gettext’ should be
+     used (*note Gettext Support::).
+
+   Example uses of some of these functions are the implementation of the
+‘number->locale-string’ and ‘monetary-amount->locale-string’ procedures
+(*note Number Input and Output::), as well as that the SRFI-19 date and
+time conversion to/from strings (*note SRFI-19::).
+
+File: guile.info,  Node: Gettext Support,  Prev: Accessing Locale Information,  Up: Internationalization
+
+6.24.6 Gettext Support
+----------------------
+
+Guile provides an interface to GNU ‘gettext’ for translating message
+strings (*note (gettext)Introduction::).
+
+   Messages are collected in domains, so different libraries and
+programs maintain different message catalogues.  The DOMAIN parameter in
+the functions below is a string (it becomes part of the message catalog
+filename).
+
+   When ‘gettext’ is not available, or if Guile was configured
+‘--without-nls’, dummy functions doing no translation are provided.
+When ‘gettext’ support is available in Guile, the ‘i18n’ feature is
+provided (*note Feature Tracking::).
+
+ -- Scheme Procedure: gettext msg [domain [category]]
+ -- C Function: scm_gettext (msg, domain, category)
+     Return the translation of MSG in DOMAIN.  DOMAIN is optional and
+     defaults to the domain set through ‘textdomain’ below.  CATEGORY is
+     optional and defaults to ‘LC_MESSAGES’ (*note Locales::).
+
+     Normal usage is for MSG to be a literal string.  ‘xgettext’ can
+     extract those from the source to form a message catalogue ready for
+     translators (*note Invoking the ‘xgettext’ Program:
+     (gettext)xgettext Invocation.).
+
+          (display (gettext "You are in a maze of twisty passages."))
+
+     ‘_’ is a commonly used shorthand, an application can make that an
+     alias for ‘gettext’.  Or a library can make a definition that uses
+     its specific DOMAIN (so an application can change the default
+     without affecting the library).
+
+          (define (_ msg) (gettext msg "mylibrary"))
+          (display (_ "File not found."))
+
+     ‘_’ is also a good place to perhaps strip disambiguating extra text
+     from the message string, as for instance in *note How to use
+     ‘gettext’ in GUI programs: (gettext)GUI program problems.
+
+ -- Scheme Procedure: ngettext msg msgplural n [domain [category]]
+ -- C Function: scm_ngettext (msg, msgplural, n, domain, category)
+     Return the translation of MSG/MSGPLURAL in DOMAIN, with a plural
+     form chosen appropriately for the number N.  DOMAIN is optional and
+     defaults to the domain set through ‘textdomain’ below.  CATEGORY is
+     optional and defaults to ‘LC_MESSAGES’ (*note Locales::).
+
+     MSG is the singular form, and MSGPLURAL the plural.  When no
+     translation is available, MSG is used if N = 1, or MSGPLURAL
+     otherwise.  When translated, the message catalogue can have a
+     different rule, and can have more than two possible forms.
+
+     As per ‘gettext’ above, normal usage is for MSG and MSGPLURAL to be
+     literal strings, since ‘xgettext’ can extract them from the source
+     to build a message catalogue.  For example,
+
+          (define (done n)
+            (format #t (ngettext "~a file processed\n"
+                                 "~a files processed\n" n)
+                       n))
+
+          (done 1) ⊣ 1 file processed
+          (done 3) ⊣ 3 files processed
+
+     It’s important to use ‘ngettext’ rather than plain ‘gettext’ for
+     plurals, since the rules for singular and plural forms in English
+     are not the same in other languages.  Only ‘ngettext’ will allow
+     translators to give correct forms (*note Additional functions for
+     plural forms: (gettext)Plural forms.).
+
+ -- Scheme Procedure: textdomain [domain]
+ -- C Function: scm_textdomain (domain)
+     Get or set the default gettext domain.  When called with no
+     parameter the current domain is returned.  When called with a
+     parameter, DOMAIN is set as the current domain, and that new value
+     returned.  For example,
+
+          (textdomain "myprog")
+          ⇒ "myprog"
+
+ -- Scheme Procedure: bindtextdomain domain [directory]
+ -- C Function: scm_bindtextdomain (domain, directory)
+     Get or set the directory under which to find message files for
+     DOMAIN.  When called without a DIRECTORY the current setting is
+     returned.  When called with a DIRECTORY, DIRECTORY is set for
+     DOMAIN and that new setting returned.  For example,
+
+          (bindtextdomain "myprog" "/my/tree/share/locale")
+          ⇒ "/my/tree/share/locale"
+
+     When using Autoconf/Automake, an application should arrange for the
+     configured ‘localedir’ to get into the program (by substituting, or
+     by generating a config file) and set that for its domain.  This
+     ensures the catalogue can be found even when installed in a
+     non-standard location.
+
+ -- Scheme Procedure: bind-textdomain-codeset domain [encoding]
+ -- C Function: scm_bind_textdomain_codeset (domain, encoding)
+     Get or set the text encoding to be used by ‘gettext’ for messages
+     from DOMAIN.  ENCODING is a string, the name of a coding system,
+     for instance "8859_1".  (On a Unix/POSIX system the ‘iconv’ program
+     can list all available encodings.)
+
+     When called without an ENCODING the current setting is returned, or
+     ‘#f’ if none yet set.  When called with an ENCODING, it is set for
+     DOMAIN and that new setting returned.  For example,
+
+          (bind-textdomain-codeset "myprog")
+          ⇒ #f
+          (bind-textdomain-codeset "myprog" "latin-9")
+          ⇒ "latin-9"
+
+     The encoding requested can be different from the translated data
+     file, messages will be recoded as necessary.  But note that when
+     there is no translation, ‘gettext’ returns its MSG unchanged, ie.
+     without any recoding.  For that reason source message strings are
+     best as plain ASCII.
+
+     Currently Guile has no understanding of multi-byte characters, and
+     string functions won’t recognise character boundaries in multi-byte
+     strings.  An application will at least be able to pass such strings
+     through to some output though.  Perhaps this will change in the
+     future.
+
+File: guile.info,  Node: Debugging,  Next: Code Coverage,  Prev: Internationalization,  Up: API Reference
+

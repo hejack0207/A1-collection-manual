@@ -1,0 +1,493 @@
+5.6 Header Files
+================
+
+The following macros check for the presence of certain C header files.
+If there is no macro specifically defined to check for a header file
+you need, and you don't need to check for any special properties of it,
+then you can use one of the general header-file check macros.
+
+* Menu:
+
+* Header Portability::          Collected knowledge on common headers
+* Particular Headers::          Special handling to find certain headers
+* Generic Headers::             How to find other headers
+
+File: autoconf.info,  Node: Header Portability,  Next: Particular Headers,  Up: Header Files
+
+5.6.1 Portability of Headers
+----------------------------
+
+This section documents some collected knowledge about common headers,
+and the problems they cause.  By definition, this list always requires
+additions.  A much more complete list is maintained by the Gnulib
+project (*note Gnulib::), covering *note Posix Headers: (gnulib)Header
+File Substitutes. and *note Glibc Headers: (gnulib)Glibc Header File
+Substitutes.  Please help us keep the gnulib list as complete as
+possible.
+
+`limits.h'
+     C99 says that `limits.h' defines `LLONG_MIN', `LLONG_MAX', and
+     `ULLONG_MAX', but many almost-C99 environments (e.g., default GCC
+     4.0.2 + glibc 2.4) do not define them.
+
+`inttypes.h' vs. `stdint.h'
+     The C99 standard says that `inttypes.h' includes `stdint.h', so
+     there's no need to include `stdint.h' separately in a standard
+     environment.  Some implementations have `inttypes.h' but not
+     `stdint.h' (e.g., Solaris 7), but we don't know of any
+     implementation that has `stdint.h' but not `inttypes.h'.
+
+`linux/irda.h'
+     It requires `linux/types.h' and `sys/socket.h'.
+
+`linux/random.h'
+     It requires `linux/types.h'.
+
+`net/if.h'
+     On Darwin, this file requires that `sys/socket.h' be included
+     beforehand.  One should run:
+
+          AC_CHECK_HEADERS([sys/socket.h])
+          AC_CHECK_HEADERS([net/if.h], [], [],
+          [#include <stdio.h>
+          #ifdef STDC_HEADERS
+          # include <stdlib.h>
+          # include <stddef.h>
+          #else
+          # ifdef HAVE_STDLIB_H
+          #  include <stdlib.h>
+          # endif
+          #endif
+          #ifdef HAVE_SYS_SOCKET_H
+          # include <sys/socket.h>
+          #endif
+          ])
+
+`netinet/if_ether.h'
+     On Darwin, this file requires that `stdio.h' and `sys/socket.h' be
+     included beforehand.  One should run:
+
+          AC_CHECK_HEADERS([sys/socket.h])
+          AC_CHECK_HEADERS([netinet/if_ether.h], [], [],
+          [#include <stdio.h>
+          #ifdef STDC_HEADERS
+          # include <stdlib.h>
+          # include <stddef.h>
+          #else
+          # ifdef HAVE_STDLIB_H
+          #  include <stdlib.h>
+          # endif
+          #endif
+          #ifdef HAVE_SYS_SOCKET_H
+          # include <sys/socket.h>
+          #endif
+          ])
+
+`stdint.h'
+     See above, item `inttypes.h' vs. `stdint.h'.
+
+`stdlib.h'
+     On many systems (e.g., Darwin), `stdio.h' is a prerequisite.
+
+`sys/mount.h'
+     On FreeBSD 4.8 on ia32 and using gcc version 2.95.4,
+     `sys/params.h' is a prerequisite.
+
+`sys/ptem.h'
+     On Solaris 8, `sys/stream.h' is a prerequisite.
+
+`sys/socket.h'
+     On Darwin, `stdlib.h' is a prerequisite.
+
+`sys/ucred.h'
+     On Tru64 5.1, `sys/types.h' is a prerequisite.
+
+`X11/extensions/scrnsaver.h'
+     Using XFree86, this header requires `X11/Xlib.h', which is probably
+     so required that you might not even consider looking for it.
+
+          AC_CHECK_HEADERS([X11/extensions/scrnsaver.h], [], [],
+          [[#include <X11/Xlib.h>
+          ]])
+
+File: autoconf.info,  Node: Particular Headers,  Next: Generic Headers,  Prev: Header Portability,  Up: Header Files
+
+5.6.2 Particular Header Checks
+------------------------------
+
+These macros check for particular system header files--whether they
+exist, and in some cases whether they declare certain symbols.
+
+ -- Macro: AC_CHECK_HEADER_STDBOOL
+     Check whether `stdbool.h' exists and conforms to C99, and cache the
+     result in the `ac_cv_header_stdbool_h' variable.  If the type
+     `_Bool' is defined, define `HAVE__BOOL' to 1.
+
+     This macro is intended for use by Gnulib (*note Gnulib::) and other
+     packages that supply a substitute `stdbool.h' on platforms lacking
+     a conforming one.  The `AC_HEADER_STDBOOL' macro is better for code
+     that explicitly checks for `stdbool.h'.
+
+ -- Macro: AC_HEADER_ASSERT
+     Check whether to enable assertions in the style of `assert.h'.
+     Assertions are enabled by default, but the user can override this
+     by invoking `configure' with the `--disable-assert' option.
+
+ -- Macro: AC_HEADER_DIRENT
+     Check for the following header files.  For the first one that is
+     found and defines `DIR', define the listed C preprocessor macro:
+
+     `dirent.h'     `HAVE_DIRENT_H'
+     `sys/ndir.h'   `HAVE_SYS_NDIR_H'
+     `sys/dir.h'    `HAVE_SYS_DIR_H'
+     `ndir.h'       `HAVE_NDIR_H'
+
+     The directory-library declarations in your source code should look
+     something like the following:
+
+          #include <sys/types.h>
+          #ifdef HAVE_DIRENT_H
+          # include <dirent.h>
+          # define NAMLEN(dirent) strlen ((dirent)->d_name)
+          #else
+          # define dirent direct
+          # define NAMLEN(dirent) ((dirent)->d_namlen)
+          # ifdef HAVE_SYS_NDIR_H
+          #  include <sys/ndir.h>
+          # endif
+          # ifdef HAVE_SYS_DIR_H
+          #  include <sys/dir.h>
+          # endif
+          # ifdef HAVE_NDIR_H
+          #  include <ndir.h>
+          # endif
+          #endif
+
+     Using the above declarations, the program would declare variables
+     to be of type `struct dirent', not `struct direct', and would
+     access the length of a directory entry name by passing a pointer
+     to a `struct dirent' to the `NAMLEN' macro.
+
+     This macro also checks for the SCO Xenix `dir' and `x' libraries.
+
+     This macro is obsolescent, as all current systems with directory
+     libraries have `<dirent.h>'.  New programs need not use this macro.
+
+     Also see `AC_STRUCT_DIRENT_D_INO' and `AC_STRUCT_DIRENT_D_TYPE'
+     (*note Particular Structures::).
+
+ -- Macro: AC_HEADER_MAJOR
+     If `sys/types.h' does not define `major', `minor', and `makedev',
+     but `sys/mkdev.h' does, define `MAJOR_IN_MKDEV'; otherwise, if
+     `sys/sysmacros.h' does, define `MAJOR_IN_SYSMACROS'.
+
+ -- Macro: AC_HEADER_RESOLV
+     Checks for header `resolv.h', checking for prerequisites first.
+     To properly use `resolv.h', your code should contain something like
+     the following:
+
+     #ifdef HAVE_SYS_TYPES_H
+     #  include <sys/types.h>
+     #endif
+     #ifdef HAVE_NETINET_IN_H
+     #  include <netinet/in.h>   /* inet_ functions / structs */
+     #endif
+     #ifdef HAVE_ARPA_NAMESER_H
+     #  include <arpa/nameser.h> /* DNS HEADER struct */
+     #endif
+     #ifdef HAVE_NETDB_H
+     #  include <netdb.h>
+     #endif
+     #include <resolv.h>
+
+ -- Macro: AC_HEADER_STAT
+     If the macros `S_ISDIR', `S_ISREG', etc. defined in `sys/stat.h'
+     do not work properly (returning false positives), define
+     `STAT_MACROS_BROKEN'.  This is the case on Tektronix UTekV, Amdahl
+     UTS and Motorola System V/88.
+
+     This macro is obsolescent, as no current systems have the bug.
+     New programs need not use this macro.
+
+ -- Macro: AC_HEADER_STDBOOL
+     If `stdbool.h' exists and conforms to C99, define `HAVE_STDBOOL_H'
+     to 1; if the type `_Bool' is defined, define `HAVE__BOOL' to 1.
+     To fulfill the C99 requirements, your program could contain the
+     following code:
+
+          #ifdef HAVE_STDBOOL_H
+          # include <stdbool.h>
+          #else
+          # ifndef HAVE__BOOL
+          #  ifdef __cplusplus
+          typedef bool _Bool;
+          #  else
+          #   define _Bool signed char
+          #  endif
+          # endif
+          # define bool _Bool
+          # define false 0
+          # define true 1
+          # define __bool_true_false_are_defined 1
+          #endif
+
+     Alternatively you can use the `stdbool' package of Gnulib (*note
+     Gnulib::).  It simplifies your code so that it can say just
+     `#include <stdbool.h>', and it adds support for less-common
+     platforms.
+
+     This macro caches its result in the `ac_cv_header_stdbool_h'
+     variable.
+
+     This macro differs from `AC_CHECK_HEADER_STDBOOL' only in that it
+     defines `HAVE_STDBOOL_H' whereas `AC_CHECK_HEADER_STDBOOL' does
+     not.
+
+ -- Macro: AC_HEADER_STDC
+     Define `STDC_HEADERS' if the system has C header files conforming
+     to ANSI C89 (ISO C90).  Specifically, this macro checks for
+     `stdlib.h', `stdarg.h', `string.h', and `float.h'; if the system
+     has those, it probably has the rest of the C89 header files.  This
+     macro also checks whether `string.h' declares `memchr' (and thus
+     presumably the other `mem' functions), whether `stdlib.h' declare
+     `free' (and thus presumably `malloc' and other related functions),
+     and whether the `ctype.h' macros work on characters with the high
+     bit set, as the C standard requires.
+
+     If you use this macro, your code can refer to `STDC_HEADERS' to
+     determine whether the system has conforming header files (and
+     probably C library functions).
+
+     This macro caches its result in the `ac_cv_header_stdc' variable.
+
+     This macro is obsolescent, as current systems have conforming
+     header files.  New programs need not use this macro.
+
+     Nowadays `string.h' is part of the C standard and declares
+     functions like `strcpy', and `strings.h' is standardized by Posix
+     and declares BSD functions like `bcopy'; but historically, string
+     functions were a major sticking point in this area.  If you still
+     want to worry about portability to ancient systems without
+     standard headers, there is so much variation that it is probably
+     easier to declare the functions you use than to figure out exactly
+     what the system header files declare.  Some ancient systems
+     contained a mix of functions from the C standard and from BSD;
+     some were mostly standard but lacked `memmove'; some defined the
+     BSD functions as macros in `string.h' or `strings.h'; some had
+     only the BSD functions but `string.h'; some declared the memory
+     functions in `memory.h', some in `string.h'; etc.  It is probably
+     sufficient to check for one string function and one memory
+     function; if the library had the standard versions of those then
+     it probably had most of the others.  If you put the following in
+     `configure.ac':
+
+          # This example is obsolescent.
+          # Nowadays you can omit these macro calls.
+          AC_HEADER_STDC
+          AC_CHECK_FUNCS([strchr memcpy])
+
+     then, in your code, you can use declarations like this:
+
+          /* This example is obsolescent.
+             Nowadays you can just #include <string.h>.  */
+          #ifdef STDC_HEADERS
+          # include <string.h>
+          #else
+          # ifndef HAVE_STRCHR
+          #  define strchr index
+          #  define strrchr rindex
+          # endif
+          char *strchr (), *strrchr ();
+          # ifndef HAVE_MEMCPY
+          #  define memcpy(d, s, n) bcopy ((s), (d), (n))
+          #  define memmove(d, s, n) bcopy ((s), (d), (n))
+          # endif
+          #endif
+
+     If you use a function like `memchr', `memset', `strtok', or
+     `strspn', which have no BSD equivalent, then macros don't suffice
+     to port to ancient hosts; you must provide an implementation of
+     each function.  An easy way to incorporate your implementations
+     only when needed (since the ones in system C libraries may be hand
+     optimized) is to, taking `memchr' for example, put it in
+     `memchr.c' and use `AC_REPLACE_FUNCS([memchr])'.
+
+ -- Macro: AC_HEADER_SYS_WAIT
+     If `sys/wait.h' exists and is compatible with Posix, define
+     `HAVE_SYS_WAIT_H'.  Incompatibility can occur if `sys/wait.h' does
+     not exist, or if it uses the old BSD `union wait' instead of `int'
+     to store a status value.  If `sys/wait.h' is not Posix compatible,
+     then instead of including it, define the Posix macros with their
+     usual interpretations.  Here is an example:
+
+          #include <sys/types.h>
+          #ifdef HAVE_SYS_WAIT_H
+          # include <sys/wait.h>
+          #endif
+          #ifndef WEXITSTATUS
+          # define WEXITSTATUS(stat_val) ((unsigned int) (stat_val) >> 8)
+          #endif
+          #ifndef WIFEXITED
+          # define WIFEXITED(stat_val) (((stat_val) & 255) == 0)
+          #endif
+
+     This macro caches its result in the `ac_cv_header_sys_wait_h'
+     variable.
+
+     This macro is obsolescent, as current systems are compatible with
+     Posix.  New programs need not use this macro.
+
+   `_POSIX_VERSION' is defined when `unistd.h' is included on Posix
+systems.  If there is no `unistd.h', it is definitely not a Posix
+system.  However, some non-Posix systems do have `unistd.h'.
+
+   The way to check whether the system supports Posix is:
+
+     #ifdef HAVE_UNISTD_H
+     # include <sys/types.h>
+     # include <unistd.h>
+     #endif
+
+     #ifdef _POSIX_VERSION
+     /* Code for Posix systems.  */
+     #endif
+
+ -- Macro: AC_HEADER_TIME
+     If a program may include both `time.h' and `sys/time.h', define
+     `TIME_WITH_SYS_TIME'.  On some ancient systems, `sys/time.h'
+     included `time.h', but `time.h' was not protected against multiple
+     inclusion, so programs could not explicitly include both files.
+     This macro is useful in programs that use, for example, `struct
+     timeval' as well as `struct tm'.  It is best used in conjunction
+     with `HAVE_SYS_TIME_H', which can be checked for using
+     `AC_CHECK_HEADERS([sys/time.h])'.
+
+          #ifdef TIME_WITH_SYS_TIME
+          # include <sys/time.h>
+          # include <time.h>
+          #else
+          # ifdef HAVE_SYS_TIME_H
+          #  include <sys/time.h>
+          # else
+          #  include <time.h>
+          # endif
+          #endif
+
+     This macro caches its result in the `ac_cv_header_time' variable.
+
+     This macro is obsolescent, as current systems can include both
+     files when they exist.  New programs need not use this macro.
+
+ -- Macro: AC_HEADER_TIOCGWINSZ
+     If the use of `TIOCGWINSZ' requires `<sys/ioctl.h>', then define
+     `GWINSZ_IN_SYS_IOCTL'.  Otherwise `TIOCGWINSZ' can be found in
+     `<termios.h>'.
+
+     Use:
+
+          #ifdef HAVE_TERMIOS_H
+          # include <termios.h>
+          #endif
+
+          #ifdef GWINSZ_IN_SYS_IOCTL
+          # include <sys/ioctl.h>
+          #endif
+
+File: autoconf.info,  Node: Generic Headers,  Prev: Particular Headers,  Up: Header Files
+
+5.6.3 Generic Header Checks
+---------------------------
+
+These macros are used to find system header files not covered by the
+"particular" test macros.  If you need to check the contents of a header
+as well as find out whether it is present, you have to write your own
+test for it (*note Writing Tests::).
+
+ -- Macro: AC_CHECK_HEADER (HEADER-FILE, [ACTION-IF-FOUND],
+          [ACTION-IF-NOT-FOUND], [INCLUDES])
+     If the system header file HEADER-FILE is compilable, execute shell
+     commands ACTION-IF-FOUND, otherwise execute ACTION-IF-NOT-FOUND.
+     If you just want to define a symbol if the header file is
+     available, consider using `AC_CHECK_HEADERS' instead.
+
+     INCLUDES is decoded to determine the appropriate include
+     directives.  If omitted or empty, `configure' will check for both
+     header existence (with the preprocessor) and usability (with the
+     compiler), using `AC_INCLUDES_DEFAULT' for the compile test.  If
+     there is a discrepancy between the results, a warning is issued to
+     the user, and the compiler results are favored (*note Present But
+     Cannot Be Compiled::).  In general, favoring the compiler results
+     means that a header will be treated as not found even though the
+     file exists, because you did not provide enough prerequisites.
+
+     Providing a non-empty INCLUDES argument allows the code to provide
+     any prerequisites prior to including the header under test; it is
+     common to use the argument `AC_INCLUDES_DEFAULT' (*note Default
+     Includes::).  With an explicit fourth argument, no preprocessor
+     test is needed.  As a special case, an INCLUDES of exactly `-'
+     triggers the older preprocessor check, which merely determines
+     existence of the file in the preprocessor search path; this should
+     only be used as a last resort (it is safer to determine the actual
+     prerequisites and perform a compiler check, or else use
+     `AC_PREPROC_IFELSE' to make it obvious that only a preprocessor
+     check is desired).
+
+     This macro caches its result in the `ac_cv_header_HEADER-FILE'
+     variable, with characters not suitable for a variable name mapped
+     to underscores.
+
+ -- Macro: AC_CHECK_HEADERS (HEADER-FILE..., [ACTION-IF-FOUND],
+          [ACTION-IF-NOT-FOUND], [INCLUDES])
+     For each given system header file HEADER-FILE in the
+     blank-separated argument list that exists, define
+     `HAVE_HEADER-FILE' (in all capitals).  If ACTION-IF-FOUND is
+     given, it is additional shell code to execute when one of the
+     header files is found.  You can give it a value of `break' to
+     break out of the loop on the first match.  If ACTION-IF-NOT-FOUND
+     is given, it is executed when one of the header files is not found.
+
+     INCLUDES is interpreted as in `AC_CHECK_HEADER', in order to
+     choose the set of preprocessor directives supplied before the
+     header under test.
+
+     This macro caches its result in the `ac_cv_header_HEADER-FILE'
+     variable, with characters not suitable for a variable name mapped
+     to underscores.
+
+   Previous versions of Autoconf merely checked whether the header was
+accepted by the preprocessor.  This was changed because the old test was
+inappropriate for typical uses.  Headers are typically used to compile,
+not merely to preprocess, and the old behavior sometimes accepted
+headers that clashed at compile-time (*note Present But Cannot Be
+Compiled::).  If you need to check whether a header is preprocessable,
+you can use `AC_PREPROC_IFELSE' (*note Running the Preprocessor::).
+
+   Actually requiring a header to compile improves the robustness of the
+test, but it also requires that you make sure that headers that must be
+included before the HEADER-FILE be part of the INCLUDES, (*note Default
+Includes::).  If looking for `bar.h', which requires that `foo.h' be
+included before if it exists, we suggest the following scheme:
+
+AC_CHECK_HEADERS([foo.h])
+AC_CHECK_HEADERS([bar.h], [], [],
+[#ifdef HAVE_FOO_H
+# include <foo.h>
+#endif
+])
+
+   The following variant generates smaller, faster `configure' files if
+you do not need the full power of `AC_CHECK_HEADERS'.
+
+ -- Macro: AC_CHECK_HEADERS_ONCE (HEADER-FILE...)
+     For each given system header file HEADER-FILE in the
+     blank-separated argument list that exists, define
+     `HAVE_HEADER-FILE' (in all capitals).  This is a once-only variant
+     of `AC_CHECK_HEADERS'.  It generates the checking code at most
+     once, so that `configure' is smaller and faster; but the checks
+     cannot be conditionalized and are always done once, early during
+     the `configure' run.  Thus, this macro is only safe for checking
+     headers that do not have prerequisites beyond what
+     `AC_INCLUDES_DEFAULT' provides.
+
+File: autoconf.info,  Node: Declarations,  Next: Structures,  Prev: Header Files,  Up: Existing Tests
+

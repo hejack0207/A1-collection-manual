@@ -1,0 +1,262 @@
+6.2 Writing Test Programs
+=========================
+
+Autoconf tests follow a common scheme: feed some program with some
+input, and most of the time, feed a compiler with some source file.
+This section is dedicated to these source samples.
+
+* Menu:
+
+* Guidelines::                  General rules for writing test programs
+* Test Functions::              Avoiding pitfalls in test programs
+* Generating Sources::          Source program boilerplate
+
+File: autoconf.info,  Node: Guidelines,  Next: Test Functions,  Up: Writing Test Programs
+
+6.2.1 Guidelines for Test Programs
+----------------------------------
+
+The most important rule to follow when writing testing samples is:
+
+                          _Look for realism._
+
+   This motto means that testing samples must be written with the same
+strictness as real programs are written.  In particular, you should
+avoid "shortcuts" and simplifications.
+
+   Don't just play with the preprocessor if you want to prepare a
+compilation.  For instance, using `cpp' to check whether a header is
+functional might let your `configure' accept a header which causes some
+_compiler_ error.  Do not hesitate to check a header with other headers
+included before, especially required headers.
+
+   Make sure the symbols you use are properly defined, i.e., refrain
+from simply declaring a function yourself instead of including the
+proper header.
+
+   Test programs should not write to standard output.  They should exit
+with status 0 if the test succeeds, and with status 1 otherwise, so
+that success can be distinguished easily from a core dump or other
+failure; segmentation violations and other failures produce a nonzero
+exit status.  Unless you arrange for `exit' to be declared, test
+programs should `return', not `exit', from `main', because on many
+systems `exit' is not declared by default.
+
+   Test programs can use `#if' or `#ifdef' to check the values of
+preprocessor macros defined by tests that have already run.  For
+example, if you call `AC_HEADER_STDBOOL', then later on in
+`configure.ac' you can have a test program that includes `stdbool.h'
+conditionally:
+
+     #ifdef HAVE_STDBOOL_H
+     # include <stdbool.h>
+     #endif
+
+   Both `#if HAVE_STDBOOL_H' and `#ifdef HAVE_STDBOOL_H' will work with
+any standard C compiler.  Some developers prefer `#if' because it is
+easier to read, while others prefer `#ifdef' because it avoids
+diagnostics with picky compilers like GCC with the `-Wundef' option.
+
+   If a test program needs to use or create a data file, give it a name
+that starts with `conftest', such as `conftest.data'.  The `configure'
+script cleans up by running `rm -f -r conftest*' after running test
+programs and if the script is interrupted.
+
+File: autoconf.info,  Node: Test Functions,  Next: Generating Sources,  Prev: Guidelines,  Up: Writing Test Programs
+
+6.2.2 Test Functions
+--------------------
+
+These days it's safe to assume support for function prototypes
+(introduced in C89).
+
+   Functions that test programs declare should also be conditionalized
+for C++, which requires `extern "C"' prototypes.  Make sure to not
+include any header files containing clashing prototypes.
+
+     #ifdef __cplusplus
+     extern "C"
+     #endif
+     void *valloc (size_t);
+
+   If a test program calls a function with invalid parameters (just to
+see whether it exists), organize the program to ensure that it never
+invokes that function.  You can do this by calling it in another
+function that is never invoked.  You can't do it by putting it after a
+call to `exit', because GCC version 2 knows that `exit' never returns
+and optimizes out any code that follows it in the same block.
+
+   If you include any header files, be sure to call the functions
+relevant to them with the correct number of arguments, even if they are
+just 0, to avoid compilation errors due to prototypes.  GCC version 2
+has internal prototypes for several functions that it automatically
+inlines; for example, `memcpy'.  To avoid errors when checking for
+them, either pass them the correct number of arguments or redeclare them
+with a different return type (such as `char').
+
+File: autoconf.info,  Node: Generating Sources,  Prev: Test Functions,  Up: Writing Test Programs
+
+6.2.3 Generating Sources
+------------------------
+
+Autoconf provides a set of macros that can be used to generate test
+source files.  They are written to be language generic, i.e., they
+actually depend on the current language (*note Language Choice::) to
+"format" the output properly.
+
+ -- Macro: AC_LANG_CONFTEST (SOURCE)
+     Save the SOURCE text in the current test source file:
+     `conftest.EXTENSION' where the EXTENSION depends on the current
+     language.  As of Autoconf 2.63b, the source file also contains the
+     results of all of the `AC_DEFINE' performed so far.
+
+     Note that the SOURCE is evaluated exactly once, like regular
+     Autoconf macro arguments, and therefore (i) you may pass a macro
+     invocation, (ii) if not, be sure to double quote if needed.
+
+     This macro issues a warning during `autoconf' processing if SOURCE
+     does not include an expansion of the macro
+     `AC_LANG_DEFINES_PROVIDED' (note that both `AC_LANG_SOURCE' and
+     `AC_LANG_PROGRAM' call this macro, and thus avoid the warning).
+
+     This macro is seldom called directly, but is used under the hood
+     by more common macros such as `AC_COMPILE_IFELSE' and
+     `AC_RUN_IFELSE'.
+
+ -- Macro: AC_LANG_DEFINES_PROVIDED
+     This macro is called as a witness that the file
+     `conftest.EXTENSION' appropriate for the current language is
+     complete, including all previously determined results from
+     `AC_DEFINE'.  This macro is seldom called directly, but exists if
+     you have a compelling reason to write a conftest file without using
+     `AC_LANG_SOURCE', yet still want to avoid a syntax warning from
+     `AC_LANG_CONFTEST'.
+
+ -- Macro: AC_LANG_SOURCE (SOURCE)
+     Expands into the SOURCE, with the definition of all the
+     `AC_DEFINE' performed so far.  This macro includes an expansion of
+     `AC_LANG_DEFINES_PROVIDED'.
+
+     In many cases, you may find it more convenient to use the wrapper
+     `AC_LANG_PROGRAM'.
+
+   For instance, executing (observe the double quotation!):
+
+     AC_INIT([Hello], [1.0], [bug-hello@example.org], [],
+             [http://www.example.org/])
+     AC_DEFINE([HELLO_WORLD], ["Hello, World\n"],
+       [Greetings string.])
+     AC_LANG([C])
+     AC_LANG_CONFTEST(
+        [AC_LANG_SOURCE([[const char hw[] = "Hello, World\n";]])])
+     gcc -E -dD conftest.c
+
+on a system with `gcc' installed, results in:
+
+     ...
+     # 1 "conftest.c"
+
+     #define PACKAGE_NAME "Hello"
+     #define PACKAGE_TARNAME "hello"
+     #define PACKAGE_VERSION "1.0"
+     #define PACKAGE_STRING "Hello 1.0"
+     #define PACKAGE_BUGREPORT "bug-hello@example.org"
+     #define PACKAGE_URL "http://www.example.org/"
+     #define HELLO_WORLD "Hello, World\n"
+
+     const char hw[] = "Hello, World\n";
+
+   When the test language is Fortran, Erlang, or Go, the `AC_DEFINE'
+definitions are not automatically translated into constants in the
+source code by this macro.
+
+ -- Macro: AC_LANG_PROGRAM (PROLOGUE, BODY)
+     Expands into a source file which consists of the PROLOGUE, and
+     then BODY as body of the main function (e.g., `main' in C).  Since
+     it uses `AC_LANG_SOURCE', the features of the latter are available.
+
+   For instance:
+
+     AC_INIT([Hello], [1.0], [bug-hello@example.org], [],
+             [http://www.example.org/])
+     AC_DEFINE([HELLO_WORLD], ["Hello, World\n"],
+       [Greetings string.])
+     AC_LANG_CONFTEST(
+     [AC_LANG_PROGRAM([[const char hw[] = "Hello, World\n";]],
+                      [[fputs (hw, stdout);]])])
+     gcc -E -dD conftest.c
+
+on a system with `gcc' installed, results in:
+
+     ...
+     # 1 "conftest.c"
+
+     #define PACKAGE_NAME "Hello"
+     #define PACKAGE_TARNAME "hello"
+     #define PACKAGE_VERSION "1.0"
+     #define PACKAGE_STRING "Hello 1.0"
+     #define PACKAGE_BUGREPORT "bug-hello@example.org"
+     #define PACKAGE_URL "http://www.example.org/"
+     #define HELLO_WORLD "Hello, World\n"
+
+     const char hw[] = "Hello, World\n";
+     int
+     main ()
+     {
+     fputs (hw, stdout);
+       ;
+       return 0;
+     }
+
+   In Erlang tests, the created source file is that of an Erlang module
+called `conftest' (`conftest.erl').  This module defines and exports at
+least one `start/0' function, which is called to perform the test.  The
+PROLOGUE is optional code that is inserted between the module header and
+the `start/0' function definition.  BODY is the body of the `start/0'
+function without the final period (*note Runtime::, about constraints
+on this function's behavior).
+
+   For instance:
+
+     AC_INIT([Hello], [1.0], [bug-hello@example.org])
+     AC_LANG(Erlang)
+     AC_LANG_CONFTEST(
+     [AC_LANG_PROGRAM([[-define(HELLO_WORLD, "Hello, world!").]],
+                      [[io:format("~s~n", [?HELLO_WORLD])]])])
+     cat conftest.erl
+
+results in:
+
+     -module(conftest).
+     -export([start/0]).
+     -define(HELLO_WORLD, "Hello, world!").
+     start() ->
+     io:format("~s~n", [?HELLO_WORLD])
+     .
+
+ -- Macro: AC_LANG_CALL (PROLOGUE, FUNCTION)
+     Expands into a source file which consists of the PROLOGUE, and
+     then a call to the FUNCTION as body of the main function (e.g.,
+     `main' in C).  Since it uses `AC_LANG_PROGRAM', the feature of the
+     latter are available.
+
+     This function will probably be replaced in the future by a version
+     which would enable specifying the arguments.  The use of this
+     macro is not encouraged, as it violates strongly the typing system.
+
+     This macro cannot be used for Erlang tests.
+
+ -- Macro: AC_LANG_FUNC_LINK_TRY (FUNCTION)
+     Expands into a source file which uses the FUNCTION in the body of
+     the main function (e.g., `main' in C).  Since it uses
+     `AC_LANG_PROGRAM', the features of the latter are available.
+
+     As `AC_LANG_CALL', this macro is documented only for completeness.
+     It is considered to be severely broken, and in the future will be
+     removed in favor of actual function calls (with properly typed
+     arguments).
+
+     This macro cannot be used for Erlang tests.
+
+File: autoconf.info,  Node: Running the Preprocessor,  Next: Running the Compiler,  Prev: Writing Test Programs,  Up: Writing Tests
+

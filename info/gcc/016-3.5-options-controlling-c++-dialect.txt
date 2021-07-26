@@ -1,0 +1,952 @@
+3.5 Options Controlling C++ Dialect
+===================================
+
+This section describes the command-line options that are only meaningful
+for C++ programs.  You can also use most of the GNU compiler options
+regardless of what language your program is in.  For example, you might
+compile a file 'firstClass.C' like this:
+
+     g++ -g -fstrict-enums -O -c firstClass.C
+
+In this example, only '-fstrict-enums' is an option meant only for C++
+programs; you can use the other options with any language supported by
+GCC.
+
+ Some options for compiling C programs, such as '-std', are also
+relevant for C++ programs.  *Note Options Controlling C Dialect: C
+Dialect Options.
+
+ Here is a list of options that are _only_ for compiling C++ programs:
+
+'-fabi-version=N'
+     Use version N of the C++ ABI.  The default is version 0.
+
+     Version 0 refers to the version conforming most closely to the C++
+     ABI specification.  Therefore, the ABI obtained using version 0
+     will change in different versions of G++ as ABI bugs are fixed.
+
+     Version 1 is the version of the C++ ABI that first appeared in G++
+     3.2.
+
+     Version 2 is the version of the C++ ABI that first appeared in G++
+     3.4, and was the default through G++ 4.9.
+
+     Version 3 corrects an error in mangling a constant address as a
+     template argument.
+
+     Version 4, which first appeared in G++ 4.5, implements a standard
+     mangling for vector types.
+
+     Version 5, which first appeared in G++ 4.6, corrects the mangling
+     of attribute const/volatile on function pointer types, decltype of
+     a plain decl, and use of a function parameter in the declaration of
+     another parameter.
+
+     Version 6, which first appeared in G++ 4.7, corrects the promotion
+     behavior of C++11 scoped enums and the mangling of template
+     argument packs, const/static_cast, prefix ++ and -, and a class
+     scope function used as a template argument.
+
+     Version 7, which first appeared in G++ 4.8, that treats nullptr_t
+     as a builtin type and corrects the mangling of lambdas in default
+     argument scope.
+
+     Version 8, which first appeared in G++ 4.9, corrects the
+     substitution behavior of function types with
+     function-cv-qualifiers.
+
+     Version 9, which first appeared in G++ 5.2, corrects the alignment
+     of 'nullptr_t'.
+
+     Version 10, which first appeared in G++ 6.1, adds mangling of
+     attributes that affect type identity, such as ia32 calling
+     convention attributes (e.g. 'stdcall').
+
+     Version 11, which first appeared in G++ 7, corrects the mangling of
+     sizeof...  expressions and operator names.  For multiple entities
+     with the same name within a function, that are declared in
+     different scopes, the mangling now changes starting with the
+     twelfth occurrence.  It also implies '-fnew-inheriting-ctors'.
+
+     Version 12, which first appeared in G++ 8, corrects the calling
+     conventions for empty classes on the x86_64 target and for classes
+     with only deleted copy/move constructors.  It accidentally changes
+     the calling convention for classes with a deleted copy constructor
+     and a trivial move constructor.
+
+     Version 13, which first appeared in G++ 8.2, fixes the accidental
+     change in version 12.
+
+     See also '-Wabi'.
+
+'-fabi-compat-version=N'
+     On targets that support strong aliases, G++ works around mangling
+     changes by creating an alias with the correct mangled name when
+     defining a symbol with an incorrect mangled name.  This switch
+     specifies which ABI version to use for the alias.
+
+     With '-fabi-version=0' (the default), this defaults to 11 (GCC 7
+     compatibility).  If another ABI version is explicitly selected,
+     this defaults to 0.  For compatibility with GCC versions 3.2
+     through 4.9, use '-fabi-compat-version=2'.
+
+     If this option is not provided but '-Wabi=N' is, that version is
+     used for compatibility aliases.  If this option is provided along
+     with '-Wabi' (without the version), the version from this option is
+     used for the warning.
+
+'-fno-access-control'
+     Turn off all access checking.  This switch is mainly useful for
+     working around bugs in the access control code.
+
+'-faligned-new'
+     Enable support for C++17 'new' of types that require more alignment
+     than 'void* ::operator new(std::size_t)' provides.  A numeric
+     argument such as '-faligned-new=32' can be used to specify how much
+     alignment (in bytes) is provided by that function, but few users
+     will need to override the default of 'alignof(std::max_align_t)'.
+
+     This flag is enabled by default for '-std=c++17'.
+
+'-fchar8_t'
+'-fno-char8_t'
+     Enable support for 'char8_t' as adopted for C++2a.  This includes
+     the addition of a new 'char8_t' fundamental type, changes to the
+     types of UTF-8 string and character literals, new signatures for
+     user-defined literals, associated standard library updates, and new
+     '__cpp_char8_t' and '__cpp_lib_char8_t' feature test macros.
+
+     This option enables functions to be overloaded for ordinary and
+     UTF-8 strings:
+
+          int f(const char *);    // #1
+          int f(const char8_t *); // #2
+          int v1 = f("text");     // Calls #1
+          int v2 = f(u8"text");   // Calls #2
+
+     and introduces new signatures for user-defined literals:
+
+          int operator""_udl1(char8_t);
+          int v3 = u8'x'_udl1;
+          int operator""_udl2(const char8_t*, std::size_t);
+          int v4 = u8"text"_udl2;
+          template<typename T, T...> int operator""_udl3();
+          int v5 = u8"text"_udl3;
+
+     The change to the types of UTF-8 string and character literals
+     introduces incompatibilities with ISO C++11 and later standards.
+     For example, the following code is well-formed under ISO C++11, but
+     is ill-formed when '-fchar8_t' is specified.
+
+          char ca[] = u8"xx";     // error: char-array initialized from wide
+                                  //        string
+          const char *cp = u8"xx";// error: invalid conversion from
+                                  //        `const char8_t*' to `const char*'
+          int f(const char*);
+          auto v = f(u8"xx");     // error: invalid conversion from
+                                  //        `const char8_t*' to `const char*'
+          std::string s{u8"xx"};  // error: no matching function for call to
+                                  //        `std::basic_string<char>::basic_string()'
+          using namespace std::literals;
+          s = u8"xx"s;            // error: conversion from
+                                  //        `basic_string<char8_t>' to non-scalar
+                                  //        type `basic_string<char>' requested
+
+'-fcheck-new'
+     Check that the pointer returned by 'operator new' is non-null
+     before attempting to modify the storage allocated.  This check is
+     normally unnecessary because the C++ standard specifies that
+     'operator new' only returns '0' if it is declared 'throw()', in
+     which case the compiler always checks the return value even without
+     this option.  In all other cases, when 'operator new' has a
+     non-empty exception specification, memory exhaustion is signalled
+     by throwing 'std::bad_alloc'.  See also 'new (nothrow)'.
+
+'-fconcepts'
+     Enable support for the C++ Extensions for Concepts Technical
+     Specification, ISO 19217 (2015), which allows code like
+
+          template <class T> concept bool Addable = requires (T t) { t + t; };
+          template <Addable T> T add (T a, T b) { return a + b; }
+
+'-fconstexpr-depth=N'
+     Set the maximum nested evaluation depth for C++11 constexpr
+     functions to N.  A limit is needed to detect endless recursion
+     during constant expression evaluation.  The minimum specified by
+     the standard is 512.
+
+'-fconstexpr-loop-limit=N'
+     Set the maximum number of iterations for a loop in C++14 constexpr
+     functions to N.  A limit is needed to detect infinite loops during
+     constant expression evaluation.  The default is 262144 (1<<18).
+
+'-fdeduce-init-list'
+     Enable deduction of a template type parameter as
+     'std::initializer_list' from a brace-enclosed initializer list,
+     i.e.
+
+          template <class T> auto forward(T t) -> decltype (realfn (t))
+          {
+            return realfn (t);
+          }
+
+          void f()
+          {
+            forward({1,2}); // call forward<std::initializer_list<int>>
+          }
+
+     This deduction was implemented as a possible extension to the
+     originally proposed semantics for the C++11 standard, but was not
+     part of the final standard, so it is disabled by default.  This
+     option is deprecated, and may be removed in a future version of
+     G++.
+
+'-fno-elide-constructors'
+     The C++ standard allows an implementation to omit creating a
+     temporary that is only used to initialize another object of the
+     same type.  Specifying this option disables that optimization, and
+     forces G++ to call the copy constructor in all cases.  This option
+     also causes G++ to call trivial member functions which otherwise
+     would be expanded inline.
+
+     In C++17, the compiler is required to omit these temporaries, but
+     this option still affects trivial member functions.
+
+'-fno-enforce-eh-specs'
+     Don't generate code to check for violation of exception
+     specifications at run time.  This option violates the C++ standard,
+     but may be useful for reducing code size in production builds, much
+     like defining 'NDEBUG'.  This does not give user code permission to
+     throw exceptions in violation of the exception specifications; the
+     compiler still optimizes based on the specifications, so throwing
+     an unexpected exception results in undefined behavior at run time.
+
+'-fextern-tls-init'
+'-fno-extern-tls-init'
+     The C++11 and OpenMP standards allow 'thread_local' and
+     'threadprivate' variables to have dynamic (runtime) initialization.
+     To support this, any use of such a variable goes through a wrapper
+     function that performs any necessary initialization.  When the use
+     and definition of the variable are in the same translation unit,
+     this overhead can be optimized away, but when the use is in a
+     different translation unit there is significant overhead even if
+     the variable doesn't actually need dynamic initialization.  If the
+     programmer can be sure that no use of the variable in a
+     non-defining TU needs to trigger dynamic initialization (either
+     because the variable is statically initialized, or a use of the
+     variable in the defining TU will be executed before any uses in
+     another TU), they can avoid this overhead with the
+     '-fno-extern-tls-init' option.
+
+     On targets that support symbol aliases, the default is
+     '-fextern-tls-init'.  On targets that do not support symbol
+     aliases, the default is '-fno-extern-tls-init'.
+
+'-fno-gnu-keywords'
+     Do not recognize 'typeof' as a keyword, so that code can use this
+     word as an identifier.  You can use the keyword '__typeof__'
+     instead.  This option is implied by the strict ISO C++ dialects:
+     '-ansi', '-std=c++98', '-std=c++11', etc.
+
+'-fno-implicit-templates'
+     Never emit code for non-inline templates that are instantiated
+     implicitly (i.e. by use); only emit code for explicit
+     instantiations.  If you use this option, you must take care to
+     structure your code to include all the necessary explicit
+     instantiations to avoid getting undefined symbols at link time.
+     *Note Template Instantiation::, for more information.
+
+'-fno-implicit-inline-templates'
+     Don't emit code for implicit instantiations of inline templates,
+     either.  The default is to handle inlines differently so that
+     compiles with and without optimization need the same set of
+     explicit instantiations.
+
+'-fno-implement-inlines'
+     To save space, do not emit out-of-line copies of inline functions
+     controlled by '#pragma implementation'.  This causes linker errors
+     if these functions are not inlined everywhere they are called.
+
+'-fms-extensions'
+     Disable Wpedantic warnings about constructs used in MFC, such as
+     implicit int and getting a pointer to member function via
+     non-standard syntax.
+
+'-fnew-inheriting-ctors'
+     Enable the P0136 adjustment to the semantics of C++11 constructor
+     inheritance.  This is part of C++17 but also considered to be a
+     Defect Report against C++11 and C++14.  This flag is enabled by
+     default unless '-fabi-version=10' or lower is specified.
+
+'-fnew-ttp-matching'
+     Enable the P0522 resolution to Core issue 150, template template
+     parameters and default arguments: this allows a template with
+     default template arguments as an argument for a template template
+     parameter with fewer template parameters.  This flag is enabled by
+     default for '-std=c++17'.
+
+'-fno-nonansi-builtins'
+     Disable built-in declarations of functions that are not mandated by
+     ANSI/ISO C.  These include 'ffs', 'alloca', '_exit', 'index',
+     'bzero', 'conjf', and other related functions.
+
+'-fnothrow-opt'
+     Treat a 'throw()' exception specification as if it were a
+     'noexcept' specification to reduce or eliminate the text size
+     overhead relative to a function with no exception specification.
+     If the function has local variables of types with non-trivial
+     destructors, the exception specification actually makes the
+     function smaller because the EH cleanups for those variables can be
+     optimized away.  The semantic effect is that an exception thrown
+     out of a function with such an exception specification results in a
+     call to 'terminate' rather than 'unexpected'.
+
+'-fno-operator-names'
+     Do not treat the operator name keywords 'and', 'bitand', 'bitor',
+     'compl', 'not', 'or' and 'xor' as synonyms as keywords.
+
+'-fno-optional-diags'
+     Disable diagnostics that the standard says a compiler does not need
+     to issue.  Currently, the only such diagnostic issued by G++ is the
+     one for a name having multiple meanings within a class.
+
+'-fpermissive'
+     Downgrade some diagnostics about nonconformant code from errors to
+     warnings.  Thus, using '-fpermissive' allows some nonconforming
+     code to compile.
+
+'-fno-pretty-templates'
+     When an error message refers to a specialization of a function
+     template, the compiler normally prints the signature of the
+     template followed by the template arguments and any typedefs or
+     typenames in the signature (e.g. 'void f(T) [with T = int]' rather
+     than 'void f(int)') so that it's clear which template is involved.
+     When an error message refers to a specialization of a class
+     template, the compiler omits any template arguments that match the
+     default template arguments for that template.  If either of these
+     behaviors make it harder to understand the error message rather
+     than easier, you can use '-fno-pretty-templates' to disable them.
+
+'-frepo'
+     Enable automatic template instantiation at link time.  This option
+     also implies '-fno-implicit-templates'.  *Note Template
+     Instantiation::, for more information.
+
+'-fno-rtti'
+     Disable generation of information about every class with virtual
+     functions for use by the C++ run-time type identification features
+     ('dynamic_cast' and 'typeid').  If you don't use those parts of the
+     language, you can save some space by using this flag.  Note that
+     exception handling uses the same information, but G++ generates it
+     as needed.  The 'dynamic_cast' operator can still be used for casts
+     that do not require run-time type information, i.e. casts to 'void
+     *' or to unambiguous base classes.
+
+     Mixing code compiled with '-frtti' with that compiled with
+     '-fno-rtti' may not work.  For example, programs may fail to link
+     if a class compiled with '-fno-rtti' is used as a base for a class
+     compiled with '-frtti'.
+
+'-fsized-deallocation'
+     Enable the built-in global declarations
+          void operator delete (void *, std::size_t) noexcept;
+          void operator delete[] (void *, std::size_t) noexcept;
+     as introduced in C++14.  This is useful for user-defined
+     replacement deallocation functions that, for example, use the size
+     of the object to make deallocation faster.  Enabled by default
+     under '-std=c++14' and above.  The flag '-Wsized-deallocation'
+     warns about places that might want to add a definition.
+
+'-fstrict-enums'
+     Allow the compiler to optimize using the assumption that a value of
+     enumerated type can only be one of the values of the enumeration
+     (as defined in the C++ standard; basically, a value that can be
+     represented in the minimum number of bits needed to represent all
+     the enumerators).  This assumption may not be valid if the program
+     uses a cast to convert an arbitrary integer value to the enumerated
+     type.
+
+'-fstrong-eval-order'
+     Evaluate member access, array subscripting, and shift expressions
+     in left-to-right order, and evaluate assignment in right-to-left
+     order, as adopted for C++17.  Enabled by default with '-std=c++17'.
+     '-fstrong-eval-order=some' enables just the ordering of member
+     access and shift expressions, and is the default without
+     '-std=c++17'.
+
+'-ftemplate-backtrace-limit=N'
+     Set the maximum number of template instantiation notes for a single
+     warning or error to N.  The default value is 10.
+
+'-ftemplate-depth=N'
+     Set the maximum instantiation depth for template classes to N.  A
+     limit on the template instantiation depth is needed to detect
+     endless recursions during template class instantiation.  ANSI/ISO
+     C++ conforming programs must not rely on a maximum depth greater
+     than 17 (changed to 1024 in C++11).  The default value is 900, as
+     the compiler can run out of stack space before hitting 1024 in some
+     situations.
+
+'-fno-threadsafe-statics'
+     Do not emit the extra code to use the routines specified in the C++
+     ABI for thread-safe initialization of local statics.  You can use
+     this option to reduce code size slightly in code that doesn't need
+     to be thread-safe.
+
+'-fuse-cxa-atexit'
+     Register destructors for objects with static storage duration with
+     the '__cxa_atexit' function rather than the 'atexit' function.
+     This option is required for fully standards-compliant handling of
+     static destructors, but only works if your C library supports
+     '__cxa_atexit'.
+
+'-fno-use-cxa-get-exception-ptr'
+     Don't use the '__cxa_get_exception_ptr' runtime routine.  This
+     causes 'std::uncaught_exception' to be incorrect, but is necessary
+     if the runtime routine is not available.
+
+'-fvisibility-inlines-hidden'
+     This switch declares that the user does not attempt to compare
+     pointers to inline functions or methods where the addresses of the
+     two functions are taken in different shared objects.
+
+     The effect of this is that GCC may, effectively, mark inline
+     methods with '__attribute__ ((visibility ("hidden")))' so that they
+     do not appear in the export table of a DSO and do not require a PLT
+     indirection when used within the DSO.  Enabling this option can
+     have a dramatic effect on load and link times of a DSO as it
+     massively reduces the size of the dynamic export table when the
+     library makes heavy use of templates.
+
+     The behavior of this switch is not quite the same as marking the
+     methods as hidden directly, because it does not affect static
+     variables local to the function or cause the compiler to deduce
+     that the function is defined in only one shared object.
+
+     You may mark a method as having a visibility explicitly to negate
+     the effect of the switch for that method.  For example, if you do
+     want to compare pointers to a particular inline method, you might
+     mark it as having default visibility.  Marking the enclosing class
+     with explicit visibility has no effect.
+
+     Explicitly instantiated inline methods are unaffected by this
+     option as their linkage might otherwise cross a shared library
+     boundary.  *Note Template Instantiation::.
+
+'-fvisibility-ms-compat'
+     This flag attempts to use visibility settings to make GCC's C++
+     linkage model compatible with that of Microsoft Visual Studio.
+
+     The flag makes these changes to GCC's linkage model:
+
+       1. It sets the default visibility to 'hidden', like
+          '-fvisibility=hidden'.
+
+       2. Types, but not their members, are not hidden by default.
+
+       3. The One Definition Rule is relaxed for types without explicit
+          visibility specifications that are defined in more than one
+          shared object: those declarations are permitted if they are
+          permitted when this option is not used.
+
+     In new code it is better to use '-fvisibility=hidden' and export
+     those classes that are intended to be externally visible.
+     Unfortunately it is possible for code to rely, perhaps
+     accidentally, on the Visual Studio behavior.
+
+     Among the consequences of these changes are that static data
+     members of the same type with the same name but defined in
+     different shared objects are different, so changing one does not
+     change the other; and that pointers to function members defined in
+     different shared objects may not compare equal.  When this flag is
+     given, it is a violation of the ODR to define types with the same
+     name differently.
+
+'-fno-weak'
+     Do not use weak symbol support, even if it is provided by the
+     linker.  By default, G++ uses weak symbols if they are available.
+     This option exists only for testing, and should not be used by
+     end-users; it results in inferior code and has no benefits.  This
+     option may be removed in a future release of G++.
+
+'-nostdinc++'
+     Do not search for header files in the standard directories specific
+     to C++, but do still search the other standard directories.  (This
+     option is used when building the C++ library.)
+
+ In addition, these optimization, warning, and code generation options
+have meanings only for C++ programs:
+
+'-Wabi (C, Objective-C, C++ and Objective-C++ only)'
+     Warn when G++ it generates code that is probably not compatible
+     with the vendor-neutral C++ ABI.  Since G++ now defaults to
+     updating the ABI with each major release, normally '-Wabi' will
+     warn only if there is a check added later in a release series for
+     an ABI issue discovered since the initial release.  '-Wabi' will
+     warn about more things if an older ABI version is selected (with
+     '-fabi-version=N').
+
+     '-Wabi' can also be used with an explicit version number to warn
+     about compatibility with a particular '-fabi-version' level, e.g.
+     '-Wabi=2' to warn about changes relative to '-fabi-version=2'.
+
+     If an explicit version number is provided and
+     '-fabi-compat-version' is not specified, the version number from
+     this option is used for compatibility aliases.  If no explicit
+     version number is provided with this option, but
+     '-fabi-compat-version' is specified, that version number is used
+     for ABI warnings.
+
+     Although an effort has been made to warn about all such cases,
+     there are probably some cases that are not warned about, even
+     though G++ is generating incompatible code.  There may also be
+     cases where warnings are emitted even though the code that is
+     generated is compatible.
+
+     You should rewrite your code to avoid these warnings if you are
+     concerned about the fact that code generated by G++ may not be
+     binary compatible with code generated by other compilers.
+
+     Known incompatibilities in '-fabi-version=2' (which was the default
+     from GCC 3.4 to 4.9) include:
+
+        * A template with a non-type template parameter of reference
+          type was mangled incorrectly:
+               extern int N;
+               template <int &> struct S {};
+               void n (S<N>) {2}
+
+          This was fixed in '-fabi-version=3'.
+
+        * SIMD vector types declared using '__attribute ((vector_size))'
+          were mangled in a non-standard way that does not allow for
+          overloading of functions taking vectors of different sizes.
+
+          The mangling was changed in '-fabi-version=4'.
+
+        * '__attribute ((const))' and 'noreturn' were mangled as type
+          qualifiers, and 'decltype' of a plain declaration was folded
+          away.
+
+          These mangling issues were fixed in '-fabi-version=5'.
+
+        * Scoped enumerators passed as arguments to a variadic function
+          are promoted like unscoped enumerators, causing 'va_arg' to
+          complain.  On most targets this does not actually affect the
+          parameter passing ABI, as there is no way to pass an argument
+          smaller than 'int'.
+
+          Also, the ABI changed the mangling of template argument packs,
+          'const_cast', 'static_cast', prefix increment/decrement, and a
+          class scope function used as a template argument.
+
+          These issues were corrected in '-fabi-version=6'.
+
+        * Lambdas in default argument scope were mangled incorrectly,
+          and the ABI changed the mangling of 'nullptr_t'.
+
+          These issues were corrected in '-fabi-version=7'.
+
+        * When mangling a function type with function-cv-qualifiers, the
+          un-qualified function type was incorrectly treated as a
+          substitution candidate.
+
+          This was fixed in '-fabi-version=8', the default for GCC 5.1.
+
+        * 'decltype(nullptr)' incorrectly had an alignment of 1, leading
+          to unaligned accesses.  Note that this did not affect the ABI
+          of a function with a 'nullptr_t' parameter, as parameters have
+          a minimum alignment.
+
+          This was fixed in '-fabi-version=9', the default for GCC 5.2.
+
+        * Target-specific attributes that affect the identity of a type,
+          such as ia32 calling conventions on a function type (stdcall,
+          regparm, etc.), did not affect the mangled name, leading to
+          name collisions when function pointers were used as template
+          arguments.
+
+          This was fixed in '-fabi-version=10', the default for GCC 6.1.
+
+     It also warns about psABI-related changes.  The known psABI changes
+     at this point include:
+
+        * For SysV/x86-64, unions with 'long double' members are passed
+          in memory as specified in psABI. For example:
+
+               union U {
+                 long double ld;
+                 int i;
+               };
+
+          'union U' is always passed in memory.
+
+'-Wabi-tag (C++ and Objective-C++ only)'
+     Warn when a type with an ABI tag is used in a context that does not
+     have that ABI tag.  See *note C++ Attributes:: for more information
+     about ABI tags.
+
+'-Wctor-dtor-privacy (C++ and Objective-C++ only)'
+     Warn when a class seems unusable because all the constructors or
+     destructors in that class are private, and it has neither friends
+     nor public static member functions.  Also warn if there are no
+     non-private methods, and there's at least one private member
+     function that isn't a constructor or destructor.
+
+'-Wdelete-non-virtual-dtor (C++ and Objective-C++ only)'
+     Warn when 'delete' is used to destroy an instance of a class that
+     has virtual functions and non-virtual destructor.  It is unsafe to
+     delete an instance of a derived class through a pointer to a base
+     class if the base class does not have a virtual destructor.  This
+     warning is enabled by '-Wall'.
+
+'-Wdeprecated-copy (C++ and Objective-C++ only)'
+     Warn that the implicit declaration of a copy constructor or copy
+     assignment operator is deprecated if the class has a user-provided
+     copy constructor or copy assignment operator, in C++11 and up.
+     This warning is enabled by '-Wextra'.  With
+     '-Wdeprecated-copy-dtor', also deprecate if the class has a
+     user-provided destructor.
+
+'-Wno-init-list-lifetime (C++ and Objective-C++ only)'
+     Do not warn about uses of 'std::initializer_list' that are likely
+     to result in dangling pointers.  Since the underlying array for an
+     'initializer_list' is handled like a normal C++ temporary object,
+     it is easy to inadvertently keep a pointer to the array past the
+     end of the array's lifetime.  For example:
+
+        * If a function returns a temporary 'initializer_list', or a
+          local 'initializer_list' variable, the array's lifetime ends
+          at the end of the return statement, so the value returned has
+          a dangling pointer.
+
+        * If a new-expression creates an 'initializer_list', the array
+          only lives until the end of the enclosing full-expression, so
+          the 'initializer_list' in the heap has a dangling pointer.
+
+        * When an 'initializer_list' variable is assigned from a
+          brace-enclosed initializer list, the temporary array created
+          for the right side of the assignment only lives until the end
+          of the full-expression, so at the next statement the
+          'initializer_list' variable has a dangling pointer.
+
+               // li's initial underlying array lives as long as li
+               std::initializer_list<int> li = { 1,2,3 };
+               // assignment changes li to point to a temporary array
+               li = { 4, 5 };
+               // now the temporary is gone and li has a dangling pointer
+               int i = li.begin()[0] // undefined behavior
+
+        * When a list constructor stores the 'begin' pointer from the
+          'initializer_list' argument, this doesn't extend the lifetime
+          of the array, so if a class variable is constructed from a
+          temporary 'initializer_list', the pointer is left dangling by
+          the end of the variable declaration statement.
+
+'-Wliteral-suffix (C++ and Objective-C++ only)'
+     Warn when a string or character literal is followed by a ud-suffix
+     which does not begin with an underscore.  As a conforming
+     extension, GCC treats such suffixes as separate preprocessing
+     tokens in order to maintain backwards compatibility with code that
+     uses formatting macros from '<inttypes.h>'.  For example:
+
+          #define __STDC_FORMAT_MACROS
+          #include <inttypes.h>
+          #include <stdio.h>
+
+          int main() {
+            int64_t i64 = 123;
+            printf("My int64: %" PRId64"\n", i64);
+          }
+
+     In this case, 'PRId64' is treated as a separate preprocessing
+     token.
+
+     Additionally, warn when a user-defined literal operator is declared
+     with a literal suffix identifier that doesn't begin with an
+     underscore.  Literal suffix identifiers that don't begin with an
+     underscore are reserved for future standardization.
+
+     This warning is enabled by default.
+
+'-Wlto-type-mismatch'
+
+     During the link-time optimization warn about type mismatches in
+     global declarations from different compilation units.  Requires
+     '-flto' to be enabled.  Enabled by default.
+
+'-Wno-narrowing (C++ and Objective-C++ only)'
+     For C++11 and later standards, narrowing conversions are diagnosed
+     by default, as required by the standard.  A narrowing conversion
+     from a constant produces an error, and a narrowing conversion from
+     a non-constant produces a warning, but '-Wno-narrowing' suppresses
+     the diagnostic.  Note that this does not affect the meaning of
+     well-formed code; narrowing conversions are still considered
+     ill-formed in SFINAE contexts.
+
+     With '-Wnarrowing' in C++98, warn when a narrowing conversion
+     prohibited by C++11 occurs within '{ }', e.g.
+
+          int i = { 2.2 }; // error: narrowing from double to int
+
+     This flag is included in '-Wall' and '-Wc++11-compat'.
+
+'-Wnoexcept (C++ and Objective-C++ only)'
+     Warn when a noexcept-expression evaluates to false because of a
+     call to a function that does not have a non-throwing exception
+     specification (i.e.  'throw()' or 'noexcept') but is known by the
+     compiler to never throw an exception.
+
+'-Wnoexcept-type (C++ and Objective-C++ only)'
+     Warn if the C++17 feature making 'noexcept' part of a function type
+     changes the mangled name of a symbol relative to C++14.  Enabled by
+     '-Wabi' and '-Wc++17-compat'.
+
+     As an example:
+
+          template <class T> void f(T t) { t(); };
+          void g() noexcept;
+          void h() { f(g); }
+
+     In C++14, 'f' calls 'f<void(*)()>', but in C++17 it calls
+     'f<void(*)()noexcept>'.
+
+'-Wclass-memaccess (C++ and Objective-C++ only)'
+     Warn when the destination of a call to a raw memory function such
+     as 'memset' or 'memcpy' is an object of class type, and when
+     writing into such an object might bypass the class non-trivial or
+     deleted constructor or copy assignment, violate const-correctness
+     or encapsulation, or corrupt virtual table pointers.  Modifying the
+     representation of such objects may violate invariants maintained by
+     member functions of the class.  For example, the call to 'memset'
+     below is undefined because it modifies a non-trivial class object
+     and is, therefore, diagnosed.  The safe way to either initialize or
+     clear the storage of objects of such types is by using the
+     appropriate constructor or assignment operator, if one is
+     available.
+          std::string str = "abc";
+          memset (&str, 0, sizeof str);
+     The '-Wclass-memaccess' option is enabled by '-Wall'.  Explicitly
+     casting the pointer to the class object to 'void *' or to a type
+     that can be safely accessed by the raw memory function suppresses
+     the warning.
+
+'-Wnon-virtual-dtor (C++ and Objective-C++ only)'
+     Warn when a class has virtual functions and an accessible
+     non-virtual destructor itself or in an accessible polymorphic base
+     class, in which case it is possible but unsafe to delete an
+     instance of a derived class through a pointer to the class itself
+     or base class.  This warning is automatically enabled if '-Weffc++'
+     is specified.
+
+'-Wregister (C++ and Objective-C++ only)'
+     Warn on uses of the 'register' storage class specifier, except when
+     it is part of the GNU *note Explicit Register Variables::
+     extension.  The use of the 'register' keyword as storage class
+     specifier has been deprecated in C++11 and removed in C++17.
+     Enabled by default with '-std=c++17'.
+
+'-Wreorder (C++ and Objective-C++ only)'
+     Warn when the order of member initializers given in the code does
+     not match the order in which they must be executed.  For instance:
+
+          struct A {
+            int i;
+            int j;
+            A(): j (0), i (1) { }
+          };
+
+     The compiler rearranges the member initializers for 'i' and 'j' to
+     match the declaration order of the members, emitting a warning to
+     that effect.  This warning is enabled by '-Wall'.
+
+'-Wno-pessimizing-move (C++ and Objective-C++ only)'
+     This warning warns when a call to 'std::move' prevents copy
+     elision.  A typical scenario when copy elision can occur is when
+     returning in a function with a class return type, when the
+     expression being returned is the name of a non-volatile automatic
+     object, and is not a function parameter, and has the same type as
+     the function return type.
+
+          struct T {
+          ...
+          };
+          T fn()
+          {
+            T t;
+            ...
+            return std::move (t);
+          }
+
+     But in this example, the 'std::move' call prevents copy elision.
+
+     This warning is enabled by '-Wall'.
+
+'-Wno-redundant-move (C++ and Objective-C++ only)'
+     This warning warns about redundant calls to 'std::move'; that is,
+     when a move operation would have been performed even without the
+     'std::move' call.  This happens because the compiler is forced to
+     treat the object as if it were an rvalue in certain situations such
+     as returning a local variable, where copy elision isn't applicable.
+     Consider:
+
+          struct T {
+          ...
+          };
+          T fn(T t)
+          {
+            ...
+            return std::move (t);
+          }
+
+     Here, the 'std::move' call is redundant.  Because G++ implements
+     Core Issue 1579, another example is:
+
+          struct T { // convertible to U
+          ...
+          };
+          struct U {
+          ...
+          };
+          U fn()
+          {
+            T t;
+            ...
+            return std::move (t);
+          }
+     In this example, copy elision isn't applicable because the type of
+     the expression being returned and the function return type differ,
+     yet G++ treats the return value as if it were designated by an
+     rvalue.
+
+     This warning is enabled by '-Wextra'.
+
+'-fext-numeric-literals (C++ and Objective-C++ only)'
+     Accept imaginary, fixed-point, or machine-defined literal number
+     suffixes as GNU extensions.  When this option is turned off these
+     suffixes are treated as C++11 user-defined literal numeric
+     suffixes.  This is on by default for all pre-C++11 dialects and all
+     GNU dialects: '-std=c++98', '-std=gnu++98', '-std=gnu++11',
+     '-std=gnu++14'.  This option is off by default for ISO C++11
+     onwards ('-std=c++11', ...).
+
+ The following '-W...' options are not affected by '-Wall'.
+
+'-Weffc++ (C++ and Objective-C++ only)'
+     Warn about violations of the following style guidelines from Scott
+     Meyers' 'Effective C++' series of books:
+
+        * Define a copy constructor and an assignment operator for
+          classes with dynamically-allocated memory.
+
+        * Prefer initialization to assignment in constructors.
+
+        * Have 'operator=' return a reference to '*this'.
+
+        * Don't try to return a reference when you must return an
+          object.
+
+        * Distinguish between prefix and postfix forms of increment and
+          decrement operators.
+
+        * Never overload '&&', '||', or ','.
+
+     This option also enables '-Wnon-virtual-dtor', which is also one of
+     the effective C++ recommendations.  However, the check is extended
+     to warn about the lack of virtual destructor in accessible
+     non-polymorphic bases classes too.
+
+     When selecting this option, be aware that the standard library
+     headers do not obey all of these guidelines; use 'grep -v' to
+     filter out those warnings.
+
+'-Wstrict-null-sentinel (C++ and Objective-C++ only)'
+     Warn about the use of an uncasted 'NULL' as sentinel.  When
+     compiling only with GCC this is a valid sentinel, as 'NULL' is
+     defined to '__null'.  Although it is a null pointer constant rather
+     than a null pointer, it is guaranteed to be of the same size as a
+     pointer.  But this use is not portable across different compilers.
+
+'-Wno-non-template-friend (C++ and Objective-C++ only)'
+     Disable warnings when non-template friend functions are declared
+     within a template.  In very old versions of GCC that predate
+     implementation of the ISO standard, declarations such as 'friend
+     int foo(int)', where the name of the friend is an unqualified-id,
+     could be interpreted as a particular specialization of a template
+     function; the warning exists to diagnose compatibility problems,
+     and is enabled by default.
+
+'-Wold-style-cast (C++ and Objective-C++ only)'
+     Warn if an old-style (C-style) cast to a non-void type is used
+     within a C++ program.  The new-style casts ('dynamic_cast',
+     'static_cast', 'reinterpret_cast', and 'const_cast') are less
+     vulnerable to unintended effects and much easier to search for.
+
+'-Woverloaded-virtual (C++ and Objective-C++ only)'
+     Warn when a function declaration hides virtual functions from a
+     base class.  For example, in:
+
+          struct A {
+            virtual void f();
+          };
+
+          struct B: public A {
+            void f(int);
+          };
+
+     the 'A' class version of 'f' is hidden in 'B', and code like:
+
+          B* b;
+          b->f();
+
+     fails to compile.
+
+'-Wno-pmf-conversions (C++ and Objective-C++ only)'
+     Disable the diagnostic for converting a bound pointer to member
+     function to a plain pointer.
+
+'-Wsign-promo (C++ and Objective-C++ only)'
+     Warn when overload resolution chooses a promotion from unsigned or
+     enumerated type to a signed type, over a conversion to an unsigned
+     type of the same size.  Previous versions of G++ tried to preserve
+     unsignedness, but the standard mandates the current behavior.
+
+'-Wtemplates (C++ and Objective-C++ only)'
+     Warn when a primary template declaration is encountered.  Some
+     coding rules disallow templates, and this may be used to enforce
+     that rule.  The warning is inactive inside a system header file,
+     such as the STL, so one can still use the STL. One may also
+     instantiate or specialize templates.
+
+'-Wmultiple-inheritance (C++ and Objective-C++ only)'
+     Warn when a class is defined with multiple direct base classes.
+     Some coding rules disallow multiple inheritance, and this may be
+     used to enforce that rule.  The warning is inactive inside a system
+     header file, such as the STL, so one can still use the STL. One may
+     also define classes that indirectly use multiple inheritance.
+
+'-Wvirtual-inheritance'
+     Warn when a class is defined with a virtual direct base class.
+     Some coding rules disallow multiple inheritance, and this may be
+     used to enforce that rule.  The warning is inactive inside a system
+     header file, such as the STL, so one can still use the STL. One may
+     also define classes that indirectly use virtual inheritance.
+
+'-Wnamespaces'
+     Warn when a namespace definition is opened.  Some coding rules
+     disallow namespaces, and this may be used to enforce that rule.
+     The warning is inactive inside a system header file, such as the
+     STL, so one can still use the STL. One may also use using
+     directives and qualified names.
+
+'-Wno-terminate (C++ and Objective-C++ only)'
+     Disable the warning about a throw-expression that will immediately
+     result in a call to 'terminate'.
+
+'-Wno-class-conversion (C++ and Objective-C++ only)'
+     Disable the warning about the case when a conversion function
+     converts an object to the same type, to a base class of that type,
+     or to void; such a conversion function will never be called.
+
+File: gcc.info,  Node: Objective-C and Objective-C++ Dialect Options,  Next: Diagnostic Message Formatting Options,  Prev: C++ Dialect Options,  Up: Invoking GCC
+

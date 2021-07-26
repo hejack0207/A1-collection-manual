@@ -1,0 +1,257 @@
+22.27 The zsh/system Module
+===========================
+
+
+   The zsh/system module makes available various builtin commands and
+parameters.
+
+
+22.27.1 Builtins
+----------------
+
+
+syserror [ -e ERRVAR ] [ -p PREFIX ] [ ERRNO | ERRNAME ]
+     This command prints out the error message associated with ERRNO, a
+     system error number, followed by a newline to standard error.
+
+     Instead of the error number, a name ERRNAME, for example ENOENT,
+     may be used.  The set of names is the same as the contents of the
+     array errnos, see below.
+
+     If the string PREFIX is given, it is printed in front of the error
+     message, with no intervening space.
+
+     If ERRVAR is supplied, the entire message, without a newline, is
+     assigned to the parameter names ERRVAR and nothing is output.
+
+     A return status of 0 indicates the message was successfully printed
+     (although it may not be useful if the error number was out of the
+     system's range), a return status of 1 indicates an error in the
+     parameters, and a return status of 2 indicates the error name was
+     not recognised (no message is printed for this).
+
+sysopen [ -arw ] [ -m PERMISSIONS ] [ -o OPTIONS ]
+        -u FD FILE
+     This command opens a file.  The -r, -w and -a flags indicate
+     whether the file should be opened for reading, writing and
+     appending, respectively.  The -m option allows the initial
+     permissions to use when creating a file to be specified in octal
+     form.  The file descriptor is specified with -u.  Either an
+     explicit file descriptor in the range 0 to 9 can be specified or a
+     variable name can be given to which the file descriptor number will
+     be assigned.
+
+     The -o option allows various system specific options to be
+     specified as a comma-separated list.  The following is a list of
+     possible options.  Note that, depending on the system, some may not
+     be available.
+     cloexec
+          mark file to be closed when other programs are executed
+
+     create
+     creat
+          create file if it does not exist
+
+     excl
+          create file, error if it already exists
+
+     noatime
+          suppress updating of the file atime
+
+     nofollow
+          fail if FILE is a symbolic link
+
+     sync
+          request that writes wait until data has been physically
+          written
+
+     truncate
+     trunc
+          truncate file to size 0
+
+     To close the file, use one of the following:
+
+          exec {FD}<&-
+          exec {FD}>&-
+
+sysread [ -c COUNTVAR ] [ -i INFD ] [ -o OUTFD ]
+        [ -s BUFSIZE ] [ -t TIMEOUT ] [ PARAM ]
+     Perform a single system read from file descriptor INFD, or zero if
+     that is not given.  The result of the read is stored in PARAM or
+     REPLY if that is not given.  If COUNTVAR is given, the number of
+     bytes read is assigned to the parameter named by COUNTVAR.
+
+     The maximum number of bytes read is BUFSIZE or 8192 if that is not
+     given, however the command returns as soon as any number of bytes
+     was successfully read.
+
+     If TIMEOUT is given, it specifies a timeout in seconds, which may
+     be zero to poll the file descriptor.  This is handled by the poll
+     system call if available, otherwise the select system call if
+     available.
+
+     If OUTFD is given, an attempt is made to write all the bytes just
+     read to the file descriptor OUTFD.  If this fails, because of a
+     system error other than EINTR or because of an internal zsh error
+     during an interrupt, the bytes read but not written are stored in
+     the parameter named by PARAM if supplied (no default is used in
+     this case), and the number of bytes read but not written is stored
+     in the parameter named by COUNTVAR if that is supplied.  If it was
+     successful, COUNTVAR contains the full number of bytes transferred,
+     as usual, and PARAM is not set.
+
+     The error EINTR (interrupted system call) is handled internally so
+     that shell interrupts are transparent to the caller.  Any other
+     error causes a return.
+
+     The possible return statuses are
+     0
+          At least one byte of data was successfully read and, if
+          appropriate, written.
+
+     1
+          There was an error in the parameters to the command.  This is
+          the only error for which a message is printed to standard
+          error.
+
+     2
+          There was an error on the read, or on polling the input file
+          descriptor for a timeout.  The parameter ERRNO gives the
+          error.
+
+     3
+          Data were successfully read, but there was an error writing
+          them to OUTFD.  The parameter ERRNO gives the error.
+
+     4
+          The attempt to read timed out.  Note this does not set ERRNO
+          as this is not a system error.
+
+     5
+          No system error occurred, but zero bytes were read.  This
+          usually indicates end of file.  The parameters are set
+          according to the usual rules; no write to OUTFD is attempted.
+
+sysseek [ -u FD ] [ -w start|end|current ] OFFSET
+     The current file position at which future reads and writes will
+     take place is adjusted to the specified byte offset.  The OFFSET is
+     evaluated as a math expression.  The -u option allows the file
+     descriptor to be specified.  By default the offset is specified
+     relative to the start or the file but, with the -w option, it is
+     possible to specify that the offset should be relative to the
+     current position or the end of the file.
+
+syswrite [ -c COUNTVAR ] [ -o OUTFD ] DATA
+     The data (a single string of bytes) are written to the file
+     descriptor OUTFD, or 1 if that is not given, using the write system
+     call.  Multiple write operations may be used if the first does not
+     write all the data.
+
+     If COUNTVAR is given, the number of byte written is stored in the
+     parameter named by COUNTVAR; this may not be the full length of
+     DATA if an error occurred.
+
+     The error EINTR (interrupted system call) is handled internally by
+     retrying; otherwise an error causes the command to return.  For
+     example, if the file descriptor is set to non-blocking output, an
+     error EAGAIN (on some systems, EWOULDBLOCK) may result in the
+     command returning early.
+
+     The return status may be 0 for success, 1 for an error in the
+     parameters to the command, or 2 for an error on the write; no error
+     message is printed in the last case, but the parameter ERRNO will
+     reflect the error that occurred.
+
+zsystem flock [ -t TIMEOUT ] [ -f VAR ] [-er] FILE
+zsystem flock -u FD_EXPR
+     The builtin zsystem's subcommand flock performs advisory file
+     locking (via the man page fcntl(2) system call) over the entire
+     contents of the given file.  This form of locking requires the
+     processes accessing the file to cooperate; its most obvious use is
+     between two instances of the shell itself.
+
+     In the first form the named FILE, which must already exist, is
+     locked by opening a file descriptor to the file and applying a lock
+     to the file descriptor.  The lock terminates when the shell process
+     that created the lock exits; it is therefore often convenient to
+     create file locks within subshells, since the lock is automatically
+     released when the subshell exits.  Status 0 is returned if the lock
+     succeeds, else status 1.
+
+     In the second form the file descriptor given by the arithmetic
+     expression FD_EXPR is closed, releasing a lock.  The file
+     descriptor can be queried by using the '-f VAR' form during the
+     lock; on a successful lock, the shell variable VAR is set to the
+     file descriptor used for locking.  The lock will be released if the
+     file descriptor is closed by any other means, for example using
+     'exec {VAR}>&-'; however, the form described here performs a safety
+     check that the file descriptor is in use for file locking.
+
+     By default the shell waits indefinitely for the lock to succeed.
+     The option -t TIMEOUT specifies a timeout for the lock in seconds;
+     currently this must be an integer.  The shell will attempt to lock
+     the file once a second during this period.  If the attempt times
+     out, status 2 is returned.
+
+     If the option -e is given, the file descriptor for the lock is
+     preserved when the shell uses exec to start a new process;
+     otherwise it is closed at that point and the lock released.
+
+     If the option -r is given, the lock is only for reading, otherwise
+     it is for reading and writing.  The file descriptor is opened
+     accordingly.
+
+zsystem supports SUBCOMMAND
+     The builtin zsystem's subcommand supports tests whether a given
+     subcommand is supported.  It returns status 0 if so, else status 1.
+     It operates silently unless there was a syntax error (i.e.  the
+     wrong number of arguments), in which case status 255 is returned.
+     Status 1 can indicate one of two things: SUBCOMMAND is known but
+     not supported by the current operating system, or SUBCOMMAND is not
+     known (possibly because this is an older version of the shell
+     before it was implemented).
+
+
+22.27.2 Math Functions
+----------------------
+
+
+systell(FD)
+     The systell math function returns the current file position for the
+     file descriptor passed as an argument.
+
+
+22.27.3 Parameters
+------------------
+
+
+errnos
+     A readonly array of the names of errors defined on the system.
+     These are typically macros defined in C by including the system
+     header file errno.h.  The index of each name (assuming the option
+     KSH_ARRAYS is unset) corresponds to the error number.  Error
+     numbers NUM before the last known error which have no name are
+     given the name ENUM in the array.
+
+     Note that aliases for errors are not handled; only the canonical
+     name is used.
+
+sysparams
+     A readonly associative array.  The keys are:
+
+     pid
+          Returns the process ID of the current process, even in
+          subshells.  Compare $$, which returns the process ID of the
+          main shell process.
+
+     ppid
+          Returns the process ID of the parent of the current process,
+          even in subshells.  Compare $PPID, which returns the process
+          ID of the parent of the main shell process.
+
+     procsubstpid
+          Returns the process ID of the last process started for process
+          substitution, i.e.  the <(...) and >(...) expansions.
+
+File: zsh.info,  Node: The zsh/net/tcp Module,  Next: The zsh/termcap Module,  Prev: The zsh/system Module,  Up: Zsh Modules
+

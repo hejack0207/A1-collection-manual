@@ -1,0 +1,275 @@
+22.9 The zsh/curses Module
+==========================
+
+
+   The zsh/curses module makes available one builtin command and various
+parameters.
+
+
+22.9.1 Builtin
+--------------
+
+
+zcurses init
+zcurses end
+zcurses addwin TARGETWIN NLINES NCOLS BEGIN_Y BEGIN_X [ PARENTWIN ]
+zcurses delwin TARGETWIN
+zcurses refresh [ TARGETWIN ... ]
+zcurses touch TARGETWIN ...
+zcurses move TARGETWIN NEW_Y NEW_X
+zcurses clear TARGETWIN [ redraw | eol | bot ]
+zcurses position TARGETWIN ARRAY
+zcurses char TARGETWIN CHARACTER
+zcurses string TARGETWIN STRING
+zcurses border TARGETWIN BORDER
+zcurses attr TARGETWIN [ [+|-]ATTRIBUTE | FG_COL/BG_COL ] [...]
+zcurses bg TARGETWIN [ [+|-]ATTRIBUTE | FG_COL/BG_COL | @CHAR ] [...]
+zcurses scroll TARGETWIN [ on | off | [+|-]LINES ]
+zcurses input TARGETWIN [ PARAM [ KPARAM [ MPARAM ] ] ]
+zcurses mouse [ delay NUM | [+|-]motion ]
+zcurses timeout TARGETWIN INTVAL
+zcurses querychar TARGETWIN [ PARAM ]
+zcurses resize HEIGHT WIDTH [ endwin | nosave | endwin_nosave ]
+     Manipulate curses windows.  All uses of this command should be
+     bracketed by 'zcurses init' to initialise use of curses, and
+     'zcurses end' to end it; omitting 'zcurses end' can cause the
+     terminal to be in an unwanted state.
+
+     The subcommand addwin creates a window with NLINES lines and NCOLS
+     columns.  Its upper left corner will be placed at row BEGIN_Y and
+     column BEGIN_X of the screen.  TARGETWIN is a string and refers to
+     the name of a window that is not currently assigned.  Note in
+     particular the curses convention that vertical values appear before
+     horizontal values.
+
+     If addwin is given an existing window as the final argument, the
+     new window is created as a subwindow of PARENTWIN.  This differs
+     from an ordinary new window in that the memory of the window
+     contents is shared with the parent's memory.  Subwindows must be
+     deleted before their parent.  Note that the coordinates of
+     subwindows are relative to the screen, not the parent, as with
+     other windows.
+
+     Use the subcommand delwin to delete a window created with addwin.
+     Note that end does _not_ implicitly delete windows, and that delwin
+     does not erase the screen image of the window.
+
+     The window corresponding to the full visible screen is called
+     stdscr; it always exists after 'zcurses init' and cannot be delete
+     with delwin.
+
+     The subcommand refresh will refresh window TARGETWIN; this is
+     necessary to make any pending changes (such as characters you have
+     prepared for output with char) visible on the screen.  refresh
+     without an argument causes the screen to be cleared and redrawn.
+     If multiple windows are given, the screen is updated once at the
+     end.
+
+     The subcommand touch marks the TARGETWINs listed as changed.  This
+     is necessary before refreshing windows if a window that was in
+     front of another window (which may be stdscr) is deleted.
+
+     The subcommand move moves the cursor position in TARGETWIN to new
+     coordinates NEW_Y and NEW_X.  Note that the subcommand string (but
+     not the subcommand char) advances the cursor position over the
+     characters added.
+
+     The subcommand clear erases the contents of TARGETWIN.  One (and no
+     more than one) of three options may be specified.  With the option
+     redraw, in addition the next refresh of TARGETWIN will cause the
+     screen to be cleared and repainted.  With the option eol, TARGETWIN
+     is only cleared to the end of the current cursor line.  With the
+     option bot, TARGETWIN is cleared to the end of the window, i.e
+     everything to the right and below the cursor is cleared.
+
+     The subcommand position writes various positions associated with
+     TARGETWIN into the array named ARRAY.  These are, in order:
+     -
+          The y and x coordinates of the cursor relative to the top left
+          of TARGETWIN
+     -
+          The y and x coordinates of the top left of TARGETWIN on the
+          screen
+     -
+          The size of TARGETWIN in y and x dimensions.
+
+     Outputting characters and strings are achieved by char and string
+     respectively.
+
+     To draw a border around window TARGETWIN, use border.  Note that
+     the border is not subsequently handled specially: in other words,
+     the border is simply a set of characters output at the edge of the
+     window.  Hence it can be overwritten, can scroll off the window,
+     etc.
+
+     The subcommand attr will set TARGETWIN's attributes or
+     foreground/background color pair for any successive character
+     output.  Each ATTRIBUTE given on the line may be prepended by a +
+     to set or a - to unset that attribute; + is assumed if absent.  The
+     attributes supported are blink, bold, dim, reverse, standout, and
+     underline.
+
+     Each FG_COL/BG_COL attribute (to be read as 'FG_COL on BG_COL')
+     sets the foreground and background color for character output.  The
+     color default is sometimes available (in particular if the library
+     is ncurses), specifying the foreground or background color with
+     which the terminal started.  The color pair default/default is
+     always available.  To use more than the 8 named colors (red, green,
+     etc.)  construct the FG_COL/BG_COL pairs where FG_COL and BG_COL
+     are decimal integers, e.g 128/200.  The maximum color value is 254
+     if the terminal supports 256 colors.
+
+     bg overrides the color and other attributes of all characters in
+     the window.  Its usual use is to set the background initially, but
+     it will overwrite the attributes of any characters at the time when
+     it is called.  In addition to the arguments allowed with attr, an
+     argument @CHAR specifies a character to be shown in otherwise blank
+     areas of the window.  Owing to limitations of curses this cannot be
+     a multibyte character (use of ASCII characters only is
+     recommended).  As the specified set of attributes override the
+     existing background, turning attributes off in the arguments is not
+     useful, though this does not cause an error.
+
+     The subcommand scroll can be used with on or off to enabled or
+     disable scrolling of a window when the cursor would otherwise move
+     below the window due to typing or output.  It can also be used with
+     a positive or negative integer to scroll the window up or down the
+     given number of lines without changing the current cursor position
+     (which therefore appears to move in the opposite direction relative
+     to the window).  In the second case, if scrolling is off it is
+     temporarily turned on to allow the window to be scrolled.
+
+     The subcommand input reads a single character from the window
+     without echoing it back.  If PARAM is supplied the character is
+     assigned to the parameter PARAM, else it is assigned to the
+     parameter REPLY.
+
+     If both PARAM and KPARAM are supplied, the key is read in 'keypad'
+     mode.  In this mode special keys such as function keys and arrow
+     keys return the name of the key in the parameter KPARAM.  The key
+     names are the macros defined in the curses.h or ncurses.h with the
+     prefix 'KEY_' removed; see also the description of the parameter
+     zcurses_keycodes below.  Other keys cause a value to be set in
+     PARAM as before.  On a successful return only one of PARAM or
+     KPARAM contains a non-empty string; the other is set to an empty
+     string.
+
+     If MPARAM is also supplied, input attempts to handle mouse input.
+     This is only available with the ncurses library; mouse handling can
+     be detected by checking for the exit status of 'zcurses mouse' with
+     no arguments.  If a mouse button is clicked (or double- or
+     triple-clicked, or pressed or released with a configurable delay
+     from being clicked) then kparam is set to the string MOUSE, and
+     MPARAM is set to an array consisting of the following elements:
+     -
+          An identifier to discriminate different input devices; this is
+          only rarely useful.
+     -
+          The x, y and z coordinates of the mouse click relative to the
+          full screen, as three elements in that order (i.e.  the y
+          coordinate is, unusually, after the x coordinate).  The z
+          coordinate is only available for a few unusual input devices
+          and is otherwise set to zero.
+     -
+          Any events that occurred as separate items; usually there will
+          be just one.  An event consists of PRESSED, RELEASED, CLICKED,
+          DOUBLE_CLICKED or TRIPLE_CLICKED followed immediately (in the
+          same element) by the number of the button.
+     -
+          If the shift key was pressed, the string SHIFT.
+     -
+          If the control key was pressed, the string CTRL.
+     -
+          If the alt key was pressed, the string ALT.
+
+     Not all mouse events may be passed through to the terminal window;
+     most terminal emulators handle some mouse events themselves.  Note
+     that the ncurses manual implies that using input both with and
+     without mouse handling may cause the mouse cursor to appear and
+     disappear.
+
+     The subcommand mouse can be used to configure the use of the mouse.
+     There is no window argument; mouse options are global.  'zcurses
+     mouse' with no arguments returns status 0 if mouse handling is
+     possible, else status 1.  Otherwise, the possible arguments (which
+     may be combined on the same command line) are as follows.  delay
+     NUM sets the maximum delay in milliseconds between press and
+     release events to be considered as a click; the value 0 disables
+     click resolution, and the default is one sixth of a second.  motion
+     proceeded by an optional '+' (the default) or - turns on or off
+     reporting of mouse motion in addition to clicks, presses and
+     releases, which are always reported.  However, it appears reports
+     for mouse motion are not currently implemented.
+
+     The subcommand timeout specifies a timeout value for input from
+     TARGETWIN.  If INTVAL is negative, 'zcurses input' waits
+     indefinitely for a character to be typed; this is the default.  If
+     INTVAL is zero, 'zcurses input' returns immediately; if there is
+     typeahead it is returned, else no input is done and status 1 is
+     returned.  If INTVAL is positive, 'zcurses input' waits INTVAL
+     milliseconds for input and if there is none at the end of that
+     period returns status 1.
+
+     The subcommand querychar queries the character at the current
+     cursor position.  The return values are stored in the array named
+     PARAM if supplied, else in the array reply.  The first value is the
+     character (which may be a multibyte character if the system
+     supports them); the second is the color pair in the usual
+     FG_COL/BG_COL notation, or 0 if color is not supported.  Any
+     attributes other than color that apply to the character, as set
+     with the subcommand attr, appear as additional elements.
+
+     The subcommand resize resizes stdscr and all windows to given
+     dimensions (windows that stick out from the new dimensions are
+     resized down).  The underlying curses extension (resize_term call)
+     can be unavailable.  To verify, zeroes can be used for HEIGHT and
+     WIDTH.  If the result of the subcommand is 0, resize_term is
+     available (2 otherwise).  Tests show that resizing can be normally
+     accomplished by calling zcurses end and zcurses refresh.  The
+     resize subcommand is provided for versatility.  Multiple system
+     configurations have been checked and zcurses end and zcurses
+     refresh are still needed for correct terminal state after resize.
+     To invoke them with resize, use ENDWIN argument.  Using NOSAVE
+     argument will cause new terminal state to not be saved internally
+     by zcurses.  This is also provided for versatility and should
+     normally be not needed.
+
+
+22.9.2 Parameters
+-----------------
+
+
+ZCURSES_COLORS
+     Readonly integer.  The maximum number of colors the terminal
+     supports.  This value is initialised by the curses library and is
+     not available until the first time zcurses init is run.
+
+ZCURSES_COLOR_PAIRS
+     Readonly integer.  The maximum number of color pairs FG_COL/BG_COL
+     that may be defined in 'zcurses attr' commands; note this limit
+     applies to all color pairs that have been used whether or not they
+     are currently active.  This value is initialised by the curses
+     library and is not available until the first time zcurses init is
+     run.
+
+zcurses_attrs
+     Readonly array.  The attributes supported by zsh/curses; available
+     as soon as the module is loaded.
+
+zcurses_colors
+     Readonly array.  The colors supported by zsh/curses; available as
+     soon as the module is loaded.
+
+zcurses_keycodes
+     Readonly array.  The values that may be returned in the second
+     parameter supplied to 'zcurses input' in the order in which they
+     are defined internally by curses.  Not all function keys are
+     listed, only F0; curses reserves space for F0 up to F63.
+
+zcurses_windows
+     Readonly array.  The current list of windows, i.e.  all windows
+     that have been created with 'zcurses addwin' and not removed with
+     'zcurses delwin'.
+
+File: zsh.info,  Node: The zsh/datetime Module,  Next: The zsh/db/gdbm Module,  Prev: The zsh/curses Module,  Up: Zsh Modules
+

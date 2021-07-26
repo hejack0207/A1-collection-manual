@@ -1,0 +1,790 @@
+9.4 Compiling to the Virtual Machine
+====================================
+
+Compilers have a mystique about them that is attractive and off-putting
+at the same time.  They are attractive because they are magical – they
+transform inert text into live results, like throwing the switch on
+Frankenstein’s monster.  However, this magic is perceived by many to be
+impenetrable.
+
+   This section aims to pay attention to the small man behind the
+curtain.
+
+   *Note Read/Load/Eval/Compile::, if you’re lost and you just wanted to
+know how to compile your ‘.scm’ file.
+
+* Menu:
+
+* Compiler Tower::                   
+* The Scheme Compiler::                   
+* Tree-IL::                 
+* GLIL::                
+* Assembly::                   
+* Bytecode and Objcode::                   
+* Writing New High-Level Languages::
+* Extending the Compiler::
+
+File: guile.info,  Node: Compiler Tower,  Next: The Scheme Compiler,  Up: Compiling to the Virtual Machine
+
+9.4.1 Compiler Tower
+--------------------
+
+Guile’s compiler is quite simple, actually – its _compilers_, to put it
+more accurately.  Guile defines a tower of languages, starting at Scheme
+and progressively simplifying down to languages that resemble the VM
+instruction set (*note Instruction Set::).
+
+   Each language knows how to compile to the next, so each step is
+simple and understandable.  Furthermore, this set of languages is not
+hardcoded into Guile, so it is possible for the user to add new
+high-level languages, new passes, or even different compilation targets.
+
+   Languages are registered in the module, ‘(system base language)’:
+
+     (use-modules (system base language))
+
+   They are registered with the ‘define-language’ form.
+
+ -- Scheme Syntax: define-language [#:name] [#:title] [#:reader]
+          [#:printer] [#:parser=#f] [#:compilers='()]
+          [#:decompilers='()] [#:evaluator=#f] [#:joiner=#f]
+          [#:for-humans?=#t]
+          [#:make-default-environment=make-fresh-user-module]
+     Define a language.
+
+     This syntax defines a ‘#<language>’ object, bound to NAME in the
+     current environment.  In addition, the language will be added to
+     the global language set.  For example, this is the language
+     definition for Scheme:
+
+          (define-language scheme
+            #:title	"Scheme"
+            #:reader      (lambda (port env) ...)
+            #:compilers   `((tree-il . ,compile-tree-il))
+            #:decompilers `((tree-il . ,decompile-tree-il))
+            #:evaluator	(lambda (x module) (primitive-eval x))
+            #:printer	write
+            #:make-default-environment (lambda () ...))
+
+   The interesting thing about having languages defined this way is that
+they present a uniform interface to the read-eval-print loop.  This
+allows the user to change the current language of the REPL:
+
+     scheme@(guile-user)> ,language tree-il
+     Happy hacking with Tree Intermediate Language!  To switch back, type `,L scheme'.
+     tree-il@(guile-user)> ,L scheme
+     Happy hacking with Scheme!  To switch back, type `,L tree-il'.
+     scheme@(guile-user)>
+
+   Languages can be looked up by name, as they were above.
+
+ -- Scheme Procedure: lookup-language name
+     Looks up a language named NAME, autoloading it if necessary.
+
+     Languages are autoloaded by looking for a variable named NAME in a
+     module named ‘(language NAME spec)’.
+
+     The language object will be returned, or ‘#f’ if there does not
+     exist a language with that name.
+
+   Defining languages this way allows us to programmatically determine
+the necessary steps for compiling code from one language to another.
+
+ -- Scheme Procedure: lookup-compilation-order from to
+     Recursively traverses the set of languages to which FROM can
+     compile, depth-first, and return the first path that can transform
+     FROM to TO.  Returns ‘#f’ if no path is found.
+
+     This function memoizes its results in a cache that is invalidated
+     by subsequent calls to ‘define-language’, so it should be quite
+     fast.
+
+   There is a notion of a “current language”, which is maintained in the
+‘current-language’ parameter, defined in the core ‘(guile)’ module.
+This language is normally Scheme, and may be rebound by the user.  The
+run-time compilation interfaces (*note Read/Load/Eval/Compile::) also
+allow you to choose other source and target languages.
+
+   The normal tower of languages when compiling Scheme goes like this:
+
+   • Scheme
+   • Tree Intermediate Language (Tree-IL)
+   • Guile Lowlevel Intermediate Language (GLIL)
+   • Assembly
+   • Bytecode
+   • Objcode
+
+   Object code may be serialized to disk directly, though it has a
+cookie and version prepended to the front.  But when compiling Scheme at
+run time, you want a Scheme value: for example, a compiled procedure.
+For this reason, so as not to break the abstraction, Guile defines a
+fake language at the bottom of the tower:
+
+   • Value
+
+   Compiling to ‘value’ loads the object code into a procedure, and
+wakes the sleeping giant.
+
+   Perhaps this strangeness can be explained by example: ‘compile-file’
+defaults to compiling to object code, because it produces object code
+that has to live in the barren world outside the Guile runtime; but
+‘compile’ defaults to compiling to ‘value’, as its product re-enters the
+Guile world.
+
+   Indeed, the process of compilation can circulate through these
+different worlds indefinitely, as shown by the following quine:
+
+     ((lambda (x) ((compile x) x)) '(lambda (x) ((compile x) x)))
+
+File: guile.info,  Node: The Scheme Compiler,  Next: Tree-IL,  Prev: Compiler Tower,  Up: Compiling to the Virtual Machine
+
+9.4.2 The Scheme Compiler
+-------------------------
+
+The job of the Scheme compiler is to expand all macros and all of Scheme
+to its most primitive expressions.  The definition of “primitive” is
+given by the inventory of constructs provided by Tree-IL, the target
+language of the Scheme compiler: procedure applications, conditionals,
+lexical references, etc.  This is described more fully in the next
+section.
+
+   The tricky and amusing thing about the Scheme-to-Tree-IL compiler is
+that it is completely implemented by the macro expander.  Since the
+macro expander has to run over all of the source code already in order
+to expand macros, it might as well do the analysis at the same time,
+producing Tree-IL expressions directly.
+
+   Because this compiler is actually the macro expander, it is
+extensible.  Any macro which the user writes becomes part of the
+compiler.
+
+   The Scheme-to-Tree-IL expander may be invoked using the generic
+‘compile’ procedure:
+
+     (compile '(+ 1 2) #:from 'scheme #:to 'tree-il)
+     ⇒
+      #<<application> src: #f
+                      proc: #<<toplevel-ref> src: #f name: +>
+                      args: (#<<const> src: #f exp: 1>
+                             #<<const> src: #f exp: 2>)>
+
+   Or, since Tree-IL is so close to Scheme, it is often useful to expand
+Scheme to Tree-IL, then translate back to Scheme.  For that reason the
+expander provides two interfaces.  The former is equivalent to calling
+‘(macroexpand '(+ 1 2) 'c)’, where the ‘'c’ is for “compile”.  With ‘'e’
+(the default), the result is translated back to Scheme:
+
+     (macroexpand '(+ 1 2))
+     ⇒ (+ 1 2)
+     (macroexpand '(let ((x 10)) (* x x)))
+     ⇒ (let ((x84 10)) (* x84 x84))
+
+   The second example shows that as part of its job, the macro expander
+renames lexically-bound variables.  The original names are preserved
+when compiling to Tree-IL, but can’t be represented in Scheme: a lexical
+binding only has one name.  It is for this reason that the _native_
+output of the expander is _not_ Scheme.  There’s too much information we
+would lose if we translated to Scheme directly: lexical variable names,
+source locations, and module hygiene.
+
+   Note however that ‘macroexpand’ does not have the same signature as
+‘compile-tree-il’.  ‘compile-tree-il’ is a small wrapper around
+‘macroexpand’, to make it conform to the general form of compiler
+procedures in Guile’s language tower.
+
+   Compiler procedures take three arguments: an expression, an
+environment, and a keyword list of options.  They return three values:
+the compiled expression, the corresponding environment for the target
+language, and a “continuation environment”.  The compiled expression and
+environment will serve as input to the next language’s compiler.  The
+“continuation environment” can be used to compile another expression
+from the same source language within the same module.
+
+   For example, you might compile the expression, ‘(define-module
+(foo))’.  This will result in a Tree-IL expression and environment.  But
+if you compiled a second expression, you would want to take into account
+the compile-time effect of compiling the previous expression, which puts
+the user in the ‘(foo)’ module.  That is purpose of the “continuation
+environment”; you would pass it as the environment when compiling the
+subsequent expression.
+
+   For Scheme, an environment is a module.  By default, the ‘compile’
+and ‘compile-file’ procedures compile in a fresh module, such that
+bindings and macros introduced by the expression being compiled are
+isolated:
+
+     (eq? (current-module) (compile '(current-module)))
+     ⇒ #f
+
+     (compile '(define hello 'world))
+     (defined? 'hello)
+     ⇒ #f
+
+     (define / *)
+     (eq? (compile '/) /)
+     ⇒ #f
+
+   Similarly, changes to the ‘current-reader’ fluid (*note
+‘current-reader’: Loading.) are isolated:
+
+     (compile '(fluid-set! current-reader (lambda args 'fail)))
+     (fluid-ref current-reader)
+     ⇒ #f
+
+   Nevertheless, having the compiler and “compilee” share the same name
+space can be achieved by explicitly passing ‘(current-module)’ as the
+compilation environment:
+
+     (define hello 'world)
+     (compile 'hello #:env (current-module))
+     ⇒ world
+
+File: guile.info,  Node: Tree-IL,  Next: GLIL,  Prev: The Scheme Compiler,  Up: Compiling to the Virtual Machine
+
+9.4.3 Tree-IL
+-------------
+
+Tree Intermediate Language (Tree-IL) is a structured intermediate
+language that is close in expressive power to Scheme.  It is an
+expanded, pre-analyzed Scheme.
+
+   Tree-IL is “structured” in the sense that its representation is based
+on records, not S-expressions.  This gives a rigidity to the language
+that ensures that compiling to a lower-level language only requires a
+limited set of transformations.  For example, the Tree-IL type ‘<const>’
+is a record type with two fields, ‘src’ and ‘exp’.  Instances of this
+type are created via ‘make-const’.  Fields of this type are accessed via
+the ‘const-src’ and ‘const-exp’ procedures.  There is also a predicate,
+‘const?’.  *Note Records::, for more information on records.
+
+   All Tree-IL types have a ‘src’ slot, which holds source location
+information for the expression.  This information, if present, will be
+residualized into the compiled object code, allowing backtraces to show
+source information.  The format of ‘src’ is the same as that returned by
+Guile’s ‘source-properties’ function.  *Note Source Properties::, for
+more information.
+
+   Although Tree-IL objects are represented internally using records,
+there is also an equivalent S-expression external representation for
+each kind of Tree-IL. For example, the S-expression representation of
+‘#<const src: #f exp: 3>’ expression would be:
+
+     (const 3)
+
+   Users may program with this format directly at the REPL:
+
+     scheme@(guile-user)> ,language tree-il
+     Happy hacking with Tree Intermediate Language!  To switch back, type `,L scheme'.
+     tree-il@(guile-user)> (apply (primitive +) (const 32) (const 10))
+     ⇒ 42
+
+   The ‘src’ fields are left out of the external representation.
+
+   One may create Tree-IL objects from their external representations
+via calling ‘parse-tree-il’, the reader for Tree-IL. If any source
+information is attached to the input S-expression, it will be propagated
+to the resulting Tree-IL expressions.  This is probably the easiest way
+to compile to Tree-IL: just make the appropriate external
+representations in S-expression format, and let ‘parse-tree-il’ take
+care of the rest.
+
+ -- Scheme Variable: <void> src
+ -- External Representation: (void)
+     An empty expression.  In practice, equivalent to Scheme’s ‘(if #f
+     #f)’.
+ -- Scheme Variable: <const> src exp
+ -- External Representation: (const EXP)
+     A constant.
+ -- Scheme Variable: <primitive-ref> src name
+ -- External Representation: (primitive NAME)
+     A reference to a “primitive”.  A primitive is a procedure that,
+     when compiled, may be open-coded.  For example, ‘cons’ is usually
+     recognized as a primitive, so that it compiles down to a single
+     instruction.
+
+     Compilation of Tree-IL usually begins with a pass that resolves
+     some ‘<module-ref>’ and ‘<toplevel-ref>’ expressions to
+     ‘<primitive-ref>’ expressions.  The actual compilation pass has
+     special cases for applications of certain primitives, like ‘apply’
+     or ‘cons’.
+ -- Scheme Variable: <lexical-ref> src name gensym
+ -- External Representation: (lexical NAME GENSYM)
+     A reference to a lexically-bound variable.  The NAME is the
+     original name of the variable in the source program.  GENSYM is a
+     unique identifier for this variable.
+ -- Scheme Variable: <lexical-set> src name gensym exp
+ -- External Representation: (set! (lexical NAME GENSYM) EXP)
+     Sets a lexically-bound variable.
+ -- Scheme Variable: <module-ref> src mod name public?
+ -- External Representation: (@ MOD NAME)
+ -- External Representation: (@@ MOD NAME)
+     A reference to a variable in a specific module.  MOD should be the
+     name of the module, e.g. ‘(guile-user)’.
+
+     If PUBLIC? is true, the variable named NAME will be looked up in
+     MOD’s public interface, and serialized with ‘@’; otherwise it will
+     be looked up among the module’s private bindings, and is serialized
+     with ‘@@’.
+ -- Scheme Variable: <module-set> src mod name public? exp
+ -- External Representation: (set! (@ MOD NAME) EXP)
+ -- External Representation: (set! (@@ MOD NAME) EXP)
+     Sets a variable in a specific module.
+ -- Scheme Variable: <toplevel-ref> src name
+ -- External Representation: (toplevel NAME)
+     References a variable from the current procedure’s module.
+ -- Scheme Variable: <toplevel-set> src name exp
+ -- External Representation: (set! (toplevel NAME) EXP)
+     Sets a variable in the current procedure’s module.
+ -- Scheme Variable: <toplevel-define> src name exp
+ -- External Representation: (define NAME EXP)
+     Defines a new top-level variable in the current procedure’s module.
+ -- Scheme Variable: <conditional> src test then else
+ -- External Representation: (if TEST THEN ELSE)
+     A conditional.  Note that ELSE is not optional.
+ -- Scheme Variable: <application> src proc args
+ -- External Representation: (apply PROC . ARGS)
+     A procedure call.
+ -- Scheme Variable: <sequence> src exps
+ -- External Representation: (begin . EXPS)
+     Like Scheme’s ‘begin’.
+ -- Scheme Variable: <lambda> src meta body
+ -- External Representation: (lambda META BODY)
+     A closure.  META is an association list of properties for the
+     procedure.  BODY is a single Tree-IL expression of type
+     ‘<lambda-case>’.  As the ‘<lambda-case>’ clause can chain to an
+     alternate clause, this makes Tree-IL’s ‘<lambda>’ have the
+     expressiveness of Scheme’s ‘case-lambda’.
+ -- Scheme Variable: <lambda-case> req opt rest kw inits gensyms body
+          alternate
+ -- External Representation: (lambda-case ((REQ OPT REST KW INITS
+          GENSYMS) BODY) [ALTERNATE])
+     One clause of a ‘case-lambda’.  A ‘lambda’ expression in Scheme is
+     treated as a ‘case-lambda’ with one clause.
+
+     REQ is a list of the procedure’s required arguments, as symbols.
+     OPT is a list of the optional arguments, or ‘#f’ if there are no
+     optional arguments.  REST is the name of the rest argument, or
+     ‘#f’.
+
+     KW is a list of the form, ‘(ALLOW-OTHER-KEYS? (KEYWORD NAME VAR)
+     ...)’, where KEYWORD is the keyword corresponding to the argument
+     named NAME, and whose corresponding gensym is VAR.  INITS are
+     tree-il expressions corresponding to all of the optional and
+     keyword arguments, evaluated to bind variables whose value is not
+     supplied by the procedure caller.  Each INIT expression is
+     evaluated in the lexical context of previously bound variables,
+     from left to right.
+
+     GENSYMS is a list of gensyms corresponding to all arguments: first
+     all of the required arguments, then the optional arguments if any,
+     then the rest argument if any, then all of the keyword arguments.
+
+     BODY is the body of the clause.  If the procedure is called with an
+     appropriate number of arguments, BODY is evaluated in tail
+     position.  Otherwise, if there is an ALTERNATE, it should be a
+     ‘<lambda-case>’ expression, representing the next clause to try.
+     If there is no ALTERNATE, a wrong-number-of-arguments error is
+     signaled.
+ -- Scheme Variable: <let> src names gensyms vals exp
+ -- External Representation: (let NAMES GENSYMS VALS EXP)
+     Lexical binding, like Scheme’s ‘let’.  NAMES are the original
+     binding names, GENSYMS are gensyms corresponding to the NAMES, and
+     VALS are Tree-IL expressions for the values.  EXP is a single
+     Tree-IL expression.
+ -- Scheme Variable: <letrec> in-order? src names gensyms vals exp
+ -- External Representation: (letrec NAMES GENSYMS VALS EXP)
+ -- External Representation: (letrec* NAMES GENSYMS VALS EXP)
+     A version of ‘<let>’ that creates recursive bindings, like Scheme’s
+     ‘letrec’, or ‘letrec*’ if IN-ORDER? is true.
+ -- Scheme Variable: <dynlet> fluids vals body
+ -- External Representation: (dynlet FLUIDS VALS BODY)
+     Dynamic binding; the equivalent of Scheme’s ‘with-fluids’.  FLUIDS
+     should be a list of Tree-IL expressions that will evaluate to
+     fluids, and VALS a corresponding list of expressions to bind to the
+     fluids during the dynamic extent of the evaluation of BODY.
+ -- Scheme Variable: <dynref> fluid
+ -- External Representation: (dynref FLUID)
+     A dynamic variable reference.  FLUID should be a Tree-IL expression
+     evaluating to a fluid.
+ -- Scheme Variable: <dynset> fluid exp
+ -- External Representation: (dynset FLUID EXP)
+     A dynamic variable set.  FLUID, a Tree-IL expression evaluating to
+     a fluid, will be set to the result of evaluating EXP.
+ -- Scheme Variable: <dynwind> winder body unwinder
+ -- External Representation: (dynwind WINDER BODY UNWINDER)
+     A ‘dynamic-wind’.  WINDER and UNWINDER should both evaluate to
+     thunks.  Ensure that the winder and the unwinder are called before
+     entering and after leaving BODY.  Note that BODY is an expression,
+     without a thunk wrapper.
+ -- Scheme Variable: <prompt> tag body handler
+ -- External Representation: (prompt TAG BODY HANDLER)
+     A dynamic prompt.  Instates a prompt named TAG, an expression,
+     during the dynamic extent of the execution of BODY, also an
+     expression.  If an abort occurs to this prompt, control will be
+     passed to HANDLER, a ‘<lambda-case>’ expression with no optional or
+     keyword arguments, and no alternate.  The first argument to the
+     ‘<lambda-case>’ will be the captured continuation, and then all of
+     the values passed to the abort.  *Note Prompts::, for more
+     information.
+ -- Scheme Variable: <abort> tag args tail
+ -- External Representation: (abort TAG ARGS TAIL)
+     An abort to the nearest prompt with the name TAG, an expression.
+     ARGS should be a list of expressions to pass to the prompt’s
+     handler, and TAIL should be an expression that will evaluate to a
+     list of additional arguments.  An abort will save the partial
+     continuation, which may later be reinstated, resulting in the
+     ‘<abort>’ expression evaluating to some number of values.
+
+   There are two Tree-IL constructs that are not normally produced by
+higher-level compilers, but instead are generated during the
+source-to-source optimization and analysis passes that the Tree-IL
+compiler does.  Users should not generate these expressions directly,
+unless they feel very clever, as the default analysis pass will generate
+them as necessary.
+
+ -- Scheme Variable: <let-values> src names gensyms exp body
+ -- External Representation: (let-values NAMES GENSYMS EXP BODY)
+     Like Scheme’s ‘receive’ – binds the values returned by evaluating
+     ‘exp’ to the ‘lambda’-like bindings described by GENSYMS.  That is
+     to say, GENSYMS may be an improper list.
+
+     ‘<let-values>’ is an optimization of ‘<application>’ of the
+     primitive, ‘call-with-values’.
+ -- Scheme Variable: <fix> src names gensyms vals body
+ -- External Representation: (fix NAMES GENSYMS VALS BODY)
+     Like ‘<letrec>’, but only for VALS that are unset ‘lambda’
+     expressions.
+
+     ‘fix’ is an optimization of ‘letrec’ (and ‘let’).
+
+   Tree-IL implements a compiler to GLIL that recursively traverses
+Tree-IL expressions, writing out GLIL expressions into a linear list.
+The compiler also keeps some state as to whether the current expression
+is in tail context, and whether its value will be used in future
+computations.  This state allows the compiler not to emit code for
+constant expressions that will not be used (e.g. docstrings), and to
+perform tail calls when in tail position.
+
+   Most optimization, such as it currently is, is performed on Tree-IL
+expressions as source-to-source transformations.  There will be more
+optimizations added in the future.
+
+   Interested readers are encouraged to read the implementation in
+‘(language tree-il compile-glil)’ for more details.
+
+File: guile.info,  Node: GLIL,  Next: Assembly,  Prev: Tree-IL,  Up: Compiling to the Virtual Machine
+
+9.4.4 GLIL
+----------
+
+Guile Lowlevel Intermediate Language (GLIL) is a structured intermediate
+language whose expressions more closely approximate Guile’s VM
+instruction set.  Its expression types are defined in ‘(language glil)’.
+
+ -- Scheme Variable: <glil-program> meta . body
+     A unit of code that at run-time will correspond to a compiled
+     procedure.  META should be an alist of properties, as in Tree-IL’s
+     ‘<lambda>’.  BODY is an ordered list of GLIL expressions.
+ -- Scheme Variable: <glil-std-prelude> nreq nlocs else-label
+     A prologue for a function with no optional, keyword, or rest
+     arguments.  NREQ is the number of required arguments.  NLOCS the
+     total number of local variables, including the arguments.  If the
+     procedure was not given exactly NREQ arguments, control will jump
+     to ELSE-LABEL, if given, or otherwise signal an error.
+ -- Scheme Variable: <glil-opt-prelude> nreq nopt rest nlocs else-label
+     A prologue for a function with optional or rest arguments.  Like
+     ‘<glil-std-prelude>’, with the addition that NOPT is the number of
+     optional arguments (possibly zero) and REST is an index of a local
+     variable at which to bind a rest argument, or ‘#f’ if there is no
+     rest argument.
+ -- Scheme Variable: <glil-kw-prelude> nreq nopt rest kw
+          allow-other-keys? nlocs else-label
+     A prologue for a function with keyword arguments.  Like
+     ‘<glil-opt-prelude>’, with the addition that KW is a list of
+     keyword arguments, and ALLOW-OTHER-KEYS? is a flag indicating
+     whether to allow unknown keys.  *Note ‘bind-kwargs’: Function
+     Prologue Instructions, for details on the format of KW.
+ -- Scheme Variable: <glil-bind> . vars
+     An advisory expression that notes a liveness extent for a set of
+     variables.  VARS is a list of ‘(NAME TYPE INDEX)’, where TYPE
+     should be either ‘argument’, ‘local’, or ‘external’.
+
+     ‘<glil-bind>’ expressions end up being serialized as part of a
+     program’s metadata and do not form part of a program’s code path.
+ -- Scheme Variable: <glil-mv-bind> vars rest
+     A multiple-value binding of the values on the stack to VARS.  If
+     REST is true, the last element of VARS will be treated as a rest
+     argument.
+
+     In addition to pushing a binding annotation on the stack, like
+     ‘<glil-bind>’, an expression is emitted at compilation time to make
+     sure that there are enough values available to bind.  See the notes
+     on ‘truncate-values’ in *note Procedure Call and Return
+     Instructions::, for more information.
+ -- Scheme Variable: <glil-unbind>
+     Closes the liveness extent of the most recently encountered
+     ‘<glil-bind>’ or ‘<glil-mv-bind>’ expression.  As GLIL expressions
+     are compiled, a parallel stack of live bindings is maintained; this
+     expression pops off the top element from that stack.
+
+     Bindings are written into the program’s metadata so that debuggers
+     and other tools can determine the set of live local variables at a
+     given offset within a VM program.
+ -- Scheme Variable: <glil-source> loc
+     Records source information for the preceding expression.  LOC
+     should be an association list of containing ‘line’ ‘column’, and
+     ‘filename’ keys, e.g. as returned by ‘source-properties’.
+ -- Scheme Variable: <glil-void>
+     Pushes “the unspecified value” on the stack.
+ -- Scheme Variable: <glil-const> obj
+     Pushes a constant value onto the stack.  OBJ must be a number,
+     string, symbol, keyword, boolean, character, uniform array, the
+     empty list, or a pair or vector of constants.
+ -- Scheme Variable: <glil-lexical> local? boxed? op index
+     Accesses a lexically bound variable.  If the variable is not LOCAL?
+     it is free.  All variables may have ‘ref’, ‘set’, and ‘bound?’ as
+     their OP.  Boxed variables may also have the OPs ‘box’,
+     ‘empty-box’, and ‘fix’, which correspond in semantics to the VM
+     instructions ‘box’, ‘empty-box’, and ‘fix-closure’.  *Note Stack
+     Layout::, for more information.
+ -- Scheme Variable: <glil-toplevel> op name
+     Accesses a toplevel variable.  OP may be ‘ref’, ‘set’, or ‘define’.
+ -- Scheme Variable: <glil-module> op mod name public?
+     Accesses a variable within a specific module.  See Tree-IL’s
+     ‘<module-ref>’, for more information.
+ -- Scheme Variable: <glil-label> label
+     Creates a new label.  LABEL can be any Scheme value, and should be
+     unique.
+ -- Scheme Variable: <glil-branch> inst label
+     Branch to a label.  LABEL should be a ‘<ghil-label>’.  ‘inst’ is a
+     branching instruction: ‘br-if’, ‘br’, etc.
+ -- Scheme Variable: <glil-call> inst nargs
+     This expression is probably misnamed, as it does not correspond to
+     function calls.  ‘<glil-call>’ invokes the VM instruction named
+     INST, noting that it is called with NARGS stack arguments.  The
+     arguments should be pushed on the stack already.  What happens to
+     the stack afterwards depends on the instruction.
+ -- Scheme Variable: <glil-mv-call> nargs ra
+     Performs a multiple-value call.  RA is a ‘<glil-label>’
+     corresponding to the multiple-value return address for the call.
+     See the notes on ‘mv-call’ in *note Procedure Call and Return
+     Instructions::, for more information.
+ -- Scheme Variable: <glil-prompt> label escape-only?
+     Push a dynamic prompt into the stack, with a handler at LABEL.
+     ESCAPE-ONLY? is a flag that is propagated to the prompt, allowing
+     an abort to avoid capturing a continuation in some cases.  *Note
+     Prompts::, for more information.
+
+   Users may enter in GLIL at the REPL as well, though there is a bit
+more bookkeeping to do:
+
+     scheme@(guile-user)> ,language glil
+     Happy hacking with Guile Lowlevel Intermediate Language (GLIL)!
+     To switch back, type `,L scheme'.
+     glil@(guile-user)> (program () (std-prelude 0 0 #f)
+                            (const 3) (call return 1))
+     ⇒ 3
+
+   Just as in all of Guile’s compilers, an environment is passed to the
+GLIL-to-object code compiler, and one is returned as well, along with
+the object code.
+
+File: guile.info,  Node: Assembly,  Next: Bytecode and Objcode,  Prev: GLIL,  Up: Compiling to the Virtual Machine
+
+9.4.5 Assembly
+--------------
+
+Assembly is an S-expression-based, human-readable representation of the
+actual bytecodes that will be emitted for the VM. As such, it is a
+useful intermediate language both for compilation and for decompilation.
+
+   Besides the fact that it is not a record-based language, assembly
+differs from GLIL in four main ways:
+
+   • Labels have been resolved to byte offsets in the program.
+   • Constants inside procedures have either been expressed as inline
+     instructions or cached in object arrays.
+   • Procedures with metadata (source location information, liveness
+     extents, procedure names, generic properties, etc) have had their
+     metadata serialized out to thunks.
+   • All expressions correspond directly to VM instructions – i.e.,
+     there is no ‘<glil-lexical>’ which can be a ref or a set.
+
+   Assembly is isomorphic to the bytecode that it compiles to.  You can
+compile to bytecode, then decompile back to assembly, and you have the
+same assembly code.
+
+   The general form of assembly instructions is the following:
+
+     (INST ARG ...)
+
+   The INST names a VM instruction, and its ARGs will be embedded in the
+instruction stream.  The easiest way to see assembly is to play around
+with it at the REPL, as can be seen in this annotated example:
+
+     scheme@(guile-user)> ,pp (compile '(+ 32 10) #:to 'assembly)
+     (load-program
+       ((:LCASE16 . 2))  ; Labels, unused in this case.
+       8                 ; Length of the thunk that was compiled.
+       (load-program     ; Metadata thunk.
+         ()
+         17
+         #f              ; No metadata thunk for the metadata thunk.
+         (make-eol)
+         (make-eol)
+         (make-int8 2)   ; Liveness extents, source info, and arities,
+         (make-int8 8)   ; in a format that Guile knows how to parse.
+         (make-int8:0)
+         (list 0 3)
+         (list 0 1)
+         (list 0 3)
+         (return))
+       (assert-nargs-ee/locals 0)  ; Prologue.
+       (make-int8 32)    ; Actual code starts here.
+       (make-int8 10)
+       (add)
+       (return))
+
+   Of course you can switch the REPL to assembly and enter in assembly
+S-expressions directly, like with other languages, though it is more
+difficult, given that the length fields have to be correct.
+
+File: guile.info,  Node: Bytecode and Objcode,  Next: Writing New High-Level Languages,  Prev: Assembly,  Up: Compiling to the Virtual Machine
+
+9.4.6 Bytecode and Objcode
+--------------------------
+
+Finally, the raw bytes.  There are actually two different “languages”
+here, corresponding to two different ways to represent the bytes.
+
+   “Bytecode” represents code as uniform byte vectors, useful for
+structuring and destructuring code on the Scheme level.  Bytecode is the
+next step down from assembly:
+
+     scheme@(guile-user)> (compile '(+ 32 10) #:to 'bytecode)
+     ⇒ #vu8(8 0 0 0 25 0 0 0            ; Header.
+            95 0                            ; Prologue.
+            10 32 10 10 148 66 17           ; Actual code.
+            0 0 0 0 0 0 0 9                 ; Metadata thunk.
+            9 10 2 10 8 11 18 0 3 18 0 1 18 0 3 66)
+
+   “Objcode” is bytecode, but mapped directly to a C structure, ‘struct
+scm_objcode’:
+
+     struct scm_objcode {
+       scm_t_uint32 len;
+       scm_t_uint32 metalen;
+       scm_t_uint8 base[0];
+     };
+
+   As one might imagine, objcode imposes a minimum length on the
+bytecode.  Also, the ‘len’ and ‘metalen’ fields are in native
+endianness, which makes objcode (and bytecode) system-dependent.
+
+   Objcode also has a couple of important efficiency hacks.  First,
+objcode may be mapped directly from disk, allowing compiled code to be
+loaded quickly, often from the system’s disk cache, and shared among
+multiple processes.  Secondly, objcode may be embedded in other objcode,
+allowing procedures to have the text of other procedures inlined into
+their bodies, without the need for separate allocation of the code.  Of
+course, the objcode object itself does need to be allocated.
+
+   Procedures related to objcode are defined in the ‘(system vm
+objcode)’ module.
+
+ -- Scheme Procedure: objcode? obj
+ -- C Function: scm_objcode_p (obj)
+     Returns ‘#f’ if OBJ is object code, ‘#f’ otherwise.
+
+ -- Scheme Procedure: bytecode->objcode bytecode
+ -- C Function: scm_bytecode_to_objcode (bytecode)
+     Makes a bytecode object from BYTECODE, which should be a
+     bytevector.  *Note Bytevectors::.
+
+ -- Scheme Variable: load-objcode file
+ -- C Function: scm_load_objcode (file)
+     Load object code from a file named FILE.  The file will be mapped
+     into memory via ‘mmap’, so this is a very fast operation.
+
+     On disk, object code has an sixteen-byte cookie prepended to it, to
+     prevent accidental loading of arbitrary garbage.
+
+ -- Scheme Variable: write-objcode objcode file
+ -- C Function: scm_write_objcode (objcode)
+     Write object code out to a file, prepending the sixteen-byte
+     cookie.
+
+ -- Scheme Variable: objcode->bytecode objcode
+ -- C Function: scm_objcode_to_bytecode (objcode)
+     Copy object code out to a bytevector for analysis by Scheme.
+
+   The following procedure is actually in ‘(system vm program)’, but
+we’ll mention it here:
+
+ -- Scheme Variable: make-program objcode objtable [free-vars=#f]
+ -- C Function: scm_make_program (objcode, objtable, free_vars)
+     Load up object code into a Scheme program.  The resulting program
+     will have OBJTABLE as its object table, which should be a vector or
+     ‘#f’, and will capture the free variables from FREE-VARS.
+
+   Object code from a file may be disassembled at the REPL via the
+meta-command ‘,disassemble-file’, abbreviated as ‘,xx’.  Programs may be
+disassembled via ‘,disassemble’, abbreviated as ‘,x’.
+
+   Compiling object code to the fake language, ‘value’, is performed via
+loading objcode into a program, then executing that thunk with respect
+to the compilation environment.  Normally the environment propagates
+through the compiler transparently, but users may specify the
+compilation environment manually as well, as a module.
+
+File: guile.info,  Node: Writing New High-Level Languages,  Next: Extending the Compiler,  Prev: Bytecode and Objcode,  Up: Compiling to the Virtual Machine
+
+9.4.7 Writing New High-Level Languages
+--------------------------------------
+
+In order to integrate a new language LANG into Guile’s compiler system,
+one has to create the module ‘(language LANG spec)’ containing the
+language definition and referencing the parser, compiler and other
+routines processing it.  The module hierarchy in ‘(language brainfuck)’
+defines a very basic Brainfuck implementation meant to serve as
+easy-to-understand example on how to do this.  See for instance
+<http://en.wikipedia.org/wiki/Brainfuck> for more information about the
+Brainfuck language itself.
+
+File: guile.info,  Node: Extending the Compiler,  Prev: Writing New High-Level Languages,  Up: Compiling to the Virtual Machine
+
+9.4.8 Extending the Compiler
+----------------------------
+
+At this point we take a detour from the impersonal tone of the rest of
+the manual.  Admit it: if you’ve read this far into the compiler
+internals manual, you are a junkie.  Perhaps a course at your university
+left you unsated, or perhaps you’ve always harbored a desire to hack the
+holy of computer science holies: a compiler.  Well you’re in good
+company, and in a good position.  Guile’s compiler needs your help.
+
+   There are many possible avenues for improving Guile’s compiler.
+Probably the most important improvement, speed-wise, will be some form
+of native compilation, both just-in-time and ahead-of-time.  This could
+be done in many ways.  Probably the easiest strategy would be to extend
+the compiled procedure structure to include a pointer to a native code
+vector, and compile from bytecode to native code at run-time after a
+procedure is called a certain number of times.
+
+   The name of the game is a profiling-based harvest of the low-hanging
+fruit, running programs of interest under a system-level profiler and
+determining which improvements would give the most bang for the buck.
+It’s really getting to the point though that native compilation is the
+next step.
+
+   The compiler also needs help at the top end, enhancing the Scheme
+that it knows to also understand R6RS, and adding new high-level
+compilers.  We have JavaScript and Emacs Lisp mostly complete, but they
+could use some love; Lua would be nice as well, but whatever language it
+is that strikes your fancy would be welcome too.
+
+   Compilers are for hacking, not for admiring or for complaining about.
+Get to it!
+
+File: guile.info,  Node: GNU Free Documentation License,  Next: Concept Index,  Prev: Guile Implementation,  Up: Top
+

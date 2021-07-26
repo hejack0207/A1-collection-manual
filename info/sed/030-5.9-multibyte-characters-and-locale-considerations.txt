@@ -1,0 +1,151 @@
+5.9 Multibyte characters and Locale Considerations
+==================================================
+
+GNU 'sed' processes valid multibyte characters in multibyte locales
+(e.g.  'UTF-8').  (1)
+
+The following example uses the Greek letter Capital Sigma (U+03A3,
+Unicode code point '0x03A3').  In a 'UTF-8' locale, 'sed' correctly
+processes the Sigma as one character despite it being 2 octets (bytes):
+
+     $ locale | grep LANG
+     LANG=en_US.UTF-8
+
+     $ printf 'a\u03A3b'
+     aU+03A3b
+
+     $ printf 'a\u03A3b' | sed 's/./X/g'
+     XXX
+
+     $ printf 'a\u03A3b' | od -tx1 -An
+      61 ce a3 62
+
+To force 'sed' to process octets separately, use the 'C' locale (also
+known as the 'POSIX' locale):
+
+     $ printf 'a\u03A3b' | LC_ALL=C sed 's/./X/g'
+     XXXX
+
+5.9.1 Invalid multibyte characters
+----------------------------------
+
+'sed''s regular expressions _do not_ match invalid multibyte sequences
+in a multibyte locale.
+
+In the following examples, the ascii value '0xCE' is an incomplete
+multibyte character (shown here as U+FFFD). The regular expression '.'
+does not match it:
+
+     $ printf 'a\xCEb\n'
+     aU+FFFDe
+
+     $ printf 'a\xCEb\n' | sed 's/./X/g'
+     XU+FFFDX
+
+     $ printf 'a\xCEc\n' | sed 's/./X/g' | od -tx1c -An
+       58  ce  58  0a
+        X      X   \n
+
+Similarly, the 'catch-all' regular expression '.*' does not match the
+entire line:
+
+     $ printf 'a\xCEc\n' | sed 's/.*//' | od -tx1c -An
+       ce  63  0a
+            c  \n
+
+GNU 'sed' offers the special 'z' command to clear the current pattern
+space regardless of invalid multibyte characters (i.e.  it works like
+'s/.*//' but also removes invalid multibyte characters):
+
+     $ printf 'a\xCEc\n' | sed 'z' | od -tx1c -An
+        0a
+        \n
+
+Alternatively, force the 'C' locale to process each octet separately
+(every octet is a valid character in the 'C' locale):
+
+     $ printf 'a\xCEc\n' | LC_ALL=C sed 's/.*//' | od -tx1c -An
+       0a
+       \n
+
+   'sed''s inability to process invalid multibyte characters can be used
+to detect such invalid sequences in a file.  In the following examples,
+the '\xCE\xCE' is an invalid multibyte sequence, while '\xCE\A3' is a
+valid multibyte sequence (of the Greek Sigma character).
+
+The following 'sed' program removes all valid characters using 's/.//g'.
+Any content left in the pattern space (the invalid characters) are added
+to the hold space using the 'H' command.  On the last line ('$'), the
+hold space is retrieved ('x'), newlines are removed ('s/\n//g'), and any
+remaining octets are printed unambiguously ('l').  Thus, any invalid
+multibyte sequences are printed as octal values:
+
+     $ printf 'ab\nc\n\xCE\xCEde\n\xCE\xA3f\n' > invalid.txt
+
+     $ cat invalid.txt
+     ab
+     c
+     U+FFFDU+FFFDde
+     U+03A3f
+
+     $ sed -n 's/.//g ; H ; ${x;s/\n//g;l}' invalid.txt
+     \316\316$
+
+With a few more commands, 'sed' can print the exact line number
+corresponding to each invalid characters (line 3).  These characters can
+then be removed by forcing the 'C' locale and using octal escape
+sequences:
+
+     $ sed -n 's/.//g;=;l' invalid.txt | paste - -  | awk '$2!="$"'
+     3       \316\316$
+
+     $ LC_ALL=C sed '3s/\o316\o316//' invalid.txt > fixed.txt
+
+5.9.2 Upper/Lower case conversion
+---------------------------------
+
+GNU 'sed''s substitute command ('s') supports upper/lower case
+conversions using '\U','\L' codes.  These conversions support multibyte
+characters:
+
+     $ printf 'ABC\u03a3\n'
+     ABCU+03A3
+
+     $ printf 'ABC\u03a3\n' | sed 's/.*/\L&/'
+     abcU+03C3
+
+*Note The "s" Command::.
+
+5.9.3 Multibyte regexp character classes
+----------------------------------------
+
+In other locales, the sorting sequence is not specified, and '[a-d]'
+might be equivalent to '[abcd]' or to '[aBbCcDd]', or it might fail to
+match any character, or the set of characters that it matches might even
+be erratic.  To obtain the traditional interpretation of bracket
+expressions, you can use the 'C' locale by setting the 'LC_ALL'
+environment variable to the value 'C'.
+
+     # TODO: is there any real-world system/locale where 'A'
+     #       is replaced by '-' ?
+     $ echo A | sed 's/[a-z]/-/'
+     A
+
+   Their interpretation depends on the 'LC_CTYPE' locale; for example,
+'[[:alnum:]]' means the character class of numbers and letters in the
+current locale.
+
+   TODO: show example of collation
+
+     # TODO: this works on glibc systems, not on musl-libc/freebsd/macosx.
+     $ printf 'cliché\n' | LC_ALL=fr_FR.utf8 sed 's/[[=e=]]/X/g'
+     clichX
+
+   ---------- Footnotes ----------
+
+   (1) Some regexp edge-cases depends on the operating system and libc
+implementation.  The examples shown are known to work as-expected on
+GNU/Linux systems using glibc.
+
+File: sed.info,  Node: advanced sed,  Next: Examples,  Prev: sed regular expressions,  Up: Top
+

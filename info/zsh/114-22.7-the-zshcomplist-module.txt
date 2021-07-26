@@ -1,0 +1,394 @@
+22.7 The zsh/complist Module
+============================
+
+
+   The zsh/complist module offers three extensions to completion
+listings: the ability to highlight matches in such a list, the ability
+to scroll through long lists and a different style of menu completion.
+
+
+22.7.1 Colored completion listings
+----------------------------------
+
+Whenever one of the parameters ZLS_COLORS or ZLS_COLOURS is set and the
+zsh/complist module is loaded or linked into the shell, completion lists
+will be colored.  Note, however, that complist will not automatically be
+loaded if it is not linked in: on systems with dynamic loading,
+'zmodload zsh/complist' is required.
+
+The parameters ZLS_COLORS and ZLS_COLOURS describe how matches are
+highlighted.  To turn on highlighting an empty value suffices, in which
+case all the default values given below will be used.  The format of the
+value of these parameters is the same as used by the GNU version of the
+ls command: a colon-separated list of specifications of the form
+'NAME=VALUE'.  The NAME may be one of the following strings, most of
+which specify file types for which the VALUE will be used.  The strings
+and their default values are:
+
+no 0
+     for normal text (i.e.  when displaying something other than a
+     matched file)
+
+fi 0
+     for regular files
+
+di 32
+     for directories
+
+ln 36
+     for symbolic links.  If this has the special value target, symbolic
+     links are dereferenced and the target file used to determine the
+     display format.
+
+pi 31
+     for named pipes (FIFOs)
+
+so 33
+     for sockets
+
+bd 44;37
+     for block devices
+
+cd 44;37
+     for character devices
+
+or NONE
+     for a symlink to nonexistent file (default is the value defined for
+     ln)
+
+mi NONE
+     for a non-existent file (default is the value defined for fi); this
+     code is currently not used
+
+su 37;41
+     for files with setuid bit set
+
+sg 30;43
+     for files with setgid bit set
+
+tw 30;42
+     for world writable directories with sticky bit set
+
+ow 34;43
+     for world writable directories without sticky bit set
+
+sa NONE
+     for files with an associated suffix alias; this is only tested
+     after specific suffixes, as described below
+
+st 37;44
+     for directories with sticky bit set but not world writable
+
+ex 35
+     for executable files
+
+lc \e[
+     for the left code (see below)
+
+rc m
+     for the right code
+
+tc 0
+     for the character indicating the file type printed after filenames
+     if the LIST_TYPES option is set
+
+sp 0
+     for the spaces printed after matches to align the next column
+
+ec NONE
+     for the end code
+
+Apart from these strings, the NAME may also be an asterisk ('*')
+followed by any string.  The VALUE given for such a string will be used
+for all files whose name ends with the string.  The NAME may also be an
+equals sign ('=') followed by a pattern; the EXTENDED_GLOB option will
+be turned on for evaluation of the pattern.  The VALUE given for this
+pattern will be used for all matches (not just filenames) whose display
+string are matched by the pattern.  Definitions for the form with the
+leading equal sign take precedence over the values defined for file
+types, which in turn take precedence over the form with the leading
+asterisk (file extensions).
+
+The leading-equals form also allows different parts of the displayed
+strings to be colored differently.  For this, the pattern has to use the
+'(#b)' globbing flag and pairs of parentheses surrounding the parts of
+the strings that are to be colored differently.  In this case the VALUE
+may consist of more than one color code separated by equal signs.  The
+first code will be used for all parts for which no explicit code is
+specified and the following codes will be used for the parts matched by
+the sub-patterns in parentheses.  For example, the specification
+'=(#b)(?)*(?)=0=3=7' will be used for all matches which are at least two
+characters long and will use the code '3' for the first character, '7'
+for the last character and '0' for the rest.
+
+All three forms of NAME may be preceded by a pattern in parentheses.  If
+this is given, the VALUE will be used only for matches in groups whose
+names are matched by the pattern given in the parentheses.  For example,
+'(g*)m*=43' highlights all matches beginning with 'm' in groups whose
+names begin with 'g' using the color code '43'.  In case of the 'lc',
+'rc', and 'ec' codes, the group pattern is ignored.
+
+Note also that all patterns are tried in the order in which they appear
+in the parameter value until the first one matches which is then used.
+Patterns may be matched against completions, descriptions (possibly with
+spaces appended for padding), or lines consisting of a completion
+followed by a description.  For consistent coloring it may be necessary
+to use more than one pattern or a pattern with backreferences.
+
+When printing a match, the code prints the value of lc, the value for
+the file-type or the last matching specification with a '*', the value
+of rc, the string to display for the match itself, and then the value of
+ec if that is defined or the values of lc, no, and rc if ec is not
+defined.
+
+The default values are ISO 6429 (ANSI) compliant and can be used on
+vt100 compatible terminals such as xterms.  On monochrome terminals the
+default values will have no visible effect.  The colors function from
+the contribution can be used to get associative arrays containing the
+codes for ANSI terminals (see *note Other Functions::).  For example,
+after loading colors, one could use '$color[red]' to get the code for
+foreground color red and '$color[bg-green]' for the code for background
+color green.
+
+If the completion system invoked by compinit is used, these parameters
+should not be set directly because the system controls them itself.
+Instead, the list-colors style should be used (see *note Completion
+System Configuration::).
+
+
+22.7.2 Scrolling in completion listings
+---------------------------------------
+
+To enable scrolling through a completion list, the LISTPROMPT parameter
+must be set.  Its value will be used as the prompt; if it is the empty
+string, a default prompt will be used.  The value may contain escapes of
+the form '%x'.  It supports the escapes '%B', '%b', '%S', '%s', '%U',
+'%u', '%F', '%f', '%K', '%k' and '%{...%}' used also in shell prompts as
+well as three pairs of additional sequences: a '%l' or '%L' is replaced
+by the number of the last line shown and the total number of lines in
+the form 'NUMBER/TOTAL'; a '%m' or '%M' is replaced with the number of
+the last match shown and the total number of matches; and '%p' or '%P'
+is replaced with 'Top', 'Bottom' or the position of the first line shown
+in percent of the total number of lines, respectively.  In each of these
+cases the form with the uppercase letter will be replaced with a string
+of fixed width, padded to the right with spaces, while the lowercase
+form will not be padded.
+
+If the parameter LISTPROMPT is set, the completion code will not ask if
+the list should be shown.  Instead it immediately starts displaying the
+list, stopping after the first screenful, showing the prompt at the
+bottom, waiting for a keypress after temporarily switching to the
+listscroll keymap.  Some of the zle functions have a special meaning
+while scrolling lists:
+
+send-break
+     stops listing discarding the key pressed
+
+accept-line, down-history, down-line-or-history
+down-line-or-search, vi-down-line-or-history
+     scrolls forward one line
+
+complete-word, menu-complete, expand-or-complete
+expand-or-complete-prefix, menu-complete-or-expand
+     scrolls forward one screenful
+
+accept-search
+     stop listing but take no other action
+
+Every other character stops listing and immediately processes the key as
+usual.  Any key that is not bound in the listscroll keymap or that is
+bound to undefined-key is looked up in the keymap currently selected.
+
+As for the ZLS_COLORS and ZLS_COLOURS parameters, LISTPROMPT should not
+be set directly when using the shell function based completion system.
+Instead, the list-prompt style should be used.
+
+
+22.7.3 Menu selection
+---------------------
+
+The zsh/complist module also offers an alternative style of selecting
+matches from a list, called menu selection, which can be used if the
+shell is set up to return to the last prompt after showing a completion
+list (see the ALWAYS_LAST_PROMPT option in *note Options::).
+
+Menu selection can be invoked directly by the widget menu-select defined
+by this module.  This is a standard ZLE widget that can be bound to a
+key in the usual way as described in *note Zsh Line Editor::.
+
+Alternatively, the parameter MENUSELECT can be set to an integer, which
+gives the minimum number of matches that must be present before menu
+selection is automatically turned on.  This second method requires that
+menu completion be started, either directly from a widget such as
+menu-complete, or due to one of the options MENU_COMPLETE or AUTO_MENU
+being set.  If MENUSELECT is set, but is 0, 1 or empty, menu selection
+will always be started during an ambiguous menu completion.
+
+When using the completion system based on shell functions, the
+MENUSELECT parameter should not be used (like the ZLS_COLORS and
+ZLS_COLOURS parameters described above).  Instead, the menu style should
+be used with the select=... keyword.
+
+After menu selection is started, the matches will be listed.  If there
+are more matches than fit on the screen, only the first screenful is
+shown.  The matches to insert into the command line can be selected from
+this list.  In the list one match is highlighted using the value for ma
+from the ZLS_COLORS or ZLS_COLOURS parameter.  The default value for
+this is '7' which forces the selected match to be highlighted using
+standout mode on a vt100-compatible terminal.  If neither ZLS_COLORS nor
+ZLS_COLOURS is set, the same terminal control sequence as for the '%S'
+escape in prompts is used.
+
+If there are more matches than fit on the screen and the parameter
+MENUPROMPT is set, its value will be shown below the matches.  It
+supports the same escape sequences as LISTPROMPT, but the number of the
+match or line shown will be that of the one where the mark is placed.
+If its value is the empty string, a default prompt will be used.
+
+The MENUSCROLL parameter can be used to specify how the list is
+scrolled.  If the parameter is unset, this is done line by line, if it
+is set to '0' (zero), the list will scroll half the number of lines of
+the screen.  If the value is positive, it gives the number of lines to
+scroll and if it is negative, the list will be scrolled the number of
+lines of the screen minus the (absolute) value.
+
+As for the ZLS_COLORS, ZLS_COLOURS and LISTPROMPT parameters, neither
+MENUPROMPT nor MENUSCROLL should be set directly when using the shell
+function based completion system.  Instead, the select-prompt and
+select-scroll styles should be used.
+
+The completion code sometimes decides not to show all of the matches in
+the list.  These hidden matches are either matches for which the
+completion function which added them explicitly requested that they not
+appear in the list (using the -n option of the compadd builtin command)
+or they are matches which duplicate a string already in the list
+(because they differ only in things like prefixes or suffixes that are
+not displayed).  In the list used for menu selection, however, even
+these matches are shown so that it is possible to select them.  To
+highlight such matches the hi and du capabilities in the ZLS_COLORS and
+ZLS_COLOURS parameters are supported for hidden matches of the first and
+second kind, respectively.
+
+Selecting matches is done by moving the mark around using the zle
+movement functions.  When not all matches can be shown on the screen at
+the same time, the list will scroll up and down when crossing the top or
+bottom line.  The following zle functions have special meaning during
+menu selection.  Note that the following always perform the same task
+within the menu selection map and cannot be replaced by user defined
+widgets, nor can the set of functions be extended:
+
+accept-line, accept-search
+     accept the current match and leave menu selection (but do not cause
+     the command line to be accepted)
+
+send-break
+     leaves menu selection and restores the previous contents of the
+     command line
+
+redisplay, clear-screen
+     execute their normal function without leaving menu selection
+
+accept-and-hold, accept-and-menu-complete
+     accept the currently inserted match and continue selection allowing
+     to select the next match to insert into the line
+
+accept-and-infer-next-history
+     accepts the current match and then tries completion with menu
+     selection again; in the case of files this allows one to select a
+     directory and immediately attempt to complete files in it; if there
+     are no matches, a message is shown and one can use undo to go back
+     to completion on the previous level, every other key leaves menu
+     selection (including the other zle functions which are otherwise
+     special during menu selection)
+
+undo
+     removes matches inserted during the menu selection by one of the
+     three functions before
+
+down-history, down-line-or-history
+vi-down-line-or-history, down-line-or-search
+     moves the mark one line down
+
+up-history, up-line-or-history
+vi-up-line-or-history, up-line-or-search
+     moves the mark one line up
+
+forward-char, vi-forward-char
+     moves the mark one column right
+
+backward-char, vi-backward-char
+     moves the mark one column left
+
+forward-word, vi-forward-word
+vi-forward-word-end, emacs-forward-word
+     moves the mark one screenful down
+
+backward-word, vi-backward-word, emacs-backward-word
+     moves the mark one screenful up
+
+vi-forward-blank-word, vi-forward-blank-word-end
+     moves the mark to the first line of the next group of matches
+
+vi-backward-blank-word
+     moves the mark to the last line of the previous group of matches
+
+beginning-of-history
+     moves the mark to the first line
+
+end-of-history
+     moves the mark to the last line
+
+beginning-of-buffer-or-history, beginning-of-line
+beginning-of-line-hist, vi-beginning-of-line
+     moves the mark to the leftmost column
+
+end-of-buffer-or-history, end-of-line
+end-of-line-hist, vi-end-of-line
+     moves the mark to the rightmost column
+
+complete-word, menu-complete, expand-or-complete
+expand-or-complete-prefix, menu-expand-or-complete
+     moves the mark to the next match
+
+reverse-menu-complete
+     moves the mark to the previous match
+
+vi-insert
+     this toggles between normal and interactive mode; in interactive
+     mode the keys bound to self-insert and self-insert-unmeta insert
+     into the command line as in normal editing mode but without leaving
+     menu selection; after each character completion is tried again and
+     the list changes to contain only the new matches; the completion
+     widgets make the longest unambiguous string be inserted in the
+     command line and undo and backward-delete-char go back to the
+     previous set of matches
+
+history-incremental-search-forward
+history-incremental-search-backward
+     this starts incremental searches in the list of completions
+     displayed; in this mode, accept-line only leaves incremental
+     search, going back to the normal menu selection mode
+
+All movement functions wrap around at the edges; any other zle function
+not listed leaves menu selection and executes that function.  It is
+possible to make widgets in the above list do the same by using the form
+of the widget with a '.' in front.  For example, the widget
+'.accept-line' has the effect of leaving menu selection and accepting
+the entire command line.
+
+During this selection the widget uses the keymap menuselect.  Any key
+that is not defined in this keymap or that is bound to undefined-key is
+looked up in the keymap currently selected.  This is used to ensure that
+the most important keys used during selection (namely the cursor keys,
+return, and TAB) have sensible defaults.  However, keys in the
+menuselect keymap can be modified directly using the bindkey builtin
+command (see *note The zsh/zle Module::).  For example, to make the
+return key leave menu selection without accepting the match currently
+selected one could call
+
+     bindkey -M menuselect '^M' send-break
+
+after loading the zsh/complist module.
+
+File: zsh.info,  Node: The zsh/computil Module,  Next: The zsh/curses Module,  Prev: The zsh/complist Module,  Up: Zsh Modules
+

@@ -1,0 +1,441 @@
+8.6 Methods and Generic Functions
+=================================
+
+A GOOPS method is like a Scheme procedure except that it is specialized
+for a particular set of argument classes, and will only be used when the
+actual arguments in a call match the classes in the method definition.
+
+     (define-method (+ (x <string>) (y <string>))
+       (string-append x y))
+
+     (+ "abc" "de") ⇒ "abcde"
+
+   A method is not formally associated with any single class (as it is
+in many other object oriented languages), because a method can be
+specialized for a combination of several classes.  If you’ve studied
+object orientation in non-Lispy languages, you may remember discussions
+such as whether a method to stretch a graphical image around a surface
+should be a method of the image class, with a surface as a parameter, or
+a method of the surface class, with an image as a parameter.  In GOOPS
+you’d just write
+
+     (define-method (stretch (im <image>) (sf <surface>))
+       ...)
+
+and the question of which class the method is more associated with does
+not need answering.
+
+   There can simultaneously be several methods with the same name but
+different sets of specializing argument classes; for example:
+
+     (define-method (+ (x <string>) (y <string)) ...)
+     (define-method (+ (x <matrix>) (y <matrix>)) ...)
+     (define-method (+ (f <fish>) (b <bicycle>)) ...)
+     (define-method (+ (a <foo>) (b <bar>) (c <baz>)) ...)
+
+A generic function is a container for the set of such methods that a
+program intends to use.
+
+   If you look at a program’s source code, and see ‘(+ x y)’ somewhere
+in it, conceptually what is happening is that the program at that point
+calls a generic function (in this case, the generic function bound to
+the identifier ‘+’).  When that happens, Guile works out which of the
+generic function’s methods is the most appropriate for the arguments
+that the function is being called with; then it evaluates the method’s
+code with the arguments as formal parameters.  This happens every time
+that a generic function call is evaluated — it isn’t assumed that a
+given source code call will end up invoking the same method every time.
+
+   Defining an identifier as a generic function is done with the
+‘define-generic’ macro.  Definition of a new method is done with the
+‘define-method’ macro.  Note that ‘define-method’ automatically does a
+‘define-generic’ if the identifier concerned is not already a generic
+function, so often an explicit ‘define-generic’ call is not needed.
+
+ -- syntax: define-generic symbol
+     Create a generic function with name SYMBOL and bind it to the
+     variable SYMBOL.  If SYMBOL was previously bound to a Scheme
+     procedure (or procedure-with-setter), the old procedure (and
+     setter) is incorporated into the new generic function as its
+     default procedure (and setter).  Any other previous value,
+     including an existing generic function, is discarded and replaced
+     by a new, empty generic function.
+
+ -- syntax: define-method (generic parameter ...) body ...
+     Define a method for the generic function or accessor GENERIC with
+     parameters PARAMETERs and body BODY ....
+
+     GENERIC is a generic function.  If GENERIC is a variable which is
+     not yet bound to a generic function object, the expansion of
+     ‘define-method’ will include a call to ‘define-generic’.  If
+     GENERIC is ‘(setter GENERIC-WITH-SETTER)’, where
+     GENERIC-WITH-SETTER is a variable which is not yet bound to a
+     generic-with-setter object, the expansion will include a call to
+     ‘define-accessor’.
+
+     Each PARAMETER must be either a symbol or a two-element list
+     ‘(SYMBOL CLASS)’.  The symbols refer to variables in the body forms
+     that will be bound to the parameters supplied by the caller when
+     calling this method.  The CLASSes, if present, specify the possible
+     combinations of parameters to which this method can be applied.
+
+     BODY ... are the bodies of the method definition.
+
+   ‘define-method’ expressions look a little like Scheme procedure
+definitions of the form
+
+     (define (name formals ...) . body)
+
+   The important difference is that each formal parameter, apart from
+the possible “rest” argument, can be qualified by a class name: ‘FORMAL’
+becomes ‘(FORMAL CLASS)’.  The meaning of this qualification is that the
+method being defined will only be applicable in a particular generic
+function invocation if the corresponding argument is an instance of
+‘CLASS’ (or one of its subclasses).  If more than one of the formal
+parameters is qualified in this way, then the method will only be
+applicable if each of the corresponding arguments is an instance of its
+respective qualifying class.
+
+   Note that unqualified formal parameters act as though they are
+qualified by the class ‘<top>’, which GOOPS uses to mean the superclass
+of all valid Scheme types, including both primitive types and GOOPS
+classes.
+
+   For example, if a generic function method is defined with PARAMETERs
+‘(s1 <square>)’ and ‘(n <number>)’, that method is only applicable to
+invocations of its generic function that have two parameters where the
+first parameter is an instance of the ‘<square>’ class and the second
+parameter is a number.
+
+* Menu:
+
+* Accessors::
+* Extending Primitives::
+* Merging Generics::
+* Next-method::                 
+* Generic Function and Method Examples::                     
+* Handling Invocation Errors::
+
+File: guile.info,  Node: Accessors,  Next: Extending Primitives,  Up: Methods and Generic Functions
+
+8.6.1 Accessors
+---------------
+
+An accessor is a generic function that can also be used with the
+generalized ‘set!’ syntax (*note Procedures with Setters::).  Guile will
+handle a call like
+
+     (set! (accessor args...) value)
+
+by calling the most specialized method of ‘accessor’ that matches the
+classes of ‘args’ and ‘value’.  ‘define-accessor’ is used to bind an
+identifier to an accessor.
+
+ -- syntax: define-accessor symbol
+     Create an accessor with name SYMBOL and bind it to the variable
+     SYMBOL.  If SYMBOL was previously bound to a Scheme procedure (or
+     procedure-with-setter), the old procedure (and setter) is
+     incorporated into the new accessor as its default procedure (and
+     setter).  Any other previous value, including an existing generic
+     function or accessor, is discarded and replaced by a new, empty
+     accessor.
+
+File: guile.info,  Node: Extending Primitives,  Next: Merging Generics,  Prev: Accessors,  Up: Methods and Generic Functions
+
+8.6.2 Extending Primitives
+--------------------------
+
+Many of Guile’s primitive procedures can be extended by giving them a
+generic function definition that operates in conjunction with their
+normal C-coded implementation.  When a primitive is extended in this
+way, it behaves like a generic function with the C-coded implementation
+as its default method.
+
+   This extension happens automatically if a method is defined (by a
+‘define-method’ call) for a variable whose current value is a primitive.
+But it can also be forced by calling ‘enable-primitive-generic!’.
+
+ -- primitive procedure: enable-primitive-generic! primitive
+     Force the creation of a generic function definition for PRIMITIVE.
+
+   Once the generic function definition for a primitive has been
+created, it can be retrieved using ‘primitive-generic-generic’.
+
+ -- primitive procedure: primitive-generic-generic primitive
+     Return the generic function definition of PRIMITIVE.
+
+     ‘primitive-generic-generic’ raises an error if PRIMITIVE is not a
+     primitive with generic capability.
+
+File: guile.info,  Node: Merging Generics,  Next: Next-method,  Prev: Extending Primitives,  Up: Methods and Generic Functions
+
+8.6.3 Merging Generics
+----------------------
+
+GOOPS generic functions and accessors often have short, generic names.
+For example, if a vector package provides an accessor for the X
+coordinate of a vector, that accessor may just be called ‘x’.  It
+doesn’t need to be called, for example, ‘vector:x’, because GOOPS will
+work out, when it sees code like ‘(x OBJ)’, that the vector-specific
+method of ‘x’ should be called if OBJ is a vector.
+
+   That raises the question, though, of what happens when different
+packages define a generic function with the same name.  Suppose we work
+with a graphical package which needs to use two independent vector
+packages for 2D and 3D vectors respectively.  If both packages export
+‘x’, what does the code using those packages end up with?
+
+   *note duplicate binding handlers: Creating Guile Modules. explains
+how this is resolved for conflicting bindings in general.  For generics,
+there is a special duplicates handler, ‘merge-generics’, which tells the
+module system to merge generic functions with the same name.  Here is an
+example:
+
+     (define-module (math 2D-vectors)
+       #:use-module (oop goops)
+       #:export (x y ...))
+
+     (define-module (math 3D-vectors)
+       #:use-module (oop goops)
+       #:export (x y z ...))
+
+     (define-module (my-module)
+       #:use-module (oop goops)
+       #:use-module (math 2D-vectors)
+       #:use-module (math 3D-vectors)
+       #:duplicates (merge-generics))
+
+   The generic function ‘x’ in ‘(my-module)’ will now incorporate all of
+the methods of ‘x’ from both imported modules.
+
+   To be precise, there will now be three distinct generic functions
+named ‘x’: ‘x’ in ‘(math 2D-vectors)’, ‘x’ in ‘(math 3D-vectors)’, and
+‘x’ in ‘(my-module)’; and these functions share their methods in an
+interesting and dynamic way.
+
+   To explain, let’s call the imported generic functions (in ‘(math
+2D-vectors)’ and ‘(math 3D-vectors)’) the “ancestors”, and the merged
+generic function (in ‘(my-module)’), the “descendant”.  The general rule
+is that for any generic function G, the applicable methods are selected
+from the union of the methods of G’s descendant functions, the methods
+of G itself and the methods of G’s ancestor functions.
+
+   Thus ancestor functions effectively share methods with their
+descendants, and vice versa.  In the example above, ‘x’ in ‘(math
+2D-vectors)’ will share the methods of ‘x’ in ‘(my-module)’ and vice
+versa.(1)  Sharing is dynamic, so adding another new method to a
+descendant implies adding it to that descendant’s ancestors too.
+
+   ---------- Footnotes ----------
+
+   (1) But note that ‘x’ in ‘(math 2D-vectors)’ doesn’t share methods
+with ‘x’ in ‘(math 3D-vectors)’, so modularity is still preserved.
+
+File: guile.info,  Node: Next-method,  Next: Generic Function and Method Examples,  Prev: Merging Generics,  Up: Methods and Generic Functions
+
+8.6.4 Next-method
+-----------------
+
+When you call a generic function, with a particular set of arguments,
+GOOPS builds a list of all the methods that are applicable to those
+arguments and orders them by how closely the method definitions match
+the actual argument types.  It then calls the method at the top of this
+list.  If the selected method’s code wants to call on to the next method
+in this list, it can do so by using ‘next-method’.
+
+     (define-method (Test (a <integer>)) (cons 'integer (next-method)))
+     (define-method (Test (a <number>))  (cons 'number  (next-method)))
+     (define-method (Test a)             (list 'top))
+
+   With these definitions,
+
+     (Test 1)   ⇒ (integer number top)
+     (Test 1.0) ⇒ (number top)
+     (Test #t)  ⇒ (top)
+
+   ‘next-method’ is always called as just ‘(next-method)’.  The
+arguments for the next method call are always implicit, and always the
+same as for the original method call.
+
+   If you want to call on to a method with the same name but with a
+different set of arguments (as you might with overloaded methods in C++,
+for example), you do not use ‘next-method’, but instead simply write the
+new call as usual:
+
+     (define-method (Test (a <number>) min max)
+       (if (and (>= a min) (<= a max))
+           (display "Number is in range\n"))
+       (Test a))
+
+     (Test 2 1 10)
+     ⊣
+     Number is in range
+     ⇒
+     (integer number top)
+
+   (You should be careful in this case that the ‘Test’ calls do not lead
+to an infinite recursion, but this consideration is just the same as in
+Scheme code in general.)
+
+File: guile.info,  Node: Generic Function and Method Examples,  Next: Handling Invocation Errors,  Prev: Next-method,  Up: Methods and Generic Functions
+
+8.6.5 Generic Function and Method Examples
+------------------------------------------
+
+Consider the following definitions:
+
+     (define-generic G)
+     (define-method (G (a <integer>) b) 'integer)
+     (define-method (G (a <real>) b) 'real)
+     (define-method (G a b) 'top)
+
+   The ‘define-generic’ call defines G as a generic function.  The three
+next lines define methods for G.  Each method uses a sequence of
+“parameter specializers” that specify when the given method is
+applicable.  A specializer permits to indicate the class a parameter
+must belong to (directly or indirectly) to be applicable.  If no
+specializer is given, the system defaults it to ‘<top>’.  Thus, the
+first method definition is equivalent to
+
+     (define-method (G (a <integer>) (b <top>)) 'integer)
+
+   Now, let’s look at some possible calls to the generic function G:
+
+     (G 2 3)    ⇒ integer
+     (G 2 #t)   ⇒ integer
+     (G 1.2 'a) ⇒ real
+     (G #t #f)  ⇒ top
+     (G 1 2 3)  ⇒ error (since no method exists for 3 parameters)
+
+   The methods above use only one specializer per parameter list.  But
+in general, any or all of a method’s parameters may be specialized.
+Suppose we define now:
+
+     (define-method (G (a <integer>) (b <number>))  'integer-number)
+     (define-method (G (a <integer>) (b <real>))    'integer-real)
+     (define-method (G (a <integer>) (b <integer>)) 'integer-integer)
+     (define-method (G a (b <number>))              'top-number)
+
+With these definitions:
+
+     (G 1 2)   ⇒ integer-integer
+     (G 1 1.0) ⇒ integer-real
+     (G 1 #t)  ⇒ integer
+     (G 'a 1)  ⇒ top-number
+
+   As a further example we shall continue to define operations on the
+‘<my-complex>’ class.  Suppose that we want to use it to implement
+complex numbers completely.  For instance a definition for the addition
+of two complex numbers could be
+
+     (define-method (new-+ (a <my-complex>) (b <my-complex>))
+       (make-rectangular (+ (real-part a) (real-part b))
+                         (+ (imag-part a) (imag-part b))))
+
+   To be sure that the ‘+’ used in the method ‘new-+’ is the standard
+addition we can do:
+
+     (define-generic new-+)
+
+     (let ((+ +))
+       (define-method (new-+ (a <my-complex>) (b <my-complex>))
+         (make-rectangular (+ (real-part a) (real-part b))
+                           (+ (imag-part a) (imag-part b)))))
+
+   The ‘define-generic’ ensures here that ‘new-+’ will be defined in the
+global environment.  Once this is done, we can add methods to the
+generic function ‘new-+’ which make a closure on the ‘+’ symbol.  A
+complete writing of the ‘new-+’ methods is shown in *note Figure 8.1:
+fig:newplus.
+
+     (define-generic new-+)
+
+     (let ((+ +))
+
+       (define-method (new-+ (a <real>) (b <real>)) (+ a b))
+
+       (define-method (new-+ (a <real>) (b <my-complex>))
+         (make-rectangular (+ a (real-part b)) (imag-part b)))
+
+       (define-method (new-+ (a <my-complex>) (b <real>))
+         (make-rectangular (+ (real-part a) b) (imag-part a)))
+
+       (define-method (new-+ (a <my-complex>) (b <my-complex>))
+         (make-rectangular (+ (real-part a) (real-part b))
+                           (+ (imag-part a) (imag-part b))))
+
+       (define-method (new-+ (a <number>))  a)
+
+       (define-method (new-+) 0)
+
+       (define-method (new-+ . args)
+         (new-+ (car args)
+           (apply new-+ (cdr args)))))
+
+     (set! + new-+)
+
+Figure 8.1: Extending ‘+’ to handle complex numbers
+
+   We take advantage here of the fact that generic function are not
+obliged to have a fixed number of parameters.  The four first methods
+implement dyadic addition.  The fifth method says that the addition of a
+single element is this element itself.  The sixth method says that using
+the addition with no parameter always return 0 (as is also true for the
+primitive ‘+’).  The last method takes an arbitrary number of
+parameters(1).  This method acts as a kind of ‘reduce’: it calls the
+dyadic addition on the _car_ of the list and on the result of applying
+it on its rest.  To finish, the ‘set!’ permits to redefine the ‘+’
+symbol to our extended addition.
+
+   To conclude our implementation (integration?)  of complex numbers, we
+could redefine standard Scheme predicates in the following manner:
+
+     (define-method (complex? c <my-complex>) #t)
+     (define-method (complex? c)           #f)
+
+     (define-method (number? n <number>) #t)
+     (define-method (number? n)          #f)
+     ...
+
+   Standard primitives in which complex numbers are involved could also
+be redefined in the same manner.
+
+   ---------- Footnotes ----------
+
+   (1) The parameter list for a ‘define-method’ follows the conventions
+used for Scheme procedures.  In particular it can use the dot notation
+or a symbol to denote an arbitrary number of parameters
+
+File: guile.info,  Node: Handling Invocation Errors,  Prev: Generic Function and Method Examples,  Up: Methods and Generic Functions
+
+8.6.6 Handling Invocation Errors
+--------------------------------
+
+If a generic function is invoked with a combination of parameters for
+which there is no applicable method, GOOPS raises an error.
+
+ -- generic: no-method
+ -- method: no-method (gf <generic>) args
+     When an application invokes a generic function, and no methods at
+     all have been defined for that generic function, GOOPS calls the
+     ‘no-method’ generic function.  The default method calls
+     ‘goops-error’ with an appropriate message.
+
+ -- generic: no-applicable-method
+ -- method: no-applicable-method (gf <generic>) args
+     When an application applies a generic function to a set of
+     arguments, and no methods have been defined for those argument
+     types, GOOPS calls the ‘no-applicable-method’ generic function.
+     The default method calls ‘goops-error’ with an appropriate message.
+
+ -- generic: no-next-method
+ -- method: no-next-method (gf <generic>) args
+     When a generic function method calls ‘(next-method)’ to invoke the
+     next less specialized method for that generic function, and no less
+     specialized methods have been defined for the current generic
+     function arguments, GOOPS calls the ‘no-next-method’ generic
+     function.  The default method calls ‘goops-error’ with an
+     appropriate message.
+
+File: guile.info,  Node: Inheritance,  Next: Introspection,  Prev: Methods and Generic Functions,  Up: GOOPS
+

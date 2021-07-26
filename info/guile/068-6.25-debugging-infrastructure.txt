@@ -1,0 +1,1264 @@
+6.25 Debugging Infrastructure
+=============================
+
+In order to understand Guile’s debugging facilities, you first need to
+understand a little about how Guile represent the Scheme control stack.
+With that in place we explain the low level trap calls that the virtual
+machine can be configured to make, and the trap and breakpoint
+infrastructure that builds on top of those calls.
+
+* Menu:
+
+* Evaluation Model::            Evaluation and the Scheme stack.
+* Source Properties::           From expressions to source locations.
+* Programmatic Error Handling::  Debugging when an error occurs.
+* Traps::                       Breakpoints, tracepoints, oh my!
+* GDB Support::                 C-level debugging with GDB.
+
+File: guile.info,  Node: Evaluation Model,  Next: Source Properties,  Up: Debugging
+
+6.25.1 Evaluation and the Scheme Stack
+--------------------------------------
+
+The idea of the Scheme stack is central to a lot of debugging.  The
+Scheme stack is a reified representation of the pending function returns
+in an expression’s continuation.  As Guile implements function calls
+using a stack, this reification takes the form of a number of nested
+stack frames, each of which corresponds to the application of a
+procedure to a set of arguments.
+
+   A Scheme stack always exists implicitly, and can be summoned into
+concrete existence as a first-class Scheme value by the ‘make-stack’
+call, so that an introspective Scheme program – such as a debugger – can
+present it in some way and allow the user to query its details.  The
+first thing to understand, therefore, is how Guile’s function call
+convention creates the stack.
+
+   Broadly speaking, Guile represents all control flow on a stack.
+Calling a function involves pushing an empty frame on the stack, then
+evaluating the procedure and its arguments, then fixing up the new frame
+so that it points to the old one.  Frames on the stack are thus linked
+together.  A tail call is the same, except it reuses the existing frame
+instead of pushing on a new one.
+
+   In this way, the only frames that are on the stack are “active”
+frames, frames which need to do some work before the computation is
+complete.  On the other hand, a function that has tail-called another
+function will not be on the stack, as it has no work left to do.
+
+   Therefore, when an error occurs in a running program, or the program
+hits a breakpoint, or in fact at any point that the programmer chooses,
+its state at that point can be represented by a “stack” of all the
+procedure applications that are logically in progress at that time, each
+of which is known as a “frame”.  The programmer can learn more about the
+program’s state at that point by inspecting the stack and its frames.
+
+* Menu:
+
+* Stack Capture::               Reifying a continuation.
+* Stacks::                      Accessors for the stack data type.
+* Frames::                      Likewise, accessors for stack frames.
+
+File: guile.info,  Node: Stack Capture,  Next: Stacks,  Up: Evaluation Model
+
+6.25.1.1 Stack Capture
+......................
+
+A Scheme program can use the ‘make-stack’ primitive anywhere in its
+code, with first arg ‘#t’, to construct a Scheme value that describes
+the Scheme stack at that point.
+
+     (make-stack #t)
+     ⇒
+     #<stack 25205a0>
+
+   Use ‘start-stack’ to limit the stack extent captured by future
+‘make-stack’ calls.
+
+ -- Scheme Procedure: make-stack obj arg ...
+ -- C Function: scm_make_stack (obj, args)
+     Create a new stack.  If OBJ is ‘#t’, the current evaluation stack
+     is used for creating the stack frames, otherwise the frames are
+     taken from OBJ (which must be a continuation or a frame object).
+
+     ARG ... can be any combination of integer, procedure, prompt tag
+     and ‘#t’ values.
+
+     These values specify various ways of cutting away uninteresting
+     stack frames from the top and bottom of the stack that ‘make-stack’
+     returns.  They come in pairs like this: ‘(INNER_CUT_1 OUTER_CUT_1
+     INNER_CUT_2 OUTER_CUT_2 ...)’.
+
+     Each INNER_CUT_I can be ‘#t’, an integer, a prompt tag, or a
+     procedure.  ‘#t’ means to cut away all frames up to but excluding
+     the first user module frame.  An integer means to cut away exactly
+     that number of frames.  A prompt tag means to cut away all frames
+     that are inside a prompt with the given tag.  A procedure means to
+     cut away all frames up to but excluding the application frame whose
+     procedure matches the specified one.
+
+     Each OUTER_CUT_I can be an integer, a prompt tag, or a procedure.
+     An integer means to cut away that number of frames.  A prompt tag
+     means to cut away all frames that are outside a prompt with the
+     given tag.  A procedure means to cut away frames down to but
+     excluding the application frame whose procedure matches the
+     specified one.
+
+     If the OUTER_CUT_I of the last pair is missing, it is taken as 0.
+
+ -- Scheme Syntax: start-stack id exp
+     Evaluate EXP on a new calling stack with identity ID.  If EXP is
+     interrupted during evaluation, backtraces will not display frames
+     farther back than EXP’s top-level form.  This macro is a way of
+     artificially limiting backtraces and stack procedures, largely as a
+     convenience to the user.
+
+File: guile.info,  Node: Stacks,  Next: Frames,  Prev: Stack Capture,  Up: Evaluation Model
+
+6.25.1.2 Stacks
+...............
+
+ -- Scheme Procedure: stack? obj
+ -- C Function: scm_stack_p (obj)
+     Return ‘#t’ if OBJ is a calling stack.
+
+ -- Scheme Procedure: stack-id stack
+ -- C Function: scm_stack_id (stack)
+     Return the identifier given to STACK by ‘start-stack’.
+
+ -- Scheme Procedure: stack-length stack
+ -- C Function: scm_stack_length (stack)
+     Return the length of STACK.
+
+ -- Scheme Procedure: stack-ref stack index
+ -- C Function: scm_stack_ref (stack, index)
+     Return the INDEX’th frame from STACK.
+
+ -- Scheme Procedure: display-backtrace stack port [first [depth
+          [highlights]]]
+ -- C Function: scm_display_backtrace_with_highlights (stack, port,
+          first, depth, highlights)
+ -- C Function: scm_display_backtrace (stack, port, first, depth)
+     Display a backtrace to the output port PORT.  STACK is the stack to
+     take the backtrace from, FIRST specifies where in the stack to
+     start and DEPTH how many frames to display.  FIRST and DEPTH can be
+     ‘#f’, which means that default values will be used.  If HIGHLIGHTS
+     is given it should be a list; the elements of this list will be
+     highlighted wherever they appear in the backtrace.
+
+File: guile.info,  Node: Frames,  Prev: Stacks,  Up: Evaluation Model
+
+6.25.1.3 Frames
+...............
+
+ -- Scheme Procedure: frame? obj
+ -- C Function: scm_frame_p (obj)
+     Return ‘#t’ if OBJ is a stack frame.
+
+ -- Scheme Procedure: frame-previous frame
+ -- C Function: scm_frame_previous (frame)
+     Return the previous frame of FRAME, or ‘#f’ if FRAME is the first
+     frame in its stack.
+
+ -- Scheme Procedure: frame-procedure frame
+ -- C Function: scm_frame_procedure (frame)
+     Return the procedure for FRAME, or ‘#f’ if no procedure is
+     associated with FRAME.
+
+ -- Scheme Procedure: frame-arguments frame
+ -- C Function: scm_frame_arguments (frame)
+     Return the arguments of FRAME.
+
+ -- Scheme Procedure: frame-address frame
+ -- Scheme Procedure: frame-instruction-pointer frame
+ -- Scheme Procedure: frame-stack-pointer frame
+     Accessors for the three VM registers associated with this frame:
+     the frame pointer (fp), instruction pointer (ip), and stack pointer
+     (sp), respectively.  *Note VM Concepts::, for more information.
+
+ -- Scheme Procedure: frame-dynamic-link frame
+ -- Scheme Procedure: frame-return-address frame
+ -- Scheme Procedure: frame-mv-return-address frame
+     Accessors for the three saved VM registers in a frame: the previous
+     frame pointer, the single-value return address, and the
+     multiple-value return address.  *Note Stack Layout::, for more
+     information.
+
+ -- Scheme Procedure: frame-num-locals frame
+ -- Scheme Procedure: frame-local-ref frame i
+ -- Scheme Procedure: frame-local-set! frame i val
+     Accessors for the temporary values corresponding to FRAME’s
+     procedure application.  The first local is the first argument given
+     to the procedure.  After the arguments, there are the local
+     variables, and after that temporary values.  *Note Stack Layout::,
+     for more information.
+
+ -- Scheme Procedure: display-application frame [port [indent]]
+ -- C Function: scm_display_application (frame, port, indent)
+     Display a procedure application FRAME to the output port PORT.
+     INDENT specifies the indentation of the output.
+
+   Additionally, the ‘(system vm frame)’ module defines a number of
+higher-level introspective procedures, for example to retrieve the names
+of local variables, and the source location to correspond to a frame.
+See its source code for more details.
+
+File: guile.info,  Node: Source Properties,  Next: Programmatic Error Handling,  Prev: Evaluation Model,  Up: Debugging
+
+6.25.2 Source Properties
+------------------------
+
+As Guile reads in Scheme code from file or from standard input, it
+remembers the file name, line number and column number where each
+expression begins.  These pieces of information are known as the “source
+properties” of the expression.  Syntax expanders and the compiler
+propagate these source properties to compiled procedures, so that, if an
+error occurs when evaluating the transformed expression, Guile’s
+debugger can point back to the file and location where the expression
+originated.
+
+   The way that source properties are stored means that Guile cannot
+associate source properties with individual symbols, keywords,
+characters, booleans, or small integers.  This can be seen by typing
+‘(xxx)’ and ‘xxx’ at the Guile prompt (where the variable ‘xxx’ has not
+been defined):
+
+     scheme@(guile-user)> (xxx)
+     <unnamed port>:4:1: In procedure module-lookup:
+     <unnamed port>:4:1: Unbound variable: xxx
+
+     scheme@(guile-user)> xxx
+     ERROR: In procedure module-lookup:
+     ERROR: Unbound variable: xxx
+
+In the latter case, no source properties were stored, so the error
+doesn’t have any source information.
+
+ -- Scheme Procedure: supports-source-properties? obj
+ -- C Function: scm_supports_source_properties_p (obj)
+     Return #t if source properties can be associated with OBJ,
+     otherwise return #f.
+
+   The recording of source properties is controlled by the read option
+named “positions” (*note Scheme Read::).  This option is switched _on_
+by default.
+
+   The following procedures can be used to access and set the source
+properties of read expressions.
+
+ -- Scheme Procedure: set-source-properties! obj alist
+ -- C Function: scm_set_source_properties_x (obj, alist)
+     Install the association list ALIST as the source property list for
+     OBJ.
+
+ -- Scheme Procedure: set-source-property! obj key datum
+ -- C Function: scm_set_source_property_x (obj, key, datum)
+     Set the source property of object OBJ, which is specified by KEY to
+     DATUM.  Normally, the key will be a symbol.
+
+ -- Scheme Procedure: source-properties obj
+ -- C Function: scm_source_properties (obj)
+     Return the source property association list of OBJ.
+
+ -- Scheme Procedure: source-property obj key
+ -- C Function: scm_source_property (obj, key)
+     Return the property specified by KEY from OBJ’s source properties.
+
+   If the ‘positions’ reader option is enabled, supported expressions
+will have values set for the ‘filename’, ‘line’ and ‘column’ properties.
+
+   Source properties are also associated with syntax objects.
+Procedural macros can get at the source location of their input using
+the ‘syntax-source’ accessor.  *Note Syntax Transformer Helpers::, for
+more.
+
+   Guile also defines a couple of convenience macros built on
+‘syntax-source’:
+
+ -- Scheme Syntax: current-source-location
+     Expands to the source properties corresponding to the location of
+     the ‘(current-source-location)’ form.
+
+ -- Scheme Syntax: current-filename
+     Expands to the current filename: the filename that the
+     ‘(current-filename)’ form appears in.  Expands to ‘#f’ if this
+     information is unavailable.
+
+   If you’re stuck with defmacros (*note Defmacros::), and want to
+preserve source information, the following helper function might be
+useful to you:
+
+ -- Scheme Procedure: cons-source xorig x y
+ -- C Function: scm_cons_source (xorig, x, y)
+     Create and return a new pair whose car and cdr are X and Y.  Any
+     source properties associated with XORIG are also associated with
+     the new pair.
+
+File: guile.info,  Node: Programmatic Error Handling,  Next: Traps,  Prev: Source Properties,  Up: Debugging
+
+6.25.3 Programmatic Error Handling
+----------------------------------
+
+For better or for worse, all programs have bugs, and dealing with bugs
+is part of programming.  This section deals with that class of bugs that
+causes an exception to be raised – from your own code, from within a
+library, or from Guile itself.
+
+* Menu:
+
+* Catching Exceptions::    Handling errors after the stack is unwound.
+* Capturing Stacks::       Capturing the stack at the time of error.
+* Pre-Unwind Debugging::   Debugging before the exception is thrown.
+* Debug Options::          A historical interface to debugging.
+
+File: guile.info,  Node: Catching Exceptions,  Next: Capturing Stacks,  Up: Programmatic Error Handling
+
+6.25.3.1 Catching Exceptions
+............................
+
+A common requirement is to be able to show as much useful context as
+possible when a Scheme program hits an error.  The most immediate
+information about an error is the kind of error that it is – such as
+“division by zero” – and any parameters that the code which signalled
+the error chose explicitly to provide.  This information originates with
+the ‘error’ or ‘throw’ call (or their C code equivalents, if the error
+is detected by C code) that signals the error, and is passed
+automatically to the handler procedure of the innermost applicable
+‘catch’ or ‘with-throw-handler’ expression.
+
+   Therefore, to catch errors that occur within a chunk of Scheme code,
+and to intercept basic information about those errors, you need to
+execute that code inside the dynamic context of a ‘catch’ or
+‘with-throw-handler’ expression, or the equivalent in C. In Scheme, this
+means you need something like this:
+
+     (catch #t
+            (lambda ()
+              ;; Execute the code in which
+              ;; you want to catch errors here.
+              ...)
+            (lambda (key . parameters)
+              ;; Put the code which you want
+              ;; to handle an error here.
+              ...))
+
+The ‘catch’ here can also be ‘with-throw-handler’; see *note Throw
+Handlers:: for information on the when you might want to use
+‘with-throw-handler’ instead of ‘catch’.
+
+   For example, to print out a message and return #f when an error
+occurs, you might use:
+
+     (define (catch-all thunk)
+       (catch #t
+         thunk
+         (lambda (key . parameters)
+           (format (current-error-port)
+                   "Uncaught throw to '~a: ~a\n" key parameters)
+           #f)))
+
+     (catch-all
+      (lambda () (error "Not a vegetable: tomato")))
+     ⊣ Uncaught throw to 'misc-error: (#f ~A (Not a vegetable: tomato) #f)
+     ⇒ #f
+
+   The ‘#t’ means that the catch is applicable to all kinds of error.
+If you want to restrict your catch to just one kind of error, you can
+put the symbol for that kind of error instead of ‘#t’.  The equivalent
+to this in C would be something like this:
+
+     SCM my_body_proc (void *body_data)
+     {
+       /* Execute the code in which
+          you want to catch errors here. */
+       ...
+     }
+
+     SCM my_handler_proc (void *handler_data,
+                          SCM key,
+                          SCM parameters)
+     {
+       /* Put the code which you want
+          to handle an error here. */
+       ...
+     }
+
+     {
+       ...
+       scm_c_catch (SCM_BOOL_T,
+                    my_body_proc, body_data,
+                    my_handler_proc, handler_data,
+                    NULL, NULL);
+       ...
+     }
+
+Again, as with the Scheme version, ‘scm_c_catch’ could be replaced by
+‘scm_c_with_throw_handler’, and ‘SCM_BOOL_T’ could instead be the symbol
+for a particular kind of error.
+
+File: guile.info,  Node: Capturing Stacks,  Next: Pre-Unwind Debugging,  Prev: Catching Exceptions,  Up: Programmatic Error Handling
+
+6.25.3.2 Capturing the full error stack
+.......................................
+
+The other interesting information about an error is the full Scheme
+stack at the point where the error occurred; in other words what
+innermost expression was being evaluated, what was the expression that
+called that one, and so on.  If you want to write your code so that it
+captures and can display this information as well, there are a couple
+important things to understand.
+
+   Firstly, the stack at the point of the error needs to be explicitly
+captured by a ‘make-stack’ call (or the C equivalent ‘scm_make_stack’).
+The Guile library does not do this “automatically” for you, so you will
+need to write code with a ‘make-stack’ or ‘scm_make_stack’ call
+yourself.  (We emphasise this point because some people are misled by
+the fact that the Guile interactive REPL code _does_ capture and display
+the stack automatically.  But the Guile interactive REPL is itself a
+Scheme program(1) running on top of the Guile library, and which uses
+‘catch’ and ‘make-stack’ in the way we are about to describe to capture
+the stack when an error occurs.)
+
+   And secondly, in order to capture the stack effectively at the point
+where the error occurred, the ‘make-stack’ call must be made before
+Guile unwinds the stack back to the location of the prevailing catch
+expression.  This means that the ‘make-stack’ call must be made within
+the handler of a ‘with-throw-handler’ expression, or the optional
+"pre-unwind" handler of a ‘catch’.  (For the full story of how these
+alternatives differ from each other, see *note Exceptions::.  The main
+difference is that ‘catch’ terminates the error, whereas
+‘with-throw-handler’ only intercepts it temporarily and then allow it to
+continue propagating up to the next innermost handler.)
+
+   So, here are some examples of how to do all this in Scheme and in C.
+For the purpose of these examples we assume that the captured stack
+should be stored in a variable, so that it can be displayed or
+arbitrarily processed later on.  In Scheme:
+
+     (let ((captured-stack #f))
+       (catch #t
+              (lambda ()
+                ;; Execute the code in which
+                ;; you want to catch errors here.
+                ...)
+              (lambda (key . parameters)
+                ;; Put the code which you want
+                ;; to handle an error after the
+                ;; stack has been unwound here.
+                ...)
+              (lambda (key . parameters)
+                ;; Capture the stack here:
+                (set! captured-stack (make-stack #t))))
+       ...
+       (if captured-stack
+           (begin
+             ;; Display or process the captured stack.
+             ...))
+       ...)
+
+And in C:
+
+     SCM my_body_proc (void *body_data)
+     {
+       /* Execute the code in which
+          you want to catch errors here. */
+       ...
+     }
+
+     SCM my_handler_proc (void *handler_data,
+                          SCM key,
+                          SCM parameters)
+     {
+       /* Put the code which you want
+          to handle an error after the
+          stack has been unwound here. */
+       ...
+     }
+
+     SCM my_preunwind_proc (void *handler_data,
+                            SCM key,
+                            SCM parameters)
+     {
+       /* Capture the stack here: */
+       *(SCM *)handler_data = scm_make_stack (SCM_BOOL_T, SCM_EOL);
+     }
+
+     {
+       SCM captured_stack = SCM_BOOL_F;
+       ...
+       scm_c_catch (SCM_BOOL_T,
+                    my_body_proc, body_data,
+                    my_handler_proc, handler_data,
+                    my_preunwind_proc, &captured_stack);
+       ...
+       if (captured_stack != SCM_BOOL_F)
+       {
+         /* Display or process the captured stack. */
+         ...
+       }
+       ...
+     }
+
+   Once you have a captured stack, you can interrogate and display its
+details in any way that you want, using the ‘stack-...’ and ‘frame-...’
+API described in *note Stacks:: and *note Frames::.
+
+   If you want to print out a backtrace in the same format that the
+Guile REPL does, you can use the ‘display-backtrace’ procedure to do so.
+You can also use ‘display-application’ to display an individual frame in
+the Guile REPL format.
+
+   ---------- Footnotes ----------
+
+   (1) In effect, it is the default program which is run when no
+commands or script file are specified on the Guile command line.
+
+File: guile.info,  Node: Pre-Unwind Debugging,  Next: Debug Options,  Prev: Capturing Stacks,  Up: Programmatic Error Handling
+
+6.25.3.3 Pre-Unwind Debugging
+.............................
+
+Instead of saving a stack away and waiting for the ‘catch’ to return,
+you can handle errors directly, from within the pre-unwind handler.
+
+   For example, to show a backtrace when an error is thrown, you might
+want to use a procedure like this:
+
+     (define (with-backtrace thunk)
+       (with-throw-handler #t
+                           thunk
+                           (lambda args (backtrace))))
+     (with-backtrace (lambda () (error "Not a vegetable: tomato")))
+
+   Since we used ‘with-throw-handler’ here, we didn’t actually catch the
+error.  *Note Throw Handlers::, for more information.  However, we did
+print out a context at the time of the error, using the built-in
+procedure, ‘backtrace’.
+
+ -- Scheme Procedure: backtrace [highlights]
+ -- C Function: scm_backtrace_with_highlights (highlights)
+ -- C Function: scm_backtrace ()
+     Display a backtrace of the current stack to the current output
+     port.  If HIGHLIGHTS is given it should be a list; the elements of
+     this list will be highlighted wherever they appear in the
+     backtrace.
+
+   The Guile REPL code (in ‘system/repl/repl.scm’ and related files)
+uses a ‘catch’ with a pre-unwind handler to capture the stack when an
+error occurs in an expression that was typed into the REPL, and debug
+that stack interactively in the context of the error.
+
+   These procedures are available for use by user programs, in the
+‘(system repl error-handling)’ module.
+
+     (use-modules (system repl error-handling))
+
+ -- Scheme Procedure: call-with-error-handling thunk [#:on-error
+          on-error='debug] [#:post-error post-error='catch] [#:pass-keys
+          pass-keys='(quit)] [#:trap-handler trap-handler='debug]
+     Call a thunk in a context in which errors are handled.
+
+     There are four keyword arguments:
+
+     ON-ERROR
+          Specifies what to do before the stack is unwound.
+
+          Valid options are ‘debug’ (the default), which will enter a
+          debugger; ‘pass’, in which case nothing is done, and the
+          exception is rethrown; or a procedure, which will be the
+          pre-unwind handler.
+
+     POST-ERROR
+          Specifies what to do after the stack is unwound.
+
+          Valid options are ‘catch’ (the default), which will silently
+          catch errors, returning the unspecified value; ‘report’, which
+          prints out a description of the error (via ‘display-error’),
+          and then returns the unspecified value; or a procedure, which
+          will be the catch handler.
+
+     TRAP-HANDLER
+          Specifies a trap handler: what to do when a breakpoint is hit.
+
+          Valid options are ‘debug’, which will enter the debugger;
+          ‘pass’, which does nothing; or ‘disabled’, which disables
+          traps entirely.  *Note Traps::, for more information.
+
+     PASS-KEYS
+          A set of keys to ignore, as a list.
+
+File: guile.info,  Node: Debug Options,  Prev: Pre-Unwind Debugging,  Up: Programmatic Error Handling
+
+6.25.3.4 Debug options
+......................
+
+The behavior of the ‘backtrace’ procedure and of the default error
+handler can be parameterized via the debug options.
+
+ -- Scheme Procedure: debug-options [setting]
+     Display the current settings of the debug options.  If SETTING is
+     omitted, only a short form of the current read options is printed.
+     Otherwise if SETTING is the symbol ‘help’, a complete options
+     description is displayed.
+
+   The set of available options, and their default values, may be had by
+invoking ‘debug-options’ at the prompt.
+
+     scheme@(guile-user)>
+     backwards       no      Display backtrace in anti-chronological order.
+     width           79      Maximal width of backtrace.
+     depth           20      Maximal length of printed backtrace.
+     backtrace       yes     Show backtrace on error.
+     stack           1048576 Stack size limit (measured in words;
+                             0 = no check).
+     show-file-name  #t      Show file names and line numbers in backtraces
+                             when not `#f'.  A value of `base' displays only
+                             base names, while `#t' displays full names.
+     warn-deprecated no      Warn when deprecated features are used.
+
+   The boolean options may be toggled with ‘debug-enable’ and
+‘debug-disable’.  The non-boolean ‘keywords’ option must be set using
+‘debug-set!’.
+
+ -- Scheme Procedure: debug-enable option-name
+ -- Scheme Procedure: debug-disable option-name
+ -- Scheme Syntax: debug-set! option-name value
+     Modify the debug options.  ‘debug-enable’ should be used with
+     boolean options and switches them on, ‘debug-disable’ switches them
+     off.
+
+     ‘debug-set!’ can be used to set an option to a specific value.  Due
+     to historical oddities, it is a macro that expects an unquoted
+     option name.
+
+Stack overflow
+..............
+
+Stack overflow errors are caused by a computation trying to use more
+stack space than has been enabled by the ‘stack’ option.  There are
+actually two kinds of stack that can overflow, the C stack and the
+Scheme stack.
+
+   Scheme stack overflows can occur if Scheme procedures recurse too far
+deeply.  An example would be the following recursive loop:
+
+     scheme@(guile-user)> (let lp () (+ 1 (lp)))
+     <unnamed port>:8:17: In procedure vm-run:
+     <unnamed port>:8:17: VM: Stack overflow
+
+   The default stack size should allow for about 10000 frames or so, so
+one usually doesn’t hit this level of recursion.  Unfortunately there is
+no way currently to make a VM with a bigger stack.  If you are in this
+unfortunate situation, please file a bug, and in the meantime, rewrite
+your code to be tail-recursive (*note Tail Calls::).
+
+   The other limit you might hit would be C stack overflows.  If you
+call a primitive procedure which then calls a Scheme procedure in a
+loop, you will consume C stack space.  Guile tries to detect excessive
+consumption of C stack space, throwing an error when you have hit 80% of
+the process’ available stack (as allocated by the operating system), or
+160 kilowords in the absence of a strict limit.
+
+   For example, looping through ‘call-with-vm’, a primitive that calls a
+thunk, gives us the following:
+
+     scheme@(guile-user)> (use-modules (system vm vm))
+     scheme@(guile-user)> (debug-set! stack 10000)
+     scheme@(guile-user)> (let lp () (call-with-vm (the-vm) lp))
+     ERROR: In procedure call-with-vm:
+     ERROR: Stack overflow
+
+   If you get an error like this, you can either try rewriting your code
+to use less stack space, or increase the maximum stack size.  To
+increase the maximum stack size, use ‘debug-set!’, for example:
+
+     (debug-set! stack 200000)
+
+   But of course it’s better to have your code operate without so much
+resource consumption, avoiding loops through C trampolines.
+
+File: guile.info,  Node: Traps,  Next: GDB Support,  Prev: Programmatic Error Handling,  Up: Debugging
+
+6.25.4 Traps
+------------
+
+Guile’s virtual machine can be configured to call out at key points to
+arbitrary user-specified procedures.
+
+   In principle, these “hooks” allow Scheme code to implement any model
+it chooses for examining the evaluation stack as program execution
+proceeds, and for suspending execution to be resumed later.
+
+   VM hooks are very low-level, though, and so Guile also has a library
+of higher-level “traps” on top of the VM hooks.  A trap is an execution
+condition that, when fulfilled, will fire a handler.  For example, Guile
+defines a trap that fires when control reaches a certain source
+location.
+
+   Finally, Guile also defines a third level of abstractions: per-thread
+“trap states”.  A trap state exists to give names to traps, and to hold
+on to the set of traps so that they can be enabled, disabled, or
+removed.  The trap state infrastructure defines the most useful
+abstractions for most cases.  For example, Guile’s REPL uses trap state
+functions to set breakpoints and tracepoints.
+
+   The following subsections describe all this in detail, for both the
+user wanting to use traps, and the developer interested in understanding
+how the interface hangs together.
+
+* Menu:
+
+* VM Hooks::                Modifying Guile’s virtual machine.
+* Trap Interface::          Traps are on or off.
+* Low-Level Traps::         The various kinds of low-level traps.
+* Tracing Traps::           Traps to trace procedure calls and returns.
+* Trap States::             One state (per thread) to bind them.
+* High-Level Traps::        The highest-level trap interface. Use this.
+
+File: guile.info,  Node: VM Hooks,  Next: Trap Interface,  Up: Traps
+
+6.25.4.1 VM Hooks
+.................
+
+Everything that runs in Guile runs on its virtual machine, a C program
+that defines a number of operations that Scheme programs can perform.
+
+   Note that there are multiple VM “engines” for Guile.  Only some of
+them have support for hooks compiled in.  Normally the deal is that you
+get hooks if you are running interactively, and otherwise they are
+disabled, as they do have some overhead (about 10 or 20 percent).
+
+   To ensure that you are running with hooks, pass ‘--debug’ to Guile
+when running your program, or otherwise use the ‘call-with-vm’ and
+‘set-vm-engine!’ procedures to ensure that you are running in a VM with
+the ‘debug’ engine.
+
+   To digress, Guile’s VM has 6 different hooks (*note Hooks::) that can
+be fired at different times, which may be accessed with the following
+procedures.
+
+   All hooks are called with one argument, the frame in question.  *Note
+Frames::.  Since these hooks may be fired very frequently, Guile does a
+terrible thing: it allocates the frames on the C stack instead of the
+garbage-collected heap.
+
+   The upshot here is that the frames are only valid within the dynamic
+extent of the call to the hook.  If a hook procedure keeps a reference
+to the frame outside the extent of the hook, bad things will happen.
+
+   The interface to hooks is provided by the ‘(system vm vm)’ module:
+
+     (use-modules (system vm vm))
+
+The result of calling ‘the-vm’ is usually passed as the VM argument to
+all of these procedures.
+
+ -- Scheme Procedure: vm-next-hook vm
+     The hook that will be fired before an instruction is retired (and
+     executed).
+
+ -- Scheme Procedure: vm-push-continuation-hook vm
+     The hook that will be fired after preparing a new frame.  Fires
+     just before applying a procedure in a non-tail context, just before
+     the corresponding apply-hook.
+
+ -- Scheme Procedure: vm-pop-continuation-hook vm
+     The hook that will be fired before returning from a frame.
+
+     This hook is a bit trickier than the rest, in that there is a
+     particular interpretation of the values on the stack.
+     Specifically, the top value on the stack is the number of values
+     being returned, and the next N values are the actual values being
+     returned, with the last value highest on the stack.
+
+ -- Scheme Procedure: vm-apply-hook vm
+     The hook that will be fired before a procedure is applied.  The
+     frame’s procedure will have already been set to the new procedure.
+
+     Note that procedure application is somewhat orthogonal to
+     continuation pushes and pops.  A non-tail call to a procedure will
+     result first in a firing of the push-continuation hook, then this
+     application hook, whereas a tail call will run without having fired
+     a push-continuation hook.
+
+ -- Scheme Procedure: vm-abort-continuation-hook vm
+     The hook that will be called after aborting to a prompt.  *Note
+     Prompts::.  The stack will be in the same state as for
+     ‘vm-pop-continuation-hook’.
+
+ -- Scheme Procedure: vm-restore-continuation-hook vm
+     The hook that will be called after restoring an undelimited
+     continuation.  Unfortunately it’s not currently possible to
+     introspect on the values that were given to the continuation.
+
+   These hooks do impose a performance penalty, if they are on.
+Obviously, the ‘vm-next-hook’ has quite an impact, performance-wise.
+Therefore Guile exposes a single, heavy-handed knob to turn hooks on or
+off, the “VM trace level”.  If the trace level is positive, hooks run;
+otherwise they don’t.
+
+   For convenience, when the VM fires a hook, it does so with the trap
+level temporarily set to 0.  That way the hooks don’t fire while you’re
+handling a hook.  The trace level is restored to whatever it was once
+the hook procedure finishes.
+
+ -- Scheme Procedure: vm-trace-level vm
+     Retrieve the “trace level” of the VM. If positive, the trace hooks
+     associated with VM will be run.  The initial trace level is 0.
+
+ -- Scheme Procedure: set-vm-trace-level! vm level
+     Set the “trace level” of the VM.
+
+   *Note A Virtual Machine for Guile::, for more information on Guile’s
+virtual machine.
+
+File: guile.info,  Node: Trap Interface,  Next: Low-Level Traps,  Prev: VM Hooks,  Up: Traps
+
+6.25.4.2 Trap Interface
+.......................
+
+The capabilities provided by hooks are great, but hooks alone rarely
+correspond to what users want to do.
+
+   For example, if a user wants to break when and if control reaches a
+certain source location, how do you do it?  If you install a “next”
+hook, you get unacceptable overhead for the execution of the entire
+program.  It would be possible to install an “apply” hook, then if the
+procedure encompasses those source locations, install a “next” hook, but
+already you’re talking about one concept that might be implemented by a
+varying number of lower-level concepts.
+
+   It’s best to be clear about things and define one abstraction for all
+such conditions: the “trap”.
+
+   Considering the myriad capabilities offered by the hooks though,
+there is only a minimum of functionality shared by all traps.  Guile’s
+current take is to reduce this to the absolute minimum, and have the
+only standard interface of a trap be “turn yourself on” or “turn
+yourself off”.
+
+   This interface sounds a bit strange, but it is useful to procedurally
+compose higher-level traps from lower-level building blocks.  For
+example, Guile defines a trap that calls one handler when control enters
+a procedure, and another when control leaves the procedure.  Given that
+trap, one can define a trap that adds to the next-hook only when within
+a given procedure.  Building further, one can define a trap that fires
+when control reaches particular instructions within a procedure.
+
+   Or of course you can stop at any of these intermediate levels.  For
+example, one might only be interested in calls to a given procedure.
+But the point is that a simple enable/disable interface is all the
+commonality that exists between the various kinds of traps, and
+furthermore that such an interface serves to allow “higher-level” traps
+to be composed from more primitive ones.
+
+   Specifically, a trap, in Guile, is a procedure.  When a trap is
+created, by convention the trap is enabled; therefore, the procedure
+that is the trap will, when called, disable the trap, and return a
+procedure that will enable the trap, and so on.
+
+   Trap procedures take one optional argument: the current frame.  (A
+trap may want to add to different sets of hooks depending on the frame
+that is current at enable-time.)
+
+   If this all sounds very complicated, it’s because it is.  Some of it
+is essential, but probably most of it is not.  The advantage of using
+this minimal interface is that composability is more lexically apparent
+than when, for example, using a stateful interface based on GOOPS. But
+perhaps this reflects the cognitive limitations of the programmer who
+made the current interface more than anything else.
+
+File: guile.info,  Node: Low-Level Traps,  Next: Tracing Traps,  Prev: Trap Interface,  Up: Traps
+
+6.25.4.3 Low-Level Traps
+........................
+
+To summarize the last sections, traps are enabled or disabled, and when
+they are enabled, they add to various VM hooks.
+
+   Note, however, that _traps do not increase the VM trace level_.  So
+if you create a trap, it will be enabled, but unless something else
+increases the VM’s trace level (*note VM Hooks::), the trap will not
+fire.  It turns out that getting the VM trace level right is tricky
+without a global view of what traps are enabled.  *Note Trap States::,
+for Guile’s answer to this problem.
+
+   Traps are created by calling procedures.  Most of these procedures
+share a set of common keyword arguments, so rather than document them
+separately, we discuss them all together here:
+
+‘#:vm’
+     The VM to instrument.  Defaults to the current thread’s VM.
+‘#:closure?’
+     For traps that depend on the current frame’s procedure, this
+     argument specifies whether to trap on the only the specific
+     procedure given, or on any closure that has the given procedure’s
+     code.  Defaults to ‘#f’.
+‘#:current-frame’
+     For traps that enable more hooks depending on their dynamic
+     context, this argument gives the current frame that the trap is
+     running in.  Defaults to ‘#f’.
+
+   To have access to these procedures, you’ll need to have imported the
+‘(system vm traps)’ module:
+
+     (use-modules (system vm traps))
+
+ -- Scheme Procedure: trap-at-procedure-call proc handler [#:vm]
+          [#:closure?]
+     A trap that calls HANDLER when PROC is applied.
+
+ -- Scheme Procedure: trap-in-procedure proc enter-handler exit-handler
+          [#:current-frame] [#:vm] [#:closure?]
+     A trap that calls ENTER-HANDLER when control enters PROC, and
+     EXIT-HANDLER when control leaves PROC.
+
+     Control can enter a procedure via:
+        • A procedure call.
+        • A return to a procedure’s frame on the stack.
+        • A continuation returning directly to an application of this
+          procedure.
+
+     Control can leave a procedure via:
+        • A normal return from the procedure.
+        • An application of another procedure.
+        • An invocation of a continuation.
+        • An abort.
+
+ -- Scheme Procedure: trap-instructions-in-procedure proc next-handler
+          exit-handler [#:current-frame] [#:vm] [#:closure?]
+     A trap that calls NEXT-HANDLER for every instruction executed in
+     PROC, and EXIT-HANDLER when execution leaves PROC.
+
+ -- Scheme Procedure: trap-at-procedure-ip-in-range proc range handler
+          [#:current-frame] [#:vm] [#:closure?]
+     A trap that calls HANDLER when execution enters a range of
+     instructions in PROC.  RANGE is a simple of pairs, ‘((START . END)
+     ...)’.  The START addresses are inclusive, and END addresses are
+     exclusive.
+
+ -- Scheme Procedure: trap-at-source-location file user-line handler
+          [#:current-frame] [#:vm]
+     A trap that fires when control reaches a given source location.
+     The USER-LINE parameter is one-indexed, as a user counts lines,
+     instead of zero-indexed, as Guile counts lines.
+
+ -- Scheme Procedure: trap-frame-finish frame return-handler
+          abort-handler [#:vm]
+     A trap that fires when control leaves the given frame.  FRAME
+     should be a live frame in the current continuation.  RETURN-HANDLER
+     will be called on a normal return, and ABORT-HANDLER on a nonlocal
+     exit.
+
+ -- Scheme Procedure: trap-in-dynamic-extent proc enter-handler
+          return-handler abort-handler [#:vm] [#:closure?]
+     A more traditional dynamic-wind trap, which fires ENTER-HANDLER
+     when control enters PROC, RETURN-HANDLER on a normal return, and
+     ABORT-HANDLER on a nonlocal exit.
+
+     Note that rewinds are not handled, so there is no rewind handler.
+
+ -- Scheme Procedure: trap-calls-in-dynamic-extent proc apply-handler
+          return-handler [#:current-frame] [#:vm] [#:closure?]
+     A trap that calls APPLY-HANDLER every time a procedure is applied,
+     and RETURN-HANDLER for returns, but only during the dynamic extent
+     of an application of PROC.
+
+ -- Scheme Procedure: trap-instructions-in-dynamic-extent proc
+          next-handler [#:current-frame] [#:vm] [#:closure?]
+     A trap that calls NEXT-HANDLER for all retired instructions within
+     the dynamic extent of a call to PROC.
+
+ -- Scheme Procedure: trap-calls-to-procedure proc apply-handler
+          return-handler [#:vm]
+     A trap that calls APPLY-HANDLER whenever PROC is applied, and
+     RETURN-HANDLER when it returns, but with an additional argument,
+     the call depth.
+
+     That is to say, the handlers will get two arguments: the frame in
+     question, and the call depth (a non-negative integer).
+
+ -- Scheme Procedure: trap-matching-instructions frame-pred handler
+          [#:vm]
+     A trap that calls FRAME-PRED at every instruction, and if
+     FRAME-PRED returns a true value, calls HANDLER on the frame.
+
+File: guile.info,  Node: Tracing Traps,  Next: Trap States,  Prev: Low-Level Traps,  Up: Traps
+
+6.25.4.4 Tracing Traps
+......................
+
+The ‘(system vm trace)’ module defines a number of traps for tracing of
+procedure applications.  When a procedure is “traced”, it means that
+every call to that procedure is reported to the user during a program
+run.  The idea is that you can mark a collection of procedures for
+tracing, and Guile will subsequently print out a line of the form
+
+     |  |  (PROCEDURE ARGS ...)
+
+   whenever a marked procedure is about to be applied to its arguments.
+This can help a programmer determine whether a function is being called
+at the wrong time or with the wrong set of arguments.
+
+   In addition, the indentation of the output is useful for
+demonstrating how the traced applications are or are not tail recursive
+with respect to each other.  Thus, a trace of a non-tail recursive
+factorial implementation looks like this:
+
+     scheme@(guile-user)> (define (fact1 n)
+                            (if (zero? n) 1
+                                (* n (fact1 (1- n)))))
+     scheme@(guile-user)> ,trace (fact1 4)
+     trace: (fact1 4)
+     trace: |  (fact1 3)
+     trace: |  |  (fact1 2)
+     trace: |  |  |  (fact1 1)
+     trace: |  |  |  |  (fact1 0)
+     trace: |  |  |  |  1
+     trace: |  |  |  1
+     trace: |  |  2
+     trace: |  6
+     trace: 24
+
+   While a typical tail recursive implementation would look more like
+this:
+
+     scheme@(guile-user)> (define (facti acc n)
+                            (if (zero? n) acc
+                                (facti (* n acc) (1- n))))
+     scheme@(guile-user)> (define (fact2 n) (facti 1 n))
+     scheme@(guile-user)> ,trace (fact2 4)
+     trace: (fact2 4)
+     trace: (facti 1 4)
+     trace: (facti 4 3)
+     trace: (facti 12 2)
+     trace: (facti 24 1)
+     trace: (facti 24 0)
+     trace: 24
+
+   The low-level traps below (*note Low-Level Traps::) share some common
+options:
+
+‘#:width’
+     The maximum width of trace output.  Trace printouts will try not to
+     exceed this column, but for highly nested procedure calls, it may
+     be unavoidable.  Defaults to 80.
+‘#:vm’
+     The VM on which to add the traps.  Defaults to the current thread’s
+     VM.
+‘#:prefix’
+     A string to print out before each trace line.  As seen above in the
+     examples, defaults to ‘"trace: "’.
+
+   To have access to these procedures, you’ll need to have imported the
+‘(system vm trace)’ module:
+
+     (use-modules (system vm trace))
+
+ -- Scheme Procedure: trace-calls-to-procedure proc [#:width] [#:vm]
+          [#:prefix]
+     Print a trace at applications of and returns from PROC.
+
+ -- Scheme Procedure: trace-calls-in-procedure proc [#:width] [#:vm]
+          [#:prefix]
+     Print a trace at all applications and returns within the dynamic
+     extent of calls to PROC.
+
+ -- Scheme Procedure: trace-instructions-in-procedure proc [#:width]
+          [#:vm]
+     Print a trace at all instructions executed in the dynamic extent of
+     calls to PROC.
+
+   In addition, Guile defines a procedure to call a thunk, tracing all
+procedure calls and returns within the thunk.
+
+ -- Scheme Procedure: call-with-trace thunk [#:calls?=#t]
+          [#:instructions?=#f] [#:width=80] [#:vm=(the-vm)]
+     Call THUNK, tracing all execution within its dynamic extent.
+
+     If CALLS? is true, Guile will print a brief report at each
+     procedure call and return, as given above.
+
+     If INSTRUCTIONS? is true, Guile will also print a message each time
+     an instruction is executed.  This is a lot of output, but it is
+     sometimes useful when doing low-level optimization.
+
+     Note that because this procedure manipulates the VM trace level
+     directly, it doesn’t compose well with traps at the REPL.
+
+   *Note Profile Commands::, for more information on tracing at the
+REPL.
+
+File: guile.info,  Node: Trap States,  Next: High-Level Traps,  Prev: Tracing Traps,  Up: Traps
+
+6.25.4.5 Trap States
+....................
+
+When multiple traps are present in a system, we begin to have a
+bookkeeping problem.  How are they named?  How does one disable, enable,
+or delete them?
+
+   Guile’s answer to this is to keep an implicit per-thread “trap
+state”.  The trap state object is not exposed to the user; rather, API
+that works on trap states fetches the current trap state from the
+dynamic environment.
+
+   Traps are identified by integers.  A trap can be enabled, disabled,
+or removed, and can have an associated user-visible name.
+
+   These procedures have their own module:
+
+     (use-modules (system vm trap-state))
+
+ -- Scheme Procedure: add-trap! trap name
+     Add a trap to the current trap state, associating the given NAME
+     with it.  Returns a fresh trap identifier (an integer).
+
+     Note that usually the more specific functions detailed in *note
+     High-Level Traps:: are used in preference to this one.
+
+ -- Scheme Procedure: list-traps
+     List the current set of traps, both enabled and disabled.  Returns
+     a list of integers.
+
+ -- Scheme Procedure: trap-name idx
+     Returns the name associated with trap IDX, or ‘#f’ if there is no
+     such trap.
+
+ -- Scheme Procedure: trap-enabled? idx
+     Returns ‘#t’ if trap IDX is present and enabled, or ‘#f’ otherwise.
+
+ -- Scheme Procedure: enable-trap! idx
+     Enables trap IDX.
+
+ -- Scheme Procedure: disable-trap! idx
+     Disables trap IDX.
+
+ -- Scheme Procedure: delete-trap! idx
+     Removes trap IDX, disabling it first, if necessary.
+
+File: guile.info,  Node: High-Level Traps,  Prev: Trap States,  Up: Traps
+
+6.25.4.6 High-Level Traps
+.........................
+
+The low-level trap API allows one to make traps that call procedures,
+and the trap state API allows one to keep track of what traps are there.
+But neither of these APIs directly helps you when you want to set a
+breakpoint, because it’s unclear what to do when the trap fires.  Do you
+enter a debugger, or mail a summary of the situation to your great-aunt,
+or what?
+
+   So for the common case in which you just want to install breakpoints,
+and then have them all result in calls to one parameterizable procedure,
+we have the high-level trap interface.
+
+   Perhaps we should have started this section with this interface, as
+it’s clearly the one most people should use.  But as its capabilities
+and limitations proceed from the lower layers, we felt that the
+character-building exercise of building a mental model might be helpful.
+
+   These procedures share a module with trap states:
+
+     (use-modules (system vm trap-state))
+
+ -- Scheme Procedure: with-default-trap-handler handler thunk
+     Call THUNK in a dynamic context in which HANDLER is the current
+     trap handler.
+
+     Additionally, during the execution of THUNK, the VM trace level
+     (*note VM Hooks::) is set to the number of enabled traps.  This
+     ensures that traps will in fact fire.
+
+     HANDLER may be ‘#f’, in which case VM hooks are not enabled as they
+     otherwise would be, as there is nothing to handle the traps.
+
+   The trace-level-setting behavior of ‘with-default-trap-handler’ is
+one of its more useful aspects, but if you are willing to forgo that,
+and just want to install a global trap handler, there’s a function for
+that too:
+
+ -- Scheme Procedure: install-trap-handler! handler
+     Set the current thread’s trap handler to HANDLER.
+
+   Trap handlers are called when traps installed by procedures from this
+module fire.  The current “consumer” of this API is Guile’s REPL, but
+one might easily imagine other trap handlers being used to integrate
+with other debugging tools.
+
+ -- Scheme Procedure: add-trap-at-procedure-call! proc
+     Install a trap that will fire when PROC is called.
+
+     This is a breakpoint.
+
+ -- Scheme Procedure: add-trace-at-procedure-call! proc
+     Install a trap that will print a tracing message when PROC is
+     called.  *Note Tracing Traps::, for more information.
+
+     This is a tracepoint.
+
+ -- Scheme Procedure: add-trap-at-source-location! file user-line
+     Install a trap that will fire when control reaches the given source
+     location.  USER-LINE is one-indexed, as users count lines, instead
+     of zero-indexed, as Guile counts lines.
+
+     This is a source breakpoint.
+
+ -- Scheme Procedure: add-ephemeral-trap-at-frame-finish! frame handler
+     Install a trap that will call HANDLER when FRAME finishes
+     executing.  The trap will be removed from the trap state after
+     firing, or on nonlocal exit.
+
+     This is a finish trap, used to implement the “finish” REPL command.
+
+ -- Scheme Procedure: add-ephemeral-stepping-trap! frame handler
+          [#:into?] [#:instruction?]
+     Install a trap that will call HANDLER after stepping to a different
+     source line or instruction.  The trap will be removed from the trap
+     state after firing, or on nonlocal exit.
+
+     If INSTRUCTION? is false (the default), the trap will fire when
+     control reaches a new source line.  Otherwise it will fire when
+     control reaches a new instruction.
+
+     Additionally, if INTO? is false (not the default), the trap will
+     only fire for frames at or prior to the given frame.  If INTO? is
+     true (the default), the trap may step into nested procedure
+     invocations.
+
+     This is a stepping trap, used to implement the “step”, “next”,
+     “step-instruction”, and “next-instruction” REPL commands.
+
+File: guile.info,  Node: GDB Support,  Prev: Traps,  Up: Debugging
+
+6.25.5 GDB Support
+------------------
+
+Sometimes, you may find it necessary to debug Guile applications at the
+C level.  Doing so can be tedious, in particular because the debugger is
+oblivious to Guile’s ‘SCM’ type, and thus unable to display ‘SCM’ values
+in any meaningful way:
+
+     (gdb) frame
+     #0  scm_display (obj=0xf04310, port=0x6f9f30) at print.c:1437
+
+   To address that, Guile comes with an extension of the GNU Debugger
+(GDB) that contains a “pretty-printer” for ‘SCM’ values.  With this GDB
+extension, the C frame in the example above shows up like this:
+
+     (gdb) frame
+     #0  scm_display (obj=("hello" GDB!), port=#<port file 6f9f30>) at print.c:1437
+
+Here GDB was able to decode the list pointed to by OBJ, and to print it
+using Scheme’s read syntax.
+
+   That extension is a ‘.scm’ file installed alongside the ‘libguile’
+shared library.  When GDB 7.8 or later is installed and compiled with
+support for extensions written in Guile, the extension is automatically
+loaded when debugging a program linked against ‘libguile’ (*note
+(gdb)Auto-loading::).  Note that the directory where ‘libguile’ is
+installed must be among GDB’s auto-loading “safe directories” (*note
+(gdb)Auto-loading safe path::).
+
+File: guile.info,  Node: Code Coverage,  Prev: Debugging,  Up: API Reference
+

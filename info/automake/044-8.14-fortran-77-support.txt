@@ -1,0 +1,187 @@
+8.14 Fortran 77 Support
+=======================
+
+Automake includes full support for Fortran 77.
+
+   Any package including Fortran 77 code must define the output variable
+‘F77’ in ‘configure.ac’; the simplest way to do this is to use the
+‘AC_PROG_F77’ macro (*note Particular Program Checks:
+(autoconf)Particular Programs.).
+
+   A few additional variables are defined when a Fortran 77 source file
+is seen:
+
+‘F77’
+     The name of the Fortran 77 compiler.
+
+‘FFLAGS’
+     Any flags to pass to the Fortran 77 compiler.
+
+‘AM_FFLAGS’
+     The maintainer’s variant of ‘FFLAGS’.
+
+‘RFLAGS’
+     Any flags to pass to the Ratfor compiler.
+
+‘AM_RFLAGS’
+     The maintainer’s variant of ‘RFLAGS’.
+
+‘F77COMPILE’
+     The command used to actually compile a Fortran 77 source file.  The
+     file name is appended to form the complete command line.
+
+‘FLINK’
+     The command used to actually link a pure Fortran 77 program or
+     shared library.
+
+   Automake can handle preprocessing Fortran 77 and Ratfor source files
+in addition to compiling them(1).  Automake also contains some support
+for creating programs and shared libraries that are a mixture of Fortran
+77 and other languages (*note Mixing Fortran 77 With C and C++::).
+
+   These issues are covered in the following sections.
+
+* Menu:
+
+* Preprocessing Fortran 77::    Preprocessing Fortran 77 sources
+* Compiling Fortran 77 Files::  Compiling Fortran 77 sources
+* Mixing Fortran 77 With C and C++::  Mixing Fortran 77 With C and C++
+
+   ---------- Footnotes ----------
+
+   (1) Much, if not most, of the information in the following sections
+pertaining to preprocessing Fortran 77 programs was taken almost
+verbatim from *note Catalogue of Rules: (make)Catalogue of Rules.
+
+File: automake.info,  Node: Preprocessing Fortran 77,  Next: Compiling Fortran 77 Files,  Up: Fortran 77 Support
+
+8.14.1 Preprocessing Fortran 77
+-------------------------------
+
+‘N.f’ is made automatically from ‘N.F’ or ‘N.r’.  This rule runs just
+the preprocessor to convert a preprocessable Fortran 77 or Ratfor source
+file into a strict Fortran 77 source file.  The precise command used is
+as follows:
+
+‘.F’
+     ‘$(F77) -F $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS)
+     $(AM_FFLAGS) $(FFLAGS)’
+
+‘.r’
+     ‘$(F77) -F $(AM_FFLAGS) $(FFLAGS) $(AM_RFLAGS) $(RFLAGS)’
+
+File: automake.info,  Node: Compiling Fortran 77 Files,  Next: Mixing Fortran 77 With C and C++,  Prev: Preprocessing Fortran 77,  Up: Fortran 77 Support
+
+8.14.2 Compiling Fortran 77 Files
+---------------------------------
+
+‘N.o’ is made automatically from ‘N.f’, ‘N.F’ or ‘N.r’ by running the
+Fortran 77 compiler.  The precise command used is as follows:
+
+‘.f’
+     ‘$(F77) -c $(AM_FFLAGS) $(FFLAGS)’
+
+‘.F’
+     ‘$(F77) -c $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS)
+     $(AM_FFLAGS) $(FFLAGS)’
+
+‘.r’
+     ‘$(F77) -c $(AM_FFLAGS) $(FFLAGS) $(AM_RFLAGS) $(RFLAGS)’
+
+File: automake.info,  Node: Mixing Fortran 77 With C and C++,  Prev: Compiling Fortran 77 Files,  Up: Fortran 77 Support
+
+8.14.3 Mixing Fortran 77 With C and C++
+---------------------------------------
+
+Automake currently provides _limited_ support for creating programs and
+shared libraries that are a mixture of Fortran 77 and C and/or C++.
+However, there are many other issues related to mixing Fortran 77 with
+other languages that are _not_ (currently) handled by Automake, but that
+are handled by other packages(1).
+
+   Automake can help in two ways:
+
+  1. Automatic selection of the linker depending on which combinations
+     of source code.
+
+  2. Automatic selection of the appropriate linker flags (e.g., ‘-L’ and
+     ‘-l’) to pass to the automatically selected linker in order to link
+     in the appropriate Fortran 77 intrinsic and run-time libraries.
+
+     These extra Fortran 77 linker flags are supplied in the output
+     variable ‘FLIBS’ by the ‘AC_F77_LIBRARY_LDFLAGS’ Autoconf macro.
+     *Note Fortran Compiler Characteristics: (autoconf)Fortran Compiler.
+
+   If Automake detects that a program or shared library (as mentioned in
+some ‘_PROGRAMS’ or ‘_LTLIBRARIES’ primary) contains source code that is
+a mixture of Fortran 77 and C and/or C++, then it requires that the
+macro ‘AC_F77_LIBRARY_LDFLAGS’ be called in ‘configure.ac’, and that
+either ‘$(FLIBS)’ appear in the appropriate ‘_LDADD’ (for programs) or
+‘_LIBADD’ (for shared libraries) variables.  It is the responsibility of
+the person writing the ‘Makefile.am’ to make sure that ‘$(FLIBS)’
+appears in the appropriate ‘_LDADD’ or ‘_LIBADD’ variable.
+
+   For example, consider the following ‘Makefile.am’:
+
+     bin_PROGRAMS = foo
+     foo_SOURCES  = main.cc foo.f
+     foo_LDADD    = libfoo.la $(FLIBS)
+
+     pkglib_LTLIBRARIES = libfoo.la
+     libfoo_la_SOURCES  = bar.f baz.c zardoz.cc
+     libfoo_la_LIBADD   = $(FLIBS)
+
+   In this case, Automake will insist that ‘AC_F77_LIBRARY_LDFLAGS’ is
+mentioned in ‘configure.ac’.  Also, if ‘$(FLIBS)’ hadn’t been mentioned
+in ‘foo_LDADD’ and ‘libfoo_la_LIBADD’, then Automake would have issued a
+warning.
+
+* Menu:
+
+* How the Linker is Chosen::    Automatic linker selection
+
+   ---------- Footnotes ----------
+
+   (1) For example, the cfortran package
+(http://www-zeus.desy.de/~burow/cfortran/) addresses all of these
+inter-language issues, and runs under nearly all Fortran 77, C and C++
+compilers on nearly all platforms.  However, ‘cfortran’ is not yet Free
+Software, but it will be in the next major release.
+
+File: automake.info,  Node: How the Linker is Chosen,  Up: Mixing Fortran 77 With C and C++
+
+8.14.3.1 How the Linker is Chosen
+.................................
+
+When a program or library mixes several languages, Automake choose the
+linker according to the following priorities.  (The names in parentheses
+are the variables containing the link command.)
+
+  1. Native Java (‘GCJLINK’)
+  2. Objective C++ (‘OBJCXXLINK’)
+  3. C++ (‘CXXLINK’)
+  4. Fortran 77 (‘F77LINK’)
+  5. Fortran (‘FCLINK’)
+  6. Objective C (‘OBJCLINK’)
+  7. Unified Parallel C (‘UPCLINK’)
+  8. C (‘LINK’)
+
+   For example, if Fortran 77, C and C++ source code is compiled into a
+program, then the C++ linker will be used.  In this case, if the C or
+Fortran 77 linkers required any special libraries that weren’t included
+by the C++ linker, then they must be manually added to an ‘_LDADD’ or
+‘_LIBADD’ variable by the user writing the ‘Makefile.am’.
+
+   Automake only looks at the file names listed in ‘_SOURCES’ variables
+to choose the linker, and defaults to the C linker.  Sometimes this is
+inconvenient because you are linking against a library written in
+another language and would like to set the linker more appropriately.
+*Note Libtool Convenience Libraries::, for a trick with
+‘nodist_EXTRA_..._SOURCES’.
+
+   A per-target ‘_LINK’ variable will override the above selection.
+Per-target link flags will cause Automake to write a per-target ‘_LINK’
+variable according to the language chosen as above.
+
+File: automake.info,  Node: Fortran 9x Support,  Next: Java Support with gcj,  Prev: Fortran 77 Support,  Up: Programs
+

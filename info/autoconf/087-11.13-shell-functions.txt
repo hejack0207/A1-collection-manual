@@ -1,0 +1,88 @@
+11.13 Shell Functions
+=====================
+
+Nowadays, it is difficult to find a shell that does not support shell
+functions at all.  However, some differences should be expected.
+
+   When declaring a shell function, you must include whitespace between
+the `)' after the function name and the start of the compound
+expression, to avoid upsetting `ksh'.  While it is possible to use any
+compound command, most scripts use `{...}'.
+
+     $ /bin/sh -c 'a(){ echo hi;}; a'
+     hi
+     $ ksh -c 'a(){ echo hi;}; a'
+     ksh: syntax error at line 1: `}' unexpected
+     $ ksh -c 'a() { echo hi;}; a'
+     hi
+
+   Inside a shell function, you should not rely on the error status of a
+subshell if the last command of that subshell was `exit' or `trap', as
+this triggers bugs in zsh 4.x; while Autoconf tries to find a shell
+that does not exhibit the bug, zsh might be the only shell present on
+the user's machine.
+
+   Likewise, the state of `$?' is not reliable when entering a shell
+function.  This has the effect that using a function as the first
+command in a `trap' handler can cause problems.
+
+     $ bash -c 'foo() { echo $?; }; trap foo 0; (exit 2); exit 2'; echo $?
+     2
+     2
+     $ ash -c 'foo() { echo $?; }; trap foo 0; (exit 2); exit 2'; echo $?
+     0
+     2
+
+   DJGPP bash 2.04 has a bug in that `return' from a shell function
+which also used a command substitution causes a segmentation fault.  To
+work around the issue, you can use `return' from a subshell, or
+`AS_SET_STATUS' as last command in the execution flow of the function
+(*note Common Shell Constructs::).
+
+   Not all shells treat shell functions as simple commands impacted by
+`set -e', for example with Solaris 10 `/bin/sh':
+
+     $ bash -c 'f() { return 1; }; set -e; f; echo oops'
+     $ /bin/sh -c 'f() { return 1; }; set -e; f; echo oops'
+     oops
+
+   Shell variables and functions may share the same namespace, for
+example with Solaris 10 `/bin/sh':
+
+     $ f () { :; }; f=; f
+     f: not found
+
+For this reason, Autoconf (actually M4sh, *note Programming in M4sh::)
+uses the prefix `as_fn_' for its functions.
+
+   Handling of positional parameters and shell options varies among
+shells.  For example, Korn shells reset and restore trace output (`set
+-x') and other options upon function entry and exit.  Inside a function,
+IRIX sh sets `$0' to the function name.
+
+   It is not portable to pass temporary environment variables to shell
+functions.  Solaris `/bin/sh' does not see the variable.  Meanwhile,
+not all shells follow the Posix rule that the assignment must affect
+the current environment in the same manner as special built-ins.
+
+     $ /bin/sh -c 'func() { echo $a;}; a=1 func; echo $a'
+     =>
+     =>
+     $ ash -c 'func() { echo $a;}; a=1 func; echo $a'
+     =>1
+     =>
+     $ bash -c 'set -o posix; func() { echo $a;}; a=1 func; echo $a'
+     =>1
+     =>1
+
+   Some ancient Bourne shell variants with function support did not
+reset `$I, I >= 0', upon function exit, so effectively the arguments of
+the script were lost after the first function invocation.  It is
+probably not worth worrying about these shells any more.
+
+   With AIX sh, a `trap' on 0 installed in a shell function triggers at
+function exit rather than at script exit.  *Note Limitations of Shell
+Builtins: trap.
+
+File: autoconf.info,  Node: Limitations of Builtins,  Next: Limitations of Usual Tools,  Prev: Shell Functions,  Up: Portable Shell
+

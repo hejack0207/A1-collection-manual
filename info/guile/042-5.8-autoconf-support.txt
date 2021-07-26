@@ -1,0 +1,247 @@
+5.8 Autoconf Support
+====================
+
+Autoconf, a part of the GNU build system, makes it easy for users to
+build your package.  This section documents Guile’s Autoconf support.
+
+* Menu:
+
+* Autoconf Background::         Why use autoconf?
+* Autoconf Macros::             The GUILE_* macros.
+* Using Autoconf Macros::       How to use them, plus examples.
+
+File: guile.info,  Node: Autoconf Background,  Next: Autoconf Macros,  Up: Autoconf Support
+
+5.8.1 Autoconf Background
+-------------------------
+
+As explained in the ‘GNU Autoconf Manual’, any package needs
+configuration at build-time (*note Introduction: (autoconf)Top.).  If
+your package uses Guile (or uses a package that in turn uses Guile), you
+probably need to know what specific Guile features are available and
+details about them.
+
+   The way to do this is to write feature tests and arrange for their
+execution by the ‘configure’ script, typically by adding the tests to
+‘configure.ac’, and running ‘autoconf’ to create ‘configure’.  Users of
+your package then run ‘configure’ in the normal way.
+
+   Macros are a way to make common feature tests easy to express.
+Autoconf provides a wide range of macros (*note (autoconf)Existing
+Tests::), and Guile installation provides Guile-specific tests in the
+areas of: program detection, compilation flags reporting, and Scheme
+module checks.
+
+File: guile.info,  Node: Autoconf Macros,  Next: Using Autoconf Macros,  Prev: Autoconf Background,  Up: Autoconf Support
+
+5.8.2 Autoconf Macros
+---------------------
+
+As mentioned earlier in this chapter, Guile supports parallel
+installation, and uses ‘pkg-config’ to let the user choose which version
+of Guile they are interested in.  ‘pkg-config’ has its own set of
+Autoconf macros that are probably installed on most every development
+system.  The most useful of these macros is ‘PKG_CHECK_MODULES’.
+
+     PKG_CHECK_MODULES([GUILE], [guile-2.0])
+
+   This example looks for Guile and sets the ‘GUILE_CFLAGS’ and
+‘GUILE_LIBS’ variables accordingly, or prints an error and exits if
+Guile was not found.
+
+   Guile comes with additional Autoconf macros providing more
+information, installed as ‘PREFIX/share/aclocal/guile.m4’.  Their names
+all begin with ‘GUILE_’.
+
+ -- Autoconf Macro: GUILE_PKG [VERSIONS]
+
+     This macro runs the ‘pkg-config’ tool to find development files for
+     an available version of Guile.
+
+     By default, this macro will search for the latest stable version of
+     Guile (e.g.  2.0), falling back to the previous stable version
+     (e.g.  1.8) if it is available.  If no guile-VERSION.pc file is
+     found, an error is signalled.  The found version is stored in
+     GUILE_EFFECTIVE_VERSION.
+
+     If ‘GUILE_PROGS’ was already invoked, this macro ensures that the
+     development files have the same effective version as the Guile
+     program.
+
+     GUILE_EFFECTIVE_VERSION is marked for substitution, as by
+     ‘AC_SUBST’.
+
+ -- Autoconf Macro: GUILE_FLAGS
+
+     This macro runs the ‘pkg-config’ tool to find out how to compile
+     and link programs against Guile.  It sets four variables:
+     GUILE_CFLAGS, GUILE_LDFLAGS, GUILE_LIBS, and GUILE_LTLIBS.
+
+     GUILE_CFLAGS: flags to pass to a C or C++ compiler to build code
+     that uses Guile header files.  This is almost always just one or
+     more ‘-I’ flags.
+
+     GUILE_LDFLAGS: flags to pass to the compiler to link a program
+     against Guile.  This includes ‘-lguile-VERSION’ for the Guile
+     library itself, and may also include one or more ‘-L’ flag to tell
+     the compiler where to find the libraries.  But it does not include
+     flags that influence the program’s runtime search path for
+     libraries, and will therefore lead to a program that fails to
+     start, unless all necessary libraries are installed in a standard
+     location such as ‘/usr/lib’.
+
+     GUILE_LIBS and GUILE_LTLIBS: flags to pass to the compiler or to
+     libtool, respectively, to link a program against Guile.  It
+     includes flags that augment the program’s runtime search path for
+     libraries, so that shared libraries will be found at the location
+     where they were during linking, even in non-standard locations.
+     GUILE_LIBS is to be used when linking the program directly with the
+     compiler, whereas GUILE_LTLIBS is to be used when linking the
+     program is done through libtool.
+
+     The variables are marked for substitution, as by ‘AC_SUBST’.
+
+ -- Autoconf Macro: GUILE_SITE_DIR
+
+     This looks for Guile’s "site" directory, usually something like
+     PREFIX/share/guile/site, and sets var GUILE_SITE to the path.  Note
+     that the var name is different from the macro name.
+
+     The variable is marked for substitution, as by ‘AC_SUBST’.
+
+ -- Autoconf Macro: GUILE_PROGS [VERSION]
+
+     This macro looks for programs ‘guile’ and ‘guild’, setting
+     variables GUILE and GUILD to their paths, respectively.  If ‘guile’
+     is not found, signal an error.
+
+     By default, this macro will search for the latest stable version of
+     Guile (e.g.  2.0).  x.y or x.y.z versions can be specified.  If an
+     older version is found, the macro will signal an error.
+
+     The effective version of the found ‘guile’ is set to
+     GUILE_EFFECTIVE_VERSION.  This macro ensures that the effective
+     version is compatible with the result of a previous invocation of
+     ‘GUILE_FLAGS’, if any.
+
+     As a legacy interface, it also looks for ‘guile-config’ and
+     ‘guile-tools’, setting GUILE_CONFIG and GUILE_TOOLS.
+
+     The variables are marked for substitution, as by ‘AC_SUBST’.
+
+ -- Autoconf Macro: GUILE_CHECK_RETVAL var check
+
+     VAR is a shell variable name to be set to the return value.  CHECK
+     is a Guile Scheme expression, evaluated with "$GUILE -c", and
+     returning either 0 or non-#f to indicate the check passed.  Non-0
+     number or #f indicates failure.  Avoid using the character "#"
+     since that confuses autoconf.
+
+ -- Autoconf Macro: GUILE_MODULE_CHECK var module featuretest
+          description
+
+     VAR is a shell variable name to be set to "yes" or "no".  MODULE is
+     a list of symbols, like: (ice-9 common-list).  FEATURETEST is an
+     expression acceptable to GUILE_CHECK, q.v.  DESCRIPTION is a
+     present-tense verb phrase (passed to AC_MSG_CHECKING).
+
+ -- Autoconf Macro: GUILE_MODULE_AVAILABLE var module
+
+     VAR is a shell variable name to be set to "yes" or "no".  MODULE is
+     a list of symbols, like: (ice-9 common-list).
+
+ -- Autoconf Macro: GUILE_MODULE_REQUIRED symlist
+
+     SYMLIST is a list of symbols, WITHOUT surrounding parens, like:
+     ice-9 common-list.
+
+ -- Autoconf Macro: GUILE_MODULE_EXPORTS var module modvar
+
+     VAR is a shell variable to be set to "yes" or "no".  MODULE is a
+     list of symbols, like: (ice-9 common-list).  MODVAR is the Guile
+     Scheme variable to check.
+
+ -- Autoconf Macro: GUILE_MODULE_REQUIRED_EXPORT module modvar
+
+     MODULE is a list of symbols, like: (ice-9 common-list).  MODVAR is
+     the Guile Scheme variable to check.
+
+File: guile.info,  Node: Using Autoconf Macros,  Prev: Autoconf Macros,  Up: Autoconf Support
+
+5.8.3 Using Autoconf Macros
+---------------------------
+
+Using the autoconf macros is straightforward: Add the macro "calls"
+(actually instantiations) to ‘configure.ac’, run ‘aclocal’, and finally,
+run ‘autoconf’.  If your system doesn’t have guile.m4 installed, place
+the desired macro definitions (‘AC_DEFUN’ forms) in ‘acinclude.m4’, and
+‘aclocal’ will do the right thing.
+
+   Some of the macros can be used inside normal shell constructs: ‘if
+foo ; then GUILE_BAZ ; fi’, but this is not guaranteed.  It’s probably a
+good idea to instantiate macros at top-level.
+
+   We now include two examples, one simple and one complicated.
+
+   The first example is for a package that uses libguile, and thus needs
+to know how to compile and link against it.  So we use
+‘PKG_CHECK_MODULES’ to set the vars ‘GUILE_CFLAGS’ and ‘GUILE_LIBS’,
+which are automatically substituted in the Makefile.
+
+     In configure.ac:
+
+       PKG_CHECK_MODULES([GUILE], [guile-2.0])
+
+     In Makefile.in:
+
+       GUILE_CFLAGS  = @GUILE_CFLAGS@
+       GUILE_LIBS = @GUILE_LIBS@
+
+       myprog.o: myprog.c
+               $(CC) -o $ $(GUILE_CFLAGS) $<
+       myprog: myprog.o
+               $(CC) -o $ $< $(GUILE_LIBS)
+
+   The second example is for a package of Guile Scheme modules that uses
+an external program and other Guile Scheme modules (some might call this
+a "pure scheme" package).  So we use the ‘GUILE_SITE_DIR’ macro, a
+regular ‘AC_PATH_PROG’ macro, and the ‘GUILE_MODULE_AVAILABLE’ macro.
+
+     In configure.ac:
+
+       GUILE_SITE_DIR
+
+       probably_wont_work=""
+
+       # pgtype pgtable
+       GUILE_MODULE_AVAILABLE(have_guile_pg, (database postgres))
+       test $have_guile_pg = no &&
+           probably_wont_work="(my pgtype) (my pgtable) $probably_wont_work"
+
+       # gpgutils
+       AC_PATH_PROG(GNUPG,gpg)
+       test x"$GNUPG" = x &&
+           probably_wont_work="(my gpgutils) $probably_wont_work"
+
+       if test ! "$probably_wont_work" = "" ; then
+           p="         ***"
+           echo
+           echo "$p"
+           echo "$p NOTE:"
+           echo "$p The following modules probably won't work:"
+           echo "$p   $probably_wont_work"
+           echo "$p They can be installed anyway, and will work if their"
+           echo "$p dependencies are installed later.  Please see README."
+           echo "$p"
+           echo
+       fi
+
+     In Makefile.in:
+
+       instdir = @GUILE_SITE@/my
+
+       install:
+             $(INSTALL) my/*.scm $(instdir)
+
+File: guile.info,  Node: API Reference,  Next: Guile Modules,  Prev: Programming in C,  Up: Top
+

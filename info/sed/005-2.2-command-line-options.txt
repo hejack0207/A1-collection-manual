@@ -1,0 +1,178 @@
+2.2 Command-Line Options
+========================
+
+The full format for invoking 'sed' is:
+
+     sed OPTIONS... [SCRIPT] [INPUTFILE...]
+
+   'sed' may be invoked with the following command-line options:
+
+'--version'
+     Print out the version of 'sed' that is being run and a copyright
+     notice, then exit.
+
+'--help'
+     Print a usage message briefly summarizing these command-line
+     options and the bug-reporting address, then exit.
+
+'-n'
+'--quiet'
+'--silent'
+     By default, 'sed' prints out the pattern space at the end of each
+     cycle through the script (*note How 'sed' works: Execution Cycle.).
+     These options disable this automatic printing, and 'sed' only
+     produces output when explicitly told to via the 'p' command.
+
+'-e SCRIPT'
+'--expression=SCRIPT'
+     Add the commands in SCRIPT to the set of commands to be run while
+     processing the input.
+
+'-f SCRIPT-FILE'
+'--file=SCRIPT-FILE'
+     Add the commands contained in the file SCRIPT-FILE to the set of
+     commands to be run while processing the input.
+
+'-i[SUFFIX]'
+'--in-place[=SUFFIX]'
+     This option specifies that files are to be edited in-place.  GNU
+     'sed' does this by creating a temporary file and sending output to
+     this file rather than to the standard output.(1).
+
+     This option implies '-s'.
+
+     When the end of the file is reached, the temporary file is renamed
+     to the output file's original name.  The extension, if supplied, is
+     used to modify the name of the old file before renaming the
+     temporary file, thereby making a backup copy(2)).
+
+     This rule is followed: if the extension doesn't contain a '*', then
+     it is appended to the end of the current filename as a suffix; if
+     the extension does contain one or more '*' characters, then _each_
+     asterisk is replaced with the current filename.  This allows you to
+     add a prefix to the backup file, instead of (or in addition to) a
+     suffix, or even to place backup copies of the original files into
+     another directory (provided the directory already exists).
+
+     If no extension is supplied, the original file is overwritten
+     without making a backup.
+
+     Because '-i' takes an optional argument, it should not be followed
+     by other short options:
+     'sed -Ei '...' FILE'
+          Same as '-E -i' with no backup suffix - 'FILE' will be edited
+          in-place without creating a backup.
+
+     'sed -iE '...' FILE'
+          This is equivalent to '--in-place=E', creating 'FILEE' as
+          backup of 'FILE'
+
+     Be cautious of using '-n' with '-i': the former disables automatic
+     printing of lines and the latter changes the file in-place without
+     a backup.  Used carelessly (and without an explicit 'p' command),
+     the output file will be empty:
+          # WRONG USAGE: 'FILE' will be truncated.
+          sed -ni 's/foo/bar/' FILE
+
+'-l N'
+'--line-length=N'
+     Specify the default line-wrap length for the 'l' command.  A length
+     of 0 (zero) means to never wrap long lines.  If not specified, it
+     is taken to be 70.
+
+'--posix'
+     GNU 'sed' includes several extensions to POSIX sed.  In order to
+     simplify writing portable scripts, this option disables all the
+     extensions that this manual documents, including additional
+     commands.  Most of the extensions accept 'sed' programs that are
+     outside the syntax mandated by POSIX, but some of them (such as the
+     behavior of the 'N' command described in *note Reporting Bugs::)
+     actually violate the standard.  If you want to disable only the
+     latter kind of extension, you can set the 'POSIXLY_CORRECT'
+     variable to a non-empty value.
+
+'-b'
+'--binary'
+     This option is available on every platform, but is only effective
+     where the operating system makes a distinction between text files
+     and binary files.  When such a distinction is made--as is the case
+     for MS-DOS, Windows, Cygwin--text files are composed of lines
+     separated by a carriage return _and_ a line feed character, and
+     'sed' does not see the ending CR. When this option is specified,
+     'sed' will open input files in binary mode, thus not requesting
+     this special processing and considering lines to end at a line
+     feed.
+
+'--follow-symlinks'
+     This option is available only on platforms that support symbolic
+     links and has an effect only if option '-i' is specified.  In this
+     case, if the file that is specified on the command line is a
+     symbolic link, 'sed' will follow the link and edit the ultimate
+     destination of the link.  The default behavior is to break the
+     symbolic link, so that the link destination will not be modified.
+
+'-E'
+'-r'
+'--regexp-extended'
+     Use extended regular expressions rather than basic regular
+     expressions.  Extended regexps are those that 'egrep' accepts; they
+     can be clearer because they usually have fewer backslashes.
+     Historically this was a GNU extension, but the '-E' extension has
+     since been added to the POSIX standard
+     (http://austingroupbugs.net/view.php?id=528), so use '-E' for
+     portability.  GNU sed has accepted '-E' as an undocumented option
+     for years, and *BSD seds have accepted '-E' for years as well, but
+     scripts that use '-E' might not port to other older systems.  *Note
+     Extended regular expressions: ERE syntax.
+
+'-s'
+'--separate'
+     By default, 'sed' will consider the files specified on the command
+     line as a single continuous long stream.  This GNU 'sed' extension
+     allows the user to consider them as separate files: range addresses
+     (such as '/abc/,/def/') are not allowed to span several files, line
+     numbers are relative to the start of each file, '$' refers to the
+     last line of each file, and files invoked from the 'R' commands are
+     rewound at the start of each file.
+
+'--sandbox'
+     In sandbox mode, 'e/w/r' commands are rejected - programs
+     containing them will be aborted without being run.  Sandbox mode
+     ensures 'sed' operates only on the input files designated on the
+     command line, and cannot run external programs.
+
+'-u'
+'--unbuffered'
+     Buffer both input and output as minimally as practical.  (This is
+     particularly useful if the input is coming from the likes of 'tail
+     -f', and you wish to see the transformed output as soon as
+     possible.)
+
+'-z'
+'--null-data'
+'--zero-terminated'
+     Treat the input as a set of lines, each terminated by a zero byte
+     (the ASCII 'NUL' character) instead of a newline.  This option can
+     be used with commands like 'sort -z' and 'find -print0' to process
+     arbitrary file names.
+
+   If no '-e', '-f', '--expression', or '--file' options are given on
+the command-line, then the first non-option argument on the command line
+is taken to be the SCRIPT to be executed.
+
+   If any command-line parameters remain after processing the above,
+these parameters are interpreted as the names of input files to be
+processed.  A file name of '-' refers to the standard input stream.  The
+standard input will be processed if no file names are specified.
+
+   ---------- Footnotes ----------
+
+   (1) This applies to commands such as '=', 'a', 'c', 'i', 'l', 'p'.
+You can still write to the standard output by using the 'w' or 'W'
+commands together with the '/dev/stdout' special file
+
+   (2) Note that GNU 'sed' creates the backup file whether or not any
+output is actually changed.
+
+File: sed.info,  Node: Exit status,  Prev: Command-Line Options,  Up: Invoking sed
+

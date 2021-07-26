@@ -1,0 +1,104 @@
+23.1 Extending Automake Rules
+=============================
+
+With some minor exceptions (for example ‘_PROGRAMS’ variables, ‘TESTS’,
+or ‘XFAIL_TESTS’) being rewritten to append ‘$(EXEEXT)’), the contents
+of a ‘Makefile.am’ is copied to ‘Makefile.in’ verbatim.
+
+   These copying semantics mean that many problems can be worked around
+by simply adding some ‘make’ variables and rules to ‘Makefile.am’.
+Automake will ignore these additions.
+
+   Since a ‘Makefile.in’ is built from data gathered from three
+different places (‘Makefile.am’, ‘configure.ac’, and ‘automake’ itself),
+it is possible to have conflicting definitions of rules or variables.
+When building ‘Makefile.in’ the following priorities are respected by
+‘automake’ to ensure the user always has the last word:
+
+   • User defined variables in ‘Makefile.am’ have priority over
+     variables ‘AC_SUBST’ed from ‘configure.ac’, and ‘AC_SUBST’ed
+     variables have priority over ‘automake’-defined variables.
+   • As far as rules are concerned, a user-defined rule overrides any
+     ‘automake’-defined rule for the same target.
+
+   These overriding semantics make it possible to fine tune some default
+settings of Automake, or replace some of its rules.  Overriding Automake
+rules is often inadvisable, particularly in the topmost directory of a
+package with subdirectories.  The ‘-Woverride’ option (*note automake
+Invocation::) comes in handy to catch overridden definitions.
+
+   Note that Automake does not make any distinction between rules with
+commands and rules that only specify dependencies.  So it is not
+possible to append new dependencies to an ‘automake’-defined target
+without redefining the entire rule.
+
+   However, various useful targets have a ‘-local’ version you can
+specify in your ‘Makefile.am’.  Automake will supplement the standard
+target with these user-supplied targets.
+
+   The targets that support a local version are ‘all’, ‘info’, ‘dvi’,
+‘ps’, ‘pdf’, ‘html’, ‘check’, ‘install-data’, ‘install-dvi’,
+‘install-exec’, ‘install-html’, ‘install-info’, ‘install-pdf’,
+‘install-ps’, ‘uninstall’, ‘installdirs’, ‘installcheck’ and the various
+‘clean’ targets (‘mostlyclean’, ‘clean’, ‘distclean’, and
+‘maintainer-clean’).
+
+   Note that there are no ‘uninstall-exec-local’ or
+‘uninstall-data-local’ targets; just use ‘uninstall-local’.  It doesn’t
+make sense to uninstall just data or just executables.
+
+   For instance, here is one way to erase a subdirectory during ‘make
+clean’ (*note Clean::).
+
+     clean-local:
+             -rm -rf testSubDir
+
+   You may be tempted to use ‘install-data-local’ to install a file to
+some hard-coded location, but you should avoid this (*note Hard-Coded
+Install Paths::).
+
+   With the ‘-local’ targets, there is no particular guarantee of
+execution order; typically, they are run early, but with parallel make,
+there is no way to be sure of that.
+
+   In contrast, some rules also have a way to run another rule, called a
+“hook”; hooks are always executed after the main rule’s work is done.
+The hook is named after the principal target, with ‘-hook’ appended.
+The targets allowing hooks are ‘install-data’, ‘install-exec’,
+‘uninstall’, ‘dist’, and ‘distcheck’.
+
+   For instance, here is how to create a hard link to an installed
+program:
+
+     install-exec-hook:
+             ln $(DESTDIR)$(bindir)/program$(EXEEXT) \
+                $(DESTDIR)$(bindir)/proglink$(EXEEXT)
+
+   Although cheaper and more portable than symbolic links, hard links
+will not work everywhere (for instance, OS/2 does not have ‘ln’).
+Ideally you should fall back to ‘cp -p’ when ‘ln’ does not work.  An
+easy way, if symbolic links are acceptable to you, is to add
+‘AC_PROG_LN_S’ to ‘configure.ac’ (*note Particular Program Checks:
+(autoconf)Particular Programs.) and use ‘$(LN_S)’ in ‘Makefile.am’.
+
+   For instance, here is how you could install a versioned copy of a
+program using ‘$(LN_S)’:
+
+     install-exec-hook:
+             cd $(DESTDIR)$(bindir) && \
+               mv -f prog$(EXEEXT) prog-$(VERSION)$(EXEEXT) && \
+               $(LN_S) prog-$(VERSION)$(EXEEXT) prog$(EXEEXT)
+
+   Note that we rename the program so that a new version will erase the
+symbolic link, not the real binary.  Also we ‘cd’ into the destination
+directory in order to create relative links.
+
+   When writing ‘install-exec-hook’ or ‘install-data-hook’, please bear
+in mind that the exec/data distinction is based on the installation
+directory, not on the primary used (*note The Two Parts of Install::).
+So a ‘foo_SCRIPTS’ will be installed by ‘install-data’, and a
+‘barexec_SCRIPTS’ will be installed by ‘install-exec’.  You should
+define your hooks consequently.
+
+File: automake.info,  Node: Third-Party Makefiles,  Prev: Extending,  Up: Not Enough
+

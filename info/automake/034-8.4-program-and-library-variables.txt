@@ -1,0 +1,232 @@
+8.4 Program and Library Variables
+=================================
+
+Associated with each program is a collection of variables that can be
+used to modify how that program is built.  There is a similar list of
+such variables for each library.  The canonical name of the program (or
+library) is used as a base for naming these variables.
+
+   In the list below, we use the name “maude” to refer to the program or
+library.  In your ‘Makefile.am’ you would replace this with the
+canonical name of your program.  This list also refers to “maude” as a
+program, but in general the same rules apply for both static and dynamic
+libraries; the documentation below notes situations where programs and
+libraries differ.
+
+‘maude_SOURCES’
+     This variable, if it exists, lists all the source files that are
+     compiled to build the program.  These files are added to the
+     distribution by default.  When building the program, Automake will
+     cause each source file to be compiled to a single ‘.o’ file (or
+     ‘.lo’ when using libtool).  Normally these object files are named
+     after the source file, but other factors can change this.  If a
+     file in the ‘_SOURCES’ variable has an unrecognized extension,
+     Automake will do one of two things with it.  If a suffix rule
+     exists for turning files with the unrecognized extension into ‘.o’
+     files, then ‘automake’ will treat this file as it will any other
+     source file (*note Support for Other Languages::).  Otherwise, the
+     file will be ignored as though it were a header file.
+
+     The prefixes ‘dist_’ and ‘nodist_’ can be used to control whether
+     files listed in a ‘_SOURCES’ variable are distributed.  ‘dist_’ is
+     redundant, as sources are distributed by default, but it can be
+     specified for clarity if desired.
+
+     It is possible to have both ‘dist_’ and ‘nodist_’ variants of a
+     given ‘_SOURCES’ variable at once; this lets you easily distribute
+     some files and not others, for instance:
+
+          nodist_maude_SOURCES = nodist.c
+          dist_maude_SOURCES = dist-me.c
+
+     By default the output file (on Unix systems, the ‘.o’ file) will be
+     put into the current build directory.  However, if the option
+     ‘subdir-objects’ is in effect in the current directory then the
+     ‘.o’ file will be put into the subdirectory named after the source
+     file.  For instance, with ‘subdir-objects’ enabled,
+     ‘sub/dir/file.c’ will be compiled to ‘sub/dir/file.o’.  Some people
+     prefer this mode of operation.  You can specify ‘subdir-objects’ in
+     ‘AUTOMAKE_OPTIONS’ (*note Options::).
+
+‘EXTRA_maude_SOURCES’
+     Automake needs to know the list of files you intend to compile
+     _statically_.  For one thing, this is the only way Automake has of
+     knowing what sort of language support a given ‘Makefile.in’
+     requires.  (1) This means that, for example, you can’t put a
+     configure substitution like ‘@my_sources@’ into a ‘_SOURCES’
+     variable.  If you intend to conditionally compile source files and
+     use ‘configure’ to substitute the appropriate object names into,
+     e.g., ‘_LDADD’ (see below), then you should list the corresponding
+     source files in the ‘EXTRA_’ variable.
+
+     This variable also supports ‘dist_’ and ‘nodist_’ prefixes.  For
+     instance, ‘nodist_EXTRA_maude_SOURCES’ would list extra sources
+     that may need to be built, but should not be distributed.
+
+‘maude_AR’
+     A static library is created by default by invoking ‘$(AR)
+     $(ARFLAGS)’ followed by the name of the library and then the
+     objects being put into the library.  You can override this by
+     setting the ‘_AR’ variable.  This is usually used with C++; some
+     C++ compilers require a special invocation in order to instantiate
+     all the templates that should go into a library.  For instance, the
+     SGI C++ compiler likes this variable set like so:
+          libmaude_a_AR = $(CXX) -ar -o
+
+‘maude_LIBADD’
+     Extra objects can be added to a _library_ using the ‘_LIBADD’
+     variable.  For instance, this should be used for objects determined
+     by ‘configure’ (*note A Library::).
+
+     In the case of libtool libraries, ‘maude_LIBADD’ can also refer to
+     other libtool libraries.
+
+‘maude_LDADD’
+     Extra objects (‘*.$(OBJEXT)’) and libraries (‘*.a’, ‘*.la’) can be
+     added to a _program_ by listing them in the ‘_LDADD’ variable.  For
+     instance, this should be used for objects determined by ‘configure’
+     (*note Linking::).
+
+     ‘_LDADD’ and ‘_LIBADD’ are inappropriate for passing
+     program-specific linker flags (except for ‘-l’, ‘-L’, ‘-dlopen’ and
+     ‘-dlpreopen’).  Use the ‘_LDFLAGS’ variable for this purpose.
+
+     For instance, if your ‘configure.ac’ uses ‘AC_PATH_XTRA’, you could
+     link your program against the X libraries like so:
+
+          maude_LDADD = $(X_PRE_LIBS) $(X_LIBS) $(X_EXTRA_LIBS)
+
+     We recommend that you use ‘-l’ and ‘-L’ only when referring to
+     third-party libraries, and give the explicit file names of any
+     library built by your package.  Doing so will ensure that
+     ‘maude_DEPENDENCIES’ (see below) is correctly defined by default.
+
+‘maude_LDFLAGS’
+     This variable is used to pass extra flags to the link step of a
+     program or a shared library.  It overrides the ‘AM_LDFLAGS’
+     variable.
+
+‘maude_LIBTOOLFLAGS’
+     This variable is used to pass extra options to ‘libtool’.  It
+     overrides the ‘AM_LIBTOOLFLAGS’ variable.  These options are output
+     before ‘libtool’’s ‘--mode=MODE’ option, so they should not be
+     mode-specific options (those belong to the compiler or linker
+     flags).  *Note Libtool Flags::.
+
+‘maude_DEPENDENCIES’
+‘EXTRA_maude_DEPENDENCIES’
+     It is also occasionally useful to have a target (program or
+     library) depend on some other file that is not actually part of
+     that target.  This can be done using the ‘_DEPENDENCIES’ variable.
+     Each target depends on the contents of such a variable, but no
+     further interpretation is done.
+
+     Since these dependencies are associated to the link rule used to
+     create the programs they should normally list files used by the
+     link command.  That is ‘*.$(OBJEXT)’, ‘*.a’, or ‘*.la’ files for
+     programs; ‘*.lo’ and ‘*.la’ files for Libtool libraries; and
+     ‘*.$(OBJEXT)’ files for static libraries.  In rare cases you may
+     need to add other kinds of files such as linker scripts, but
+     _listing a source file in ‘_DEPENDENCIES’ is wrong_.  If some
+     source file needs to be built before all the components of a
+     program are built, consider using the ‘BUILT_SOURCES’ variable
+     (*note Sources::).
+
+     If ‘_DEPENDENCIES’ is not supplied, it is computed by Automake.
+     The automatically-assigned value is the contents of ‘_LDADD’ or
+     ‘_LIBADD’, with most configure substitutions, ‘-l’, ‘-L’, ‘-dlopen’
+     and ‘-dlpreopen’ options removed.  The configure substitutions that
+     are left in are only ‘$(LIBOBJS)’ and ‘$(ALLOCA)’; these are left
+     because it is known that they will not cause an invalid value for
+     ‘_DEPENDENCIES’ to be generated.
+
+     ‘_DEPENDENCIES’ is more likely used to perform conditional
+     compilation using an ‘AC_SUBST’ variable that contains a list of
+     objects.  *Note Conditional Sources::, and *note Conditional
+     Libtool Sources::.
+
+     The ‘EXTRA_*_DEPENDENCIES’ variable may be useful for cases where
+     you merely want to augment the ‘automake’-generated ‘_DEPENDENCIES’
+     variable rather than replacing it.
+
+‘maude_LINK’
+     You can override the linker on a per-program basis.  By default the
+     linker is chosen according to the languages used by the program.
+     For instance, a program that includes C++ source code would use the
+     C++ compiler to link.  The ‘_LINK’ variable must hold the name of a
+     command that can be passed all the ‘.o’ file names and libraries to
+     link against as arguments.  Note that the name of the underlying
+     program is _not_ passed to ‘_LINK’; typically one uses ‘$@’:
+
+          maude_LINK = $(CCLD) -magic -o $@
+
+     If a ‘_LINK’ variable is not supplied, it may still be generated
+     and used by Automake due to the use of per-target link flags such
+     as ‘_CFLAGS’, ‘_LDFLAGS’ or ‘_LIBTOOLFLAGS’, in cases where they
+     apply.
+
+‘maude_CCASFLAGS’
+‘maude_CFLAGS’
+‘maude_CPPFLAGS’
+‘maude_CXXFLAGS’
+‘maude_FFLAGS’
+‘maude_GCJFLAGS’
+‘maude_LFLAGS’
+‘maude_OBJCFLAGS’
+‘maude_OBJCXXFLAGS’
+‘maude_RFLAGS’
+‘maude_UPCFLAGS’
+‘maude_YFLAGS’
+     Automake allows you to set compilation flags on a per-program (or
+     per-library) basis.  A single source file can be included in
+     several programs, and it will potentially be compiled with
+     different flags for each program.  This works for any language
+     directly supported by Automake.  These “per-target compilation
+     flags” are ‘_CCASFLAGS’, ‘_CFLAGS’, ‘_CPPFLAGS’, ‘_CXXFLAGS’,
+     ‘_FFLAGS’, ‘_GCJFLAGS’, ‘_LFLAGS’, ‘_OBJCFLAGS’, ‘_OBJCXXFLAGS’,
+     ‘_RFLAGS’, ‘_UPCFLAGS’, and ‘_YFLAGS’.
+
+     When using a per-target compilation flag, Automake will choose a
+     different name for the intermediate object files.  Ordinarily a
+     file like ‘sample.c’ will be compiled to produce ‘sample.o’.
+     However, if the program’s ‘_CFLAGS’ variable is set, then the
+     object file will be named, for instance, ‘maude-sample.o’.  (See
+     also *note Renamed Objects::).
+
+     In compilations with per-target flags, the ordinary ‘AM_’ form of
+     the flags variable is _not_ automatically included in the
+     compilation (however, the user form of the variable _is_ included).
+     So for instance, if you want the hypothetical ‘maude’ compilations
+     to also use the value of ‘AM_CFLAGS’, you would need to write:
+
+          maude_CFLAGS = ... your flags ... $(AM_CFLAGS)
+
+     *Note Flag Variables Ordering::, for more discussion about the
+     interaction between user variables, ‘AM_’ shadow variables, and
+     per-target variables.
+
+‘maude_SHORTNAME’
+     On some platforms the allowable file names are very short.  In
+     order to support these systems and per-target compilation flags at
+     the same time, Automake allows you to set a “short name” that will
+     influence how intermediate object files are named.  For instance,
+     in the following example,
+
+          bin_PROGRAMS = maude
+          maude_CPPFLAGS = -DSOMEFLAG
+          maude_SHORTNAME = m
+          maude_SOURCES = sample.c ...
+
+     the object file would be named ‘m-sample.o’ rather than
+     ‘maude-sample.o’.
+
+     This facility is rarely needed in practice, and we recommend
+     avoiding it until you find it is required.
+
+   ---------- Footnotes ----------
+
+   (1) There are other, more obscure reasons for this limitation as
+well.
+
+File: automake.info,  Node: Default _SOURCES,  Next: LIBOBJS,  Prev: Program and Library Variables,  Up: Programs
+

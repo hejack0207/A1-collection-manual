@@ -1,0 +1,180 @@
+18.5 Upgrading From Version 1
+=============================
+
+Autoconf version 2 is mostly backward compatible with version 1.
+However, it introduces better ways to do some things, and doesn't
+support some of the ugly things in version 1.  So, depending on how
+sophisticated your `configure.ac' files are, you might have to do some
+manual work in order to upgrade to version 2.  This chapter points out
+some problems to watch for when upgrading.  Also, perhaps your
+`configure' scripts could benefit from some of the new features in
+version 2; the changes are summarized in the file `NEWS' in the
+Autoconf distribution.
+
+* Menu:
+
+* Changed File Names::          Files you might rename
+* Changed Makefiles::           New things to put in `Makefile.in'
+* Changed Macros::              Macro calls you might replace
+* Changed Results::             Changes in how to check test results
+* Changed Macro Writing::       Better ways to write your own macros
+
+File: autoconf.info,  Node: Changed File Names,  Next: Changed Makefiles,  Up: Autoconf 1
+
+18.5.1 Changed File Names
+-------------------------
+
+If you have an `aclocal.m4' installed with Autoconf (as opposed to in a
+particular package's source directory), you must rename it to
+`acsite.m4'.  *Note autoconf Invocation::.
+
+   If you distribute `install.sh' with your package, rename it to
+`install-sh' so `make' builtin rules don't inadvertently create a file
+called `install' from it.  `AC_PROG_INSTALL' looks for the script under
+both names, but it is best to use the new name.
+
+   If you were using `config.h.top', `config.h.bot', or `acconfig.h',
+you still can, but you have less clutter if you use the `AH_' macros.
+*Note Autoheader Macros::.
+
+File: autoconf.info,  Node: Changed Makefiles,  Next: Changed Macros,  Prev: Changed File Names,  Up: Autoconf 1
+
+18.5.2 Changed Makefiles
+------------------------
+
+Add `@CFLAGS@', `@CPPFLAGS@', and `@LDFLAGS@' in your `Makefile.in'
+files, so they can take advantage of the values of those variables in
+the environment when `configure' is run.  Doing this isn't necessary,
+but it's a convenience for users.
+
+   Also add `@configure_input@' in a comment to each input file for
+`AC_OUTPUT', so that the output files contain a comment saying they
+were produced by `configure'.  Automatically selecting the right
+comment syntax for all the kinds of files that people call `AC_OUTPUT'
+on became too much work.
+
+   Add `config.log' and `config.cache' to the list of files you remove
+in `distclean' targets.
+
+   If you have the following in `Makefile.in':
+
+     prefix = /usr/local
+     exec_prefix = $(prefix)
+
+you must change it to:
+
+     prefix = @prefix@
+     exec_prefix = @exec_prefix@
+
+The old behavior of replacing those variables without `@' characters
+around them has been removed.
+
+File: autoconf.info,  Node: Changed Macros,  Next: Changed Results,  Prev: Changed Makefiles,  Up: Autoconf 1
+
+18.5.3 Changed Macros
+---------------------
+
+Many of the macros were renamed in Autoconf version 2.  You can still
+use the old names, but the new ones are clearer, and it's easier to find
+the documentation for them.  *Note Obsolete Macros::, for a table
+showing the new names for the old macros.  Use the `autoupdate' program
+to convert your `configure.ac' to using the new macro names.  *Note
+autoupdate Invocation::.
+
+   Some macros have been superseded by similar ones that do the job
+better, but are not call-compatible.  If you get warnings about calling
+obsolete macros while running `autoconf', you may safely ignore them,
+but your `configure' script generally works better if you follow the
+advice that is printed about what to replace the obsolete macros with.
+In particular, the mechanism for reporting the results of tests has
+changed.  If you were using `echo' or `AC_VERBOSE' (perhaps via
+`AC_COMPILE_CHECK'), your `configure' script's output looks better if
+you switch to `AC_MSG_CHECKING' and `AC_MSG_RESULT'.  *Note Printing
+Messages::.  Those macros work best in conjunction with cache
+variables.  *Note Caching Results::.
+
+File: autoconf.info,  Node: Changed Results,  Next: Changed Macro Writing,  Prev: Changed Macros,  Up: Autoconf 1
+
+18.5.4 Changed Results
+----------------------
+
+If you were checking the results of previous tests by examining the
+shell variable `DEFS', you need to switch to checking the values of the
+cache variables for those tests.  `DEFS' no longer exists while
+`configure' is running; it is only created when generating output
+files.  This difference from version 1 is because properly quoting the
+contents of that variable turned out to be too cumbersome and
+inefficient to do every time `AC_DEFINE' is called.  *Note Cache
+Variable Names::.
+
+   For example, here is a `configure.ac' fragment written for Autoconf
+version 1:
+
+     AC_HAVE_FUNCS(syslog)
+     case "$DEFS" in
+     *-DHAVE_SYSLOG*) ;;
+     *) # syslog is not in the default libraries.  See if it's in some other.
+       saved_LIBS="$LIBS"
+       for lib in bsd socket inet; do
+         AC_CHECKING(for syslog in -l$lib)
+         LIBS="-l$lib $saved_LIBS"
+         AC_HAVE_FUNCS(syslog)
+         case "$DEFS" in
+         *-DHAVE_SYSLOG*) break ;;
+         *) ;;
+         esac
+         LIBS="$saved_LIBS"
+       done ;;
+     esac
+
+   Here is a way to write it for version 2:
+
+     AC_CHECK_FUNCS([syslog])
+     if test "x$ac_cv_func_syslog" = xno; then
+       # syslog is not in the default libraries.  See if it's in some other.
+       for lib in bsd socket inet; do
+         AC_CHECK_LIB([$lib], [syslog], [AC_DEFINE([HAVE_SYSLOG])
+           LIBS="-l$lib $LIBS"; break])
+       done
+     fi
+
+   If you were working around bugs in `AC_DEFINE_UNQUOTED' by adding
+backslashes before quotes, you need to remove them.  It now works
+predictably, and does not treat quotes (except back quotes) specially.
+*Note Setting Output Variables::.
+
+   All of the Boolean shell variables set by Autoconf macros now use
+`yes' for the true value.  Most of them use `no' for false, though for
+backward compatibility some use the empty string instead.  If you were
+relying on a shell variable being set to something like 1 or `t' for
+true, you need to change your tests.
+
+File: autoconf.info,  Node: Changed Macro Writing,  Prev: Changed Results,  Up: Autoconf 1
+
+18.5.5 Changed Macro Writing
+----------------------------
+
+When defining your own macros, you should now use `AC_DEFUN' instead of
+`define'.  `AC_DEFUN' automatically calls `AC_PROVIDE' and ensures that
+macros called via `AC_REQUIRE' do not interrupt other macros, to
+prevent nested `checking...' messages on the screen.  There's no actual
+harm in continuing to use the older way, but it's less convenient and
+attractive.  *Note Macro Definitions::.
+
+   You probably looked at the macros that came with Autoconf as a guide
+for how to do things.  It would be a good idea to take a look at the new
+versions of them, as the style is somewhat improved and they take
+advantage of some new features.
+
+   If you were doing tricky things with undocumented Autoconf internals
+(macros, variables, diversions), check whether you need to change
+anything to account for changes that have been made.  Perhaps you can
+even use an officially supported technique in version 2 instead of
+kludging.  Or perhaps not.
+
+   To speed up your locally written feature tests, add caching to them.
+See whether any of your tests are of general enough usefulness to
+encapsulate them into macros that you can share.
+
+File: autoconf.info,  Node: Autoconf 2.13,  Prev: Autoconf 1,  Up: Obsolete Constructs
+

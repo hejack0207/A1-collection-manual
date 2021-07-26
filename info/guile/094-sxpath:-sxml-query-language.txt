@@ -1,0 +1,431 @@
+SXPath: SXML Query Language
+===========================
+
+SXPath is a query language for SXML, an instance of XML Information set
+(Infoset) in the form of s-expressions.  See ‘(sxml ssax)’ for the
+definition of SXML and more details.  SXPath is also a translation into
+Scheme of an XML Path Language, XPath (http://www.w3.org/TR/xpath).
+XPath and SXPath describe means of selecting a set of Infoset’s items or
+their properties.
+
+   To facilitate queries, XPath maps the XML Infoset into an explicit
+tree, and introduces important notions of a location path and a current,
+context node.  A location path denotes a selection of a set of nodes
+relative to a context node.  Any XPath tree has a distinguished, root
+node – which serves as the context node for absolute location paths.
+Location path is recursively defined as a location step joined with a
+location path.  A location step is a simple query of the database
+relative to a context node.  A step may include expressions that further
+filter the selected set.  Each node in the resulting set is used as a
+context node for the adjoining location path.  The result of the step is
+a union of the sets returned by the latter location paths.
+
+   The SXML representation of the XML Infoset (see SSAX.scm) is rather
+suitable for querying as it is.  Bowing to the XPath specification, we
+will refer to SXML information items as ’Nodes’:
+
+      	<Node> ::= <Element> | <attributes-coll> | <attrib>
+      		   | "text string" | <PI>
+
+   This production can also be described as
+
+     	<Node> ::= (name . <Nodeset>) | "text string"
+
+   An (ordered) set of nodes is just a list of the constituent nodes:
+
+      	<Nodeset> ::= (<Node> ...)
+
+   Nodesets, and Nodes other than text strings are both lists.  A
+<Nodeset> however is either an empty list, or a list whose head is not a
+symbol.  A symbol at the head of a node is either an XML name (in which
+case it’s a tag of an XML element), or an administrative name such as
+’@’.  This uniform list representation makes processing rather simple
+and elegant, while avoiding confusion.  The multi-branch tree structure
+formed by the mutually-recursive datatypes <Node> and <Nodeset> lends
+itself well to processing by functional languages.
+
+   A location path is in fact a composite query over an XPath tree or
+its branch.  A singe step is a combination of a projection, selection or
+a transitive closure.  Multiple steps are combined via join and union
+operations.  This insight allows us to _elegantly_ implement XPath as a
+sequence of projection and filtering primitives – converters – joined by
+“combinators”.  Each converter takes a node and returns a nodeset which
+is the result of the corresponding query relative to that node.  A
+converter can also be called on a set of nodes.  In that case it returns
+a union of the corresponding queries over each node in the set.  The
+union is easily implemented as a list append operation as all nodes in a
+SXML tree are considered distinct, by XPath conventions.  We also
+preserve the order of the members in the union.  Query combinators are
+high-order functions: they take converter(s) (which is a Node|Nodeset ->
+Nodeset function) and compose or otherwise combine them.  We will be
+concerned with only relative location paths [XPath]: an absolute
+location path is a relative path applied to the root node.
+
+   Similarly to XPath, SXPath defines full and abbreviated notations for
+location paths.  In both cases, the abbreviated notation can be
+mechanically expanded into the full form by simple rewriting rules.  In
+the case of SXPath the corresponding rules are given in the
+documentation of the ‘sxpath’ procedure.  *Note SXPath procedure
+documentation: sxpath-procedure-docs.
+
+   The regression test suite at the end of the file ‘SXPATH-old.scm’
+shows a representative sample of SXPaths in both notations, juxtaposed
+with the corresponding XPath expressions.  Most of the samples are
+borrowed literally from the XPath specification.
+
+   Much of the following material is taken from the SXPath sources by
+Oleg Kiselyov et al.
+
+7.22.6.2 Basic Converters and Applicators
+.........................................
+
+A converter is a function mapping a nodeset (or a single node) to
+another nodeset.  Its type can be represented like this:
+
+     type Converter = Node|Nodeset -> Nodeset
+
+   A converter can also play the role of a predicate: in that case, if a
+converter, applied to a node or a nodeset, yields a non-empty nodeset,
+the converter-predicate is deemed satisfied.  Likewise, an empty nodeset
+is equivalent to ‘#f’ in denoting failure.
+
+ -- Scheme Procedure: nodeset? x
+     Return ‘#t’ if X is a nodeset.
+
+ -- Scheme Procedure: node-typeof? crit
+     This function implements a ’Node test’ as defined in Sec.  2.3 of
+     the XPath document.  A node test is one of the components of a
+     location step.  It is also a converter-predicate in SXPath.
+
+     The function ‘node-typeof?’ takes a type criterion and returns a
+     function, which, when applied to a node, will tell if the node
+     satisfies the test.
+
+     The criterion CRIT is a symbol, one of the following:
+
+     ‘id’
+          tests if the node has the right name (id)
+
+     ‘@’
+          tests if the node is an <attributes-coll>
+
+     ‘*’
+          tests if the node is an <Element>
+
+     ‘*text*’
+          tests if the node is a text node
+
+     ‘*PI*’
+          tests if the node is a PI (processing instruction) node
+
+     ‘*any*’
+          ‘#t’ for any type of node
+
+ -- Scheme Procedure: node-eq? other
+     A curried equivalence converter predicate that takes a node OTHER
+     and returns a function that takes another node.  The two nodes are
+     compared using ‘eq?’.
+
+ -- Scheme Procedure: node-equal? other
+     A curried equivalence converter predicate that takes a node OTHER
+     and returns a function that takes another node.  The two nodes are
+     compared using ‘equal?’.
+
+ -- Scheme Procedure: node-pos n
+     Select the N’th element of a nodeset and return as a singular
+     nodeset.  If the N’th element does not exist, return an empty
+     nodeset.  If N is a negative number the node is picked from the
+     tail of the list.
+
+          ((node-pos 1) nodeset)  ; return the the head of the nodeset (if exists)
+          ((node-pos 2) nodeset)  ; return the node after that (if exists)
+          ((node-pos -1) nodeset) ; selects the last node of a non-empty nodeset
+          ((node-pos -2) nodeset) ; selects the last but one node, if exists.
+
+ -- Scheme Procedure: filter pred?
+     A filter applicator, which introduces a filtering context.  The
+     argument converter PRED? is considered a predicate, with either
+     ‘#f’ or ‘nil’ meaning failure.
+
+ -- Scheme Procedure: take-until pred?
+          take-until:: Converter -> Converter, or
+          take-until:: Pred -> Node|Nodeset -> Nodeset
+
+     Given a converter-predicate PRED? and a nodeset, apply the
+     predicate to each element of the nodeset, until the predicate
+     yields anything but ‘#f’ or ‘nil’.  Return the elements of the
+     input nodeset that have been processed until that moment (that is,
+     which fail the predicate).
+
+     ‘take-until’ is a variation of the ‘filter’ above: ‘take-until’
+     passes elements of an ordered input set up to (but not including)
+     the first element that satisfies the predicate.  The nodeset
+     returned by ‘((take-until (not pred)) nset)’ is a subset – to be
+     more precise, a prefix – of the nodeset returned by ‘((filter pred)
+     nset)’.
+
+ -- Scheme Procedure: take-after pred?
+          take-after:: Converter -> Converter, or
+          take-after:: Pred -> Node|Nodeset -> Nodeset
+
+     Given a converter-predicate PRED? and a nodeset, apply the
+     predicate to each element of the nodeset, until the predicate
+     yields anything but ‘#f’ or ‘nil’.  Return the elements of the
+     input nodeset that have not been processed: that is, return the
+     elements of the input nodeset that follow the first element that
+     satisfied the predicate.
+
+     ‘take-after’ along with ‘take-until’ partition an input nodeset
+     into three parts: the first element that satisfies a predicate, all
+     preceding elements and all following elements.
+
+ -- Scheme Procedure: map-union proc lst
+     Apply PROC to each element of LST and return the list of results.
+     If PROC returns a nodeset, splice it into the result
+
+     From another point of view, ‘map-union’ is a function
+     ‘Converter->Converter’, which places an argument-converter in a
+     joining context.
+
+ -- Scheme Procedure: node-reverse node-or-nodeset
+          node-reverse :: Converter, or
+          node-reverse:: Node|Nodeset -> Nodeset
+
+     Reverses the order of nodes in the nodeset.  This basic converter
+     is needed to implement a reverse document order (see the XPath
+     Recommendation).
+
+ -- Scheme Procedure: node-trace title
+          node-trace:: String -> Converter
+
+     ‘(node-trace title)’ is an identity converter.  In addition it
+     prints out the node or nodeset it is applied to, prefixed with the
+     TITLE.  This converter is very useful for debugging.
+
+7.22.6.3 Converter Combinators
+..............................
+
+Combinators are higher-order functions that transmogrify a converter or
+glue a sequence of converters into a single, non-trivial converter.  The
+goal is to arrive at converters that correspond to XPath location paths.
+
+   From a different point of view, a combinator is a fixed, named
+“pattern” of applying converters.  Given below is a complete set of such
+patterns that together implement XPath location path specification.  As
+it turns out, all these combinators can be built from a small number of
+basic blocks: regular functional composition, ‘map-union’ and ‘filter’
+applicators, and the nodeset union.
+
+ -- Scheme Procedure: select-kids test-pred?
+     ‘select-kids’ takes a converter (or a predicate) as an argument and
+     returns another converter.  The resulting converter applied to a
+     nodeset returns an ordered subset of its children that satisfy the
+     predicate TEST-PRED?.
+
+ -- Scheme Procedure: node-self pred?
+     Similar to ‘select-kids’ except that the predicate PRED? is applied
+     to the node itself rather than to its children.  The resulting
+     nodeset will contain either one component, or will be empty if the
+     node failed the predicate.
+
+ -- Scheme Procedure: node-join . selectors
+          node-join:: [LocPath] -> Node|Nodeset -> Nodeset, or
+          node-join:: [Converter] -> Converter
+
+     Join the sequence of location steps or paths as described above.
+
+ -- Scheme Procedure: node-reduce . converters
+          node-reduce:: [LocPath] -> Node|Nodeset -> Nodeset, or
+          node-reduce:: [Converter] -> Converter
+
+     A regular functional composition of converters.  From a different
+     point of view, ‘((apply node-reduce converters) nodeset)’ is
+     equivalent to ‘(foldl apply nodeset converters)’, i.e., folding, or
+     reducing, a list of converters with the nodeset as a seed.
+
+ -- Scheme Procedure: node-or . converters
+          node-or:: [Converter] -> Converter
+
+     This combinator applies all converters to a given node and produces
+     the union of their results.  This combinator corresponds to a union
+     (‘|’ operation) for XPath location paths.
+
+ -- Scheme Procedure: node-closure test-pred?
+          node-closure:: Converter -> Converter
+
+     Select all _descendants_ of a node that satisfy a
+     converter-predicate TEST-PRED?.  This combinator is similar to
+     ‘select-kids’ but applies to grand...  children as well.  This
+     combinator implements the ‘descendant::’ XPath axis.  Conceptually,
+     this combinator can be expressed as
+
+          (define (node-closure f)
+            (node-or
+              (select-kids f)
+              (node-reduce (select-kids (node-typeof? '*)) (node-closure f))))
+
+     This definition, as written, looks somewhat like a fixpoint, and it
+     will run forever.  It is obvious however that sooner or later
+     ‘(select-kids (node-typeof? '*))’ will return an empty nodeset.  At
+     this point further iterations will no longer affect the result and
+     can be stopped.
+
+ -- Scheme Procedure: node-parent rootnode
+          node-parent:: RootNode -> Converter
+
+     ‘(node-parent rootnode)’ yields a converter that returns a parent
+     of a node it is applied to.  If applied to a nodeset, it returns
+     the list of parents of nodes in the nodeset.  The ROOTNODE does not
+     have to be the root node of the whole SXML tree – it may be a root
+     node of a branch of interest.
+
+     Given the notation of Philip Wadler’s paper on semantics of XSLT,
+
+       parent(x) = { y | y=subnode*(root), x=subnode(y) }
+
+     Therefore, ‘node-parent’ is not the fundamental converter: it can
+     be expressed through the existing ones.  Yet ‘node-parent’ is a
+     rather convenient converter.  It corresponds to a ‘parent::’ axis
+     of SXPath.  Note that the ‘parent::’ axis can be used with an
+     attribute node as well.
+
+ -- Scheme Procedure: sxpath path
+     Evaluate an abbreviated SXPath.
+
+          sxpath:: AbbrPath -> Converter, or
+          sxpath:: AbbrPath -> Node|Nodeset -> Nodeset
+
+     PATH is a list.  It is translated to the full SXPath according to
+     the following rewriting rules:
+
+          (sxpath '())
+          ⇒ (node-join)
+
+          (sxpath '(path-component ...))
+          ⇒ (node-join (sxpath1 path-component) (sxpath '(...)))
+
+          (sxpath1 '//)
+          ⇒ (node-or
+             (node-self (node-typeof? '*any*))
+             (node-closure (node-typeof? '*any*)))
+
+          (sxpath1 '(equal? x))
+          ⇒ (select-kids (node-equal? x))
+
+          (sxpath1 '(eq? x))
+          ⇒ (select-kids (node-eq? x))
+
+          (sxpath1 ?symbol)
+          ⇒ (select-kids (node-typeof? ?symbol)
+
+          (sxpath1 procedure)
+          ⇒ procedure
+
+          (sxpath1 '(?symbol ...))
+          ⇒ (sxpath1 '((?symbol) ...))
+
+          (sxpath1 '(path reducer ...))
+          ⇒ (node-reduce (sxpath path) (sxpathr reducer) ...)
+
+          (sxpathr number)
+          ⇒ (node-pos number)
+
+          (sxpathr path-filter)
+          ⇒ (filter (sxpath path-filter))
+
+File: guile.info,  Node: sxml ssax input-parse,  Next: sxml apply-templates,  Prev: SXPath,  Up: SXML
+
+7.22.7 (sxml ssax input-parse)
+------------------------------
+
+7.22.7.1 Overview
+.................
+
+A simple lexer.
+
+   The procedures in this module surprisingly often suffice to parse an
+input stream.  They either skip, or build and return tokens, according
+to inclusion or delimiting semantics.  The list of characters to expect,
+include, or to break at may vary from one invocation of a function to
+another.  This allows the functions to easily parse even
+context-sensitive languages.
+
+   EOF is generally frowned on, and thrown up upon if encountered.
+Exceptions are mentioned specifically.  The list of expected characters
+(characters to skip until, or break-characters) may include an EOF
+"character", which is to be coded as the symbol, ‘*eof*’.
+
+   The input stream to parse is specified as a “port”, which is usually
+the last (and optional) argument.  It defaults to the current input port
+if omitted.
+
+   If the parser encounters an error, it will throw an exception to the
+key ‘parser-error’.  The arguments will be of the form ‘(PORT MESSAGE
+SPECIALISING-MSG*)’.
+
+   The first argument is a port, which typically points to the offending
+character or its neighborhood.  You can then use ‘port-column’ and
+‘port-line’ to query the current position.  MESSAGE is the description
+of the error.  Other arguments supply more details about the problem.
+
+7.22.7.2 Usage
+..............
+
+ -- Scheme Procedure: peek-next-char [port]
+
+ -- Scheme Procedure: assert-curr-char expected-chars comment [port]
+
+ -- Scheme Procedure: skip-until arg [port]
+
+ -- Scheme Procedure: skip-while skip-chars [port]
+
+ -- Scheme Procedure: next-token prefix-skipped-chars break-chars
+          [comment] [port]
+
+ -- Scheme Procedure: next-token-of incl-list/pred [port]
+
+ -- Scheme Procedure: read-text-line [port]
+
+ -- Scheme Procedure: read-string n [port]
+
+ -- Scheme Procedure: find-string-from-port? _ _ . _
+     Looks for STR in <INPUT-PORT>, optionally within the first
+     MAX-NO-CHAR characters.
+
+File: guile.info,  Node: sxml apply-templates,  Prev: sxml ssax input-parse,  Up: SXML
+
+7.22.8 (sxml apply-templates)
+-----------------------------
+
+7.22.8.1 Overview
+.................
+
+Pre-order traversal of a tree and creation of a new tree:
+
+     	apply-templates:: tree x <templates> -> <new-tree>
+
+   where
+
+      <templates> ::= (<template> ...)
+      <template>  ::= (<node-test> <node-test> ... <node-test> . <handler>)
+      <node-test> ::= an argument to node-typeof? above
+      <handler>   ::= <tree> -> <new-tree>
+
+   This procedure does a _normal_, pre-order traversal of an SXML tree.
+It walks the tree, checking at each node against the list of matching
+templates.
+
+   If the match is found (which must be unique, i.e., unambiguous), the
+corresponding handler is invoked and given the current node as an
+argument.  The result from the handler, which must be a ‘<tree>’, takes
+place of the current node in the resulting tree.  The name of the
+function is not accidental: it resembles rather closely an
+‘apply-templates’ function of XSLT.
+
+7.22.8.2 Usage
+..............
+
+ -- Scheme Procedure: apply-templates tree templates
+
+File: guile.info,  Node: Texinfo Processing,  Prev: SXML,  Up: Guile Modules
+

@@ -1,0 +1,621 @@
+4.8 Substitutions in Makefiles
+==============================
+
+Each subdirectory in a distribution that contains something to be
+compiled or installed should come with a file `Makefile.in', from which
+`configure' creates a file `Makefile' in that directory.  To create
+`Makefile', `configure' performs a simple variable substitution,
+replacing occurrences of `@VARIABLE@' in `Makefile.in' with the value
+that `configure' has determined for that variable.  Variables that are
+substituted into output files in this way are called "output
+variables".  They are ordinary shell variables that are set in
+`configure'.  To make `configure' substitute a particular variable into
+the output files, the macro `AC_SUBST' must be called with that
+variable name as an argument.  Any occurrences of `@VARIABLE@' for
+other variables are left unchanged.  *Note Setting Output Variables::,
+for more information on creating output variables with `AC_SUBST'.
+
+   A software package that uses a `configure' script should be
+distributed with a file `Makefile.in', but no makefile; that way, the
+user has to properly configure the package for the local system before
+compiling it.
+
+   *Note Makefile Conventions: (standards)Makefile Conventions, for
+more information on what to put in makefiles.
+
+* Menu:
+
+* Preset Output Variables::     Output variables that are always set
+* Installation Directory Variables::  Other preset output variables
+* Changed Directory Variables::  Warnings about `datarootdir'
+* Build Directories::           Supporting multiple concurrent compiles
+* Automatic Remaking::          Makefile rules for configuring
+
+File: autoconf.info,  Node: Preset Output Variables,  Next: Installation Directory Variables,  Up: Makefile Substitutions
+
+4.8.1 Preset Output Variables
+-----------------------------
+
+Some output variables are preset by the Autoconf macros.  Some of the
+Autoconf macros set additional output variables, which are mentioned in
+the descriptions for those macros.  *Note Output Variable Index::, for a
+complete list of output variables.  *Note Installation Directory
+Variables::, for the list of the preset ones related to installation
+directories.  Below are listed the other preset ones, many of which are
+precious variables (*note Setting Output Variables::, `AC_ARG_VAR').
+
+   The preset variables which are available during `config.status'
+(*note Configuration Actions::) may also be used during `configure'
+tests.  For example, it is permissible to reference `$srcdir' when
+constructing a list of directories to pass via option `-I' during a
+compiler feature check.  When used in this manner, coupled with the
+fact that `configure' is always run from the top build directory, it is
+sufficient to use just `$srcdir' instead of `$top_srcdir'.
+
+ -- Variable: CFLAGS
+     Debugging and optimization options for the C compiler.  If it is
+     not set in the environment when `configure' runs, the default
+     value is set when you call `AC_PROG_CC' (or empty if you don't).
+     `configure' uses this variable when compiling or linking programs
+     to test for C features.
+
+     If a compiler option affects only the behavior of the preprocessor
+     (e.g., `-DNAME'), it should be put into `CPPFLAGS' instead.  If it
+     affects only the linker (e.g., `-LDIRECTORY'), it should be put
+     into `LDFLAGS' instead.  If it affects only the compiler proper,
+     `CFLAGS' is the natural home for it.  If an option affects
+     multiple phases of the compiler, though, matters get tricky.  One
+     approach to put such options directly into `CC', e.g., `CC='gcc
+     -m64''.  Another is to put them into both `CPPFLAGS' and
+     `LDFLAGS', but not into `CFLAGS'.
+
+     However, remember that some `Makefile' variables are reserved by
+     the GNU Coding Standards for the use of the "user"--the person
+     building the package.  For instance, `CFLAGS' is one such variable.
+
+     Sometimes package developers are tempted to set user variables
+     such as `CFLAGS' because it appears to make their job easier.
+     However, the package itself should never set a user variable,
+     particularly not to include switches that are required for proper
+     compilation of the package.  Since these variables are documented
+     as being for the package builder, that person rightfully expects
+     to be able to override any of these variables at build time.  If
+     the package developer needs to add switches without interfering
+     with the user, the proper way to do that is to introduce an
+     additional variable.  Automake makes this easy by introducing
+     `AM_CFLAGS' (*note Flag Variables Ordering: (automake)Flag
+     Variables Ordering.), but the concept is the same even if Automake
+     is not used.
+
+ -- Variable: configure_input
+     A comment saying that the file was generated automatically by
+     `configure' and giving the name of the input file.  `AC_OUTPUT'
+     adds a comment line containing this variable to the top of every
+     makefile it creates.  For other files, you should reference this
+     variable in a comment at the top of each input file.  For example,
+     an input shell script should begin like this:
+
+          #!/bin/sh
+          # @configure_input@
+
+     The presence of that line also reminds people editing the file
+     that it needs to be processed by `configure' in order to be used.
+
+ -- Variable: CPPFLAGS
+     Preprocessor options for the C, C++, Objective C, and Objective C++
+     preprocessors and compilers.  If it is not set in the environment
+     when `configure' runs, the default value is empty.  `configure'
+     uses this variable when preprocessing or compiling programs to
+     test for C, C++, Objective C, and Objective C++ features.
+
+     This variable's contents should contain options like `-I', `-D',
+     and `-U' that affect only the behavior of the preprocessor.
+     Please see the explanation of `CFLAGS' for what you can do if an
+     option affects other phases of the compiler as well.
+
+     Currently, `configure' always links as part of a single invocation
+     of the compiler that also preprocesses and compiles, so it uses
+     this variable also when linking programs.  However, it is unwise to
+     depend on this behavior because the GNU Coding Standards do not
+     require it and many packages do not use `CPPFLAGS' when linking
+     programs.
+
+     *Note Special Chars in Variables::, for limitations that `CPPFLAGS'
+     might run into.
+
+ -- Variable: CXXFLAGS
+     Debugging and optimization options for the C++ compiler.  It acts
+     like `CFLAGS', but for C++ instead of C.
+
+ -- Variable: DEFS
+     `-D' options to pass to the C compiler.  If `AC_CONFIG_HEADERS' is
+     called, `configure' replaces `@DEFS@' with `-DHAVE_CONFIG_H'
+     instead (*note Configuration Headers::).  This variable is not
+     defined while `configure' is performing its tests, only when
+     creating the output files.  *Note Setting Output Variables::, for
+     how to check the results of previous tests.
+
+ -- Variable: ECHO_C
+ -- Variable: ECHO_N
+ -- Variable: ECHO_T
+     How does one suppress the trailing newline from `echo' for
+     question-answer message pairs?  These variables provide a way:
+
+          echo $ECHO_N "And the winner is... $ECHO_C"
+          sleep 100000000000
+          echo "${ECHO_T}dead."
+
+     Some old and uncommon `echo' implementations offer no means to
+     achieve this, in which case `ECHO_T' is set to tab.  You might not
+     want to use it.
+
+ -- Variable: ERLCFLAGS
+     Debugging and optimization options for the Erlang compiler.  If it
+     is not set in the environment when `configure' runs, the default
+     value is empty.  `configure' uses this variable when compiling
+     programs to test for Erlang features.
+
+ -- Variable: FCFLAGS
+     Debugging and optimization options for the Fortran compiler.  If it
+     is not set in the environment when `configure' runs, the default
+     value is set when you call `AC_PROG_FC' (or empty if you don't).
+     `configure' uses this variable when compiling or linking programs
+     to test for Fortran features.
+
+ -- Variable: FFLAGS
+     Debugging and optimization options for the Fortran 77 compiler.
+     If it is not set in the environment when `configure' runs, the
+     default value is set when you call `AC_PROG_F77' (or empty if you
+     don't).  `configure' uses this variable when compiling or linking
+     programs to test for Fortran 77 features.
+
+ -- Variable: LDFLAGS
+     Options for the linker.  If it is not set in the environment when
+     `configure' runs, the default value is empty.  `configure' uses
+     this variable when linking programs to test for C, C++, Objective
+     C, Objective C++, Fortran, and Go features.
+
+     This variable's contents should contain options like `-s' and `-L'
+     that affect only the behavior of the linker.  Please see the
+     explanation of `CFLAGS' for what you can do if an option also
+     affects other phases of the compiler.
+
+     Don't use this variable to pass library names (`-l') to the
+     linker; use `LIBS' instead.
+
+ -- Variable: LIBS
+     `-l' options to pass to the linker.  The default value is empty,
+     but some Autoconf macros may prepend extra libraries to this
+     variable if those libraries are found and provide necessary
+     functions, see *note Libraries::.  `configure' uses this variable
+     when linking programs to test for C, C++, Objective C, Objective
+     C++, Fortran, and Go features.
+
+ -- Variable: OBJCFLAGS
+     Debugging and optimization options for the Objective C compiler.
+     It acts like `CFLAGS', but for Objective C instead of C.
+
+ -- Variable: OBJCXXFLAGS
+     Debugging and optimization options for the Objective C++ compiler.
+     It acts like `CXXFLAGS', but for Objective C++ instead of C++.
+
+ -- Variable: GOFLAGS
+     Debugging and optimization options for the Go compiler.  It acts
+     like `CFLAGS', but for Go instead of C.
+
+ -- Variable: builddir
+     Rigorously equal to `.'.  Added for symmetry only.
+
+ -- Variable: abs_builddir
+     Absolute name of `builddir'.
+
+ -- Variable: top_builddir
+     The relative name of the top level of the current build tree.  In
+     the top-level directory, this is the same as `builddir'.
+
+ -- Variable: top_build_prefix
+     The relative name of the top level of the current build tree with
+     final slash if nonempty.  This is the same as `top_builddir',
+     except that it contains zero or more runs of `../', so it should
+     not be appended with a slash for concatenation.  This helps for
+     `make' implementations that otherwise do not treat `./file' and
+     `file' as equal in the toplevel build directory.
+
+ -- Variable: abs_top_builddir
+     Absolute name of `top_builddir'.
+
+ -- Variable: srcdir
+     The name of the directory that contains the source code for that
+     makefile.
+
+ -- Variable: abs_srcdir
+     Absolute name of `srcdir'.
+
+ -- Variable: top_srcdir
+     The name of the top-level source code directory for the package.
+     In the top-level directory, this is the same as `srcdir'.
+
+ -- Variable: abs_top_srcdir
+     Absolute name of `top_srcdir'.
+
+File: autoconf.info,  Node: Installation Directory Variables,  Next: Changed Directory Variables,  Prev: Preset Output Variables,  Up: Makefile Substitutions
+
+4.8.2 Installation Directory Variables
+--------------------------------------
+
+The following variables specify the directories for package
+installation, see *note Variables for Installation Directories:
+(standards)Directory Variables, for more information.  Each variable
+corresponds to an argument of `configure'; trailing slashes are
+stripped so that expressions such as `${prefix}/lib' expand with only
+one slash between directory names.  See the end of this section for
+details on when and how to use these variables.
+
+ -- Variable: bindir
+     The directory for installing executables that users run.
+
+ -- Variable: datadir
+     The directory for installing idiosyncratic read-only
+     architecture-independent data.
+
+ -- Variable: datarootdir
+     The root of the directory tree for read-only
+     architecture-independent data files.
+
+ -- Variable: docdir
+     The directory for installing documentation files (other than Info
+     and man).
+
+ -- Variable: dvidir
+     The directory for installing documentation files in DVI format.
+
+ -- Variable: exec_prefix
+     The installation prefix for architecture-dependent files.  By
+     default it's the same as `prefix'.  You should avoid installing
+     anything directly to `exec_prefix'.  However, the default value for
+     directories containing architecture-dependent files should be
+     relative to `exec_prefix'.
+
+ -- Variable: htmldir
+     The directory for installing HTML documentation.
+
+ -- Variable: includedir
+     The directory for installing C header files.
+
+ -- Variable: infodir
+     The directory for installing documentation in Info format.
+
+ -- Variable: libdir
+     The directory for installing object code libraries.
+
+ -- Variable: libexecdir
+     The directory for installing executables that other programs run.
+
+ -- Variable: localedir
+     The directory for installing locale-dependent but
+     architecture-independent data, such as message catalogs.  This
+     directory usually has a subdirectory per locale.
+
+ -- Variable: localstatedir
+     The directory for installing modifiable single-machine data.
+
+ -- Variable: mandir
+     The top-level directory for installing documentation in man format.
+
+ -- Variable: oldincludedir
+     The directory for installing C header files for non-GCC compilers.
+
+ -- Variable: pdfdir
+     The directory for installing PDF documentation.
+
+ -- Variable: prefix
+     The common installation prefix for all files.  If `exec_prefix' is
+     defined to a different value, `prefix' is used only for
+     architecture-independent files.
+
+ -- Variable: psdir
+     The directory for installing PostScript documentation.
+
+ -- Variable: sbindir
+     The directory for installing executables that system
+     administrators run.
+
+ -- Variable: sharedstatedir
+     The directory for installing modifiable architecture-independent
+     data.
+
+ -- Variable: sysconfdir
+     The directory for installing read-only single-machine data.
+
+   Most of these variables have values that rely on `prefix' or
+`exec_prefix'.  It is deliberate that the directory output variables
+keep them unexpanded: typically `@datarootdir@' is replaced by
+`${prefix}/share', not `/usr/local/share', and `@datadir@' is replaced
+by `${datarootdir}'.
+
+   This behavior is mandated by the GNU Coding Standards, so that when
+the user runs:
+
+`make'
+     she can still specify a different prefix from the one specified to
+     `configure', in which case, if needed, the package should hard
+     code dependencies corresponding to the make-specified prefix.
+
+`make install'
+     she can specify a different installation location, in which case
+     the package _must_ still depend on the location which was compiled
+     in (i.e., never recompile when `make install' is run).  This is an
+     extremely important feature, as many people may decide to install
+     all the files of a package grouped together, and then install
+     links from the final locations to there.
+
+   In order to support these features, it is essential that
+`datarootdir' remains defined as `${prefix}/share', so that its value
+can be expanded based on the current value of `prefix'.
+
+   A corollary is that you should not use these variables except in
+makefiles.  For instance, instead of trying to evaluate `datadir' in
+`configure' and hard-coding it in makefiles using e.g.,
+`AC_DEFINE_UNQUOTED([DATADIR], ["$datadir"], [Data directory.])', you
+should add `-DDATADIR='$(datadir)'' to your makefile's definition of
+`CPPFLAGS' (`AM_CPPFLAGS' if you are also using Automake).
+
+   Similarly, you should not rely on `AC_CONFIG_FILES' to replace
+`bindir' and friends in your shell scripts and other files; instead,
+let `make' manage their replacement.  For instance Autoconf ships
+templates of its shell scripts ending with `.in', and uses a makefile
+snippet similar to the following to build scripts like `autoheader' and
+`autom4te':
+
+     edit = sed \
+             -e 's|@bindir[@]|$(bindir)|g' \
+             -e 's|@pkgdatadir[@]|$(pkgdatadir)|g' \
+             -e 's|@prefix[@]|$(prefix)|g'
+
+     autoheader autom4te: Makefile
+             rm -f $@ $@.tmp
+             srcdir=''; \
+               test -f ./$@.in || srcdir=$(srcdir)/; \
+               $(edit) $${srcdir}$@.in >$@.tmp
+             chmod +x $@.tmp
+             chmod a-w $@.tmp
+             mv $@.tmp $@
+
+     autoheader: $(srcdir)/autoheader.in
+     autom4te: $(srcdir)/autom4te.in
+
+   Some details are noteworthy:
+
+`@bindir[@]'
+     The brackets prevent `configure' from replacing `@bindir@' in the
+     Sed expression itself.  Brackets are preferable to a backslash
+     here, since Posix says `\@' is not portable.
+
+`$(bindir)'
+     Don't use `@bindir@'!  Use the matching makefile variable instead.
+
+`$(pkgdatadir)'
+     The example takes advantage of the variable `$(pkgdatadir)'
+     provided by Automake; it is equivalent to `$(datadir)/$(PACKAGE)'.
+
+`/'
+     Don't use `/' in the Sed expressions that replace file names since
+     most likely the variables you use, such as `$(bindir)', contain
+     `/'.  Use a shell metacharacter instead, such as `|'.
+
+special characters
+     File names, file name components, and the value of `VPATH' should
+     not contain shell metacharacters or white space.  *Note Special
+     Chars in Variables::.
+
+dependency on `Makefile'
+     Since `edit' uses values that depend on the configuration specific
+     values (`prefix', etc.) and not only on `VERSION' and so forth,
+     the output depends on `Makefile', not `configure.ac'.
+
+`$@'
+     The main rule is generic, and uses `$@' extensively to avoid the
+     need for multiple copies of the rule.
+
+Separated dependencies and single suffix rules
+     You can't use them!  The above snippet cannot be (portably)
+     rewritten as:
+
+          autoconf autoheader: Makefile
+          .in:
+                  rm -f $@ $@.tmp
+                  $(edit) $< >$@.tmp
+                  chmod +x $@.tmp
+                  mv $@.tmp $@
+
+     *Note Single Suffix Rules::, for details.
+
+`$(srcdir)'
+     Be sure to specify the name of the source directory, otherwise the
+     package won't support separated builds.
+
+   For the more specific installation of Erlang libraries, the
+following variables are defined:
+
+ -- Variable: ERLANG_INSTALL_LIB_DIR
+     The common parent directory of Erlang library installation
+     directories.  This variable is set by calling the
+     `AC_ERLANG_SUBST_INSTALL_LIB_DIR' macro in `configure.ac'.
+
+ -- Variable: ERLANG_INSTALL_LIB_DIR_LIBRARY
+     The installation directory for Erlang library LIBRARY.  This
+     variable is set by using the `AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR'
+     macro in `configure.ac'.
+
+   *Note Erlang Libraries::, for details.
+
+File: autoconf.info,  Node: Changed Directory Variables,  Next: Build Directories,  Prev: Installation Directory Variables,  Up: Makefile Substitutions
+
+4.8.3 Changed Directory Variables
+---------------------------------
+
+In Autoconf 2.60, the set of directory variables has changed, and the
+defaults of some variables have been adjusted (*note Installation
+Directory Variables::) to changes in the GNU Coding Standards.
+Notably, `datadir', `infodir', and `mandir' are now expressed in terms
+of `datarootdir'.  If you are upgrading from an earlier Autoconf
+version, you may need to adjust your files to ensure that the directory
+variables are substituted correctly (*note Defining Directories::), and
+that a definition of `datarootdir' is in place.  For example, in a
+`Makefile.in', adding
+
+     datarootdir = @datarootdir@
+
+is usually sufficient.  If you use Automake to create `Makefile.in', it
+will add this for you.
+
+   To help with the transition, Autoconf warns about files that seem to
+use `datarootdir' without defining it.  In some cases, it then expands
+the value of `$datarootdir' in substitutions of the directory
+variables.  The following example shows such a warning:
+
+     $ cat configure.ac
+     AC_INIT
+     AC_CONFIG_FILES([Makefile])
+     AC_OUTPUT
+     $ cat Makefile.in
+     prefix = @prefix@
+     datadir = @datadir@
+     $ autoconf
+     $ configure
+     configure: creating ./config.status
+     config.status: creating Makefile
+     config.status: WARNING:
+                    Makefile.in seems to ignore the --datarootdir setting
+     $ cat Makefile
+     prefix = /usr/local
+     datadir = ${prefix}/share
+
+   Usually one can easily change the file to accommodate both older and
+newer Autoconf releases:
+
+     $ cat Makefile.in
+     prefix = @prefix@
+     datarootdir = @datarootdir@
+     datadir = @datadir@
+     $ configure
+     configure: creating ./config.status
+     config.status: creating Makefile
+     $ cat Makefile
+     prefix = /usr/local
+     datarootdir = ${prefix}/share
+     datadir = ${datarootdir}
+
+   In some cases, however, the checks may not be able to detect that a
+suitable initialization of `datarootdir' is in place, or they may fail
+to detect that such an initialization is necessary in the output file.
+If, after auditing your package, there are still spurious `configure'
+warnings about `datarootdir', you may add the line
+
+     AC_DEFUN([AC_DATAROOTDIR_CHECKED])
+
+to your `configure.ac' to disable the warnings.  This is an exception
+to the usual rule that you should not define a macro whose name begins
+with `AC_' (*note Macro Names::).
+
+File: autoconf.info,  Node: Build Directories,  Next: Automatic Remaking,  Prev: Changed Directory Variables,  Up: Makefile Substitutions
+
+4.8.4 Build Directories
+-----------------------
+
+You can support compiling a software package for several architectures
+simultaneously from the same copy of the source code.  The object files
+for each architecture are kept in their own directory.
+
+   To support doing this, `make' uses the `VPATH' variable to find the
+files that are in the source directory.  GNU Make can do this.  Most
+other recent `make' programs can do this as well, though they may have
+difficulties and it is often simpler to recommend GNU `make' (*note
+VPATH and Make::).  Older `make' programs do not support `VPATH'; when
+using them, the source code must be in the same directory as the object
+files.
+
+   If you are using GNU Automake, the remaining details in this section
+are already covered for you, based on the contents of your
+`Makefile.am'.  But if you are using Autoconf in isolation, then
+supporting `VPATH' requires the following in your `Makefile.in':
+
+     srcdir = @srcdir@
+     VPATH = @srcdir@
+
+   Do not set `VPATH' to the value of another variable (*note Variables
+listed in VPATH::.
+
+   `configure' substitutes the correct value for `srcdir' when it
+produces `Makefile'.
+
+   Do not use the `make' variable `$<', which expands to the file name
+of the file in the source directory (found with `VPATH'), except in
+implicit rules.  (An implicit rule is one such as `.c.o', which tells
+how to create a `.o' file from a `.c' file.)  Some versions of `make'
+do not set `$<' in explicit rules; they expand it to an empty value.
+
+   Instead, Make command lines should always refer to source files by
+prefixing them with `$(srcdir)/'.  For example:
+
+     time.info: time.texinfo
+             $(MAKEINFO) '$(srcdir)/time.texinfo'
+
+File: autoconf.info,  Node: Automatic Remaking,  Prev: Build Directories,  Up: Makefile Substitutions
+
+4.8.5 Automatic Remaking
+------------------------
+
+You can put rules like the following in the top-level `Makefile.in' for
+a package to automatically update the configuration information when
+you change the configuration files.  This example includes all of the
+optional files, such as `aclocal.m4' and those related to configuration
+header files.  Omit from the `Makefile.in' rules for any of these files
+that your package does not use.
+
+   The `$(srcdir)/' prefix is included because of limitations in the
+`VPATH' mechanism.
+
+   The `stamp-' files are necessary because the timestamps of
+`config.h.in' and `config.h' are not changed if remaking them does not
+change their contents.  This feature avoids unnecessary recompilation.
+You should include the file `stamp-h.in' in your package's
+distribution, so that `make' considers `config.h.in' up to date.  Don't
+use `touch' (*note Limitations of Usual Tools: touch.); instead, use
+`echo' (using `date' would cause needless differences, hence CVS
+conflicts, etc.).
+
+     $(srcdir)/configure: configure.ac aclocal.m4
+             cd '$(srcdir)' && autoconf
+
+     # autoheader might not change config.h.in, so touch a stamp file.
+     $(srcdir)/config.h.in: stamp-h.in
+     $(srcdir)/stamp-h.in: configure.ac aclocal.m4
+             cd '$(srcdir)' && autoheader
+             echo timestamp > '$(srcdir)/stamp-h.in'
+
+     config.h: stamp-h
+     stamp-h: config.h.in config.status
+             ./config.status
+
+     Makefile: Makefile.in config.status
+             ./config.status
+
+     config.status: configure
+             ./config.status --recheck
+
+(Be careful if you copy these lines directly into your makefile, as you
+need to convert the indented lines to start with the tab character.)
+
+   In addition, you should use
+
+     AC_CONFIG_FILES([stamp-h], [echo timestamp > stamp-h])
+
+so `config.status' ensures that `config.h' is considered up to date.
+*Note Output::, for more information about `AC_OUTPUT'.
+
+   *Note config.status Invocation::, for more examples of handling
+configuration-related dependencies.
+
+File: autoconf.info,  Node: Configuration Headers,  Next: Configuration Commands,  Prev: Makefile Substitutions,  Up: Setup
+

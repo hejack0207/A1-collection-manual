@@ -1,0 +1,2213 @@
+6.14 Input and Output
+=====================
+
+* Menu:
+
+* Ports::                       The idea of the port abstraction.
+* Reading::                     Procedures for reading from a port.
+* Writing::                     Procedures for writing to a port.
+* Closing::                     Procedures to close a port.
+* Random Access::               Moving around a random access port.
+* Line/Delimited::              Read and write lines or delimited text.
+* Block Reading and Writing::   Reading and writing blocks of text.
+* Default Ports::               Defaults for input, output and errors.
+* Port Types::                  Types of port and how to make them.
+* R6RS I/O Ports::              The R6RS port API.
+* I/O Extensions::              Using and extending ports in C.
+* BOM Handling::                Handling of Unicode byte order marks.
+
+File: guile.info,  Node: Ports,  Next: Reading,  Up: Input and Output
+
+6.14.1 Ports
+------------
+
+Sequential input/output in Scheme is represented by operations on a
+“port”.  This chapter explains the operations that Guile provides for
+working with ports.
+
+   Ports are created by opening, for instance ‘open-file’ for a file
+(*note File Ports::).  Characters can be read from an input port and
+written to an output port, or both on an input/output port.  A port can
+be closed (*note Closing::) when no longer required, after which any
+attempt to read or write is an error.
+
+   The formal definition of a port is very generic: an input port is
+simply “an object which can deliver characters on demand,” and an output
+port is “an object which can accept characters.” Because this definition
+is so loose, it is easy to write functions that simulate ports in
+software.  “Soft ports” and “string ports” are two interesting and
+powerful examples of this technique.  (*note Soft Ports::, and *note
+String Ports::.)
+
+   Ports are garbage collected in the usual way (*note Memory
+Management::), and will be closed at that time if not already closed.
+In this case any errors occurring in the close will not be reported.
+Usually a program will want to explicitly close so as to be sure all its
+operations have been successful.  Of course if a program has abandoned
+something due to an error or other condition then closing problems are
+probably not of interest.
+
+   It is strongly recommended that file ports be closed explicitly when
+no longer required.  Most systems have limits on how many files can be
+open, both on a per-process and a system-wide basis.  A program that
+uses many files should take care not to hit those limits.  The same
+applies to similar system resources such as pipes and sockets.
+
+   Note that automatic garbage collection is triggered only by memory
+consumption, not by file or other resource usage, so a program cannot
+rely on that to keep it away from system limits.  An explicit call to
+‘gc’ can of course be relied on to pick up unreferenced ports.  If
+program flow makes it hard to be certain when to close then this may be
+an acceptable way to control resource usage.
+
+   All file access uses the “LFS” large file support functions when
+available, so files bigger than 2 Gbytes (2^31 bytes) can be read and
+written on a 32-bit system.
+
+   Each port has an associated character encoding that controls how
+bytes read from the port are converted to characters and string and
+controls how characters and strings written to the port are converted to
+bytes.  When ports are created, they inherit their character encoding
+from the current locale, but, that can be modified after the port is
+created.
+
+   Currently, the ports only work with _non-modal_ encodings.  Most
+encodings are non-modal, meaning that the conversion of bytes to a
+string doesn’t depend on its context: the same byte sequence will always
+return the same string.  A couple of modal encodings are in common use,
+like ISO-2022-JP and ISO-2022-KR, and they are not yet supported.
+
+   Each port also has an associated conversion strategy: what to do when
+a Guile character can’t be converted to the port’s encoded character
+representation for output.  There are three possible strategies: to
+raise an error, to replace the character with a hex escape, or to
+replace the character with a substitute character.
+
+ -- Scheme Procedure: input-port? x
+ -- C Function: scm_input_port_p (x)
+     Return ‘#t’ if X is an input port, otherwise return ‘#f’.  Any
+     object satisfying this predicate also satisfies ‘port?’.
+
+ -- Scheme Procedure: output-port? x
+ -- C Function: scm_output_port_p (x)
+     Return ‘#t’ if X is an output port, otherwise return ‘#f’.  Any
+     object satisfying this predicate also satisfies ‘port?’.
+
+ -- Scheme Procedure: port? x
+ -- C Function: scm_port_p (x)
+     Return a boolean indicating whether X is a port.  Equivalent to
+     ‘(or (input-port? X) (output-port? X))’.
+
+ -- Scheme Procedure: set-port-encoding! port enc
+ -- C Function: scm_set_port_encoding_x (port, enc)
+     Sets the character encoding that will be used to interpret all port
+     I/O. ENC is a string containing the name of an encoding.  Valid
+     encoding names are those defined by IANA
+     (http://www.iana.org/assignments/character-sets).
+
+ -- Scheme Variable: %default-port-encoding
+     A fluid containing ‘#f’ or the name of the encoding to be used by
+     default for newly created ports (*note Fluids and Dynamic
+     States::).  The value ‘#f’ is equivalent to ‘"ISO-8859-1"’.
+
+     New ports are created with the encoding appropriate for the current
+     locale if ‘setlocale’ has been called or the value specified by
+     this fluid otherwise.
+
+ -- Scheme Procedure: port-encoding port
+ -- C Function: scm_port_encoding (port)
+     Returns, as a string, the character encoding that PORT uses to
+     interpret its input and output.  The value ‘#f’ is equivalent to
+     ‘"ISO-8859-1"’.
+
+ -- Scheme Procedure: set-port-conversion-strategy! port sym
+ -- C Function: scm_set_port_conversion_strategy_x (port, sym)
+     Sets the behavior of the interpreter when outputting a character
+     that is not representable in the port’s current encoding.  SYM can
+     be either ‘'error’, ‘'substitute’, or ‘'escape’.  If it is
+     ‘'error’, an error will be thrown when an nonconvertible character
+     is encountered.  If it is ‘'substitute’, then nonconvertible
+     characters will be replaced with approximate characters, or with
+     question marks if no approximately correct character is available.
+     If it is ‘'escape’, it will appear as a hex escape when output.
+
+     If PORT is an open port, the conversion error behavior is set for
+     that port.  If it is ‘#f’, it is set as the default behavior for
+     any future ports that get created in this thread.
+
+ -- Scheme Procedure: port-conversion-strategy port
+ -- C Function: scm_port_conversion_strategy (port)
+     Returns the behavior of the port when outputting a character that
+     is not representable in the port’s current encoding.  It returns
+     the symbol ‘error’ if unrepresentable characters should cause
+     exceptions, ‘substitute’ if the port should try to replace
+     unrepresentable characters with question marks or approximate
+     characters, or ‘escape’ if unrepresentable characters should be
+     converted to string escapes.
+
+     If PORT is ‘#f’, then the current default behavior will be
+     returned.  New ports will have this default behavior when they are
+     created.
+
+ -- Scheme Variable: %default-port-conversion-strategy
+     The fluid that defines the conversion strategy for newly created
+     ports, and for other conversion routines such as ‘scm_to_stringn’,
+     ‘scm_from_stringn’, ‘string->pointer’, and ‘pointer->string’.
+
+     Its value must be one of the symbols described above, with the same
+     semantics: ‘'error’, ‘'substitute’, or ‘'escape’.
+
+     When Guile starts, its value is ‘'substitute’.
+
+     Note that ‘(set-port-conversion-strategy! #f SYM)’ is equivalent to
+     ‘(fluid-set! %default-port-conversion-strategy SYM)’.
+
+File: guile.info,  Node: Reading,  Next: Writing,  Prev: Ports,  Up: Input and Output
+
+6.14.2 Reading
+--------------
+
+[Generic procedures for reading from ports.]
+
+   These procedures pertain to reading characters and strings from
+ports.  To read general S-expressions from ports, *Note Scheme Read::.
+
+ -- Scheme Procedure: eof-object? x
+ -- C Function: scm_eof_object_p (x)
+     Return ‘#t’ if X is an end-of-file object; otherwise return ‘#f’.
+
+ -- Scheme Procedure: char-ready? [port]
+ -- C Function: scm_char_ready_p (port)
+     Return ‘#t’ if a character is ready on input PORT and return ‘#f’
+     otherwise.  If ‘char-ready?’ returns ‘#t’ then the next ‘read-char’
+     operation on PORT is guaranteed not to hang.  If PORT is a file
+     port at end of file then ‘char-ready?’ returns ‘#t’.
+
+     ‘char-ready?’ exists to make it possible for a program to accept
+     characters from interactive ports without getting stuck waiting for
+     input.  Any input editors associated with such ports must make sure
+     that characters whose existence has been asserted by ‘char-ready?’
+     cannot be rubbed out.  If ‘char-ready?’ were to return ‘#f’ at end
+     of file, a port at end of file would be indistinguishable from an
+     interactive port that has no ready characters.
+
+ -- Scheme Procedure: read-char [port]
+ -- C Function: scm_read_char (port)
+     Return the next character available from PORT, updating PORT to
+     point to the following character.  If no more characters are
+     available, the end-of-file object is returned.
+
+     When PORT’s data cannot be decoded according to its character
+     encoding, a ‘decoding-error’ is raised and PORT points past the
+     erroneous byte sequence.
+
+ -- C Function: size_t scm_c_read (SCM port, void *buffer, size_t size)
+     Read up to SIZE bytes from PORT and store them in BUFFER.  The
+     return value is the number of bytes actually read, which can be
+     less than SIZE if end-of-file has been reached.
+
+     Note that this function does not update ‘port-line’ and
+     ‘port-column’ below.
+
+ -- Scheme Procedure: peek-char [port]
+ -- C Function: scm_peek_char (port)
+     Return the next character available from PORT, _without_ updating
+     PORT to point to the following character.  If no more characters
+     are available, the end-of-file object is returned.
+
+     The value returned by a call to ‘peek-char’ is the same as the
+     value that would have been returned by a call to ‘read-char’ on the
+     same port.  The only difference is that the very next call to
+     ‘read-char’ or ‘peek-char’ on that PORT will return the value
+     returned by the preceding call to ‘peek-char’.  In particular, a
+     call to ‘peek-char’ on an interactive port will hang waiting for
+     input whenever a call to ‘read-char’ would have hung.
+
+     As for ‘read-char’, a ‘decoding-error’ may be raised if such a
+     situation occurs.  However, unlike with ‘read-char’, PORT still
+     points at the beginning of the erroneous byte sequence when the
+     error is raised.
+
+ -- Scheme Procedure: unread-char cobj [port]
+ -- C Function: scm_unread_char (cobj, port)
+     Place character COBJ in PORT so that it will be read by the next
+     read operation.  If called multiple times, the unread characters
+     will be read again in last-in first-out order.  If PORT is not
+     supplied, the current input port is used.
+
+ -- Scheme Procedure: unread-string str port
+ -- C Function: scm_unread_string (str, port)
+     Place the string STR in PORT so that its characters will be read
+     from left-to-right as the next characters from PORT during
+     subsequent read operations.  If called multiple times, the unread
+     characters will be read again in last-in first-out order.  If PORT
+     is not supplied, the ‘current-input-port’ is used.
+
+ -- Scheme Procedure: drain-input port
+ -- C Function: scm_drain_input (port)
+     This procedure clears a port’s input buffers, similar to the way
+     that force-output clears the output buffer.  The contents of the
+     buffers are returned as a single string, e.g.,
+
+          (define p (open-input-file ...))
+          (drain-input p) => empty string, nothing buffered yet.
+          (unread-char (read-char p) p)
+          (drain-input p) => initial chars from p, up to the buffer size.
+
+     Draining the buffers may be useful for cleanly finishing buffered
+     I/O so that the file descriptor can be used directly for further
+     input.
+
+ -- Scheme Procedure: port-column port
+ -- Scheme Procedure: port-line port
+ -- C Function: scm_port_column (port)
+ -- C Function: scm_port_line (port)
+     Return the current column number or line number of PORT.  If the
+     number is unknown, the result is #f.  Otherwise, the result is a
+     0-origin integer - i.e. the first character of the first line is
+     line 0, column 0.  (However, when you display a file position, for
+     example in an error message, we recommend you add 1 to get 1-origin
+     integers.  This is because lines and column numbers traditionally
+     start with 1, and that is what non-programmers will find most
+     natural.)
+
+ -- Scheme Procedure: set-port-column! port column
+ -- Scheme Procedure: set-port-line! port line
+ -- C Function: scm_set_port_column_x (port, column)
+ -- C Function: scm_set_port_line_x (port, line)
+     Set the current column or line number of PORT.
+
+File: guile.info,  Node: Writing,  Next: Closing,  Prev: Reading,  Up: Input and Output
+
+6.14.3 Writing
+--------------
+
+[Generic procedures for writing to ports.]
+
+   These procedures are for writing characters and strings to ports.
+For more information on writing arbitrary Scheme objects to ports, *Note
+Scheme Write::.
+
+ -- Scheme Procedure: get-print-state port
+ -- C Function: scm_get_print_state (port)
+     Return the print state of the port PORT.  If PORT has no associated
+     print state, ‘#f’ is returned.
+
+ -- Scheme Procedure: newline [port]
+ -- C Function: scm_newline (port)
+     Send a newline to PORT.  If PORT is omitted, send to the current
+     output port.
+
+ -- Scheme Procedure: port-with-print-state port [pstate]
+ -- C Function: scm_port_with_print_state (port, pstate)
+     Create a new port which behaves like PORT, but with an included
+     print state PSTATE.  PSTATE is optional.  If PSTATE isn’t supplied
+     and PORT already has a print state, the old print state is reused.
+
+ -- Scheme Procedure: simple-format destination message . args
+ -- C Function: scm_simple_format (destination, message, args)
+     Write MESSAGE to DESTINATION, defaulting to the current output
+     port.  MESSAGE can contain ‘~A’ (was ‘%s’) and ‘~S’ (was ‘%S’)
+     escapes.  When printed, the escapes are replaced with corresponding
+     members of ARGS: ‘~A’ formats using ‘display’ and ‘~S’ formats
+     using ‘write’.  If DESTINATION is ‘#t’, then use the current output
+     port, if DESTINATION is ‘#f’, then return a string containing the
+     formatted text.  Does not add a trailing newline.
+
+ -- Scheme Procedure: write-char chr [port]
+ -- C Function: scm_write_char (chr, port)
+     Send character CHR to PORT.
+
+ -- C Function: void scm_c_write (SCM port, const void *buffer, size_t
+          size)
+     Write SIZE bytes at BUFFER to PORT.
+
+     Note that this function does not update ‘port-line’ and
+     ‘port-column’ (*note Reading::).
+
+ -- Scheme Procedure: force-output [port]
+ -- C Function: scm_force_output (port)
+     Flush the specified output port, or the current output port if PORT
+     is omitted.  The current output buffer contents are passed to the
+     underlying port implementation (e.g., in the case of fports, the
+     data will be written to the file and the output buffer will be
+     cleared.)  It has no effect on an unbuffered port.
+
+     The return value is unspecified.
+
+ -- Scheme Procedure: flush-all-ports
+ -- C Function: scm_flush_all_ports ()
+     Equivalent to calling ‘force-output’ on all open output ports.  The
+     return value is unspecified.
+
+File: guile.info,  Node: Closing,  Next: Random Access,  Prev: Writing,  Up: Input and Output
+
+6.14.4 Closing
+--------------
+
+ -- Scheme Procedure: close-port port
+ -- C Function: scm_close_port (port)
+     Close the specified port object.  Return ‘#t’ if it successfully
+     closes a port or ‘#f’ if it was already closed.  An exception may
+     be raised if an error occurs, for example when flushing buffered
+     output.  See also *note close: Ports and File Descriptors, for a
+     procedure which can close file descriptors.
+
+ -- Scheme Procedure: close-input-port port
+ -- Scheme Procedure: close-output-port port
+ -- C Function: scm_close_input_port (port)
+ -- C Function: scm_close_output_port (port)
+     Close the specified input or output PORT.  An exception may be
+     raised if an error occurs while closing.  If PORT is already
+     closed, nothing is done.  The return value is unspecified.
+
+     See also *note close: Ports and File Descriptors, for a procedure
+     which can close file descriptors.
+
+ -- Scheme Procedure: port-closed? port
+ -- C Function: scm_port_closed_p (port)
+     Return ‘#t’ if PORT is closed or ‘#f’ if it is open.
+
+File: guile.info,  Node: Random Access,  Next: Line/Delimited,  Prev: Closing,  Up: Input and Output
+
+6.14.5 Random Access
+--------------------
+
+ -- Scheme Procedure: seek fd_port offset whence
+ -- C Function: scm_seek (fd_port, offset, whence)
+     Sets the current position of FD_PORT to the integer OFFSET.  For a
+     file port, OFFSET is expressed as a number of bytes; for other
+     types of ports, such as string ports, OFFSET is an abstract
+     representation of the position within the port’s data, not
+     necessarily expressed as a number of bytes.  OFFSET is interpreted
+     according to the value of WHENCE.
+
+     One of the following variables should be supplied for WHENCE:
+      -- Variable: SEEK_SET
+          Seek from the beginning of the file.
+      -- Variable: SEEK_CUR
+          Seek from the current position.
+      -- Variable: SEEK_END
+          Seek from the end of the file.
+     If FD_PORT is a file descriptor, the underlying system call is
+     ‘lseek’.  PORT may be a string port.
+
+     The value returned is the new position in FD_PORT.  This means that
+     the current position of a port can be obtained using:
+          (seek port 0 SEEK_CUR)
+
+ -- Scheme Procedure: ftell fd_port
+ -- C Function: scm_ftell (fd_port)
+     Return an integer representing the current position of FD_PORT,
+     measured from the beginning.  Equivalent to:
+
+          (seek port 0 SEEK_CUR)
+
+ -- Scheme Procedure: truncate-file file [length]
+ -- C Function: scm_truncate_file (file, length)
+     Truncate FILE to LENGTH bytes.  FILE can be a filename string, a
+     port object, or an integer file descriptor.  The return value is
+     unspecified.
+
+     For a port or file descriptor LENGTH can be omitted, in which case
+     the file is truncated at the current position (per ‘ftell’ above).
+
+     On most systems a file can be extended by giving a length greater
+     than the current size, but this is not mandatory in the POSIX
+     standard.
+
+File: guile.info,  Node: Line/Delimited,  Next: Block Reading and Writing,  Prev: Random Access,  Up: Input and Output
+
+6.14.6 Line Oriented and Delimited Text
+---------------------------------------
+
+The delimited-I/O module can be accessed with:
+
+     (use-modules (ice-9 rdelim))
+
+   It can be used to read or write lines of text, or read text delimited
+by a specified set of characters.  It’s similar to the ‘(scsh rdelim)’
+module from guile-scsh, but does not use multiple values or character
+sets and has an extra procedure ‘write-line’.
+
+ -- Scheme Procedure: read-line [port] [handle-delim]
+     Return a line of text from PORT if specified, otherwise from the
+     value returned by ‘(current-input-port)’.  Under Unix, a line of
+     text is terminated by the first end-of-line character or by
+     end-of-file.
+
+     If HANDLE-DELIM is specified, it should be one of the following
+     symbols:
+     ‘trim’
+          Discard the terminating delimiter.  This is the default, but
+          it will be impossible to tell whether the read terminated with
+          a delimiter or end-of-file.
+     ‘concat’
+          Append the terminating delimiter (if any) to the returned
+          string.
+     ‘peek’
+          Push the terminating delimiter (if any) back on to the port.
+     ‘split’
+          Return a pair containing the string read from the port and the
+          terminating delimiter or end-of-file object.
+
+     Like ‘read-char’, this procedure can throw to ‘decoding-error’
+     (*note ‘read-char’: Reading.).
+
+ -- Scheme Procedure: read-line! buf [port]
+     Read a line of text into the supplied string BUF and return the
+     number of characters added to BUF.  If BUF is filled, then ‘#f’ is
+     returned.  Read from PORT if specified, otherwise from the value
+     returned by ‘(current-input-port)’.
+
+ -- Scheme Procedure: read-delimited delims [port] [handle-delim]
+     Read text until one of the characters in the string DELIMS is found
+     or end-of-file is reached.  Read from PORT if supplied, otherwise
+     from the value returned by ‘(current-input-port)’.  HANDLE-DELIM
+     takes the same values as described for ‘read-line’.
+
+ -- Scheme Procedure: read-delimited! delims buf [port] [handle-delim]
+          [start] [end]
+     Read text into the supplied string BUF.
+
+     If a delimiter was found, return the number of characters written,
+     except if HANDLE-DELIM is ‘split’, in which case the return value
+     is a pair, as noted above.
+
+     As a special case, if PORT was already at end-of-stream, the EOF
+     object is returned.  Also, if no characters were written because
+     the buffer was full, ‘#f’ is returned.
+
+     It’s something of a wacky interface, to be honest.
+
+ -- Scheme Procedure: write-line obj [port]
+ -- C Function: scm_write_line (obj, port)
+     Display OBJ and a newline character to PORT.  If PORT is not
+     specified, ‘(current-output-port)’ is used.  This function is
+     equivalent to:
+          (display obj [port])
+          (newline [port])
+
+   In the past, Guile did not have a procedure that would just read out
+all of the characters from a port.  As a workaround, many people just
+called ‘read-delimited’ with no delimiters, knowing that would produce
+the behavior they wanted.  This prompted Guile developers to add some
+routines that would read all characters from a port.  So it is that
+‘(ice-9 rdelim)’ is also the home for procedures that can reading
+undelimited text:
+
+ -- Scheme Procedure: read-string [port] [count]
+     Read all of the characters out of PORT and return them as a string.
+     If the COUNT is present, treat it as a limit to the number of
+     characters to read.
+
+     By default, read from the current input port, with no size limit on
+     the result.  This procedure always returns a string, even if no
+     characters were read.
+
+ -- Scheme Procedure: read-string! buf [port] [start] [end]
+     Fill BUF with characters read from PORT, defaulting to the current
+     input port.  Return the number of characters read.
+
+     If START or END are specified, store data only into the substring
+     of STR bounded by START and END (which default to the beginning and
+     end of the string, respectively).
+
+   Some of the aforementioned I/O functions rely on the following C
+primitives.  These will mainly be of interest to people hacking Guile
+internals.
+
+ -- Scheme Procedure: %read-delimited! delims str gobble [port [start
+          [end]]]
+ -- C Function: scm_read_delimited_x (delims, str, gobble, port, start,
+          end)
+     Read characters from PORT into STR until one of the characters in
+     the DELIMS string is encountered.  If GOBBLE is true, discard the
+     delimiter character; otherwise, leave it in the input stream for
+     the next read.  If PORT is not specified, use the value of
+     ‘(current-input-port)’.  If START or END are specified, store data
+     only into the substring of STR bounded by START and END (which
+     default to the beginning and end of the string, respectively).
+
+     Return a pair consisting of the delimiter that terminated the
+     string and the number of characters read.  If reading stopped at
+     the end of file, the delimiter returned is the EOF-OBJECT; if the
+     string was filled without encountering a delimiter, this value is
+     ‘#f’.
+
+ -- Scheme Procedure: %read-line [port]
+ -- C Function: scm_read_line (port)
+     Read a newline-terminated line from PORT, allocating storage as
+     necessary.  The newline terminator (if any) is removed from the
+     string, and a pair consisting of the line and its delimiter is
+     returned.  The delimiter may be either a newline or the EOF-OBJECT;
+     if ‘%read-line’ is called at the end of file, it returns the pair
+     ‘(#<eof> . #<eof>)’.
+
+File: guile.info,  Node: Block Reading and Writing,  Next: Default Ports,  Prev: Line/Delimited,  Up: Input and Output
+
+6.14.7 Block reading and writing
+--------------------------------
+
+The Block-string-I/O module can be accessed with:
+
+     (use-modules (ice-9 rw))
+
+   It currently contains procedures that help to implement the ‘(scsh
+rw)’ module in guile-scsh.
+
+ -- Scheme Procedure: read-string!/partial str [port_or_fdes [start
+          [end]]]
+ -- C Function: scm_read_string_x_partial (str, port_or_fdes, start,
+          end)
+     Read characters from a port or file descriptor into a string STR.
+     A port must have an underlying file descriptor — a so-called fport.
+     This procedure is scsh-compatible and can efficiently read large
+     strings.  It will:
+
+        • attempt to fill the entire string, unless the START and/or END
+          arguments are supplied.  i.e., START defaults to 0 and END
+          defaults to ‘(string-length str)’
+        • use the current input port if PORT_OR_FDES is not supplied.
+        • return fewer than the requested number of characters in some
+          cases, e.g., on end of file, if interrupted by a signal, or if
+          not all the characters are immediately available.
+        • wait indefinitely for some input if no characters are
+          currently available, unless the port is in non-blocking mode.
+        • read characters from the port’s input buffers if available,
+          instead from the underlying file descriptor.
+        • return ‘#f’ if end-of-file is encountered before reading any
+          characters, otherwise return the number of characters read.
+        • return 0 if the port is in non-blocking mode and no characters
+          are immediately available.
+        • return 0 if the request is for 0 bytes, with no end-of-file
+          check.
+
+ -- Scheme Procedure: write-string/partial str [port_or_fdes [start
+          [end]]]
+ -- C Function: scm_write_string_partial (str, port_or_fdes, start, end)
+     Write characters from a string STR to a port or file descriptor.  A
+     port must have an underlying file descriptor — a so-called fport.
+     This procedure is scsh-compatible and can efficiently write large
+     strings.  It will:
+
+        • attempt to write the entire string, unless the START and/or
+          END arguments are supplied.  i.e., START defaults to 0 and END
+          defaults to ‘(string-length str)’
+        • use the current output port if PORT_OF_FDES is not supplied.
+        • in the case of a buffered port, store the characters in the
+          port’s output buffer, if all will fit.  If they will not fit
+          then any existing buffered characters will be flushed before
+          attempting to write the new characters directly to the
+          underlying file descriptor.  If the port is in non-blocking
+          mode and buffered characters can not be flushed immediately,
+          then an ‘EAGAIN’ system-error exception will be raised (Note:
+          scsh does not support the use of non-blocking buffered ports.)
+        • write fewer than the requested number of characters in some
+          cases, e.g., if interrupted by a signal or if not all of the
+          output can be accepted immediately.
+        • wait indefinitely for at least one character from STR to be
+          accepted by the port, unless the port is in non-blocking mode.
+        • return the number of characters accepted by the port.
+        • return 0 if the port is in non-blocking mode and can not
+          accept at least one character from STR immediately
+        • return 0 immediately if the request size is 0 bytes.
+
+File: guile.info,  Node: Default Ports,  Next: Port Types,  Prev: Block Reading and Writing,  Up: Input and Output
+
+6.14.8 Default Ports for Input, Output and Errors
+-------------------------------------------------
+
+ -- Scheme Procedure: current-input-port
+ -- C Function: scm_current_input_port ()
+     Return the current input port.  This is the default port used by
+     many input procedures.
+
+     Initially this is the “standard input” in Unix and C terminology.
+     When the standard input is a tty the port is unbuffered, otherwise
+     it’s fully buffered.
+
+     Unbuffered input is good if an application runs an interactive
+     subprocess, since any type-ahead input won’t go into Guile’s buffer
+     and be unavailable to the subprocess.
+
+     Note that Guile buffering is completely separate from the tty “line
+     discipline”.  In the usual cooked mode on a tty Guile only sees a
+     line of input once the user presses <Return>.
+
+ -- Scheme Procedure: current-output-port
+ -- C Function: scm_current_output_port ()
+     Return the current output port.  This is the default port used by
+     many output procedures.
+
+     Initially this is the “standard output” in Unix and C terminology.
+     When the standard output is a tty this port is unbuffered,
+     otherwise it’s fully buffered.
+
+     Unbuffered output to a tty is good for ensuring progress output or
+     a prompt is seen.  But an application which always prints whole
+     lines could change to line buffered, or an application with a lot
+     of output could go fully buffered and perhaps make explicit
+     ‘force-output’ calls (*note Writing::) at selected points.
+
+ -- Scheme Procedure: current-error-port
+ -- C Function: scm_current_error_port ()
+     Return the port to which errors and warnings should be sent.
+
+     Initially this is the “standard error” in Unix and C terminology.
+     When the standard error is a tty this port is unbuffered, otherwise
+     it’s fully buffered.
+
+ -- Scheme Procedure: set-current-input-port port
+ -- Scheme Procedure: set-current-output-port port
+ -- Scheme Procedure: set-current-error-port port
+ -- C Function: scm_set_current_input_port (port)
+ -- C Function: scm_set_current_output_port (port)
+ -- C Function: scm_set_current_error_port (port)
+     Change the ports returned by ‘current-input-port’,
+     ‘current-output-port’ and ‘current-error-port’, respectively, so
+     that they use the supplied PORT for input or output.
+
+ -- C Function: void scm_dynwind_current_input_port (SCM port)
+ -- C Function: void scm_dynwind_current_output_port (SCM port)
+ -- C Function: void scm_dynwind_current_error_port (SCM port)
+     These functions must be used inside a pair of calls to
+     ‘scm_dynwind_begin’ and ‘scm_dynwind_end’ (*note Dynamic Wind::).
+     During the dynwind context, the indicated port is set to PORT.
+
+     More precisely, the current port is swapped with a ‘backup’ value
+     whenever the dynwind context is entered or left.  The backup value
+     is initialized with the PORT argument.
+
+File: guile.info,  Node: Port Types,  Next: R6RS I/O Ports,  Prev: Default Ports,  Up: Input and Output
+
+6.14.9 Types of Port
+--------------------
+
+[Types of port; how to make them.]
+
+* Menu:
+
+* File Ports:: Ports on an operating system file.
+* String Ports:: Ports on a Scheme string.
+* Soft Ports:: Ports on arbitrary Scheme procedures.
+* Void Ports:: Ports on nothing at all.
+
+File: guile.info,  Node: File Ports,  Next: String Ports,  Up: Port Types
+
+6.14.9.1 File Ports
+...................
+
+The following procedures are used to open file ports.  See also *note
+open: Ports and File Descriptors, for an interface to the Unix ‘open’
+system call.
+
+   Most systems have limits on how many files can be open, so it’s
+strongly recommended that file ports be closed explicitly when no longer
+required (*note Ports::).
+
+ -- Scheme Procedure: open-file filename mode [#:guess-encoding=#f]
+          [#:encoding=#f]
+ -- C Function: scm_open_file_with_encoding (filename, mode,
+          guess_encoding, encoding)
+ -- C Function: scm_open_file (filename, mode)
+     Open the file whose name is FILENAME, and return a port
+     representing that file.  The attributes of the port are determined
+     by the MODE string.  The way in which this is interpreted is
+     similar to C stdio.  The first character must be one of the
+     following:
+
+     ‘r’
+          Open an existing file for input.
+     ‘w’
+          Open a file for output, creating it if it doesn’t already
+          exist or removing its contents if it does.
+     ‘a’
+          Open a file for output, creating it if it doesn’t already
+          exist.  All writes to the port will go to the end of the file.
+          The "append mode" can be turned off while the port is in use
+          *note fcntl: Ports and File Descriptors.
+
+     The following additional characters can be appended:
+
+     ‘+’
+          Open the port for both input and output.  E.g., ‘r+’: open an
+          existing file for both input and output.
+     ‘0’
+          Create an "unbuffered" port.  In this case input and output
+          operations are passed directly to the underlying port
+          implementation without additional buffering.  This is likely
+          to slow down I/O operations.  The buffering mode can be
+          changed while a port is in use *note setvbuf: Ports and File
+          Descriptors.
+     ‘l’
+          Add line-buffering to the port.  The port output buffer will
+          be automatically flushed whenever a newline character is
+          written.
+     ‘b’
+          Use binary mode, ensuring that each byte in the file will be
+          read as one Scheme character.
+
+          To provide this property, the file will be opened with the
+          8-bit character encoding "ISO-8859-1", ignoring the default
+          port encoding.  *Note Ports::, for more information on port
+          encodings.
+
+          Note that while it is possible to read and write binary data
+          as characters or strings, it is usually better to treat bytes
+          as octets, and byte sequences as bytevectors.  *Note R6RS
+          Binary Input::, and *note R6RS Binary Output::, for more.
+
+          This option had another historical meaning, for DOS
+          compatibility: in the default (textual) mode, DOS reads a
+          CR-LF sequence as one LF byte.  The ‘b’ flag prevents this
+          from happening, adding ‘O_BINARY’ to the underlying ‘open’
+          call.  Still, the flag is generally useful because of its port
+          encoding ramifications.
+
+     Unless binary mode is requested, the character encoding of the new
+     port is determined as follows: First, if GUESS-ENCODING is true,
+     the ‘file-encoding’ procedure is used to guess the encoding of the
+     file (*note Character Encoding of Source Files::).  If
+     GUESS-ENCODING is false or if ‘file-encoding’ fails, ENCODING is
+     used unless it is also false.  As a last resort, the default port
+     encoding is used.  *Note Ports::, for more information on port
+     encodings.  It is an error to pass a non-false GUESS-ENCODING or
+     ENCODING if binary mode is requested.
+
+     If a file cannot be opened with the access requested, ‘open-file’
+     throws an exception.
+
+     When the file is opened, its encoding is set to the current
+     ‘%default-port-encoding’, unless the ‘b’ flag was supplied.
+     Sometimes it is desirable to honor Emacs-style coding declarations
+     in files(1).  When that is the case, the ‘file-encoding’ procedure
+     can be used as follows (*note ‘file-encoding’: Character Encoding
+     of Source Files.):
+
+          (let* ((port     (open-input-file file))
+                 (encoding (file-encoding port)))
+            (set-port-encoding! port (or encoding (port-encoding port))))
+
+     In theory we could create read/write ports which were buffered in
+     one direction only.  However this isn’t included in the current
+     interfaces.
+
+ -- Scheme Procedure: open-input-file filename [#:guess-encoding=#f]
+          [#:encoding=#f] [#:binary=#f]
+
+     Open FILENAME for input.  If BINARY is true, open the port in
+     binary mode, otherwise use text mode.  ENCODING and GUESS-ENCODING
+     determine the character encoding as described above for
+     ‘open-file’.  Equivalent to
+          (open-file FILENAME
+                     (if BINARY "rb" "r")
+                     #:guess-encoding GUESS-ENCODING
+                     #:encoding ENCODING)
+
+ -- Scheme Procedure: open-output-file filename [#:encoding=#f]
+          [#:binary=#f]
+
+     Open FILENAME for output.  If BINARY is true, open the port in
+     binary mode, otherwise use text mode.  ENCODING specifies the
+     character encoding as described above for ‘open-file’.  Equivalent
+     to
+          (open-file FILENAME
+                     (if BINARY "wb" "w")
+                     #:encoding ENCODING)
+
+ -- Scheme Procedure: call-with-input-file filename proc
+          [#:guess-encoding=#f] [#:encoding=#f] [#:binary=#f]
+ -- Scheme Procedure: call-with-output-file filename proc
+          [#:encoding=#f] [#:binary=#f]
+     Open FILENAME for input or output, and call ‘(PROC port)’ with the
+     resulting port.  Return the value returned by PROC.  FILENAME is
+     opened as per ‘open-input-file’ or ‘open-output-file’ respectively,
+     and an error is signaled if it cannot be opened.
+
+     When PROC returns, the port is closed.  If PROC does not return
+     (e.g. if it throws an error), then the port might not be closed
+     automatically, though it will be garbage collected in the usual way
+     if not otherwise referenced.
+
+ -- Scheme Procedure: with-input-from-file filename thunk
+          [#:guess-encoding=#f] [#:encoding=#f] [#:binary=#f]
+ -- Scheme Procedure: with-output-to-file filename thunk [#:encoding=#f]
+          [#:binary=#f]
+ -- Scheme Procedure: with-error-to-file filename thunk [#:encoding=#f]
+          [#:binary=#f]
+     Open FILENAME and call ‘(THUNK)’ with the new port setup as
+     respectively the ‘current-input-port’, ‘current-output-port’, or
+     ‘current-error-port’.  Return the value returned by THUNK.
+     FILENAME is opened as per ‘open-input-file’ or ‘open-output-file’
+     respectively, and an error is signaled if it cannot be opened.
+
+     When THUNK returns, the port is closed and the previous setting of
+     the respective current port is restored.
+
+     The current port setting is managed with ‘dynamic-wind’, so the
+     previous value is restored no matter how THUNK exits (eg. an
+     exception), and if THUNK is re-entered (via a captured
+     continuation) then it’s set again to the FILENAME port.
+
+     The port is closed when THUNK returns normally, but not when exited
+     via an exception or new continuation.  This ensures it’s still
+     ready for use if THUNK is re-entered by a captured continuation.
+     Of course the port is always garbage collected and closed in the
+     usual way when no longer referenced anywhere.
+
+ -- Scheme Procedure: port-mode port
+ -- C Function: scm_port_mode (port)
+     Return the port modes associated with the open port PORT.  These
+     will not necessarily be identical to the modes used when the port
+     was opened, since modes such as "append" which are used only during
+     port creation are not retained.
+
+ -- Scheme Procedure: port-filename port
+ -- C Function: scm_port_filename (port)
+     Return the filename associated with PORT, or ‘#f’ if no filename is
+     associated with the port.
+
+     PORT must be open, ‘port-filename’ cannot be used once the port is
+     closed.
+
+ -- Scheme Procedure: set-port-filename! port filename
+ -- C Function: scm_set_port_filename_x (port, filename)
+     Change the filename associated with PORT, using the current input
+     port if none is specified.  Note that this does not change the
+     port’s source of data, but only the value that is returned by
+     ‘port-filename’ and reported in diagnostic output.
+
+ -- Scheme Procedure: file-port? obj
+ -- C Function: scm_file_port_p (obj)
+     Determine whether OBJ is a port that is related to a file.
+
+   ---------- Footnotes ----------
+
+   (1) Guile 2.0.0 to 2.0.7 would do this by default.  This behavior was
+deemed inappropriate and disabled starting from Guile 2.0.8.
+
+File: guile.info,  Node: String Ports,  Next: Soft Ports,  Prev: File Ports,  Up: Port Types
+
+6.14.9.2 String Ports
+.....................
+
+The following allow string ports to be opened by analogy to R4RS file
+port facilities:
+
+   With string ports, the port-encoding is treated differently than
+other types of ports.  When string ports are created, they do not
+inherit a character encoding from the current locale.  They are given a
+default locale that allows them to handle all valid string characters.
+Typically one should not modify a string port’s character encoding away
+from its default.
+
+ -- Scheme Procedure: call-with-output-string proc
+ -- C Function: scm_call_with_output_string (proc)
+     Calls the one-argument procedure PROC with a newly created output
+     port.  When the function returns, the string composed of the
+     characters written into the port is returned.  PROC should not
+     close the port.
+
+     Note that which characters can be written to a string port depend
+     on the port’s encoding.  The default encoding of string ports is
+     specified by the ‘%default-port-encoding’ fluid (*note
+     ‘%default-port-encoding’: Ports.).  For instance, it is an error to
+     write Greek letter alpha to an ISO-8859-1-encoded string port since
+     this character cannot be represented with ISO-8859-1:
+
+          (define alpha (integer->char #x03b1)) ; GREEK SMALL LETTER ALPHA
+
+          (with-fluids ((%default-port-encoding "ISO-8859-1"))
+            (call-with-output-string
+              (lambda (p)
+                (display alpha p))))
+
+          ⇒
+          Throw to key `encoding-error'
+
+     Changing the string port’s encoding to a Unicode-capable encoding
+     such as UTF-8 solves the problem.
+
+ -- Scheme Procedure: call-with-input-string string proc
+ -- C Function: scm_call_with_input_string (string, proc)
+     Calls the one-argument procedure PROC with a newly created input
+     port from which STRING’s contents may be read.  The value yielded
+     by the PROC is returned.
+
+ -- Scheme Procedure: with-output-to-string thunk
+     Calls the zero-argument procedure THUNK with the current output
+     port set temporarily to a new string port.  It returns a string
+     composed of the characters written to the current output.
+
+     See ‘call-with-output-string’ above for character encoding
+     considerations.
+
+ -- Scheme Procedure: with-input-from-string string thunk
+     Calls the zero-argument procedure THUNK with the current input port
+     set temporarily to a string port opened on the specified STRING.
+     The value yielded by THUNK is returned.
+
+ -- Scheme Procedure: open-input-string str
+ -- C Function: scm_open_input_string (str)
+     Take a string and return an input port that delivers characters
+     from the string.  The port can be closed by ‘close-input-port’,
+     though its storage will be reclaimed by the garbage collector if it
+     becomes inaccessible.
+
+ -- Scheme Procedure: open-output-string
+ -- C Function: scm_open_output_string ()
+     Return an output port that will accumulate characters for retrieval
+     by ‘get-output-string’.  The port can be closed by the procedure
+     ‘close-output-port’, though its storage will be reclaimed by the
+     garbage collector if it becomes inaccessible.
+
+ -- Scheme Procedure: get-output-string port
+ -- C Function: scm_get_output_string (port)
+     Given an output port created by ‘open-output-string’, return a
+     string consisting of the characters that have been output to the
+     port so far.
+
+     ‘get-output-string’ must be used before closing PORT, once closed
+     the string cannot be obtained.
+
+   A string port can be used in many procedures which accept a port but
+which are not dependent on implementation details of fports.  E.g.,
+seeking and truncating will work on a string port, but trying to extract
+the file descriptor number will fail.
+
+File: guile.info,  Node: Soft Ports,  Next: Void Ports,  Prev: String Ports,  Up: Port Types
+
+6.14.9.3 Soft Ports
+...................
+
+A “soft-port” is a port based on a vector of procedures capable of
+accepting or delivering characters.  It allows emulation of I/O ports.
+
+ -- Scheme Procedure: make-soft-port pv modes
+ -- C Function: scm_make_soft_port (pv, modes)
+     Return a port capable of receiving or delivering characters as
+     specified by the MODES string (*note open-file: File Ports.).  PV
+     must be a vector of length 5 or 6.  Its components are as follows:
+
+       0. procedure accepting one character for output
+       1. procedure accepting a string for output
+       2. thunk for flushing output
+       3. thunk for getting one character
+       4. thunk for closing port (not by garbage collection)
+       5. (if present and not ‘#f’) thunk for computing the number of
+          characters that can be read from the port without blocking.
+
+     For an output-only port only elements 0, 1, 2, and 4 need be
+     procedures.  For an input-only port only elements 3 and 4 need be
+     procedures.  Thunks 2 and 4 can instead be ‘#f’ if there is no
+     useful operation for them to perform.
+
+     If thunk 3 returns ‘#f’ or an ‘eof-object’ (*note eof-object?:
+     (r5rs)Input.) it indicates that the port has reached end-of-file.
+     For example:
+
+          (define stdout (current-output-port))
+          (define p (make-soft-port
+                     (vector
+                      (lambda (c) (write c stdout))
+                      (lambda (s) (display s stdout))
+                      (lambda () (display "." stdout))
+                      (lambda () (char-upcase (read-char)))
+                      (lambda () (display "@" stdout)))
+                     "rw"))
+
+          (write p p) ⇒ #<input-output: soft 8081e20>
+
+File: guile.info,  Node: Void Ports,  Prev: Soft Ports,  Up: Port Types
+
+6.14.9.4 Void Ports
+...................
+
+This kind of port causes any data to be discarded when written to, and
+always returns the end-of-file object when read from.
+
+ -- Scheme Procedure: %make-void-port mode
+ -- C Function: scm_sys_make_void_port (mode)
+     Create and return a new void port.  A void port acts like
+     ‘/dev/null’.  The MODE argument specifies the input/output modes
+     for this port: see the documentation for ‘open-file’ in *note File
+     Ports::.
+
+File: guile.info,  Node: R6RS I/O Ports,  Next: I/O Extensions,  Prev: Port Types,  Up: Input and Output
+
+6.14.10 R6RS I/O Ports
+----------------------
+
+The I/O port API of the Revised Report^6 on the Algorithmic Language
+Scheme (R6RS) (http://www.r6rs.org/) is provided by the ‘(rnrs io
+ports)’ module.  It provides features, such as binary I/O and Unicode
+string I/O, that complement or refine Guile’s historical port API
+presented above (*note Input and Output::).  Note that R6RS ports are
+not disjoint from Guile’s native ports, so Guile-specific procedures
+will work on ports created using the R6RS API, and vice versa.
+
+   The text in this section is taken from the R6RS standard libraries
+document, with only minor adaptions for inclusion in this manual.  The
+Guile developers offer their thanks to the R6RS editors for having
+provided the report’s text under permissive conditions making this
+possible.
+
+   _Note_: The implementation of this R6RS API is not complete yet.
+
+* Menu:
+
+* R6RS File Names::             File names.
+* R6RS File Options::           Options for opening files.
+* R6RS Buffer Modes::           Influencing buffering behavior.
+* R6RS Transcoders::            Influencing port encoding.
+* R6RS End-of-File::            The end-of-file object.
+* R6RS Port Manipulation::      Manipulating R6RS ports.
+* R6RS Input Ports::            Input Ports.
+* R6RS Binary Input::           Binary input.
+* R6RS Textual Input::          Textual input.
+* R6RS Output Ports::           Output Ports.
+* R6RS Binary Output::          Binary output.
+* R6RS Textual Output::         Textual output.
+
+   A subset of the ‘(rnrs io ports)’ module, plus one non-standard
+procedure ‘unget-bytevector’ (*note R6RS Binary Input::), is provided by
+the ‘(ice-9 binary-ports)’ module.  It contains binary input/output
+procedures and does not rely on R6RS support.
+
+File: guile.info,  Node: R6RS File Names,  Next: R6RS File Options,  Up: R6RS I/O Ports
+
+6.14.10.1 File Names
+....................
+
+Some of the procedures described in this chapter accept a file name as
+an argument.  Valid values for such a file name include strings that
+name a file using the native notation of file system paths on an
+implementation’s underlying operating system, and may include
+implementation-dependent values as well.
+
+   A FILENAME parameter name means that the corresponding argument must
+be a file name.
+
+File: guile.info,  Node: R6RS File Options,  Next: R6RS Buffer Modes,  Prev: R6RS File Names,  Up: R6RS I/O Ports
+
+6.14.10.2 File Options
+......................
+
+When opening a file, the various procedures in this library accept a
+‘file-options’ object that encapsulates flags to specify how the file is
+to be opened.  A ‘file-options’ object is an enum-set (*note rnrs
+enums::) over the symbols constituting valid file options.
+
+   A FILE-OPTIONS parameter name means that the corresponding argument
+must be a file-options object.
+
+ -- Scheme Syntax: file-options FILE-OPTIONS-SYMBOL ...
+
+     Each FILE-OPTIONS-SYMBOL must be a symbol.
+
+     The ‘file-options’ syntax returns a file-options object that
+     encapsulates the specified options.
+
+     When supplied to an operation that opens a file for output, the
+     file-options object returned by ‘(file-options)’ specifies that the
+     file is created if it does not exist and an exception with
+     condition type ‘&i/o-file-already-exists’ is raised if it does
+     exist.  The following standard options can be included to modify
+     the default behavior.
+
+     ‘no-create’
+          If the file does not already exist, it is not created;
+          instead, an exception with condition type
+          ‘&i/o-file-does-not-exist’ is raised.  If the file already
+          exists, the exception with condition type
+          ‘&i/o-file-already-exists’ is not raised and the file is
+          truncated to zero length.
+     ‘no-fail’
+          If the file already exists, the exception with condition type
+          ‘&i/o-file-already-exists’ is not raised, even if ‘no-create’
+          is not included, and the file is truncated to zero length.
+     ‘no-truncate’
+          If the file already exists and the exception with condition
+          type ‘&i/o-file-already-exists’ has been inhibited by
+          inclusion of ‘no-create’ or ‘no-fail’, the file is not
+          truncated, but the port’s current position is still set to the
+          beginning of the file.
+
+     These options have no effect when a file is opened only for input.
+     Symbols other than those listed above may be used as
+     FILE-OPTIONS-SYMBOLs; they have implementation-specific meaning, if
+     any.
+
+          Note: Only the name of FILE-OPTIONS-SYMBOL is significant.
+
+File: guile.info,  Node: R6RS Buffer Modes,  Next: R6RS Transcoders,  Prev: R6RS File Options,  Up: R6RS I/O Ports
+
+6.14.10.3 Buffer Modes
+......................
+
+Each port has an associated buffer mode.  For an output port, the buffer
+mode defines when an output operation flushes the buffer associated with
+the output port.  For an input port, the buffer mode defines how much
+data will be read to satisfy read operations.  The possible buffer modes
+are the symbols ‘none’ for no buffering, ‘line’ for flushing upon line
+endings and reading up to line endings, or other
+implementation-dependent behavior, and ‘block’ for arbitrary buffering.
+This section uses the parameter name BUFFER-MODE for arguments that must
+be buffer-mode symbols.
+
+   If two ports are connected to the same mutable source, both ports are
+unbuffered, and reading a byte or character from that shared source via
+one of the two ports would change the bytes or characters seen via the
+other port, a lookahead operation on one port will render the peeked
+byte or character inaccessible via the other port, while a subsequent
+read operation on the peeked port will see the peeked byte or character
+even though the port is otherwise unbuffered.
+
+   In other words, the semantics of buffering is defined in terms of
+side effects on shared mutable sources, and a lookahead operation has
+the same side effect on the shared source as a read operation.
+
+ -- Scheme Syntax: buffer-mode BUFFER-MODE-SYMBOL
+
+     BUFFER-MODE-SYMBOL must be a symbol whose name is one of ‘none’,
+     ‘line’, and ‘block’.  The result is the corresponding symbol, and
+     specifies the associated buffer mode.
+
+          Note: Only the name of BUFFER-MODE-SYMBOL is significant.
+
+ -- Scheme Procedure: buffer-mode? obj
+     Returns ‘#t’ if the argument is a valid buffer-mode symbol, and
+     returns ‘#f’ otherwise.
+
+File: guile.info,  Node: R6RS Transcoders,  Next: R6RS End-of-File,  Prev: R6RS Buffer Modes,  Up: R6RS I/O Ports
+
+6.14.10.4 Transcoders
+.....................
+
+Several different Unicode encoding schemes describe standard ways to
+encode characters and strings as byte sequences and to decode those
+sequences.  Within this document, a “codec” is an immutable Scheme
+object that represents a Unicode or similar encoding scheme.
+
+   An “end-of-line style” is a symbol that, if it is not ‘none’,
+describes how a textual port transcodes representations of line endings.
+
+   A “transcoder” is an immutable Scheme object that combines a codec
+with an end-of-line style and a method for handling decoding errors.
+Each transcoder represents some specific bidirectional (but not
+necessarily lossless), possibly stateful translation between byte
+sequences and Unicode characters and strings.  Every transcoder can
+operate in the input direction (bytes to characters) or in the output
+direction (characters to bytes).  A TRANSCODER parameter name means that
+the corresponding argument must be a transcoder.
+
+   A “binary port” is a port that supports binary I/O, does not have an
+associated transcoder and does not support textual I/O. A “textual port”
+is a port that supports textual I/O, and does not support binary I/O. A
+textual port may or may not have an associated transcoder.
+
+ -- Scheme Procedure: latin-1-codec
+ -- Scheme Procedure: utf-8-codec
+ -- Scheme Procedure: utf-16-codec
+
+     These are predefined codecs for the ISO 8859-1, UTF-8, and UTF-16
+     encoding schemes.
+
+     A call to any of these procedures returns a value that is equal in
+     the sense of ‘eqv?’ to the result of any other call to the same
+     procedure.
+
+ -- Scheme Syntax: eol-style EOL-STYLE-SYMBOL
+
+     EOL-STYLE-SYMBOL should be a symbol whose name is one of ‘lf’,
+     ‘cr’, ‘crlf’, ‘nel’, ‘crnel’, ‘ls’, and ‘none’.
+
+     The form evaluates to the corresponding symbol.  If the name of
+     EOL-STYLE-SYMBOL is not one of these symbols, the effect and result
+     are implementation-dependent; in particular, the result may be an
+     eol-style symbol acceptable as an EOL-STYLE argument to
+     ‘make-transcoder’.  Otherwise, an exception is raised.
+
+     All eol-style symbols except ‘none’ describe a specific line-ending
+     encoding:
+
+     ‘lf’
+          linefeed
+     ‘cr’
+          carriage return
+     ‘crlf’
+          carriage return, linefeed
+     ‘nel’
+          next line
+     ‘crnel’
+          carriage return, next line
+     ‘ls’
+          line separator
+
+     For a textual port with a transcoder, and whose transcoder has an
+     eol-style symbol ‘none’, no conversion occurs.  For a textual input
+     port, any eol-style symbol other than ‘none’ means that all of the
+     above line-ending encodings are recognized and are translated into
+     a single linefeed.  For a textual output port, ‘none’ and ‘lf’ are
+     equivalent.  Linefeed characters are encoded according to the
+     specified eol-style symbol, and all other characters that
+     participate in possible line endings are encoded as is.
+
+          Note: Only the name of EOL-STYLE-SYMBOL is significant.
+
+ -- Scheme Procedure: native-eol-style
+     Returns the default end-of-line style of the underlying platform,
+     e.g., ‘lf’ on Unix and ‘crlf’ on Windows.
+
+ -- Condition Type: &i/o-decoding
+ -- Scheme Procedure: make-i/o-decoding-error port
+ -- Scheme Procedure: i/o-decoding-error? obj
+
+     This condition type could be defined by
+
+          (define-condition-type &i/o-decoding &i/o-port
+            make-i/o-decoding-error i/o-decoding-error?)
+
+     An exception with this type is raised when one of the operations
+     for textual input from a port encounters a sequence of bytes that
+     cannot be translated into a character or string by the input
+     direction of the port’s transcoder.
+
+     When such an exception is raised, the port’s position is past the
+     invalid encoding.
+
+ -- Condition Type: &i/o-encoding
+ -- Scheme Procedure: make-i/o-encoding-error port char
+ -- Scheme Procedure: i/o-encoding-error? obj
+ -- Scheme Procedure: i/o-encoding-error-char condition
+
+     This condition type could be defined by
+
+          (define-condition-type &i/o-encoding &i/o-port
+            make-i/o-encoding-error i/o-encoding-error?
+            (char i/o-encoding-error-char))
+
+     An exception with this type is raised when one of the operations
+     for textual output to a port encounters a character that cannot be
+     translated into bytes by the output direction of the port’s
+     transcoder.  CHAR is the character that could not be encoded.
+
+ -- Scheme Syntax: error-handling-mode ERROR-HANDLING-MODE-SYMBOL
+
+     ERROR-HANDLING-MODE-SYMBOL should be a symbol whose name is one of
+     ‘ignore’, ‘raise’, and ‘replace’.  The form evaluates to the
+     corresponding symbol.  If ERROR-HANDLING-MODE-SYMBOL is not one of
+     these identifiers, effect and result are implementation-dependent:
+     The result may be an error-handling-mode symbol acceptable as a
+     HANDLING-MODE argument to ‘make-transcoder’.  If it is not
+     acceptable as a HANDLING-MODE argument to ‘make-transcoder’, an
+     exception is raised.
+
+          Note: Only the name of ERROR-HANDLING-MODE-SYMBOL is
+          significant.
+
+     The error-handling mode of a transcoder specifies the behavior of
+     textual I/O operations in the presence of encoding or decoding
+     errors.
+
+     If a textual input operation encounters an invalid or incomplete
+     character encoding, and the error-handling mode is ‘ignore’, an
+     appropriate number of bytes of the invalid encoding are ignored and
+     decoding continues with the following bytes.
+
+     If the error-handling mode is ‘replace’, the replacement character
+     U+FFFD is injected into the data stream, an appropriate number of
+     bytes are ignored, and decoding continues with the following bytes.
+
+     If the error-handling mode is ‘raise’, an exception with condition
+     type ‘&i/o-decoding’ is raised.
+
+     If a textual output operation encounters a character it cannot
+     encode, and the error-handling mode is ‘ignore’, the character is
+     ignored and encoding continues with the next character.  If the
+     error-handling mode is ‘replace’, a codec-specific replacement
+     character is emitted by the transcoder, and encoding continues with
+     the next character.  The replacement character is U+FFFD for
+     transcoders whose codec is one of the Unicode encodings, but is the
+     ‘?’ character for the Latin-1 encoding.  If the error-handling mode
+     is ‘raise’, an exception with condition type ‘&i/o-encoding’ is
+     raised.
+
+ -- Scheme Procedure: make-transcoder codec
+ -- Scheme Procedure: make-transcoder codec eol-style
+ -- Scheme Procedure: make-transcoder codec eol-style handling-mode
+
+     CODEC must be a codec; EOL-STYLE, if present, an eol-style symbol;
+     and HANDLING-MODE, if present, an error-handling-mode symbol.
+
+     EOL-STYLE may be omitted, in which case it defaults to the native
+     end-of-line style of the underlying platform.  HANDLING-MODE may be
+     omitted, in which case it defaults to ‘replace’.  The result is a
+     transcoder with the behavior specified by its arguments.
+
+ -- Scheme procedure: native-transcoder
+     Returns an implementation-dependent transcoder that represents a
+     possibly locale-dependent “native” transcoding.
+
+ -- Scheme Procedure: transcoder-codec transcoder
+ -- Scheme Procedure: transcoder-eol-style transcoder
+ -- Scheme Procedure: transcoder-error-handling-mode transcoder
+
+     These are accessors for transcoder objects; when applied to a
+     transcoder returned by ‘make-transcoder’, they return the CODEC,
+     EOL-STYLE, and HANDLING-MODE arguments, respectively.
+
+ -- Scheme Procedure: bytevector->string bytevector transcoder
+
+     Returns the string that results from transcoding the BYTEVECTOR
+     according to the input direction of the transcoder.
+
+ -- Scheme Procedure: string->bytevector string transcoder
+
+     Returns the bytevector that results from transcoding the STRING
+     according to the output direction of the transcoder.
+
+File: guile.info,  Node: R6RS End-of-File,  Next: R6RS Port Manipulation,  Prev: R6RS Transcoders,  Up: R6RS I/O Ports
+
+6.14.10.5 The End-of-File Object
+................................
+
+R5RS’ ‘eof-object?’ procedure is provided by the ‘(rnrs io ports)’
+module:
+
+ -- Scheme Procedure: eof-object? obj
+ -- C Function: scm_eof_object_p (obj)
+     Return true if OBJ is the end-of-file (EOF) object.
+
+   In addition, the following procedure is provided:
+
+ -- Scheme Procedure: eof-object
+ -- C Function: scm_eof_object ()
+     Return the end-of-file (EOF) object.
+
+          (eof-object? (eof-object))
+          ⇒ #t
+
+File: guile.info,  Node: R6RS Port Manipulation,  Next: R6RS Input Ports,  Prev: R6RS End-of-File,  Up: R6RS I/O Ports
+
+6.14.10.6 Port Manipulation
+...........................
+
+The procedures listed below operate on any kind of R6RS I/O port.
+
+ -- Scheme Procedure: port? obj
+     Returns ‘#t’ if the argument is a port, and returns ‘#f’ otherwise.
+
+ -- Scheme Procedure: port-transcoder port
+     Returns the transcoder associated with PORT if PORT is textual and
+     has an associated transcoder, and returns ‘#f’ if PORT is binary or
+     does not have an associated transcoder.
+
+ -- Scheme Procedure: binary-port? port
+     Return ‘#t’ if PORT is a “binary port”, suitable for binary data
+     input/output.
+
+     Note that internally Guile does not differentiate between binary
+     and textual ports, unlike the R6RS. Thus, this procedure returns
+     true when PORT does not have an associated encoding—i.e., when
+     ‘(port-encoding PORT)’ is ‘#f’ (*note port-encoding: Ports.).  This
+     is the case for ports returned by R6RS procedures such as
+     ‘open-bytevector-input-port’ and ‘make-custom-binary-output-port’.
+
+     However, Guile currently does not prevent use of textual I/O
+     procedures such as ‘display’ or ‘read-char’ with binary ports.
+     Doing so “upgrades” the port from binary to textual, under the
+     ISO-8859-1 encoding.  Likewise, Guile does not prevent use of
+     ‘set-port-encoding!’ on a binary port, which also turns it into a
+     “textual” port.
+
+ -- Scheme Procedure: textual-port? port
+     Always return ‘#t’, as all ports can be used for textual I/O in
+     Guile.
+
+ -- Scheme Procedure: transcoded-port binary-port transcoder
+     The ‘transcoded-port’ procedure returns a new textual port with the
+     specified TRANSCODER.  Otherwise the new textual port’s state is
+     largely the same as that of BINARY-PORT.  If BINARY-PORT is an
+     input port, the new textual port will be an input port and will
+     transcode the bytes that have not yet been read from BINARY-PORT.
+     If BINARY-PORT is an output port, the new textual port will be an
+     output port and will transcode output characters into bytes that
+     are written to the byte sink represented by BINARY-PORT.
+
+     As a side effect, however, ‘transcoded-port’ closes BINARY-PORT in
+     a special way that allows the new textual port to continue to use
+     the byte source or sink represented by BINARY-PORT, even though
+     BINARY-PORT itself is closed and cannot be used by the input and
+     output operations described in this chapter.
+
+ -- Scheme Procedure: port-position port
+     If PORT supports it (see below), return the offset (an integer)
+     indicating where the next octet will be read from/written to in
+     PORT.  If PORT does not support this operation, an error condition
+     is raised.
+
+     This is similar to Guile’s ‘seek’ procedure with the ‘SEEK_CUR’
+     argument (*note Random Access::).
+
+ -- Scheme Procedure: port-has-port-position? port
+     Return ‘#t’ is PORT supports ‘port-position’.
+
+ -- Scheme Procedure: set-port-position! port offset
+     If PORT supports it (see below), set the position where the next
+     octet will be read from/written to PORT to OFFSET (an integer).  If
+     PORT does not support this operation, an error condition is raised.
+
+     This is similar to Guile’s ‘seek’ procedure with the ‘SEEK_SET’
+     argument (*note Random Access::).
+
+ -- Scheme Procedure: port-has-set-port-position!? port
+     Return ‘#t’ is PORT supports ‘set-port-position!’.
+
+ -- Scheme Procedure: call-with-port port proc
+     Call PROC, passing it PORT and closing PORT upon exit of PROC.
+     Return the return values of PROC.
+
+File: guile.info,  Node: R6RS Input Ports,  Next: R6RS Binary Input,  Prev: R6RS Port Manipulation,  Up: R6RS I/O Ports
+
+6.14.10.7 Input Ports
+.....................
+
+ -- Scheme Procedure: input-port? obj
+     Returns ‘#t’ if the argument is an input port (or a combined input
+     and output port), and returns ‘#f’ otherwise.
+
+ -- Scheme Procedure: port-eof? input-port
+     Returns ‘#t’ if the ‘lookahead-u8’ procedure (if INPUT-PORT is a
+     binary port) or the ‘lookahead-char’ procedure (if INPUT-PORT is a
+     textual port) would return the end-of-file object, and ‘#f’
+     otherwise.  The operation may block indefinitely if no data is
+     available but the port cannot be determined to be at end of file.
+
+ -- Scheme Procedure: open-file-input-port filename
+ -- Scheme Procedure: open-file-input-port filename file-options
+ -- Scheme Procedure: open-file-input-port filename file-options
+          buffer-mode
+ -- Scheme Procedure: open-file-input-port filename file-options
+          buffer-mode maybe-transcoder
+     MAYBE-TRANSCODER must be either a transcoder or ‘#f’.
+
+     The ‘open-file-input-port’ procedure returns an input port for the
+     named file.  The FILE-OPTIONS and MAYBE-TRANSCODER arguments are
+     optional.
+
+     The FILE-OPTIONS argument, which may determine various aspects of
+     the returned port (*note R6RS File Options::), defaults to the
+     value of ‘(file-options)’.
+
+     The BUFFER-MODE argument, if supplied, must be one of the symbols
+     that name a buffer mode.  The BUFFER-MODE argument defaults to
+     ‘block’.
+
+     If MAYBE-TRANSCODER is a transcoder, it becomes the transcoder
+     associated with the returned port.
+
+     If MAYBE-TRANSCODER is ‘#f’ or absent, the port will be a binary
+     port and will support the ‘port-position’ and ‘set-port-position!’
+     operations.  Otherwise the port will be a textual port, and whether
+     it supports the ‘port-position’ and ‘set-port-position!’ operations
+     is implementation-dependent (and possibly transcoder-dependent).
+
+ -- Scheme Procedure: standard-input-port
+     Returns a fresh binary input port connected to standard input.
+     Whether the port supports the ‘port-position’ and
+     ‘set-port-position!’ operations is implementation-dependent.
+
+ -- Scheme Procedure: current-input-port
+     This returns a default textual port for input.  Normally, this
+     default port is associated with standard input, but can be
+     dynamically re-assigned using the ‘with-input-from-file’ procedure
+     from the ‘io simple (6)’ library (*note rnrs io simple::).  The
+     port may or may not have an associated transcoder; if it does, the
+     transcoder is implementation-dependent.
+
+File: guile.info,  Node: R6RS Binary Input,  Next: R6RS Textual Input,  Prev: R6RS Input Ports,  Up: R6RS I/O Ports
+
+6.14.10.8 Binary Input
+......................
+
+R6RS binary input ports can be created with the procedures described
+below.
+
+ -- Scheme Procedure: open-bytevector-input-port bv [transcoder]
+ -- C Function: scm_open_bytevector_input_port (bv, transcoder)
+     Return an input port whose contents are drawn from bytevector BV
+     (*note Bytevectors::).
+
+     The TRANSCODER argument is currently not supported.
+
+ -- Scheme Procedure: make-custom-binary-input-port id read!
+          get-position set-position! close
+ -- C Function: scm_make_custom_binary_input_port (id, read!,
+          get-position, set-position!, close)
+     Return a new custom binary input port(1) named ID (a string) whose
+     input is drained by invoking READ! and passing it a bytevector, an
+     index where bytes should be written, and the number of bytes to
+     read.  The ‘read!’ procedure must return an integer indicating the
+     number of bytes read, or ‘0’ to indicate the end-of-file.
+
+     Optionally, if GET-POSITION is not ‘#f’, it must be a thunk that
+     will be called when ‘port-position’ is invoked on the custom binary
+     port and should return an integer indicating the position within
+     the underlying data stream; if GET-POSITION was not supplied, the
+     returned port does not support ‘port-position’.
+
+     Likewise, if SET-POSITION! is not ‘#f’, it should be a one-argument
+     procedure.  When ‘set-port-position!’ is invoked on the custom
+     binary input port, SET-POSITION! is passed an integer indicating
+     the position of the next byte is to read.
+
+     Finally, if CLOSE is not ‘#f’, it must be a thunk.  It is invoked
+     when the custom binary input port is closed.
+
+     The returned port is fully buffered by default, but its buffering
+     mode can be changed using ‘setvbuf’ (*note ‘setvbuf’: Ports and
+     File Descriptors.).
+
+     Using a custom binary input port, the ‘open-bytevector-input-port’
+     procedure could be implemented as follows:
+
+          (define (open-bytevector-input-port source)
+            (define position 0)
+            (define length (bytevector-length source))
+
+            (define (read! bv start count)
+              (let ((count (min count (- length position))))
+                (bytevector-copy! source position
+                                  bv start count)
+                (set! position (+ position count))
+                count))
+
+            (define (get-position) position)
+
+            (define (set-position! new-position)
+              (set! position new-position))
+
+            (make-custom-binary-input-port "the port" read!
+                                            get-position
+                                            set-position!))
+
+          (read (open-bytevector-input-port (string->utf8 "hello")))
+          ⇒ hello
+
+   Binary input is achieved using the procedures below:
+
+ -- Scheme Procedure: get-u8 port
+ -- C Function: scm_get_u8 (port)
+     Return an octet read from PORT, a binary input port, blocking as
+     necessary, or the end-of-file object.
+
+ -- Scheme Procedure: lookahead-u8 port
+ -- C Function: scm_lookahead_u8 (port)
+     Like ‘get-u8’ but does not update PORT’s position to point past the
+     octet.
+
+ -- Scheme Procedure: get-bytevector-n port count
+ -- C Function: scm_get_bytevector_n (port, count)
+     Read COUNT octets from PORT, blocking as necessary and return a
+     bytevector containing the octets read.  If fewer bytes are
+     available, a bytevector smaller than COUNT is returned.
+
+ -- Scheme Procedure: get-bytevector-n! port bv start count
+ -- C Function: scm_get_bytevector_n_x (port, bv, start, count)
+     Read COUNT bytes from PORT and store them in BV starting at index
+     START.  Return either the number of bytes actually read or the
+     end-of-file object.
+
+ -- Scheme Procedure: get-bytevector-some port
+ -- C Function: scm_get_bytevector_some (port)
+     Read from PORT, blocking as necessary, until bytes are available or
+     an end-of-file is reached.  Return either the end-of-file object or
+     a new bytevector containing some of the available bytes (at least
+     one), and update the port position to point just past these bytes.
+
+ -- Scheme Procedure: get-bytevector-all port
+ -- C Function: scm_get_bytevector_all (port)
+     Read from PORT, blocking as necessary, until the end-of-file is
+     reached.  Return either a new bytevector containing the data read
+     or the end-of-file object (if no data were available).
+
+   The ‘(ice-9 binary-ports)’ module provides the following procedure as
+an extension to ‘(rnrs io ports)’:
+
+ -- Scheme Procedure: unget-bytevector port bv [start [count]]
+ -- C Function: scm_unget_bytevector (port, bv, start, count)
+     Place the contents of BV in PORT, optionally starting at index
+     START and limiting to COUNT octets, so that its bytes will be read
+     from left-to-right as the next bytes from PORT during subsequent
+     read operations.  If called multiple times, the unread bytes will
+     be read again in last-in first-out order.
+
+   ---------- Footnotes ----------
+
+   (1) This is similar in spirit to Guile’s “soft ports” (*note Soft
+Ports::).
+
+File: guile.info,  Node: R6RS Textual Input,  Next: R6RS Output Ports,  Prev: R6RS Binary Input,  Up: R6RS I/O Ports
+
+6.14.10.9 Textual Input
+.......................
+
+ -- Scheme Procedure: get-char textual-input-port
+     Reads from TEXTUAL-INPUT-PORT, blocking as necessary, until a
+     complete character is available from TEXTUAL-INPUT-PORT, or until
+     an end of file is reached.
+
+     If a complete character is available before the next end of file,
+     ‘get-char’ returns that character and updates the input port to
+     point past the character.  If an end of file is reached before any
+     character is read, ‘get-char’ returns the end-of-file object.
+
+ -- Scheme Procedure: lookahead-char textual-input-port
+     The ‘lookahead-char’ procedure is like ‘get-char’, but it does not
+     update TEXTUAL-INPUT-PORT to point past the character.
+
+ -- Scheme Procedure: get-string-n textual-input-port count
+
+     COUNT must be an exact, non-negative integer object, representing
+     the number of characters to be read.
+
+     The ‘get-string-n’ procedure reads from TEXTUAL-INPUT-PORT,
+     blocking as necessary, until COUNT characters are available, or
+     until an end of file is reached.
+
+     If COUNT characters are available before end of file,
+     ‘get-string-n’ returns a string consisting of those COUNT
+     characters.  If fewer characters are available before an end of
+     file, but one or more characters can be read, ‘get-string-n’
+     returns a string containing those characters.  In either case, the
+     input port is updated to point just past the characters read.  If
+     no characters can be read before an end of file, the end-of-file
+     object is returned.
+
+ -- Scheme Procedure: get-string-n! textual-input-port string start
+          count
+
+     START and COUNT must be exact, non-negative integer objects, with
+     COUNT representing the number of characters to be read.  STRING
+     must be a string with at least $START + COUNT$ characters.
+
+     The ‘get-string-n!’ procedure reads from TEXTUAL-INPUT-PORT in the
+     same manner as ‘get-string-n’.  If COUNT characters are available
+     before an end of file, they are written into STRING starting at
+     index START, and COUNT is returned.  If fewer characters are
+     available before an end of file, but one or more can be read, those
+     characters are written into STRING starting at index START and the
+     number of characters actually read is returned as an exact integer
+     object.  If no characters can be read before an end of file, the
+     end-of-file object is returned.
+
+ -- Scheme Procedure: get-string-all textual-input-port
+     Reads from TEXTUAL-INPUT-PORT until an end of file, decoding
+     characters in the same manner as ‘get-string-n’ and
+     ‘get-string-n!’.
+
+     If characters are available before the end of file, a string
+     containing all the characters decoded from that data are returned.
+     If no character precedes the end of file, the end-of-file object is
+     returned.
+
+ -- Scheme Procedure: get-line textual-input-port
+     Reads from TEXTUAL-INPUT-PORT up to and including the linefeed
+     character or end of file, decoding characters in the same manner as
+     ‘get-string-n’ and ‘get-string-n!’.
+
+     If a linefeed character is read, a string containing all of the
+     text up to (but not including) the linefeed character is returned,
+     and the port is updated to point just past the linefeed character.
+     If an end of file is encountered before any linefeed character is
+     read, but some characters have been read and decoded as characters,
+     a string containing those characters is returned.  If an end of
+     file is encountered before any characters are read, the end-of-file
+     object is returned.
+
+          Note: The end-of-line style, if not ‘none’, will cause all
+          line endings to be read as linefeed characters.  *Note R6RS
+          Transcoders::.
+
+ -- Scheme Procedure: get-datum textual-input-port count
+     Reads an external representation from TEXTUAL-INPUT-PORT and
+     returns the datum it represents.  The ‘get-datum’ procedure returns
+     the next datum that can be parsed from the given
+     TEXTUAL-INPUT-PORT, updating TEXTUAL-INPUT-PORT to point exactly
+     past the end of the external representation of the object.
+
+     Any _interlexeme space_ (comment or whitespace, *note Scheme
+     Syntax::) in the input is first skipped.  If an end of file occurs
+     after the interlexeme space, the end-of-file object (*note R6RS
+     End-of-File::) is returned.
+
+     If a character inconsistent with an external representation is
+     encountered in the input, an exception with condition types
+     ‘&lexical’ and ‘&i/o-read’ is raised.  Also, if the end of file is
+     encountered after the beginning of an external representation, but
+     the external representation is incomplete and therefore cannot be
+     parsed, an exception with condition types ‘&lexical’ and
+     ‘&i/o-read’ is raised.
+
+File: guile.info,  Node: R6RS Output Ports,  Next: R6RS Binary Output,  Prev: R6RS Textual Input,  Up: R6RS I/O Ports
+
+6.14.10.10 Output Ports
+.......................
+
+ -- Scheme Procedure: output-port? obj
+     Returns ‘#t’ if the argument is an output port (or a combined input
+     and output port), ‘#f’ otherwise.
+
+ -- Scheme Procedure: flush-output-port port
+     Flushes any buffered output from the buffer of OUTPUT-PORT to the
+     underlying file, device, or object.  The ‘flush-output-port’
+     procedure returns an unspecified values.
+
+ -- Scheme Procedure: open-file-output-port filename
+ -- Scheme Procedure: open-file-output-port filename file-options
+ -- Scheme Procedure: open-file-output-port filename file-options
+          buffer-mode
+ -- Scheme Procedure: open-file-output-port filename file-options
+          buffer-mode maybe-transcoder
+
+     MAYBE-TRANSCODER must be either a transcoder or ‘#f’.
+
+     The ‘open-file-output-port’ procedure returns an output port for
+     the named file.
+
+     The FILE-OPTIONS argument, which may determine various aspects of
+     the returned port (*note R6RS File Options::), defaults to the
+     value of ‘(file-options)’.
+
+     The BUFFER-MODE argument, if supplied, must be one of the symbols
+     that name a buffer mode.  The BUFFER-MODE argument defaults to
+     ‘block’.
+
+     If MAYBE-TRANSCODER is a transcoder, it becomes the transcoder
+     associated with the port.
+
+     If MAYBE-TRANSCODER is ‘#f’ or absent, the port will be a binary
+     port and will support the ‘port-position’ and ‘set-port-position!’
+     operations.  Otherwise the port will be a textual port, and whether
+     it supports the ‘port-position’ and ‘set-port-position!’ operations
+     is implementation-dependent (and possibly transcoder-dependent).
+
+ -- Scheme Procedure: standard-output-port
+ -- Scheme Procedure: standard-error-port
+     Returns a fresh binary output port connected to the standard output
+     or standard error respectively.  Whether the port supports the
+     ‘port-position’ and ‘set-port-position!’ operations is
+     implementation-dependent.
+
+ -- Scheme Procedure: current-output-port
+ -- Scheme Procedure: current-error-port
+     These return default textual ports for regular output and error
+     output.  Normally, these default ports are associated with standard
+     output, and standard error, respectively.  The return value of
+     ‘current-output-port’ can be dynamically re-assigned using the
+     ‘with-output-to-file’ procedure from the ‘io simple (6)’ library
+     (*note rnrs io simple::).  A port returned by one of these
+     procedures may or may not have an associated transcoder; if it
+     does, the transcoder is implementation-dependent.
+
+File: guile.info,  Node: R6RS Binary Output,  Next: R6RS Textual Output,  Prev: R6RS Output Ports,  Up: R6RS I/O Ports
+
+6.14.10.11 Binary Output
+........................
+
+Binary output ports can be created with the procedures below.
+
+ -- Scheme Procedure: open-bytevector-output-port [transcoder]
+ -- C Function: scm_open_bytevector_output_port (transcoder)
+     Return two values: a binary output port and a procedure.  The
+     latter should be called with zero arguments to obtain a bytevector
+     containing the data accumulated by the port, as illustrated below.
+
+          (call-with-values
+            (lambda ()
+              (open-bytevector-output-port))
+            (lambda (port get-bytevector)
+              (display "hello" port)
+              (get-bytevector)))
+
+          ⇒ #vu8(104 101 108 108 111)
+
+     The TRANSCODER argument is currently not supported.
+
+ -- Scheme Procedure: make-custom-binary-output-port id write!
+          get-position set-position! close
+ -- C Function: scm_make_custom_binary_output_port (id, write!,
+          get-position, set-position!, close)
+     Return a new custom binary output port named ID (a string) whose
+     output is sunk by invoking WRITE! and passing it a bytevector, an
+     index where bytes should be read from this bytevector, and the
+     number of bytes to be “written”.  The ‘write!’ procedure must
+     return an integer indicating the number of bytes actually written;
+     when it is passed ‘0’ as the number of bytes to write, it should
+     behave as though an end-of-file was sent to the byte sink.
+
+     The other arguments are as for ‘make-custom-binary-input-port’
+     (*note ‘make-custom-binary-input-port’: R6RS Binary Input.).
+
+   Writing to a binary output port can be done using the following
+procedures:
+
+ -- Scheme Procedure: put-u8 port octet
+ -- C Function: scm_put_u8 (port, octet)
+     Write OCTET, an integer in the 0–255 range, to PORT, a binary
+     output port.
+
+ -- Scheme Procedure: put-bytevector port bv [start [count]]
+ -- C Function: scm_put_bytevector (port, bv, start, count)
+     Write the contents of BV to PORT, optionally starting at index
+     START and limiting to COUNT octets.
+
+File: guile.info,  Node: R6RS Textual Output,  Prev: R6RS Binary Output,  Up: R6RS I/O Ports
+
+6.14.10.12 Textual Output
+.........................
+
+ -- Scheme Procedure: put-char port char
+     Writes CHAR to the port.  The ‘put-char’ procedure returns an
+     unspecified value.
+
+ -- Scheme Procedure: put-string port string
+ -- Scheme Procedure: put-string port string start
+ -- Scheme Procedure: put-string port string start count
+
+     START and COUNT must be non-negative exact integer objects.  STRING
+     must have a length of at least START + COUNT.  START defaults to 0.
+     COUNT defaults to ‘(string-length STRING)’ - START$.  The
+     ‘put-string’ procedure writes the COUNT characters of STRING
+     starting at index START to the port.  The ‘put-string’ procedure
+     returns an unspecified value.
+
+ -- Scheme Procedure: put-datum textual-output-port datum
+     DATUM should be a datum value.  The ‘put-datum’ procedure writes an
+     external representation of DATUM to TEXTUAL-OUTPUT-PORT.  The
+     specific external representation is implementation-dependent.
+     However, whenever possible, an implementation should produce a
+     representation for which ‘get-datum’, when reading the
+     representation, will return an object equal (in the sense of
+     ‘equal?’) to DATUM.
+
+          Note: Not all datums may allow producing an external
+          representation for which ‘get-datum’ will produce an object
+          that is equal to the original.  Specifically, NaNs contained
+          in DATUM may make this impossible.
+
+          Note: The ‘put-datum’ procedure merely writes the external
+          representation, but no trailing delimiter.  If ‘put-datum’ is
+          used to write several subsequent external representations to
+          an output port, care should be taken to delimit them properly
+          so they can be read back in by subsequent calls to
+          ‘get-datum’.
+
+File: guile.info,  Node: I/O Extensions,  Next: BOM Handling,  Prev: R6RS I/O Ports,  Up: Input and Output
+
+6.14.11 Using and Extending Ports in C
+--------------------------------------
+
+* Menu:
+
+* C Port Interface:: Using ports from C.
+* Port Implementation:: How to implement a new port type in C.
+
+File: guile.info,  Node: C Port Interface,  Next: Port Implementation,  Up: I/O Extensions
+
+6.14.11.1 C Port Interface
+..........................
+
+This section describes how to use Scheme ports from C.
+
+Port basics
+...........
+
+There are two main data structures.  A port type object (ptob) is of
+type ‘scm_ptob_descriptor’.  A port instance is of type ‘scm_port’.
+Given an ‘SCM’ variable which points to a port, the corresponding C port
+object can be obtained using the ‘SCM_PTAB_ENTRY’ macro.  The ptob can
+be obtained by using ‘SCM_PTOBNUM’ to give an index into the ‘scm_ptobs’
+global array.
+
+Port buffers
+............
+
+An input port always has a read buffer and an output port always has a
+write buffer.  However the size of these buffers is not guaranteed to be
+more than one byte (e.g., the ‘shortbuf’ field in ‘scm_port’ which is
+used when no other buffer is allocated).  The way in which the buffers
+are allocated depends on the implementation of the ptob.  For example in
+the case of an fport, buffers may be allocated with malloc when the port
+is created, but in the case of an strport the underlying string is used
+as the buffer.
+
+The ‘rw_random’ flag
+....................
+
+Special treatment is required for ports which can be seeked at random.
+Before various operations, such as seeking the port or changing from
+input to output on a bidirectional port or vice versa, the port
+implementation must be given a chance to update its state.  The write
+buffer is updated by calling the ‘flush’ ptob procedure and the input
+buffer is updated by calling the ‘end_input’ ptob procedure.  In the
+case of an fport, ‘flush’ causes buffered output to be written to the
+file descriptor, while ‘end_input’ causes the descriptor position to be
+adjusted to account for buffered input which was never read.
+
+   The special treatment must be performed if the ‘rw_random’ flag in
+the port is non-zero.
+
+The ‘rw_active’ variable
+........................
+
+The ‘rw_active’ variable in the port is only used if ‘rw_random’ is set.
+It’s defined as an enum with the following values:
+
+‘SCM_PORT_READ’
+     the read buffer may have unread data.
+
+‘SCM_PORT_WRITE’
+     the write buffer may have unwritten data.
+
+‘SCM_PORT_NEITHER’
+     neither the write nor the read buffer has data.
+
+Reading from a port.
+....................
+
+To read from a port, it’s possible to either call existing libguile
+procedures such as ‘scm_getc’ and ‘scm_read_line’ or to read data from
+the read buffer directly.  Reading from the buffer involves the
+following steps:
+
+  1. Flush output on the port, if ‘rw_active’ is ‘SCM_PORT_WRITE’.
+
+  2. Fill the read buffer, if it’s empty, using ‘scm_fill_input’.
+
+  3. Read the data from the buffer and update the read position in the
+     buffer.  Steps 2) and 3) may be repeated as many times as required.
+
+  4. Set rw_active to ‘SCM_PORT_READ’ if ‘rw_random’ is set.
+
+  5. update the port’s line and column counts.
+
+Writing to a port.
+..................
+
+To write data to a port, calling ‘scm_lfwrite’ should be sufficient for
+most purposes.  This takes care of the following steps:
+
+  1. End input on the port, if ‘rw_active’ is ‘SCM_PORT_READ’.
+
+  2. Pass the data to the ptob implementation using the ‘write’ ptob
+     procedure.  The advantage of using the ptob ‘write’ instead of
+     manipulating the write buffer directly is that it allows the data
+     to be written in one operation even if the port is using the
+     single-byte ‘shortbuf’.
+
+  3. Set ‘rw_active’ to ‘SCM_PORT_WRITE’ if ‘rw_random’ is set.
+
+File: guile.info,  Node: Port Implementation,  Prev: C Port Interface,  Up: I/O Extensions
+
+6.14.11.2 Port Implementation
+.............................
+
+This section describes how to implement a new port type in C.
+
+   As described in the previous section, a port type object (ptob) is a
+structure of type ‘scm_ptob_descriptor’.  A ptob is created by calling
+‘scm_make_port_type’.
+
+ -- Function: scm_t_bits scm_make_port_type (char *name, int
+          (*fill_input) (SCM port), void (*write) (SCM port, const void
+          *data, size_t size))
+     Return a new port type object.  The NAME, FILL_INPUT and WRITE
+     parameters are initial values for those port type fields, as
+     described below.  The other fields are initialized with default
+     values and can be changed later.
+
+   All of the elements of the ptob, apart from ‘name’, are procedures
+which collectively implement the port behaviour.  Creating a new port
+type mostly involves writing these procedures.
+
+‘name’
+     A pointer to a NUL terminated string: the name of the port type.
+     This is the only element of ‘scm_ptob_descriptor’ which is not a
+     procedure.  Set via the first argument to ‘scm_make_port_type’.
+
+‘mark’
+     Called during garbage collection to mark any SCM objects that a
+     port object may contain.  It doesn’t need to be set unless the port
+     has ‘SCM’ components.  Set using
+
+      -- Function: void scm_set_port_mark (scm_t_bits tc, SCM (*mark)
+               (SCM port))
+
+‘free’
+     Called when the port is collected during gc.  It should free any
+     resources used by the port.  Set using
+
+      -- Function: void scm_set_port_free (scm_t_bits tc, size_t (*free)
+               (SCM port))
+
+‘print’
+     Called when ‘write’ is called on the port object, to print a port
+     description.  E.g., for an fport it may produce something like:
+     ‘#<input: /etc/passwd 3>’.  Set using
+
+      -- Function: void scm_set_port_print (scm_t_bits tc, int (*print)
+               (SCM port, SCM dest_port, scm_print_state *pstate))
+          The first argument PORT is the object being printed, the
+          second argument DEST_PORT is where its description should go.
+
+‘equalp’
+     Not used at present.  Set using
+
+      -- Function: void scm_set_port_equalp (scm_t_bits tc, SCM
+               (*equalp) (SCM, SCM))
+
+‘close’
+     Called when the port is closed, unless it was collected during gc.
+     It should free any resources used by the port.  Set using
+
+      -- Function: void scm_set_port_close (scm_t_bits tc, int (*close)
+               (SCM port))
+
+‘write’
+     Accept data which is to be written using the port.  The port
+     implementation may choose to buffer the data instead of processing
+     it directly.  Set via the third argument to ‘scm_make_port_type’.
+
+‘flush’
+     Complete the processing of buffered output data.  Reset the value
+     of ‘rw_active’ to ‘SCM_PORT_NEITHER’.  Set using
+
+      -- Function: void scm_set_port_flush (scm_t_bits tc, void (*flush)
+               (SCM port))
+
+‘end_input’
+     Perform any synchronization required when switching from input to
+     output on the port.  Reset the value of ‘rw_active’ to
+     ‘SCM_PORT_NEITHER’.  Set using
+
+      -- Function: void scm_set_port_end_input (scm_t_bits tc, void
+               (*end_input) (SCM port, int offset))
+
+‘fill_input’
+     Read new data into the read buffer and return the first character.
+     It can be assumed that the read buffer is empty when this procedure
+     is called.  Set via the second argument to ‘scm_make_port_type’.
+
+‘input_waiting’
+     Return a lower bound on the number of bytes that could be read from
+     the port without blocking.  It can be assumed that the current
+     state of ‘rw_active’ is ‘SCM_PORT_NEITHER’.  Set using
+
+      -- Function: void scm_set_port_input_waiting (scm_t_bits tc, int
+               (*input_waiting) (SCM port))
+
+‘seek’
+     Set the current position of the port.  The procedure can not make
+     any assumptions about the value of ‘rw_active’ when it’s called.
+     It can reset the buffers first if desired by using something like:
+
+          if (pt->rw_active == SCM_PORT_READ)
+            scm_end_input (port);
+          else if (pt->rw_active == SCM_PORT_WRITE)
+            ptob->flush (port);
+
+     However note that this will have the side effect of discarding any
+     data in the unread-char buffer, in addition to any side effects
+     from the ‘end_input’ and ‘flush’ ptob procedures.  This is
+     undesirable when seek is called to measure the current position of
+     the port, i.e., ‘(seek p 0 SEEK_CUR)’.  The libguile fport and
+     string port implementations take care to avoid this problem.
+
+     The procedure is set using
+
+      -- Function: void scm_set_port_seek (scm_t_bits tc, scm_t_off
+               (*seek) (SCM port, scm_t_off offset, int whence))
+
+‘truncate’
+     Truncate the port data to be specified length.  It can be assumed
+     that the current state of ‘rw_active’ is ‘SCM_PORT_NEITHER’.  Set
+     using
+
+      -- Function: void scm_set_port_truncate (scm_t_bits tc, void
+               (*truncate) (SCM port, scm_t_off length))
+
+File: guile.info,  Node: BOM Handling,  Prev: I/O Extensions,  Up: Input and Output
+
+6.14.12 Handling of Unicode byte order marks.
+---------------------------------------------
+
+This section documents the finer points of Guile’s handling of Unicode
+byte order marks (BOMs).  A byte order mark (U+FEFF) is typically found
+at the start of a UTF-16 or UTF-32 stream, to allow readers to reliably
+determine the byte order.  Occasionally, a BOM is found at the start of
+a UTF-8 stream, but this is much less common and not generally
+recommended.
+
+   Guile attempts to handle BOMs automatically, and in accordance with
+the recommendations of the Unicode Standard, when the port encoding is
+set to ‘UTF-8’, ‘UTF-16’, or ‘UTF-32’.  In brief, Guile automatically
+writes a BOM at the start of a UTF-16 or UTF-32 stream, and
+automatically consumes one from the start of a UTF-8, UTF-16, or UTF-32
+stream.
+
+   As specified in the Unicode Standard, a BOM is only handled specially
+at the start of a stream, and only if the port encoding is set to
+‘UTF-8’, ‘UTF-16’ or ‘UTF-32’.  If the port encoding is set to
+‘UTF-16BE’, ‘UTF-16LE’, ‘UTF-32BE’, or ‘UTF-32LE’, then BOMs are _not_
+handled specially, and none of the special handling described in this
+section applies.
+
+   • To ensure that Guile will properly detect the byte order of a
+     UTF-16 or UTF-32 stream, you must perform a textual read before any
+     writes, seeks, or binary I/O. Guile will not attempt to read a BOM
+     unless a read is explicitly requested at the start of the stream.
+
+   • If a textual write is performed before the first read, then an
+     arbitrary byte order will be chosen.  Currently, big endian is the
+     default on all platforms, but that may change in the future.  If
+     you wish to explicitly control the byte order of an output stream,
+     set the port encoding to ‘UTF-16BE’, ‘UTF-16LE’, ‘UTF-32BE’, or
+     ‘UTF-32LE’, and explicitly write a BOM (‘#\xFEFF’) if desired.
+
+   • If ‘set-port-encoding!’ is called in the middle of a stream, Guile
+     treats this as a new logical “start of stream” for purposes of BOM
+     handling, and will forget about any BOMs that had previously been
+     seen.  Therefore, it may choose a different byte order than had
+     been used previously.  This is intended to support multiple logical
+     text streams embedded within a larger binary stream.
+
+   • Binary I/O operations are not guaranteed to update Guile’s notion
+     of whether the port is at the “start of the stream”, nor are they
+     guaranteed to produce or consume BOMs.
+
+   • For ports that support seeking (e.g.  normal files), the input and
+     output streams are considered linked: if the user reads first, then
+     a BOM will be consumed (if appropriate), but later writes will
+     _not_ produce a BOM. Similarly, if the user writes first, then
+     later reads will _not_ consume a BOM.
+
+   • For ports that do not support seeking (e.g.  pipes, sockets, and
+     terminals), the input and output streams are considered
+     _independent_ for purposes of BOM handling: the first read will
+     consume a BOM (if appropriate), and the first write will _also_
+     produce a BOM (if appropriate).  However, the input and output
+     streams will always use the same byte order.
+
+   • Seeks to the beginning of a file will set the “start of stream”
+     flags.  Therefore, a subsequent textual read or write will consume
+     or produce a BOM. However, unlike ‘set-port-encoding!’, if a byte
+     order had already been chosen for the port, it will remain in
+     effect after a seek, and cannot be changed by the presence of a
+     BOM. Seeks anywhere other than the beginning of a file clear the
+     “start of stream” flags.
+
+File: guile.info,  Node: Regular Expressions,  Next: LALR(1) Parsing,  Prev: Input and Output,  Up: API Reference
+

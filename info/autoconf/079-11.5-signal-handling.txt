@@ -1,0 +1,135 @@
+11.5 Signal Handling
+====================
+
+Portable handling of signals within the shell is another major source of
+headaches.  This is worsened by the fact that various different,
+mutually incompatible approaches are possible in this area, each with
+its distinctive merits and demerits.  A detailed description of these
+possible approaches, as well as of their pros and cons, can be found in
+this article (http://www.cons.org/cracauer/sigint.html).
+
+   Solaris 10 `/bin/sh' automatically traps most signals by default;
+the shell still exits with error upon termination by one of those
+signals, but in such a case the exit status might be somewhat
+unexpected (even if allowed by POSIX, strictly speaking):
+
+     $ bash -c 'kill -1 $$'; echo $? # Will exit 128 + (signal number).
+     Hangup
+     129
+     $ /bin/ksh -c 'kill -15 $$'; echo $? # Likewise.
+     Terminated
+     143
+     $ for sig in 1 2 3 15; do
+     >   echo $sig:
+     >   /bin/sh -c "kill -$s \$\$"; echo $?
+     > done
+     signal 1:
+     Hangup
+     129
+     signal 2:
+     208
+     signal 3:
+     208
+     signal 15:
+     208
+
+   This gets even worse if one is using the POSIX `wait' interface to
+get details about the shell process terminations: it will result in the
+shell having exited normally, rather than by receiving a signal.
+
+     $ cat > foo.c <<'END'
+     #include <stdio.h>    /* for printf */
+     #include <stdlib.h>   /* for system */
+     #include <sys/wait.h> /* for WIF* macros */
+     int main(void)
+     {
+       int status = system ("kill -15 $$");
+       printf ("Terminated by signal: %s\n",
+               WIFSIGNALED (status) ? "yes" : "no");
+       printf ("Exited normally: %s\n",
+               WIFEXITED (status) ? "yes" : "no");
+       return 0;
+     }
+     END
+     $ cc -o foo foo.c
+     $ ./a.out # On GNU/Linux
+     Terminated by signal: no
+     Exited normally: yes
+     $ ./a.out # On Solaris 10
+     Terminated by signal: yes
+     Exited normally: no
+
+   Various shells seem to handle `SIGQUIT' specially: they ignore it
+even if it is not blocked, and even if the shell is not running
+interactively (in fact, even if the shell has no attached tty); among
+these shells are at least Bash (from version 2 onwards), Zsh 4.3.12,
+Solaris 10 `/bin/ksh' and `/usr/xpg4/bin/sh', and AT&T `ksh93' (2011).
+Still, `SIGQUIT' seems to be trappable quite portably within all these
+shells.  OTOH, some other shells doesn't special-case the handling of
+`SIGQUIT'; among these shells are at least `pdksh' 5.2.14, Solaris 10
+and NetBSD 5.1 `/bin/sh', and the Almquist Shell 0.5.5.1.
+
+   Some shells (especially Korn shells and derivatives) might try to
+propagate to themselves a signal that has killed a child process; this
+is not a bug, but a conscious design choice (although its overall value
+might be debatable).  The exact details of how this is attained vary
+from shell to shell.  For example, upon running `perl -e 'kill 2, $$'',
+after the perl process has been interrupted AT&T `ksh93' (2011) will
+proceed to send itself a `SIGINT', while Solaris 10 `/bin/ksh' and
+`/usr/xpg4/bin/sh' will proceed to exit with status 130 (i.e., 128 +
+2). In any case, if there is an active trap associated with `SIGINT',
+those shells will correctly execute it.
+
+   Some Korn shells, when a child process die due receiving a signal
+with signal number N, can leave in `$?' an exit status of 256+N instead
+of the more common 128+N.  Observe the difference between AT&T `ksh93'
+(2011) and `bash' 4.1.5 on Debian:
+
+     $ /bin/ksh -c 'sh -c "kill -1 \$\$"; echo $?'
+     /bin/ksh: line 1: 7837: Hangup
+     257
+     $ /bin/bash -c 'sh -c "kill -1 \$\$"; echo $?'
+     /bin/bash: line 1:  7861 Hangup        (sh -c "kill -1 \$\$")
+     129
+
+This `ksh' behavior is allowed by POSIX, if implemented with due care;
+see this Austin Group discussion
+(http://www.austingroupbugs.net/view.php?id=51) for more background.
+However, if it is not implemented with proper care, such a behavior
+might cause problems in some corner cases.  To see why, assume we have
+a "wrapper" script like this:
+
+     #!/bin/sh
+     # Ignore some signals in the shell only, not in its child processes.
+     trap : 1 2 13 15
+     wrapped_command "$@"
+     ret=$?
+     other_command
+     exit $ret
+
+If `wrapped_command' is interrupted by a `SIGHUP' (which has signal
+number 1), `ret' will be set to 257.  Unless the `exit' shell builtin
+is smart enough to understand that such a value can only have
+originated from a signal, and adjust the final wait status of the shell
+appropriately, the value 257 will just get truncated to 1 by the
+closing `exit' call, so that a caller of the script will have no way to
+determine that termination by a signal was involved.  Observe the
+different behavior of AT&T `ksh93' (2011) and `bash' 4.1.5 on Debian:
+
+     $ cat foo.sh
+     #!/bin/sh
+     sh -c 'kill -1 $$'
+     ret=$?
+     echo $ret
+     exit $ret
+     $ /bin/ksh foo.sh; echo $?
+     foo.sh: line 2: 12479: Hangup
+     257
+     1
+     $ /bin/bash foo.sh; echo $?
+     foo.sh: line 2: 12487 Hangup        (sh -c 'kill -1 $$')
+     129
+     129
+
+File: autoconf.info,  Node: File System Conventions,  Next: Shell Pattern Matching,  Prev: Signal Handling,  Up: Portable Shell
+

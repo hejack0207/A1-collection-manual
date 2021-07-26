@@ -1,0 +1,80 @@
+7.20 Squeezing Blank Lines
+==========================
+
+As a final example, here are three scripts, of increasing complexity and
+speed, that implement the same function as 'cat -s', that is squeezing
+blank lines.
+
+   The first leaves a blank line at the beginning and end if there are
+some already.
+
+     #!/usr/bin/sed -f
+
+     # on empty lines, join with next
+     # Note there is a star in the regexp
+     :x
+     /^\n*$/ {
+     N
+     bx
+     }
+
+     # now, squeeze all '\n', this can be also done by:
+     # s/^\(\n\)*/\1/
+     s/\n*/\
+     /
+
+   This one is a bit more complex and removes all empty lines at the
+beginning.  It does leave a single blank line at end if one was there.
+
+     #!/usr/bin/sed -f
+
+     # delete all leading empty lines
+     1,/^./{
+     /./!d
+     }
+
+     # on an empty line we remove it and all the following
+     # empty lines, but one
+     :x
+     /./!{
+     N
+     s/^\n$//
+     tx
+     }
+
+   This removes leading and trailing blank lines.  It is also the
+fastest.  Note that loops are completely done with 'n' and 'b', without
+relying on 'sed' to restart the script automatically at the end of a
+line.
+
+     #!/usr/bin/sed -nf
+
+     # delete all (leading) blanks
+     /./!d
+
+     # get here: so there is a non empty
+     :x
+     # print it
+     p
+     # get next
+     n
+     # got chars? print it again, etc...
+     /./bx
+
+     # no, don't have chars: got an empty line
+     :z
+     # get next, if last line we finish here so no trailing
+     # empty lines are written
+     n
+     # also empty? then ignore it, and get next... this will
+     # remove ALL empty lines
+     /./!bz
+
+     # all empty lines were deleted/ignored, but we have a non empty.  As
+     # what we want to do is to squeeze, insert a blank line artificially
+     i\
+
+     bx
+
+File: sed.info,  Node: Limitations,  Next: Other Resources,  Prev: Examples,  Up: Top
+
