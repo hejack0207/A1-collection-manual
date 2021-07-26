@@ -1,3 +1,3 @@
 #!/usr/bin/zsh
 
-grep -B1 "^\*\{8,\}" $1
+grep -B1 --no-group-separator "^\*\{8,\}" $1
