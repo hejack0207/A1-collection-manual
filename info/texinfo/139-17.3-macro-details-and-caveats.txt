@@ -1,0 +1,171 @@
+17.3 Macro Details and Caveats
+==============================
+
+By design, macro expansion does not happen in the following contexts in
+'makeinfo':
+
+   * '@macro' and '@unmacro' lines;
+
+   * '@if...' lines, including '@ifset' and similar;
+
+   * '@set', '@clear', '@value';
+
+   * '@clickstyle' lines;
+
+   * '@end' lines.
+
+Unfortunately, TeX may do some expansion in these situations, possibly
+yielding errors.
+
+   Also, quite a few macro-related constructs cause problems with TeX;
+some of the caveats are listed below.  Thus, if you get macro-related
+errors when producing the printed version of a manual, you might try
+expanding the macros with 'makeinfo' by invoking 'texi2dvi' with the
+'-E' option (*note Format with texi2dvi::).  Or, more reliably, eschew
+Texinfo macros altogether and use a language designed for macro
+processing, such as M4 (*note External Macro Processors::).
+
+   * As mentioned earlier, macro names must consist entirely of letters.
+
+   * It is not advisable to redefine any TeX primitive, plain, or
+     Texinfo command name as a macro.  Unfortunately this is a large and
+     open-ended set of names, and the possible resulting errors are
+     unpredictable.
+
+   * Arguments to macros taking more than one argument cannot cross
+     lines.
+
+   * Macros containing a command which must be on a line by itself, such
+     as a conditional, cannot be invoked in the middle of a line.
+     Similarly, macros containing line-oriented commands or text, such
+     as '@example' environments, may behave unpredictably in TeX.
+
+   * If you have problems using conditionals within a macro, an
+     alternative is to use separate macro definitions inside conditional
+     blocks.  For example, instead of
+
+          @macro Mac
+          @iftex
+          text for TeX output
+          @end iftex
+          @ifnottex
+          text for not TeX output
+          @end ifnottex
+          @end macro
+
+     you can do the following instead:
+
+          @iftex
+          @macro Mac
+          text for TeX output
+          @end macro
+          @end iftex
+
+          @ifnottex
+          @macro Mac
+          text for not TeX output
+          @end macro
+          @end ifnottex
+
+   * Texinfo commands in the expansion of a macro in the text of an
+     index entry may end up being typeset as literal text (including an
+     "@" sign), instead of being interpreted with their intended
+     meaning.
+
+   * White space is ignored at the beginnings of lines.
+
+   * Macros can't be reliably used in the argument to accent commands
+     (*note Inserting Accents::).
+
+   * The backslash escape for commas in macro arguments does not work;
+     '@comma{}' must be used.
+
+   * Likewise, if you want to pass an argument with the Texinfo command
+     '@,' (to produce a cedilla, see *note Inserting Accents::), you
+     have to use '@value' or another work-around.  Otherwise, the comma
+     may be taken as separating the arguments.  For example,
+
+          @macro mactwo{argfirst, argsecond}
+          \argfirst\+\argsecond\.
+          @end macro
+          @set fc Fran@,cois
+          @mactwo{@value{fc},}
+
+     produces:
+
+          Franc,ois+.
+
+   * Ending a macro body with '@c' may cause text following the macro
+     invocation to be ignored as a comment in 'makeinfo'.  This is not
+     the case when processing with TeX.  This was often done to "comment
+     out" an unwanted newline at the end of a macro body, but this is
+     not necessary any more, as the final newline before '@end macro' is
+     not included in the macro body anyway.
+
+   * In general, you can't arbitrarily substitute a macro (or '@value')
+     call for Texinfo command arguments, even when the text is the same.
+     Texinfo is not M4 (or even plain TeX).  It might work with some
+     commands, it fails with others.  Best not to do it at all.  For
+     instance, this fails:
+
+          @macro offmacro
+          off
+          @end macro
+          @headings @offmacro
+
+     This looks equivalent to '@headings off', but for TeXnical reasons,
+     it fails with a mysterious error message (namely, 'Paragraph ended
+     before @headings was complete').
+
+   * Macros cannot define macros in the natural way.  To do this, you
+     must use conditionals and raw TeX.  For example:
+
+          @ifnottex
+          @macro ctor {name, arg}
+          @macro \name\
+          something involving \arg\ somehow
+          @end macro
+          @end macro
+          @end ifnottex
+          @tex
+          \gdef\ctor#1{\ctorx#1,}
+          \gdef\ctorx#1,#2,{\def#1{something involving #2 somehow}}
+          @end tex
+
+   The 'makeinfo' implementation also has the following limitations (by
+design):
+
+   * '@verbatim' and macros do not mix; for instance, you can't start a
+     verbatim block inside a macro and end it outside (*note
+     @verbatim::).  Starting any environment inside a macro and ending
+     it outside may or may not work, for that matter.
+
+   * Macros that completely define macros are ok, but it's not possible
+     to have incompletely nested macro definitions.  That is, '@macro'
+     and '@end macro' (likewise for '@rmacro') must be correctly paired.
+     For example, you cannot start a macro definition within a macro,
+     and then end that nested definition outside the macro.
+
+   In the 'makeinfo' implementation before Texinfo 5.0, ends of lines
+from expansion of a '@macro' definition did not end an @-command
+line-delimited argument ('@chapter', '@center', etc.).  This is no
+longer the case.  For example:
+
+     @macro twolines{}
+     aaa
+     bbb
+     @end macro
+     @center @twolines{}
+
+   In the current 'makeinfo', this is equivalent to:
+
+     @center aaa
+     bbb
+
+with just 'aaa' as the argument to '@center'.  In the earlier
+implementation, it would have been parsed as this:
+
+     @center aaa bbb
+
+File: texinfo.info,  Node: @alias,  Next: @definfoenclose,  Prev: Macro Details,  Up: Defining New Texinfo Commands
+

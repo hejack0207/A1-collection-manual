@@ -1,0 +1,235 @@
+G.1 Info Format General Layout
+==============================
+
+This section describes the overall layout of Info manuals.
+
+* Menu:
+
+* Whole:           Info Format Whole Manual. Split vs. nonsplit manuals.
+* Preamble:        Info Format Preamble.
+* Indirect:        Info Format Indirect Table.
+* Tag table:       Info Format Tag Table.
+* Local variables: Info Format Local Variables.
+* Regular nodes:   Info Format Regular Nodes.
+
+File: texinfo.info,  Node: Info Format Whole Manual,  Next: Info Format Preamble,  Up: Info Format General Layout
+
+Info Format: A Whole Manual
+---------------------------
+
+To begin, an Info manual is either "nonsplit" (contained wholly within a
+single file) or "split" (across several files).
+
+   The syntax for a nonsplit manual is:
+
+         <nonsplit info file> =
+     <preamble>
+     <node>*
+     <tag table>?
+     <local variables>?
+
+   When split, there is a "main file", which contains only pointers to
+the nodes given in other "subfiles".  The main file looks like this:
+
+         <split info main file> =
+     <preamble>
+     <indirect table>
+     <tag table>
+     <local variables>?
+
+   The subfiles in a split manual have the following syntax:
+
+         <split info subfile> =
+     <preamble>
+     <node>*
+
+   Note that the tag table is not optional for split files, as it is
+used with the indirect table to deduce which subfile a particular node
+is in.
+
+File: texinfo.info,  Node: Info Format Preamble,  Next: Info Format Indirect Table,  Prev: Info Format Whole Manual,  Up: Info Format General Layout
+
+Info Format: Preamble
+---------------------
+
+The <preamble> is text at the beginning of all output files.  It is not
+intended to be visible by default in an Info viewer, but may be
+displayed upon user request.
+
+         <preamble> =
+     <identification>       # "This is FILENAME, produced by ..."
+     <copying text>         # Expansion of @copying text.
+     <dir entries>          # Derived from @dircategory and @direntry.
+
+These pieces are:
+
+<identification line>
+     An arbitrary string beginning the output file, followed by a blank
+     line.
+
+<copying text>
+     The expansion of a '@copying' environment, if the manual has one
+     (*note @copying::).
+
+<dir entries>
+     The result of any '@dircategory' and '@direntry' commands present
+     in the manual (*note Installing Dir Entries::).
+
+File: texinfo.info,  Node: Info Format Indirect Table,  Next: Info Format Tag Table,  Prev: Info Format Preamble,  Up: Info Format General Layout
+
+Info Format: Indirect Table
+---------------------------
+
+         <indirect table> =
+     <separator>
+     Indirect:
+     (<filename>: <bytepos>)*
+
+   The indirect table is written to the main file in the case of split
+output only.  It specifies, as a decimal integer, the starting byte
+position (zero-based) that the first node of each subfile would have if
+the subfiles were concatenated together in order, not including the
+top-level file.  The first node of actual content is pointed to by the
+first entry.
+
+   As an example, suppose split output is generated for the GDB manual.
+The top-level file 'gdb.info' will contain something like this:
+
+     <separator>
+     Indirect:
+     gdb.info-1: 1878
+     gdb.info-2: 295733
+     ...
+
+   This tells Info viewers that the first node of the manual occurs at
+byte 1878 of the file 'gdb.info-1' (which would be after that file's
+preamble.)  The first node in the 'gdb.info-2' subfile would start at
+byte 295733 if 'gdb.info-2' were appended to 'gdb.info-1', including any
+preamble sections in both files.
+
+   Unfortunately, Info-creating programs such as 'makeinfo' have not
+always implemented these rules perfectly, due to various bugs and
+oversights.  Therefore, robust Info viewers should fall back to
+searching "nearby" the given position for a node, instead of giving up
+immediately if the position is not exactly at a node beginning.
+
+File: texinfo.info,  Node: Info Format Tag Table,  Next: Info Format Local Variables,  Prev: Info Format Indirect Table,  Up: Info Format General Layout
+
+Info Format: Tag Table
+----------------------
+
+         <tag table> =
+     <separator>
+     Tag Table:
+     (<lparen>Indirect<rparen>)?
+     (Node|Ref): <nodeid>^?<bytepos>
+     <separator>
+     End Tag Table
+
+   The '(Indirect)' line appears in the case of split output only.
+
+   The tag table specifies the starting byte position of each node and
+anchor in the file.  In the case of split output, it is only written in
+the main output file.
+
+   Each line defines an identifier as either an anchor or a node, as
+specified.  For example, 'Node: Top^?1647' says that the node named
+'Top' starts at byte 1647 while 'Ref: Overview-Footnote-1^?30045' says
+that the anchor named 'Overview-Footnote-1' starts at byte 30045.  It is
+an error to define the same identifier both ways.
+
+   In the case of nonsplit output, the byte positions simply refer to
+the location in the output file.  In the case of split output, the byte
+positions refer to an imaginary file created by concatenating all the
+split files (but not the top-level file).  See the previous section.
+
+   Here is an example:
+
+     ^_
+     Tag Table:
+     Node: Top^?89
+     Node: Ch1^?292
+     ^_
+     End Tag Table
+
+This specifies a manual with two nodes, 'Top' and 'Ch1', at byte
+positions 89 and 292 respectively.  Because the '(Indirect)' line is not
+present, the manual is not split.
+
+   Preamble sections or other non-node sections of files do not have a
+tag table entry.
+
+File: texinfo.info,  Node: Info Format Local Variables,  Next: Info Format Regular Nodes,  Prev: Info Format Tag Table,  Up: Info Format General Layout
+
+Info Format: Local Variables
+----------------------------
+
+The local variables section is optional and is currently used to give
+the encoding information.  It may be augmented in the future.
+
+         <local variables> =
+     <separator>
+     Local Variables:
+     coding: <encoding>
+     End:
+
+   *Note @documentencoding::.
+
+File: texinfo.info,  Node: Info Format Regular Nodes,  Prev: Info Format Local Variables,  Up: Info Format General Layout
+
+Info Format: Regular Nodes
+--------------------------
+
+Regular nodes look like this:
+
+         <node> =
+     <separator>
+     File: <fn>, Node: <id1>, (Next: <id2>, )? (Prev: <id3>, )? Up: <id4>
+
+     <general text, until the next ^_ or end-of-file>
+
+At least one space or tab must be present after each colon and comma,
+but any number of spaces are ignored.  The <id> node identifiers have
+following format:
+
+        <id> = (<lparen><infofile><rparen>)?(<del>?<nodename><del>?)?
+     |  <id> = (<lparen><infofile><rparen>)?(<nodename>)?
+
+   This <node> defines <id1> in file <fn>, which is typically either
+'manualname' or 'manualname.info'.  No parenthesized <infofile>
+component may appear within <id1>.
+
+   Each of the identifiers after 'Next', 'Prev' and 'Up' refer to nodes
+or anchors within a file.  These pointers normally refer within the same
+file, but '(dir)' is often used to point to the top-level dir file.  If
+an <infofile> component is used then the node name may be omitted, in
+which case the node identifier refers to the 'Top' node within the
+referenced file.
+
+   The 'Next' and 'Prev' pointers are optional.  The 'Up' pointer is
+technically also optional, although most likely this indicates a mistake
+in the node structuring.  Conventionally, the nodes are arranged to form
+a tree, but this is not a requirement of the format.
+
+   Node names containing periods, commas, colons or parentheses
+(including @-commands which produce any of these) can confuse Info
+readers.  If it is necessary to refer to a node whose name contains any
+of these, the <nodename> should be surrounded by a pair of <del>
+characters.  There is support in 'makeinfo' for adding these characters
+(*note INFO_SPECIAL_CHARS_QUOTE::); however, we don't recommend you make
+use of this support until such time as Info-reading programs that
+recognize this syntax are common.  *Note Node Line Requirements::.
+
+   The use of non-ASCII characters in the names of nodes is permitted,
+but can cause problems in cross-references between nodes in Info files
+with different character encodings, and also when node names from many
+different files are listed (for example, with the '--apropos' option to
+the standalone Info browser), so we recommend avoiding them whenever
+feasible.  For example, prefer the use of the ASCII apostrophe character
+(') to Unicode directional quotes.
+
+   The <general text> of the node can include the special constructs
+described next.
+
+File: texinfo.info,  Node: Info Format Text Constructs,  Prev: Info Format General Layout,  Up: Info Format Specification
+

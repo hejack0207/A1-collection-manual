@@ -1,0 +1,130 @@
+17.6 External Macro Processors: Line Directives
+===============================================
+
+Texinfo macros (and its other text substitution facilities) work fine in
+straightforward cases.  If your document needs unusually complex
+processing, however, their fragility and limitations can be a problem.
+In this case, you may want to use a different macro processor
+altogether, such as M4 (*note (m4)Top::) or CPP (*note (cpp)Top::).
+
+   With one exception, Texinfo does not need to know whether its input
+is "original" source or preprocessed from some other source file.
+Therefore, you can arrange your build system to invoke whatever programs
+you like to handle macro expansion or other preprocessing needs.
+Texinfo does not offer built-in support for any particular preprocessor,
+since no one program seemed likely to suffice for the requirements of
+all documents.
+
+   The one exception is line numbers in error messages.  In that case,
+the line number should refer to the original source file, whatever it
+may be.  There's a well-known mechanism for this: the so-called '#line'
+directive.  Texinfo supports this.
+
+* Menu:
+
+* #line Directive::
+* TeX: #line and TeX.
+* Syntax: #line Syntax Details.
+
+File: texinfo.info,  Node: #line Directive,  Next: #line and TeX,  Up: External Macro Processors
+
+17.6.1 '#line' Directive
+------------------------
+
+An input line such as this:
+
+     #line 100 "foo.ptexi"
+
+indicates that the next line was line 100 of the file 'foo.ptexi', and
+so that's what an error message should refer to.  Both M4 (*note
+(m4)Preprocessor features::) and CPP (*note (cpp)Line Control::, and
+*note (cpp)Preprocessor Output::) can generate such lines.
+
+   The 'makeinfo' program recognizes these lines by default, except
+within '@verbatim' blocks (*note @verbatim::).  Their recognition can be
+turned off completely with 'CPP_LINE_DIRECTIVES' (*note Other
+Customization Variables::), though there is normally no reason to do so.
+
+   For those few programs (M4, CPP, Texinfo) which need to document
+'#line' directives and therefore have examples which would otherwise
+match the pattern, the command '@hashchar{}' can be used (*note
+Inserting a Hashsign::).  The example line above looks like this in the
+source for this manual:
+
+     @hashchar{}line 100 "foo.ptexi"
+
+   The '@hashchar' command was added to Texinfo in 2013.  If you don't
+want to rely on it, you can also use '@set' and '@value' to insert the
+literal '#':
+
+     @set hash #
+     @value{hash}line 1 "example.c"
+
+   Or, if suitable, a '@verbatim' environment can be used instead of
+'@example'.  As mentioned above, '#line'-recognition is disabled inside
+verbatim blocks.
+
+File: texinfo.info,  Node: #line and TeX,  Next: #line Syntax Details,  Prev: #line Directive,  Up: External Macro Processors
+
+17.6.2 '#line' and TeX
+----------------------
+
+As mentioned, 'makeinfo' recognizes the '#line' directives described in
+the previous section.  However, 'texinfo.tex' does not and cannot.
+Therefore, such a line will be incorrectly typeset verbatim if TeX sees
+it.  The solution is to use 'makeinfo''s macro expansion options before
+running TeX.  There are three approaches:
+
+   * If you run 'texi2dvi' or its variants (*note Format with
+     texi2dvi::), you can pass '-E' and 'texi2dvi' will run 'makeinfo'
+     first to expand macros and eliminate '#line'.
+
+   * If you run 'makeinfo' or its variants (*note Generic Translator
+     texi2any::), you can specify '--no-ifinfo --iftex -E somefile.out',
+     and then give 'somefile.out' to 'texi2dvi' in a separate command.
+
+   * Or you can run 'makeinfo --dvi --Xopt -E'.  (Or '--pdf' instead of
+     '--dvi'.)  'makeinfo' will then call 'texi2dvi -E'.
+
+   One last caveat regarding use with TeX: since the '#line' directives
+are not recognized, the line numbers emitted by the '@errormsg{}'
+command (*note Conditional Commands::), or by TeX itself, are the
+(incorrect) line numbers from the derived file which TeX is reading,
+rather than the preprocessor-specified line numbers.  This is another
+example of why we recommend running 'makeinfo' for the best diagnostics
+(*note makeinfo Advantages::).
+
+File: texinfo.info,  Node: #line Syntax Details,  Prev: #line and TeX,  Up: External Macro Processors
+
+17.6.3 '#line' Syntax Details
+-----------------------------
+
+Syntax details for the '#line' directive: the '#' character can be
+preceded or followed by whitespace, the word 'line' is optional, and the
+file name can be followed by a whitespace-separated list of integers
+(these are so-called "flags" output by CPP in some cases).  For those
+who like to know the gory details, the actual (Perl) regular expression
+which is matched is this:
+
+     /^\s*#\s*(line)? (\d+)(( "([^"]+)")(\s+\d+)*)?\s*$/
+
+   As far as we've been able to tell, the trailing integer flags only
+occur in conjunction with a filename, so that is reflected in the
+regular expression.
+
+   As an example, the following is a syntactically valid '#line'
+directive, meaning line 1 of '/usr/include/stdio.h':
+
+     # 1 "/usr/include/stdio.h" 2 3 4
+
+   Unfortunately, the quoted filename ('"..."') has to be optional,
+because M4 (especially) can often generate '#line' directives within a
+single file.  Since the 'line' is also optional, the result is that
+lines might match which you wouldn't expect, e.g.,
+
+     # 1
+
+   The possible solutions are described above (*note #line Directive::).
+
+File: texinfo.info,  Node: Include Files,  Next: Hardcopy,  Prev: Defining New Texinfo Commands,  Up: Top
+

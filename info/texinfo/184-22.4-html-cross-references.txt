@@ -1,0 +1,485 @@
+22.4 HTML Cross-references
+==========================
+
+Cross-references between Texinfo manuals in HTML format become, in the
+end, a standard HTML '<a>' link, but the details are unfortunately
+complex.  This section describes the algorithm used in detail, so that
+Texinfo can cooperate with other programs, such as 'texi2html', by
+writing mutually compatible HTML files.
+
+   This algorithm may or may not be used for links _within_ HTML output
+for a Texinfo file.  Since no issues of compatibility arise in such
+cases, we do not need to specify this.
+
+   We try to support references to such "external" manuals in both
+monolithic and split forms.  A "monolithic" (mono) manual is entirely
+contained in one file, and a "split" manual has a file for each node.
+(*Note HTML Splitting::.)
+
+   The algorithm was primarily devised by Patrice Dumas in 2003-04.
+
+* Menu:
+
+* Link Basics:       HTML Xref Link Basics.
+* Node Expansion:    HTML Xref Node Name Expansion.
+* Command Expansion: HTML Xref Command Expansion.
+* 8-bit Expansion:   HTML Xref 8-bit Character Expansion.
+* Mismatch:          HTML Xref Mismatch.
+* Configuration:     HTML Xref Configuration. htmlxref.cnf.
+* Preserving links:  HTML Xref Link Preservation. MANUAL-noderename.cnf.
+
+File: texinfo.info,  Node: HTML Xref Link Basics,  Next: HTML Xref Node Name Expansion,  Up: HTML Xref
+
+22.4.1 HTML Cross-reference Link Basics
+---------------------------------------
+
+For our purposes, an HTML link consists of four components: a host name,
+a directory part, a file part, and a target part.  We always assume the
+'http' protocol.  For example:
+
+     http://HOST/DIR/FILE.html#TARGET
+
+   The information to construct a link comes from the node name and
+manual name in the cross-reference command in the Texinfo source (*note
+Cross References::), and from "external information" (*note HTML Xref
+Configuration::).
+
+   We now consider each part in turn.
+
+   The HOST is hardwired to be the local host.  This could either be the
+literal string 'localhost', or, according to the rules for HTML links,
+the 'http://localhost/' could be omitted entirely.
+
+   The DIR and FILE parts are more complicated, and depend on the
+relative split/mono nature of both the manual being processed and the
+manual that the cross-reference refers to.  The underlying idea is that
+there is one directory for Texinfo manuals in HTML, and a given MANUAL
+is either available as a monolithic file 'MANUAL.html', or a split
+subdirectory 'MANUAL/*.html'.  Here are the cases:
+
+   * If the present manual is split, and the referent manual is also
+     split, the directory is '../REFERENT/' and the file is the expanded
+     node name (described later).
+
+   * If the present manual is split, and the referent manual is mono,
+     the directory is '../' and the file is 'REFERENT.html'.
+
+   * If the present manual is mono, and the referent manual is split,
+     the directory is 'REFERENT/' and the file is the expanded node
+     name.
+
+   * If the present manual is mono, and the referent manual is also
+     mono, the directory is './' (or just the empty string), and the
+     file is 'REFERENT.html'.
+
+   Another rule, that only holds for filenames, is that base filenames
+are truncated to 245 characters, to allow for an extension to be
+appended and still comply with the 255-character limit which is common
+to many filesystems.  Although technically this can be changed with the
+'BASEFILENAME_LENGTH' customization variable (*note Other Customization
+Variables::), doing so would make cross-manual references to such nodes
+invalid.
+
+   Any directory part in the filename argument of the source cross
+reference command is ignored.  Thus, '@xref{,,,../foo}' and
+'@xref{,,,foo}' both use 'foo' as the manual name.  This is because any
+such attempted hardwiring of the directory is very unlikely to be useful
+for both Info and HTML output.
+
+   Finally, the TARGET part is always the expanded node name.
+
+   Whether the present manual is split or mono is determined by user
+option; 'makeinfo' defaults to split, with the '--no-split' option
+overriding this.
+
+   Whether the referent manual is split or mono, however, is another bit
+of the external information (*note HTML Xref Configuration::).  By
+default, 'makeinfo' uses the same form of the referent manual as the
+present manual.
+
+   Thus, there can be a mismatch between the format of the referent
+manual that the generating software assumes, and the format it's
+actually present in.  *Note HTML Xref Mismatch::.
+
+File: texinfo.info,  Node: HTML Xref Node Name Expansion,  Next: HTML Xref Command Expansion,  Prev: HTML Xref Link Basics,  Up: HTML Xref
+
+22.4.2 HTML Cross-reference Node Name Expansion
+-----------------------------------------------
+
+As mentioned in the previous section, the key part of the HTML cross
+reference algorithm is the conversion of node names in the Texinfo
+source into strings suitable for XHTML identifiers and filenames.  The
+restrictions are similar for each: plain ASCII letters, numbers, and the
+'-' and '_' characters are all that can be used.  (Although HTML anchors
+can contain most characters, XHTML is more restrictive.)
+
+   Cross-references in Texinfo can refer either to nodes or anchors
+(*note @anchor::).  However, anchors are treated identically to nodes in
+this context, so we'll continue to say "node" names for simplicity.
+
+   A special exception: the Top node (*note The Top Node::) is always
+mapped to the file 'index.html', to match web server software.  However,
+the HTML _target_ is 'Top'.  Thus (in the split case):
+
+     @xref{Top,,, emacs, The GNU Emacs Manual}.
+     => <a href="emacs/index.html#Top">
+
+  1. The standard ASCII letters (a-z and A-Z) are not modified.  All
+     other characters may be changed as specified below.
+
+  2. The standard ASCII numbers (0-9) are not modified except when a
+     number is the first character of the node name.  In that case, see
+     below.
+
+  3. Multiple consecutive space, tab and newline characters are
+     transformed into just one space.  (It's not possible to have
+     newlines in node names with the current implementation, but we
+     specify it anyway, just in case.)
+
+  4. Leading and trailing spaces are removed.
+
+  5. After the above has been applied, each remaining space character is
+     converted into a '-' character.
+
+  6. Other ASCII 7-bit characters are transformed into '_00XX', where XX
+     is the ASCII character code in (lowercase) hexadecimal.  This
+     includes '_', which is mapped to '_005f'.
+
+  7. If the node name does not begin with a letter, the literal string
+     'g_t' is prefixed to the result.  (Due to the rules above, that
+     string can never occur otherwise; it is an arbitrary choice,
+     standing for "GNU Texinfo".)  This is necessary because XHTML
+     requires that identifiers begin with a letter.
+
+   For example:
+
+     @node A  node --- with _'%
+     => A-node-_002d_002d_002d-with-_005f_0027_0025
+
+   Example translations of common characters:
+
+   * '_' => '_005f'
+   * '-' => '_002d'
+   * 'A node' => 'A-node'
+
+   On case-folding computer systems, nodes differing only by case will
+be mapped to the same file.  In particular, as mentioned above, Top
+always maps to the file 'index.html'.  Thus, on a case-folding system,
+Top and a node named 'Index' will both be written to 'index.html'.
+Fortunately, the targets serve to distinguish these cases, since HTML
+target names are always case-sensitive, independent of operating system.
+
+File: texinfo.info,  Node: HTML Xref Command Expansion,  Next: HTML Xref 8-bit Character Expansion,  Prev: HTML Xref Node Name Expansion,  Up: HTML Xref
+
+22.4.3 HTML Cross-reference Command Expansion
+---------------------------------------------
+
+Node names may contain @-commands (*note Node Line Requirements::).
+This section describes how they are handled.
+
+   First, comments are removed.
+
+   Next, any '@value' commands (*note @set @value::) and macro
+invocations (*note Invoking Macros::) are fully expanded.
+
+   Then, for the following commands, the command name and braces are
+removed, and the text of the argument is recursively transformed:
+
+     @asis @b @cite @code @command @dfn @dmn @dotless
+     @emph @env @file @i @indicateurl @kbd @key
+     @samp @sansserif @sc @slanted @strong @sub @sup
+     @t @U @var @verb @w
+
+For '@sc', any letters are capitalized.
+
+   In addition, the following commands are replaced by constant text, as
+shown below.  If any of these commands have non-empty arguments, as in
+'@TeX{bad}', it is an error, and the result is unspecified.  In this
+table, '(space)' means a space character and '(nothing)' means the empty
+string.  The notation 'U+HHHH' means Unicode code point HHHH (in hex, as
+usual).
+
+   There are further transformations of many of these expansions to
+yield the final file or other target name, such as space characters to
+'-', etc., according to the other rules.
+
+'@(newline)'           (space)
+'@(space)'             (space)
+'@(tab)'               (space)
+'@!'                   '!'
+'@*'                   (space)
+'@-'                   (nothing)
+'@.'                   '.'
+'@:'                   (nothing)
+'@?'                   '?'
+'@@'                   '@'
+'@{'                   '{'
+'@}'                   '}'
+'@LaTeX'               'LaTeX'
+'@TeX'                 'TeX'
+'@arrow'               U+2192
+'@bullet'              U+2022
+'@comma'               ','
+'@copyright'           U+00A9
+'@dots'                U+2026
+'@enddots'             '...'
+'@equiv'               U+2261
+'@error'               'error-->'
+'@euro'                U+20AC
+'@exclamdown'          U+00A1
+'@expansion'           U+21A6
+'@geq'                 U+2265
+'@leq'                 U+2264
+'@minus'               U+2212
+'@ordf'                U+00AA
+'@ordm'                U+00BA
+'@point'               U+2605
+'@pounds'              U+00A3
+'@print'               U+22A3
+'@questiondown'        U+00BF
+'@registeredsymbol'    U+00AE
+'@result'              U+21D2
+'@textdegree'          U+00B0
+'@tie'                 (space)
+
+   Quotation mark @-commands ('@quotedblright{}' and the like), are
+likewise replaced by their Unicode values.  Normal quotation
+_characters_ (e.g., ASCII ' and ') are not altered.  *Note Inserting
+Quotation Marks::.
+
+   Any '@acronym', '@abbr', '@email', and '@image' commands are replaced
+by their first argument.  (For these commands, all subsequent arguments
+are optional, and ignored here.)  *Note @acronym::, and *note @email::,
+and *note Images::.
+
+   Accents are handled according to the next section.
+
+   Any other command is an error, and the result is unspecified.
+
+File: texinfo.info,  Node: HTML Xref 8-bit Character Expansion,  Next: HTML Xref Mismatch,  Prev: HTML Xref Command Expansion,  Up: HTML Xref
+
+22.4.4 HTML Cross-reference 8-bit Character Expansion
+-----------------------------------------------------
+
+Usually, characters other than plain 7-bit ASCII are transformed into
+the corresponding Unicode code point(s) in Normalization Form C, which
+uses precomposed characters where available.  (This is the normalization
+form recommended by the W3C and other bodies.)  This holds when that
+code point is '0xffff' or less, as it almost always is.
+
+   These will then be further transformed by the rules above into the
+string '_HHHH', where HHHH is the code point in hex.
+
+   For example, combining this rule and the previous section:
+
+     @node @b{A} @TeX{} @u{B} @point{}@enddots{}
+     => A-TeX-B_0306-_2605_002e_002e_002e
+
+   Notice: 1) '@enddots' expands to three periods which in turn expands
+to three '_002e''s; 2) '@u{B}' is a 'B' with a breve accent, which does
+not exist as a pre-accented Unicode character, therefore expands to
+'B_0306' (B with combining breve).
+
+   When the Unicode code point is above '0xffff', the transformation is
+'__XXXXXX', that is, two leading underscores followed by six hex digits.
+Since Unicode has declared that their highest code point is '0x10ffff',
+this is sufficient.  (We felt it was better to define this extra escape
+than to always use six hex digits, since the first two would nearly
+always be zeros.)
+
+   This method works fine if the node name consists mostly of ASCII
+characters and contains only few 8-bit ones.  But if the document is
+written in a language whose script is not based on the Latin alphabet
+(for example, Ukrainian), it will create file names consisting almost
+entirely of '_XXXX' notations, which is inconvenient and all but
+unreadable.  To handle such cases, 'makeinfo' offers the
+'--transliterate-file-names' command line option.  This option enables
+"transliteration" of node names into ASCII characters for the purposes
+of file name creation and referencing.  The transliteration is based on
+phonetic principles, which makes the generated file names more easily
+understanable.
+
+   For the definition of Unicode Normalization Form C, see Unicode
+report UAX#15, <http://www.unicode.org/reports/tr15/>.  Many related
+documents and implementations are available elsewhere on the web.
+
+File: texinfo.info,  Node: HTML Xref Mismatch,  Next: HTML Xref Configuration,  Prev: HTML Xref 8-bit Character Expansion,  Up: HTML Xref
+
+22.4.5 HTML Cross-reference Mismatch
+------------------------------------
+
+As mentioned earlier (*note HTML Xref Link Basics::), the generating
+software may need to guess whether a given manual being cross referenced
+is available in split or monolithic form--and, inevitably, it might
+guess wrong.  However, when the _referent_ manual is generated, it is
+possible to handle at least some mismatches.
+
+   In the case where we assume the referent is split, but it is actually
+available in mono, the only recourse would be to generate a 'manual/'
+subdirectory full of HTML files which redirect back to the monolithic
+'manual.html'.  Since this is essentially the same as a split manual in
+the first place, it's not very appealing.
+
+   On the other hand, in the case where we assume the referent is mono,
+but it is actually available in split, it is possible to use JavaScript
+to redirect from the putatively monolithic 'manual.html' to the
+different 'manual/node.html' files.  Here's an example:
+
+     function redirect() {
+       switch (location.hash) {
+         case "#Node1":
+           location.replace("manual/Node1.html#Node1"); break;
+         case "#Node2" :
+           location.replace("manual/Node2.html#Node2"); break;
+         ...
+         default:;
+       }
+     }
+
+   Then, in the '<body>' tag of 'manual.html':
+
+     <body onLoad="redirect();">
+
+   Once again, this is something the software which generated the
+_referent_ manual has to do in advance, it's not something the software
+generating the cross-reference in the present manual can control.
+
+File: texinfo.info,  Node: HTML Xref Configuration,  Next: HTML Xref Link Preservation,  Prev: HTML Xref Mismatch,  Up: HTML Xref
+
+22.4.6 HTML Cross-reference Configuration: 'htmlxref.cnf'
+---------------------------------------------------------
+
+'makeinfo' reads a file named 'htmlxref.cnf' to gather information for
+cross-references to other manuals in HTML output.  It is looked for in
+the following directories:
+
+'./'
+     (the current directory)
+
+'./.texinfo/'
+     (under the current directory)
+
+'~/.texinfo/'
+     (where '~' is the current user's home directory)
+
+'SYSCONFDIR/texinfo/'
+     (where SYSCONFDIR is the system configuration directory specified
+     at compile-time, e.g., '/usr/local/etc')
+
+'DATADIR/texinfo/'
+     (likewise specified at compile time, e.g., '/usr/local/share')
+
+   All files found are used, with earlier entries overriding later ones.
+The Texinfo distribution includes a default file which handles many GNU
+manuals; it is installed in the last of the above directories, i.e.,
+'DATADIR/texinfo/htmlxref.cnf'.
+
+   The file is line-oriented.  Lines consisting only of whitespace are
+ignored.  Comments are indicated with a '#' at the beginning of a line,
+optionally preceded by whitespace.  Since '#' can occur in urls (like
+almost any character), it does not otherwise start a comment.
+
+   Each non-blank non-comment line must be either a "variable
+assignment" or "manual information".
+
+   A variable assignment line looks like this:
+
+     VARNAME = VARVALUE
+
+   Whitespace around the '=' is optional and ignored.  The VARNAME
+should consist of letters; case is significant.  The VARVALUE is an
+arbitrary string, continuing to the end of the line.  Variables are then
+referenced with '${VARNAME}'; variable references can occur in the
+VARVALUE.
+
+   A manual information line looks like this:
+
+     MANUAL KEYWORD URLPREFIX
+
+with MANUAL the short identifier for a manual, KEYWORD being one of:
+'mono', 'node', 'section', 'chapter', and URLPREFIX described below.
+Variable references can occur only in the URLPREFIX.  For example (used
+in the canonical 'htmlxref.cnf'):
+
+     G = http://www.gnu.org
+     GS = ${G}/software
+     hello mono    ${GS}/hello/manual/hello.html
+     hello chapter ${GS}/hello/manual/html_chapter/
+     hello section ${GS}/hello/manual/html_section/
+     hello node    ${GS}/hello/manual/html_node/
+
+   If the keyword is 'mono', URLPREFIX gives the host, directory, and
+file name for MANUAL as one monolithic file.
+
+   If the keyword is 'node', 'section', or 'chapter', URLPREFIX gives
+the host and directory for MANUAL split into nodes, sections, or
+chapters, respectively.
+
+   When available, 'makeinfo' will use the "corresponding" value for
+cross-references between manuals.  That is, when generating monolithic
+output ('--no-split'), the 'mono' url will be used, when generating
+output that is split by node, the 'node' url will be used, etc.
+However, if a manual is not available in that form, anything that is
+available can be used.  Here is the search order for each style:
+
+     node    => node,    section, chapter, mono
+     section => section, chapter, node,    mono
+     chapter => chapter, section, node,    mono
+     mono    => mono,    chapter, section, node
+
+   These section- and chapter-level cross-manual references can succeed
+only when the target manual was created using '--node-files'; this is
+the default for split output.
+
+   If you have additions or corrections to the 'htmlxref.cnf'
+distributed with Texinfo, please email <bug-texinfo@gnu.org> as usual.
+You can get the latest version from
+<http://ftpmirror.gnu.org/texinfo/htmlxref.cnf>.
+
+File: texinfo.info,  Node: HTML Xref Link Preservation,  Prev: HTML Xref Configuration,  Up: HTML Xref
+
+22.4.7 HTML Cross-reference Link Preservation: MANUAL'-noderename.cnf'
+----------------------------------------------------------------------
+
+Occasionally changes in a program require removing (or renaming) nodes
+in the manual in order to have the best documentation.  Given the nature
+of the web, however, links may exist anywhere to such a removed node
+(renaming appears the same as removal for this purpose), and it's not
+ideal for those links to simply break.
+
+   The preferred approach to preserving links to deleted or renamed
+nodes is to use anchors (*note @anchor::), as this works with all output
+formats, including Info.  However, Texinfo provides an alternative
+method to do this for HTML output via a separate file which specifes old
+node names and the new nodes to which the old names should be
+redirected.  This method is deprecated, and support for these files will
+be removed in future Texinfo releases.  It is specific to HTML and
+supporting @-commands in node names in these files in practice
+complicates the implementation in 'texi2any'.
+
+   The "renamed nodes file" is named MANUAL'-noderename.cnf', where
+MANUAL is the base name of the manual.  For example, the manual
+'texinfo.texi' would be supplemented by a file 'texinfo-noderename'.cnf.
+(This name can be overridden by setting the 'RENAMED_NODES_FILE'
+customization variable; *note Customization Variables::).
+
+   The file is read in pairs of lines, as follows:
+
+     OLD-NODE-NAME
+     @@{} NEW-NODE-NAME
+
+   The usual conversion from Texinfo node names to HTML names is
+applied; see this entire section for details (*note HTML Xref::).  The
+unusual '@@{}' separator is used because it is not a valid Texinfo
+construct, so can't appear in the node names.
+
+   The effect is that 'makeinfo' generates a redirect from OLD-NODE-NAME
+to NEW-NODE-NAME when producing HTML output.  Thus, external links to
+the old node are preserved.
+
+   Lines consisting only of whitespace are ignored.  Comments are
+indicated with a '@c' at the beginning of a line, optionally preceded by
+whitespace.
+
+File: texinfo.info,  Node: @-Command Details,  Next: Tips,  Prev: Generating HTML,  Up: Top
+
