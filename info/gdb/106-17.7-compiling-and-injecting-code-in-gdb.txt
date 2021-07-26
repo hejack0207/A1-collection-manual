@@ -1,0 +1,309 @@
+17.7 Compiling and Injecting Code in GDB
+========================================
+
+GDB supports on-demand compilation and code injection into programs
+running under GDB.  GCC 5.0 or higher built with 'libcc1.so' must be
+installed for this functionality to be enabled.  This functionality is
+implemented with the following commands.
+
+'compile code SOURCE-CODE'
+'compile code -raw -- SOURCE-CODE'
+     Compile SOURCE-CODE with the compiler language found as the current
+     language in GDB (*note Languages::).  If compilation and injection
+     is not supported with the current language specified in GDB, or the
+     compiler does not support this feature, an error message will be
+     printed.  If SOURCE-CODE compiles and links successfully, GDB will
+     load the object-code emitted, and execute it within the context of
+     the currently selected inferior.  It is important to note that the
+     compiled code is executed immediately.  After execution, the
+     compiled code is removed from GDB and any new types or variables
+     you have defined will be deleted.
+
+     The command allows you to specify SOURCE-CODE in two ways.  The
+     simplest method is to provide a single line of code to the command.
+     E.g.:
+
+          compile code printf ("hello world\n");
+
+     If you specify options on the command line as well as source code,
+     they may conflict.  The '--' delimiter can be used to separate
+     options from actual source code.  E.g.:
+
+          compile code -r -- printf ("hello world\n");
+
+     Alternatively you can enter source code as multiple lines of text.
+     To enter this mode, invoke the 'compile code' command without any
+     text following the command.  This will start the multiple-line
+     editor and allow you to type as many lines of source code as
+     required.  When you have completed typing, enter 'end' on its own
+     line to exit the editor.
+
+          compile code
+          >printf ("hello\n");
+          >printf ("world\n");
+          >end
+
+     Specifying '-raw', prohibits GDB from wrapping the provided
+     SOURCE-CODE in a callable scope.  In this case, you must specify
+     the entry point of the code by defining a function named
+     '_gdb_expr_'.  The '-raw' code cannot access variables of the
+     inferior.  Using '-raw' option may be needed for example when
+     SOURCE-CODE requires '#include' lines which may conflict with
+     inferior symbols otherwise.
+
+'compile file FILENAME'
+'compile file -raw FILENAME'
+     Like 'compile code', but take the source code from FILENAME.
+
+          compile file /home/user/example.c
+
+'compile print [[OPTIONS] --] EXPR'
+'compile print [[OPTIONS] --] /F EXPR'
+     Compile and execute EXPR with the compiler language found as the
+     current language in GDB (*note Languages::).  By default the value
+     of EXPR is printed in a format appropriate to its data type; you
+     can choose a different format by specifying '/F', where F is a
+     letter specifying the format; see *note Output Formats: Output
+     Formats.  The 'compile print' command accepts the same options as
+     the 'print' command; see *note print options::.
+
+'compile print [[OPTIONS] --]'
+'compile print [[OPTIONS] --] /F'
+     Alternatively you can enter the expression (source code producing
+     it) as multiple lines of text.  To enter this mode, invoke the
+     'compile print' command without any text following the command.
+     This will start the multiple-line editor.
+
+The process of compiling and injecting the code can be inspected using:
+
+'set debug compile'
+     Turns on or off display of GDB process of compiling and injecting
+     the code.  The default is off.
+
+'show debug compile'
+     Displays the current state of displaying GDB process of compiling
+     and injecting the code.
+
+'set debug compile-cplus-types'
+     Turns on or off the display of C++ type conversion debugging
+     information.  The default is off.
+
+'show debug compile-cplus-types'
+     Displays the current state of displaying debugging information for
+     C++ type conversion.
+
+17.7.1 Compilation Options for the 'compile' Command
+----------------------------------------------------
+
+GDB needs to specify the right compilation options for the code to be
+injected, in part to make its ABI compatible with the inferior and in
+part to make the injected code compatible with GDB's injecting process.
+
+The options used, in increasing precedence:
+
+target architecture and OS options ('gdbarch')
+     These options depend on target processor type and target operating
+     system, usually they specify at least 32-bit ('-m32') or 64-bit
+     ('-m64') compilation option.
+
+compilation options recorded in the target
+     GCC (since version 4.7) stores the options used for compilation
+     into 'DW_AT_producer' part of DWARF debugging information according
+     to the GCC option '-grecord-gcc-switches'.  One has to explicitly
+     specify '-g' during inferior compilation otherwise GCC produces no
+     DWARF. This feature is only relevant for platforms where '-g'
+     produces DWARF by default, otherwise one may try to enforce DWARF
+     by using '-gdwarf-4'.
+
+compilation options set by 'set compile-args'
+
+You can override compilation options using the following command:
+
+'set compile-args'
+     Set compilation options used for compiling and injecting code with
+     the 'compile' commands.  These options override any conflicting
+     ones from the target architecture and/or options stored during
+     inferior compilation.
+
+'show compile-args'
+     Displays the current state of compilation options override.  This
+     does not show all the options actually used during compilation, use
+     *note set debug compile:: for that.
+
+17.7.2 Caveats When Using the 'compile' Command
+-----------------------------------------------
+
+There are a few caveats to keep in mind when using the 'compile'
+command.  As the caveats are different per language, the table below
+highlights specific issues on a per language basis.
+
+C code examples and caveats
+     When the language in GDB is set to 'C', the compiler will attempt
+     to compile the source code with a 'C' compiler.  The source code
+     provided to the 'compile' command will have much the same access to
+     variables and types as it normally would if it were part of the
+     program currently being debugged in GDB.
+
+     Below is a sample program that forms the basis of the examples that
+     follow.  This program has been compiled and loaded into GDB, much
+     like any other normal debugging session.
+
+          void function1 (void)
+          {
+             int i = 42;
+             printf ("function 1\n");
+          }
+
+          void function2 (void)
+          {
+             int j = 12;
+             function1 ();
+          }
+
+          int main(void)
+          {
+             int k = 6;
+             int *p;
+             function2 ();
+             return 0;
+          }
+
+     For the purposes of the examples in this section, the program above
+     has been compiled, loaded into GDB, stopped at the function 'main',
+     and GDB is awaiting input from the user.
+
+     To access variables and types for any program in GDB, the program
+     must be compiled and packaged with debug information.  The
+     'compile' command is not an exception to this rule.  Without debug
+     information, you can still use the 'compile' command, but you will
+     be very limited in what variables and types you can access.
+
+     So with that in mind, the example above has been compiled with
+     debug information enabled.  The 'compile' command will have access
+     to all variables and types (except those that may have been
+     optimized out).  Currently, as GDB has stopped the program in the
+     'main' function, the 'compile' command would have access to the
+     variable 'k'.  You could invoke the 'compile' command and type some
+     source code to set the value of 'k'.  You can also read it, or do
+     anything with that variable you would normally do in 'C'.  Be aware
+     that changes to inferior variables in the 'compile' command are
+     persistent.  In the following example:
+
+          compile code k = 3;
+
+     the variable 'k' is now 3.  It will retain that value until
+     something else in the example program changes it, or another
+     'compile' command changes it.
+
+     Normal scope and access rules apply to source code compiled and
+     injected by the 'compile' command.  In the example, the variables
+     'j' and 'k' are not accessible yet, because the program is
+     currently stopped in the 'main' function, where these variables are
+     not in scope.  Therefore, the following command
+
+          compile code j = 3;
+
+     will result in a compilation error message.
+
+     Once the program is continued, execution will bring these variables
+     in scope, and they will become accessible; then the code you
+     specify via the 'compile' command will be able to access them.
+
+     You can create variables and types with the 'compile' command as
+     part of your source code.  Variables and types that are created as
+     part of the 'compile' command are not visible to the rest of the
+     program for the duration of its run.  This example is valid:
+
+          compile code int ff = 5; printf ("ff is %d\n", ff);
+
+     However, if you were to type the following into GDB after that
+     command has completed:
+
+          compile code printf ("ff is %d\n'', ff);
+
+     a compiler error would be raised as the variable 'ff' no longer
+     exists.  Object code generated and injected by the 'compile'
+     command is removed when its execution ends.  Caution is advised
+     when assigning to program variables values of variables created by
+     the code submitted to the 'compile' command.  This example is
+     valid:
+
+          compile code int ff = 5; k = ff;
+
+     The value of the variable 'ff' is assigned to 'k'.  The variable
+     'k' does not require the existence of 'ff' to maintain the value it
+     has been assigned.  However, pointers require particular care in
+     assignment.  If the source code compiled with the 'compile' command
+     changed the address of a pointer in the example program, perhaps to
+     a variable created in the 'compile' command, that pointer would
+     point to an invalid location when the command exits.  The following
+     example would likely cause issues with your debugged program:
+
+          compile code int ff = 5; p = &ff;
+
+     In this example, 'p' would point to 'ff' when the 'compile' command
+     is executing the source code provided to it.  However, as variables
+     in the (example) program persist with their assigned values, the
+     variable 'p' would point to an invalid location when the command
+     exists.  A general rule should be followed in that you should
+     either assign 'NULL' to any assigned pointers, or restore a valid
+     location to the pointer before the command exits.
+
+     Similar caution must be exercised with any structs, unions, and
+     typedefs defined in 'compile' command.  Types defined in the
+     'compile' command will no longer be available in the next 'compile'
+     command.  Therefore, if you cast a variable to a type defined in
+     the 'compile' command, care must be taken to ensure that any future
+     need to resolve the type can be achieved.
+
+          (gdb) compile code static struct a { int a; } v = { 42 }; argv = &v;
+          (gdb) compile code printf ("%d\n", ((struct a *) argv)->a);
+          gdb command line:1:36: error: dereferencing pointer to incomplete type ‘struct a’
+          Compilation failed.
+          (gdb) compile code struct a { int a; }; printf ("%d\n", ((struct a *) argv)->a);
+          42
+
+     Variables that have been optimized away by the compiler are not
+     accessible to the code submitted to the 'compile' command.  Access
+     to those variables will generate a compiler error which GDB will
+     print to the console.
+
+17.7.3 Compiler Search for the 'compile' Command
+------------------------------------------------
+
+GDB needs to find GCC for the inferior being debugged which may not be
+obvious for remote targets of different architecture than where GDB is
+running.  Environment variable 'PATH' on GDB host is searched for GCC
+binary matching the target architecture and operating system.  This
+search can be overriden by 'set compile-gcc' GDB command below.  'PATH'
+is taken from shell that executed GDB, it is not the value set by GDB
+command 'set environment').  *Note Environment::.
+
+   Specifically 'PATH' is searched for binaries matching regular
+expression 'ARCH(-[^-]*)?-OS-gcc' according to the inferior target being
+debugged.  ARCH is processor name -- multiarch is supported, so for
+example both 'i386' and 'x86_64' targets look for pattern
+'(x86_64|i.86)' and both 's390' and 's390x' targets look for pattern
+'s390x?'.  OS is currently supported only for pattern 'linux(-gnu)?'.
+
+   On Posix hosts the compiler driver GDB needs to find also shared
+library 'libcc1.so' from the compiler.  It is searched in default shared
+library search path (overridable with usual environment variable
+'LD_LIBRARY_PATH'), unrelated to 'PATH' or 'set compile-gcc' settings.
+Contrary to it 'libcc1plugin.so' is found according to the installation
+of the found compiler -- as possibly specified by the 'set compile-gcc'
+command.
+
+'set compile-gcc'
+     Set compilation command used for compiling and injecting code with
+     the 'compile' commands.  If this option is not set (it is set to an
+     empty string), the search described above will occur -- that is the
+     default.
+
+'show compile-gcc'
+     Displays the current compile command GCC driver filename.  If set,
+     it is the main command 'gcc', found usually for example under name
+     'x86_64-linux-gnu-gcc'.
+
+File: gdb.info,  Node: GDB Files,  Next: Targets,  Prev: Altering,  Up: Top
+

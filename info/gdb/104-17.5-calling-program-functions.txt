@@ -1,0 +1,127 @@
+17.5 Calling Program Functions
+==============================
+
+'print EXPR'
+     Evaluate the expression EXPR and display the resulting value.  The
+     expression may include calls to functions in the program being
+     debugged.
+
+'call EXPR'
+     Evaluate the expression EXPR without displaying 'void' returned
+     values.
+
+     You can use this variant of the 'print' command if you want to
+     execute a function from your program that does not return anything
+     (a.k.a. "a void function"), but without cluttering the output with
+     'void' returned values that GDB will otherwise print.  If the
+     result is not void, it is printed and saved in the value history.
+
+   It is possible for the function you call via the 'print' or 'call'
+command to generate a signal (e.g., if there's a bug in the function, or
+if you passed it incorrect arguments).  What happens in that case is
+controlled by the 'set unwindonsignal' command.
+
+   Similarly, with a C++ program it is possible for the function you
+call via the 'print' or 'call' command to generate an exception that is
+not handled due to the constraints of the dummy frame.  In this case,
+any exception that is raised in the frame, but has an out-of-frame
+exception handler will not be found.  GDB builds a dummy-frame for the
+inferior function call, and the unwinder cannot seek for exception
+handlers outside of this dummy-frame.  What happens in that case is
+controlled by the 'set unwind-on-terminating-exception' command.
+
+'set unwindonsignal'
+     Set unwinding of the stack if a signal is received while in a
+     function that GDB called in the program being debugged.  If set to
+     on, GDB unwinds the stack it created for the call and restores the
+     context to what it was before the call.  If set to off (the
+     default), GDB stops in the frame where the signal was received.
+
+'show unwindonsignal'
+     Show the current setting of stack unwinding in the functions called
+     by GDB.
+
+'set unwind-on-terminating-exception'
+     Set unwinding of the stack if a C++ exception is raised, but left
+     unhandled while in a function that GDB called in the program being
+     debugged.  If set to on (the default), GDB unwinds the stack it
+     created for the call and restores the context to what it was before
+     the call.  If set to off, GDB the exception is delivered to the
+     default C++ exception handler and the inferior terminated.
+
+'show unwind-on-terminating-exception'
+     Show the current setting of stack unwinding in the functions called
+     by GDB.
+
+'set may-call-functions'
+     Set permission to call functions in the program.  This controls
+     whether GDB will attempt to call functions in the program, such as
+     with expressions in the 'print' command.  It defaults to 'on'.
+
+     To call a function in the program, GDB has to temporarily modify
+     the state of the inferior.  This has potentially undesired side
+     effects.  Also, having GDB call nested functions is likely to be
+     erroneous and may even crash the program being debugged.  You can
+     avoid such hazards by forbidding GDB from calling functions in the
+     program being debugged.  If calling functions in the program is
+     forbidden, GDB will throw an error when a command (such as printing
+     an expression) starts a function call in the program.
+
+'show may-call-functions'
+     Show permission to call functions in the program.
+
+17.5.1 Calling Functions with No Debug Info
+-------------------------------------------
+
+Sometimes, a function you wish to call is missing debug information.  In
+such case, GDB does not know the type of the function, including the
+types of the function's parameters.  To avoid calling the inferior
+function incorrectly, which could result in the called function
+functioning erroneously and even crash, GDB refuses to call the function
+unless you tell it the type of the function.
+
+   For prototyped (i.e. ANSI/ISO style) functions, there are two ways to
+do that.  The simplest is to cast the call to the function's declared
+return type.  For example:
+
+     (gdb) p getenv ("PATH")
+     'getenv' has unknown return type; cast the call to its declared return type
+     (gdb) p (char *) getenv ("PATH")
+     $1 = 0x7fffffffe7ba "/usr/local/bin:/"...
+
+   Casting the return type of a no-debug function is equivalent to
+casting the function to a pointer to a prototyped function that has a
+prototype that matches the types of the passed-in arguments, and calling
+that.  I.e., the call above is equivalent to:
+
+     (gdb) p ((char * (*) (const char *)) getenv) ("PATH")
+
+and given this prototyped C or C++ function with float parameters:
+
+     float multiply (float v1, float v2) { return v1 * v2; }
+
+these calls are equivalent:
+
+     (gdb) p (float) multiply (2.0f, 3.0f)
+     (gdb) p ((float (*) (float, float)) multiply) (2.0f, 3.0f)
+
+   If the function you wish to call is declared as unprototyped (i.e.
+old K&R style), you must use the cast-to-function-pointer syntax, so
+that GDB knows that it needs to apply default argument promotions
+(promote float arguments to double).  *Note float promotion: ABI. For
+example, given this unprototyped C function with float parameters, and
+no debug info:
+
+     float
+     multiply_noproto (v1, v2)
+       float v1, v2;
+     {
+       return v1 * v2;
+     }
+
+you call it like this:
+
+       (gdb) p ((float (*) ()) multiply_noproto) (2.0f, 3.0f)
+
+File: gdb.info,  Node: Patching,  Next: Compiling and Injecting Code,  Prev: Calling,  Up: Altering
+

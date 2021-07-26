@@ -1,0 +1,56 @@
+18.4 Debugging Information in a Special Section
+===============================================
+
+Some systems ship pre-built executables and libraries that have a
+special '.gnu_debugdata' section.  This feature is called
+"MiniDebugInfo".  This section holds an LZMA-compressed object and is
+used to supply extra symbols for backtraces.
+
+   The intent of this section is to provide extra minimal debugging
+information for use in simple backtraces.  It is not intended to be a
+replacement for full separate debugging information (*note Separate
+Debug Files::).  The example below shows the intended use; however, GDB
+does not currently put restrictions on what sort of debugging
+information might be included in the section.
+
+   GDB has support for this extension.  If the section exists, then it
+is used provided that no other source of debugging information can be
+found, and that GDB was configured with LZMA support.
+
+   This section can be easily created using 'objcopy' and other standard
+utilities:
+
+     # Extract the dynamic symbols from the main binary, there is no need
+     # to also have these in the normal symbol table.
+     nm -D BINARY --format=posix --defined-only \
+       | awk '{ print $1 }' | sort > dynsyms
+
+     # Extract all the text (i.e. function) symbols from the debuginfo.
+     # (Note that we actually also accept "D" symbols, for the benefit
+     # of platforms like PowerPC64 that use function descriptors.)
+     nm BINARY --format=posix --defined-only \
+       | awk '{ if ($2 == "T" || $2 == "t" || $2 == "D") print $1 }' \
+       | sort > funcsyms
+
+     # Keep all the function symbols not already in the dynamic symbol
+     # table.
+     comm -13 dynsyms funcsyms > keep_symbols
+
+     # Separate full debug info into debug binary.
+     objcopy --only-keep-debug BINARY debug
+
+     # Copy the full debuginfo, keeping only a minimal set of symbols and
+     # removing some unnecessary sections.
+     objcopy -S --remove-section .gdb_index --remove-section .comment \
+       --keep-symbols=keep_symbols debug mini_debuginfo
+
+     # Drop the full debug info from the original binary.
+     strip --strip-all -R .comment BINARY
+
+     # Inject the compressed data into the .gnu_debugdata section of the
+     # original binary.
+     xz mini_debuginfo
+     objcopy --add-section .gnu_debugdata=mini_debuginfo.xz BINARY
+
+File: gdb.info,  Node: Index Files,  Next: Symbol Errors,  Prev: MiniDebugInfo,  Up: GDB Files
+

@@ -1,0 +1,308 @@
+F.2 Bytecode Descriptions
+=========================
+
+Each bytecode description has the following form:
+
+'add' (0x02): A B => A+B
+
+     Pop the top two stack items, A and B, as integers; push their sum,
+     as an integer.
+
+   In this example, 'add' is the name of the bytecode, and '(0x02)' is
+the one-byte value used to encode the bytecode, in hexadecimal.  The
+phrase "A B => A+B" shows the stack before and after the bytecode
+executes.  Beforehand, the stack must contain at least two values, A and
+B; since the top of the stack is to the right, B is on the top of the
+stack, and A is underneath it.  After execution, the bytecode will have
+popped A and B from the stack, and replaced them with a single value,
+A+B.  There may be other values on the stack below those shown, but the
+bytecode affects only those shown.
+
+   Here is another example:
+
+'const8' (0x22) N: => N
+     Push the 8-bit integer constant N on the stack, without sign
+     extension.
+
+   In this example, the bytecode 'const8' takes an operand N directly
+from the bytecode stream; the operand follows the 'const8' bytecode
+itself.  We write any such operands immediately after the name of the
+bytecode, before the colon, and describe the exact encoding of the
+operand in the bytecode stream in the body of the bytecode description.
+
+   For the 'const8' bytecode, there are no stack items given before the
+=>; this simply means that the bytecode consumes no values from the
+stack.  If a bytecode consumes no values, or produces no values, the
+list on either side of the => may be empty.
+
+   If a value is written as A, B, or N, then the bytecode treats it as
+an integer.  If a value is written is ADDR, then the bytecode treats it
+as an address.
+
+   We do not fully describe the floating point operations here; although
+this design can be extended in a clean way to handle floating point
+values, they are not of immediate interest to the customer, so we avoid
+describing them, to save time.
+
+'float' (0x01): =>
+
+     Prefix for floating-point bytecodes.  Not implemented yet.
+
+'add' (0x02): A B => A+B
+     Pop two integers from the stack, and push their sum, as an integer.
+
+'sub' (0x03): A B => A-B
+     Pop two integers from the stack, subtract the top value from the
+     next-to-top value, and push the difference.
+
+'mul' (0x04): A B => A*B
+     Pop two integers from the stack, multiply them, and push the
+     product on the stack.  Note that, when one multiplies two N-bit
+     numbers yielding another N-bit number, it is irrelevant whether the
+     numbers are signed or not; the results are the same.
+
+'div_signed' (0x05): A B => A/B
+     Pop two signed integers from the stack; divide the next-to-top
+     value by the top value, and push the quotient.  If the divisor is
+     zero, terminate with an error.
+
+'div_unsigned' (0x06): A B => A/B
+     Pop two unsigned integers from the stack; divide the next-to-top
+     value by the top value, and push the quotient.  If the divisor is
+     zero, terminate with an error.
+
+'rem_signed' (0x07): A B => A MODULO B
+     Pop two signed integers from the stack; divide the next-to-top
+     value by the top value, and push the remainder.  If the divisor is
+     zero, terminate with an error.
+
+'rem_unsigned' (0x08): A B => A MODULO B
+     Pop two unsigned integers from the stack; divide the next-to-top
+     value by the top value, and push the remainder.  If the divisor is
+     zero, terminate with an error.
+
+'lsh' (0x09): A B => A<<B
+     Pop two integers from the stack; let A be the next-to-top value,
+     and B be the top value.  Shift A left by B bits, and push the
+     result.
+
+'rsh_signed' (0x0a): A B => '(signed)'A>>B
+     Pop two integers from the stack; let A be the next-to-top value,
+     and B be the top value.  Shift A right by B bits, inserting copies
+     of the top bit at the high end, and push the result.
+
+'rsh_unsigned' (0x0b): A B => A>>B
+     Pop two integers from the stack; let A be the next-to-top value,
+     and B be the top value.  Shift A right by B bits, inserting zero
+     bits at the high end, and push the result.
+
+'log_not' (0x0e): A => !A
+     Pop an integer from the stack; if it is zero, push the value one;
+     otherwise, push the value zero.
+
+'bit_and' (0x0f): A B => A&B
+     Pop two integers from the stack, and push their bitwise 'and'.
+
+'bit_or' (0x10): A B => A|B
+     Pop two integers from the stack, and push their bitwise 'or'.
+
+'bit_xor' (0x11): A B => A^B
+     Pop two integers from the stack, and push their bitwise
+     exclusive-'or'.
+
+'bit_not' (0x12): A => ~A
+     Pop an integer from the stack, and push its bitwise complement.
+
+'equal' (0x13): A B => A=B
+     Pop two integers from the stack; if they are equal, push the value
+     one; otherwise, push the value zero.
+
+'less_signed' (0x14): A B => A<B
+     Pop two signed integers from the stack; if the next-to-top value is
+     less than the top value, push the value one; otherwise, push the
+     value zero.
+
+'less_unsigned' (0x15): A B => A<B
+     Pop two unsigned integers from the stack; if the next-to-top value
+     is less than the top value, push the value one; otherwise, push the
+     value zero.
+
+'ext' (0x16) N: A => A, sign-extended from N bits
+     Pop an unsigned value from the stack; treating it as an N-bit
+     twos-complement value, extend it to full length.  This means that
+     all bits to the left of bit N-1 (where the least significant bit is
+     bit 0) are set to the value of bit N-1.  Note that N may be larger
+     than or equal to the width of the stack elements of the bytecode
+     engine; in this case, the bytecode should have no effect.
+
+     The number of source bits to preserve, N, is encoded as a single
+     byte unsigned integer following the 'ext' bytecode.
+
+'zero_ext' (0x2a) N: A => A, zero-extended from N bits
+     Pop an unsigned value from the stack; zero all but the bottom N
+     bits.
+
+     The number of source bits to preserve, N, is encoded as a single
+     byte unsigned integer following the 'zero_ext' bytecode.
+
+'ref8' (0x17): ADDR => A
+'ref16' (0x18): ADDR => A
+'ref32' (0x19): ADDR => A
+'ref64' (0x1a): ADDR => A
+     Pop an address ADDR from the stack.  For bytecode 'ref'N, fetch an
+     N-bit value from ADDR, using the natural target endianness.  Push
+     the fetched value as an unsigned integer.
+
+     Note that ADDR may not be aligned in any particular way; the 'refN'
+     bytecodes should operate correctly for any address.
+
+     If attempting to access memory at ADDR would cause a processor
+     exception of some sort, terminate with an error.
+
+'ref_float' (0x1b): ADDR => D
+'ref_double' (0x1c): ADDR => D
+'ref_long_double' (0x1d): ADDR => D
+'l_to_d' (0x1e): A => D
+'d_to_l' (0x1f): D => A
+     Not implemented yet.
+
+'dup' (0x28): A => A A
+     Push another copy of the stack's top element.
+
+'swap' (0x2b): A B => B A
+     Exchange the top two items on the stack.
+
+'pop' (0x29): A =>
+     Discard the top value on the stack.
+
+'pick' (0x32) N: A ... B => A ... B A
+     Duplicate an item from the stack and push it on the top of the
+     stack.  N, a single byte, indicates the stack item to copy.  If N
+     is zero, this is the same as 'dup'; if N is one, it copies the item
+     under the top item, etc.  If N exceeds the number of items on the
+     stack, terminate with an error.
+
+'rot' (0x33): A B C => C A B
+     Rotate the top three items on the stack.  The top item (c) becomes
+     the third item, the next-to-top item (b) becomes the top item and
+     the third item (a) from the top becomes the next-to-top item.
+
+'if_goto' (0x20) OFFSET: A =>
+     Pop an integer off the stack; if it is non-zero, branch to the
+     given offset in the bytecode string.  Otherwise, continue to the
+     next instruction in the bytecode stream.  In other words, if A is
+     non-zero, set the 'pc' register to 'start' + OFFSET.  Thus, an
+     offset of zero denotes the beginning of the expression.
+
+     The OFFSET is stored as a sixteen-bit unsigned value, stored
+     immediately following the 'if_goto' bytecode.  It is always stored
+     most significant byte first, regardless of the target's normal
+     endianness.  The offset is not guaranteed to fall at any particular
+     alignment within the bytecode stream; thus, on machines where
+     fetching a 16-bit on an unaligned address raises an exception, you
+     should fetch the offset one byte at a time.
+
+'goto' (0x21) OFFSET: =>
+     Branch unconditionally to OFFSET; in other words, set the 'pc'
+     register to 'start' + OFFSET.
+
+     The offset is stored in the same way as for the 'if_goto' bytecode.
+
+'const8' (0x22) N: => N
+'const16' (0x23) N: => N
+'const32' (0x24) N: => N
+'const64' (0x25) N: => N
+     Push the integer constant N on the stack, without sign extension.
+     To produce a small negative value, push a small twos-complement
+     value, and then sign-extend it using the 'ext' bytecode.
+
+     The constant N is stored in the appropriate number of bytes
+     following the 'const'B bytecode.  The constant N is always stored
+     most significant byte first, regardless of the target's normal
+     endianness.  The constant is not guaranteed to fall at any
+     particular alignment within the bytecode stream; thus, on machines
+     where fetching a 16-bit on an unaligned address raises an
+     exception, you should fetch N one byte at a time.
+
+'reg' (0x26) N: => A
+     Push the value of register number N, without sign extension.  The
+     registers are numbered following GDB's conventions.
+
+     The register number N is encoded as a 16-bit unsigned integer
+     immediately following the 'reg' bytecode.  It is always stored most
+     significant byte first, regardless of the target's normal
+     endianness.  The register number is not guaranteed to fall at any
+     particular alignment within the bytecode stream; thus, on machines
+     where fetching a 16-bit on an unaligned address raises an
+     exception, you should fetch the register number one byte at a time.
+
+'getv' (0x2c) N: => V
+     Push the value of trace state variable number N, without sign
+     extension.
+
+     The variable number N is encoded as a 16-bit unsigned integer
+     immediately following the 'getv' bytecode.  It is always stored
+     most significant byte first, regardless of the target's normal
+     endianness.  The variable number is not guaranteed to fall at any
+     particular alignment within the bytecode stream; thus, on machines
+     where fetching a 16-bit on an unaligned address raises an
+     exception, you should fetch the register number one byte at a time.
+
+'setv' (0x2d) N: V => V
+     Set trace state variable number N to the value found on the top of
+     the stack.  The stack is unchanged, so that the value is readily
+     available if the assignment is part of a larger expression.  The
+     handling of N is as described for 'getv'.
+
+'trace' (0x0c): ADDR SIZE =>
+     Record the contents of the SIZE bytes at ADDR in a trace buffer,
+     for later retrieval by GDB.
+
+'trace_quick' (0x0d) SIZE: ADDR => ADDR
+     Record the contents of the SIZE bytes at ADDR in a trace buffer,
+     for later retrieval by GDB. SIZE is a single byte unsigned integer
+     following the 'trace' opcode.
+
+     This bytecode is equivalent to the sequence 'dup const8 SIZE
+     trace', but we provide it anyway to save space in bytecode strings.
+
+'trace16' (0x30) SIZE: ADDR => ADDR
+     Identical to trace_quick, except that SIZE is a 16-bit big-endian
+     unsigned integer, not a single byte.  This should probably have
+     been named 'trace_quick16', for consistency.
+
+'tracev' (0x2e) N: => A
+     Record the value of trace state variable number N in the trace
+     buffer.  The handling of N is as described for 'getv'.
+
+'tracenz' (0x2f) ADDR SIZE =>
+     Record the bytes at ADDR in a trace buffer, for later retrieval by
+     GDB. Stop at either the first zero byte, or when SIZE bytes have
+     been recorded, whichever occurs first.
+
+'printf' (0x34) NUMARGS STRING =>
+     Do a formatted print, in the style of the C function 'printf').
+     The value of NUMARGS is the number of arguments to expect on the
+     stack, while STRING is the format string, prefixed with a two-byte
+     length.  The last byte of the string must be zero, and is included
+     in the length.  The format string includes escaped sequences just
+     as it appears in C source, so for instance the format string
+     '"\t%d\n"' is six characters long, and the output will consist of a
+     tab character, a decimal number, and a newline.  At the top of the
+     stack, above the values to be printed, this bytecode will pop a
+     "function" and "channel".  If the function is nonzero, then the
+     target may treat it as a function and call it, passing the channel
+     as a first argument, as with the C function 'fprintf'.  If the
+     function is zero, then the target may simply call a standard
+     formatted print function of its choice.  In all, this bytecode pops
+     2 + NUMARGS stack elements, and pushes nothing.
+
+'end' (0x27): =>
+     Stop executing bytecode; the result should be the top element of
+     the stack.  If the purpose of the expression was to compute an
+     lvalue or a range of memory, then the next-to-top of the stack is
+     the lvalue's address, and the top of the stack is the lvalue's
+     size, in bytes.
+
+File: gdb.info,  Node: Using Agent Expressions,  Next: Varying Target Capabilities,  Prev: Bytecode Descriptions,  Up: Agent Expressions
+

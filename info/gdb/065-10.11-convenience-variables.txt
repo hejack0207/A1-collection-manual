@@ -1,0 +1,194 @@
+10.11 Convenience Variables
+===========================
+
+GDB provides "convenience variables" that you can use within GDB to hold
+on to a value and refer to it later.  These variables exist entirely
+within GDB; they are not part of your program, and setting a convenience
+variable has no direct effect on further execution of your program.
+That is why you can use them freely.
+
+   Convenience variables are prefixed with '$'.  Any name preceded by
+'$' can be used for a convenience variable, unless it is one of the
+predefined machine-specific register names (*note Registers:
+Registers.).  (Value history references, in contrast, are _numbers_
+preceded by '$'.  *Note Value History: Value History.)
+
+   You can save a value in a convenience variable with an assignment
+expression, just as you would set a variable in your program.  For
+example:
+
+     set $foo = *object_ptr
+
+would save in '$foo' the value contained in the object pointed to by
+'object_ptr'.
+
+   Using a convenience variable for the first time creates it, but its
+value is 'void' until you assign a new value.  You can alter the value
+with another assignment at any time.
+
+   Convenience variables have no fixed types.  You can assign a
+convenience variable any type of value, including structures and arrays,
+even if that variable already has a value of a different type.  The
+convenience variable, when used as an expression, has the type of its
+current value.
+
+'show convenience'
+     Print a list of convenience variables used so far, and their
+     values, as well as a list of the convenience functions.
+     Abbreviated 'show conv'.
+
+'init-if-undefined $VARIABLE = EXPRESSION'
+     Set a convenience variable if it has not already been set.  This is
+     useful for user-defined commands that keep some state.  It is
+     similar, in concept, to using local static variables with
+     initializers in C (except that convenience variables are global).
+     It can also be used to allow users to override default values used
+     in a command script.
+
+     If the variable is already defined then the expression is not
+     evaluated so any side-effects do not occur.
+
+   One of the ways to use a convenience variable is as a counter to be
+incremented or a pointer to be advanced.  For example, to print a field
+from successive elements of an array of structures:
+
+     set $i = 0
+     print bar[$i++]->contents
+
+Repeat that command by typing <RET>.
+
+   Some convenience variables are created automatically by GDB and given
+values likely to be useful.
+
+'$_'
+     The variable '$_' is automatically set by the 'x' command to the
+     last address examined (*note Examining Memory: Memory.).  Other
+     commands which provide a default address for 'x' to examine also
+     set '$_' to that address; these commands include 'info line' and
+     'info breakpoint'.  The type of '$_' is 'void *' except when set by
+     the 'x' command, in which case it is a pointer to the type of
+     '$__'.
+
+'$__'
+     The variable '$__' is automatically set by the 'x' command to the
+     value found in the last address examined.  Its type is chosen to
+     match the format in which the data was printed.
+
+'$_exitcode'
+     When the program being debugged terminates normally, GDB
+     automatically sets this variable to the exit code of the program,
+     and resets '$_exitsignal' to 'void'.
+
+'$_exitsignal'
+     When the program being debugged dies due to an uncaught signal, GDB
+     automatically sets this variable to that signal's number, and
+     resets '$_exitcode' to 'void'.
+
+     To distinguish between whether the program being debugged has
+     exited (i.e., '$_exitcode' is not 'void') or signalled (i.e.,
+     '$_exitsignal' is not 'void'), the convenience function '$_isvoid'
+     can be used (*note Convenience Functions: Convenience Funs.).  For
+     example, considering the following source code:
+
+          #include <signal.h>
+
+          int
+          main (int argc, char *argv[])
+          {
+            raise (SIGALRM);
+            return 0;
+          }
+
+     A valid way of telling whether the program being debugged has
+     exited or signalled would be:
+
+          (gdb) define has_exited_or_signalled
+          Type commands for definition of ``has_exited_or_signalled''.
+          End with a line saying just ``end''.
+          >if $_isvoid ($_exitsignal)
+           >echo The program has exited\n
+           >else
+           >echo The program has signalled\n
+           >end
+          >end
+          (gdb) run
+          Starting program:
+
+          Program terminated with signal SIGALRM, Alarm clock.
+          The program no longer exists.
+          (gdb) has_exited_or_signalled
+          The program has signalled
+
+     As can be seen, GDB correctly informs that the program being
+     debugged has signalled, since it calls 'raise' and raises a
+     'SIGALRM' signal.  If the program being debugged had not called
+     'raise', then GDB would report a normal exit:
+
+          (gdb) has_exited_or_signalled
+          The program has exited
+
+'$_exception'
+     The variable '$_exception' is set to the exception object being
+     thrown at an exception-related catchpoint.  *Note Set
+     Catchpoints::.
+
+'$_ada_exception'
+     The variable '$_ada_exception' is set to the address of the
+     exception being caught or thrown at an Ada exception-related
+     catchpoint.  *Note Set Catchpoints::.
+
+'$_probe_argc'
+'$_probe_arg0...$_probe_arg11'
+     Arguments to a static probe.  *Note Static Probe Points::.
+
+'$_sdata'
+     The variable '$_sdata' contains extra collected static tracepoint
+     data.  *Note Tracepoint Action Lists: Tracepoint Actions.  Note
+     that '$_sdata' could be empty, if not inspecting a trace buffer, or
+     if extra static tracepoint data has not been collected.
+
+'$_siginfo'
+     The variable '$_siginfo' contains extra signal information (*note
+     extra signal information::).  Note that '$_siginfo' could be empty,
+     if the application has not yet received any signals.  For example,
+     it will be empty before you execute the 'run' command.
+
+'$_tlb'
+     The variable '$_tlb' is automatically set when debugging
+     applications running on MS-Windows in native mode or connected to
+     gdbserver that supports the 'qGetTIBAddr' request.  *Note General
+     Query Packets::.  This variable contains the address of the thread
+     information block.
+
+'$_inferior'
+     The number of the current inferior.  *Note Debugging Multiple
+     Inferiors Connections and Programs: Inferiors Connections and
+     Programs.
+
+'$_thread'
+     The thread number of the current thread.  *Note thread numbers::.
+
+'$_gthread'
+     The global number of the current thread.  *Note global thread
+     numbers::.
+
+'$_gdb_major'
+'$_gdb_minor'
+     The major and minor version numbers of the running GDB.
+     Development snapshots and pretest versions have their minor version
+     incremented by one; thus, GDB pretest 9.11.90 will produce the
+     value 12 for '$_gdb_minor'.  These variables allow you to write
+     scripts that work with different versions of GDB without errors
+     caused by features unavailable in some of those versions.
+
+'$_shell_exitcode'
+'$_shell_exitsignal'
+     GDB commands such as 'shell' and '|' are launching shell commands.
+     When a launched command terminates, GDB automatically maintains the
+     variables '$_shell_exitcode' and '$_shell_exitsignal' according to
+     the exit status of the last launched command.  These variables are
+     set and used similarly to the variables '$_exitcode' and
+     '$_exitsignal'.
+
+File: gdb.info,  Node: Convenience Funs,  Next: Registers,  Prev: Convenience Vars,  Up: Data
+

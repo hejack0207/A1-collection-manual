@@ -1,0 +1,98 @@
+14.2 Overlay Commands
+=====================
+
+To use GDB's overlay support, each overlay in your program must
+correspond to a separate section of the executable file.  The section's
+virtual memory address and load memory address must be the overlay's
+mapped and load addresses.  Identifying overlays with sections allows
+GDB to determine the appropriate address of a function or variable,
+depending on whether the overlay is mapped or not.
+
+   GDB's overlay commands all start with the word 'overlay'; you can
+abbreviate this as 'ov' or 'ovly'.  The commands are:
+
+'overlay off'
+     Disable GDB's overlay support.  When overlay support is disabled,
+     GDB assumes that all functions and variables are always present at
+     their mapped addresses.  By default, GDB's overlay support is
+     disabled.
+
+'overlay manual'
+     Enable "manual" overlay debugging.  In this mode, GDB relies on you
+     to tell it which overlays are mapped, and which are not, using the
+     'overlay map-overlay' and 'overlay unmap-overlay' commands
+     described below.
+
+'overlay map-overlay OVERLAY'
+'overlay map OVERLAY'
+     Tell GDB that OVERLAY is now mapped; OVERLAY must be the name of
+     the object file section containing the overlay.  When an overlay is
+     mapped, GDB assumes it can find the overlay's functions and
+     variables at their mapped addresses.  GDB assumes that any other
+     overlays whose mapped ranges overlap that of OVERLAY are now
+     unmapped.
+
+'overlay unmap-overlay OVERLAY'
+'overlay unmap OVERLAY'
+     Tell GDB that OVERLAY is no longer mapped; OVERLAY must be the name
+     of the object file section containing the overlay.  When an overlay
+     is unmapped, GDB assumes it can find the overlay's functions and
+     variables at their load addresses.
+
+'overlay auto'
+     Enable "automatic" overlay debugging.  In this mode, GDB consults a
+     data structure the overlay manager maintains in the inferior to see
+     which overlays are mapped.  For details, see *note Automatic
+     Overlay Debugging::.
+
+'overlay load-target'
+'overlay load'
+     Re-read the overlay table from the inferior.  Normally, GDB
+     re-reads the table GDB automatically each time the inferior stops,
+     so this command should only be necessary if you have changed the
+     overlay mapping yourself using GDB.  This command is only useful
+     when using automatic overlay debugging.
+
+'overlay list-overlays'
+'overlay list'
+     Display a list of the overlays currently mapped, along with their
+     mapped addresses, load addresses, and sizes.
+
+   Normally, when GDB prints a code address, it includes the name of the
+function the address falls in:
+
+     (gdb) print main
+     $3 = {int ()} 0x11a0 <main>
+When overlay debugging is enabled, GDB recognizes code in unmapped
+overlays, and prints the names of unmapped functions with asterisks
+around them.  For example, if 'foo' is a function in an unmapped
+overlay, GDB prints it this way:
+
+     (gdb) overlay list
+     No sections are mapped.
+     (gdb) print foo
+     $5 = {int (int)} 0x100000 <*foo*>
+When 'foo''s overlay is mapped, GDB prints the function's name normally:
+
+     (gdb) overlay list
+     Section .ov.foo.text, loaded at 0x100000 - 0x100034,
+             mapped at 0x1016 - 0x104a
+     (gdb) print foo
+     $6 = {int (int)} 0x1016 <foo>
+
+   When overlay debugging is enabled, GDB can find the correct address
+for functions and variables in an overlay, whether or not the overlay is
+mapped.  This allows most GDB commands, like 'break' and 'disassemble',
+to work normally, even on unmapped code.  However, GDB's breakpoint
+support has some limitations:
+
+   * You can set breakpoints in functions in unmapped overlays, as long
+     as GDB can write to the overlay at its load address.
+   * GDB can not set hardware or simulator-based breakpoints in unmapped
+     overlays.  However, if you set a breakpoint at the end of your
+     overlay manager (and tell GDB which overlays are now mapped, if you
+     are using manual overlay management), GDB will re-set its
+     breakpoints properly.
+
+File: gdb.info,  Node: Automatic Overlay Debugging,  Next: Overlay Sample Program,  Prev: Overlay Commands,  Up: Overlays
+

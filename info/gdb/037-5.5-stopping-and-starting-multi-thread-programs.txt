@@ -1,0 +1,411 @@
+5.5 Stopping and Starting Multi-Thread Programs
+===============================================
+
+GDB supports debugging programs with multiple threads (*note Debugging
+Programs with Multiple Threads: Threads.).  There are two modes of
+controlling execution of your program within the debugger.  In the
+default mode, referred to as "all-stop mode", when any thread in your
+program stops (for example, at a breakpoint or while being stepped), all
+other threads in the program are also stopped by GDB.  On some targets,
+GDB also supports "non-stop mode", in which other threads can continue
+to run freely while you examine the stopped thread in the debugger.
+
+* Menu:
+
+* All-Stop Mode::		All threads stop when GDB takes control
+* Non-Stop Mode::		Other threads continue to execute
+* Background Execution::	Running your program asynchronously
+* Thread-Specific Breakpoints::	Controlling breakpoints
+* Interrupted System Calls::	GDB may interfere with system calls
+* Observer Mode::               GDB does not alter program behavior
+
+File: gdb.info,  Node: All-Stop Mode,  Next: Non-Stop Mode,  Up: Thread Stops
+
+5.5.1 All-Stop Mode
+-------------------
+
+In all-stop mode, whenever your program stops under GDB for any reason,
+_all_ threads of execution stop, not just the current thread.  This
+allows you to examine the overall state of the program, including
+switching between threads, without worrying that things may change
+underfoot.
+
+   Conversely, whenever you restart the program, _all_ threads start
+executing.  _This is true even when single-stepping_ with commands like
+'step' or 'next'.
+
+   In particular, GDB cannot single-step all threads in lockstep.  Since
+thread scheduling is up to your debugging target's operating system (not
+controlled by GDB), other threads may execute more than one statement
+while the current thread completes a single step.  Moreover, in general
+other threads stop in the middle of a statement, rather than at a clean
+statement boundary, when the program stops.
+
+   You might even find your program stopped in another thread after
+continuing or even single-stepping.  This happens whenever some other
+thread runs into a breakpoint, a signal, or an exception before the
+first thread completes whatever you requested.
+
+   Whenever GDB stops your program, due to a breakpoint or a signal, it
+automatically selects the thread where that breakpoint or signal
+happened.  GDB alerts you to the context switch with a message such as
+'[Switching to Thread N]' to identify the thread.
+
+   On some OSes, you can modify GDB's default behavior by locking the OS
+scheduler to allow only a single thread to run.
+
+'set scheduler-locking MODE'
+     Set the scheduler locking mode.  It applies to normal execution,
+     record mode, and replay mode.  If it is 'off', then there is no
+     locking and any thread may run at any time.  If 'on', then only the
+     current thread may run when the inferior is resumed.  The 'step'
+     mode optimizes for single-stepping; it prevents other threads from
+     preempting the current thread while you are stepping, so that the
+     focus of debugging does not change unexpectedly.  Other threads
+     never get a chance to run when you step, and they are completely
+     free to run when you use commands like 'continue', 'until', or
+     'finish'.  However, unless another thread hits a breakpoint during
+     its timeslice, GDB does not change the current thread away from the
+     thread that you are debugging.  The 'replay' mode behaves like
+     'off' in record mode and like 'on' in replay mode.
+
+'show scheduler-locking'
+     Display the current scheduler locking mode.
+
+   By default, when you issue one of the execution commands such as
+'continue', 'next' or 'step', GDB allows only threads of the current
+inferior to run.  For example, if GDB is attached to two inferiors, each
+with two threads, the 'continue' command resumes only the two threads of
+the current inferior.  This is useful, for example, when you debug a
+program that forks and you want to hold the parent stopped (so that, for
+instance, it doesn't run to exit), while you debug the child.  In other
+situations, you may not be interested in inspecting the current state of
+any of the processes GDB is attached to, and you may want to resume them
+all until some breakpoint is hit.  In the latter case, you can instruct
+GDB to allow all threads of all the inferiors to run with the
+'set schedule-multiple' command.
+
+'set schedule-multiple'
+     Set the mode for allowing threads of multiple processes to be
+     resumed when an execution command is issued.  When 'on', all
+     threads of all processes are allowed to run.  When 'off', only the
+     threads of the current process are resumed.  The default is 'off'.
+     The 'scheduler-locking' mode takes precedence when set to 'on', or
+     while you are stepping and set to 'step'.
+
+'show schedule-multiple'
+     Display the current mode for resuming the execution of threads of
+     multiple processes.
+
+File: gdb.info,  Node: Non-Stop Mode,  Next: Background Execution,  Prev: All-Stop Mode,  Up: Thread Stops
+
+5.5.2 Non-Stop Mode
+-------------------
+
+For some multi-threaded targets, GDB supports an optional mode of
+operation in which you can examine stopped program threads in the
+debugger while other threads continue to execute freely.  This minimizes
+intrusion when debugging live systems, such as programs where some
+threads have real-time constraints or must continue to respond to
+external events.  This is referred to as "non-stop" mode.
+
+   In non-stop mode, when a thread stops to report a debugging event,
+_only_ that thread is stopped; GDB does not stop other threads as well,
+in contrast to the all-stop mode behavior.  Additionally, execution
+commands such as 'continue' and 'step' apply by default only to the
+current thread in non-stop mode, rather than all threads as in all-stop
+mode.  This allows you to control threads explicitly in ways that are
+not possible in all-stop mode -- for example, stepping one thread while
+allowing others to run freely, stepping one thread while holding all
+others stopped, or stepping several threads independently and
+simultaneously.
+
+   To enter non-stop mode, use this sequence of commands before you run
+or attach to your program:
+
+     # If using the CLI, pagination breaks non-stop.
+     set pagination off
+
+     # Finally, turn it on!
+     set non-stop on
+
+   You can use these commands to manipulate the non-stop mode setting:
+
+'set non-stop on'
+     Enable selection of non-stop mode.
+'set non-stop off'
+     Disable selection of non-stop mode.
+'show non-stop'
+     Show the current non-stop enablement setting.
+
+   Note these commands only reflect whether non-stop mode is enabled,
+not whether the currently-executing program is being run in non-stop
+mode.  In particular, the 'set non-stop' preference is only consulted
+when GDB starts or connects to the target program, and it is generally
+not possible to switch modes once debugging has started.  Furthermore,
+since not all targets support non-stop mode, even when you have enabled
+non-stop mode, GDB may still fall back to all-stop operation by default.
+
+   In non-stop mode, all execution commands apply only to the current
+thread by default.  That is, 'continue' only continues one thread.  To
+continue all threads, issue 'continue -a' or 'c -a'.
+
+   You can use GDB's background execution commands (*note Background
+Execution::) to run some threads in the background while you continue to
+examine or step others from GDB.  The MI execution commands (*note
+GDB/MI Program Execution::) are always executed asynchronously in
+non-stop mode.
+
+   Suspending execution is done with the 'interrupt' command when
+running in the background, or 'Ctrl-c' during foreground execution.  In
+all-stop mode, this stops the whole process; but in non-stop mode the
+interrupt applies only to the current thread.  To stop the whole
+program, use 'interrupt -a'.
+
+   Other execution commands do not currently support the '-a' option.
+
+   In non-stop mode, when a thread stops, GDB doesn't automatically make
+that thread current, as it does in all-stop mode.  This is because the
+thread stop notifications are asynchronous with respect to GDB's command
+interpreter, and it would be confusing if GDB unexpectedly changed to a
+different thread just as you entered a command to operate on the
+previously current thread.
+
+File: gdb.info,  Node: Background Execution,  Next: Thread-Specific Breakpoints,  Prev: Non-Stop Mode,  Up: Thread Stops
+
+5.5.3 Background Execution
+--------------------------
+
+GDB's execution commands have two variants: the normal foreground
+(synchronous) behavior, and a background (asynchronous) behavior.  In
+foreground execution, GDB waits for the program to report that some
+thread has stopped before prompting for another command.  In background
+execution, GDB immediately gives a command prompt so that you can issue
+other commands while your program runs.
+
+   If the target doesn't support async mode, GDB issues an error message
+if you attempt to use the background execution commands.
+
+   To specify background execution, add a '&' to the command.  For
+example, the background form of the 'continue' command is 'continue&',
+or just 'c&'.  The execution commands that accept background execution
+are:
+
+'run'
+     *Note Starting your Program: Starting.
+
+'attach'
+     *Note Debugging an Already-running Process: Attach.
+
+'step'
+     *Note step: Continuing and Stepping.
+
+'stepi'
+     *Note stepi: Continuing and Stepping.
+
+'next'
+     *Note next: Continuing and Stepping.
+
+'nexti'
+     *Note nexti: Continuing and Stepping.
+
+'continue'
+     *Note continue: Continuing and Stepping.
+
+'finish'
+     *Note finish: Continuing and Stepping.
+
+'until'
+     *Note until: Continuing and Stepping.
+
+   Background execution is especially useful in conjunction with
+non-stop mode for debugging programs with multiple threads; see *note
+Non-Stop Mode::.  However, you can also use these commands in the normal
+all-stop mode with the restriction that you cannot issue another
+execution command until the previous one finishes.  Examples of commands
+that are valid in all-stop mode while the program is running include
+'help' and 'info break'.
+
+   You can interrupt your program while it is running in the background
+by using the 'interrupt' command.
+
+'interrupt'
+'interrupt -a'
+
+     Suspend execution of the running program.  In all-stop mode,
+     'interrupt' stops the whole process, but in non-stop mode, it stops
+     only the current thread.  To stop the whole program in non-stop
+     mode, use 'interrupt -a'.
+
+File: gdb.info,  Node: Thread-Specific Breakpoints,  Next: Interrupted System Calls,  Prev: Background Execution,  Up: Thread Stops
+
+5.5.4 Thread-Specific Breakpoints
+---------------------------------
+
+When your program has multiple threads (*note Debugging Programs with
+Multiple Threads: Threads.), you can choose whether to set breakpoints
+on all threads, or on a particular thread.
+
+'break LOCATION thread THREAD-ID'
+'break LOCATION thread THREAD-ID if ...'
+     LOCATION specifies source lines; there are several ways of writing
+     them (*note Specify Location::), but the effect is always to
+     specify some source line.
+
+     Use the qualifier 'thread THREAD-ID' with a breakpoint command to
+     specify that you only want GDB to stop the program when a
+     particular thread reaches this breakpoint.  The THREAD-ID specifier
+     is one of the thread identifiers assigned by GDB, shown in the
+     first column of the 'info threads' display.
+
+     If you do not specify 'thread THREAD-ID' when you set a breakpoint,
+     the breakpoint applies to _all_ threads of your program.
+
+     You can use the 'thread' qualifier on conditional breakpoints as
+     well; in this case, place 'thread THREAD-ID' before or after the
+     breakpoint condition, like this:
+
+          (gdb) break frik.c:13 thread 28 if bartab > lim
+
+   Thread-specific breakpoints are automatically deleted when GDB
+detects the corresponding thread is no longer in the thread list.  For
+example:
+
+     (gdb) c
+     Thread-specific breakpoint 3 deleted - thread 28 no longer in the thread list.
+
+   There are several ways for a thread to disappear, such as a regular
+thread exit, but also when you detach from the process with the 'detach'
+command (*note Debugging an Already-running Process: Attach.), or if GDB
+loses the remote connection (*note Remote Debugging::), etc.  Note that
+with some targets, GDB is only able to detect a thread has exited when
+the user explictly asks for the thread list with the 'info threads'
+command.
+
+File: gdb.info,  Node: Interrupted System Calls,  Next: Observer Mode,  Prev: Thread-Specific Breakpoints,  Up: Thread Stops
+
+5.5.5 Interrupted System Calls
+------------------------------
+
+There is an unfortunate side effect when using GDB to debug
+multi-threaded programs.  If one thread stops for a breakpoint, or for
+some other reason, and another thread is blocked in a system call, then
+the system call may return prematurely.  This is a consequence of the
+interaction between multiple threads and the signals that GDB uses to
+implement breakpoints and other events that stop execution.
+
+   To handle this problem, your program should check the return value of
+each system call and react appropriately.  This is good programming
+style anyways.
+
+   For example, do not write code like this:
+
+       sleep (10);
+
+   The call to 'sleep' will return early if a different thread stops at
+a breakpoint or for some other reason.
+
+   Instead, write this:
+
+       int unslept = 10;
+       while (unslept > 0)
+         unslept = sleep (unslept);
+
+   A system call is allowed to return early, so the system is still
+conforming to its specification.  But GDB does cause your multi-threaded
+program to behave differently than it would without GDB.
+
+   Also, GDB uses internal breakpoints in the thread library to monitor
+certain events such as thread creation and thread destruction.  When
+such an event happens, a system call in another thread may return
+prematurely, even though your program does not appear to stop.
+
+File: gdb.info,  Node: Observer Mode,  Prev: Interrupted System Calls,  Up: Thread Stops
+
+5.5.6 Observer Mode
+-------------------
+
+If you want to build on non-stop mode and observe program behavior
+without any chance of disruption by GDB, you can set variables to
+disable all of the debugger's attempts to modify state, whether by
+writing memory, inserting breakpoints, etc.  These operate at a low
+level, intercepting operations from all commands.
+
+   When all of these are set to 'off', then GDB is said to be "observer
+mode".  As a convenience, the variable 'observer' can be set to disable
+these, plus enable non-stop mode.
+
+   Note that GDB will not prevent you from making nonsensical
+combinations of these settings.  For instance, if you have enabled
+'may-insert-breakpoints' but disabled 'may-write-memory', then
+breakpoints that work by writing trap instructions into the code stream
+will still not be able to be placed.
+
+'set observer on'
+'set observer off'
+     When set to 'on', this disables all the permission variables below
+     (except for 'insert-fast-tracepoints'), plus enables non-stop
+     debugging.  Setting this to 'off' switches back to normal
+     debugging, though remaining in non-stop mode.
+
+'show observer'
+     Show whether observer mode is on or off.
+
+'set may-write-registers on'
+'set may-write-registers off'
+     This controls whether GDB will attempt to alter the values of
+     registers, such as with assignment expressions in 'print', or the
+     'jump' command.  It defaults to 'on'.
+
+'show may-write-registers'
+     Show the current permission to write registers.
+
+'set may-write-memory on'
+'set may-write-memory off'
+     This controls whether GDB will attempt to alter the contents of
+     memory, such as with assignment expressions in 'print'.  It
+     defaults to 'on'.
+
+'show may-write-memory'
+     Show the current permission to write memory.
+
+'set may-insert-breakpoints on'
+'set may-insert-breakpoints off'
+     This controls whether GDB will attempt to insert breakpoints.  This
+     affects all breakpoints, including internal breakpoints defined by
+     GDB.  It defaults to 'on'.
+
+'show may-insert-breakpoints'
+     Show the current permission to insert breakpoints.
+
+'set may-insert-tracepoints on'
+'set may-insert-tracepoints off'
+     This controls whether GDB will attempt to insert (regular)
+     tracepoints at the beginning of a tracing experiment.  It affects
+     only non-fast tracepoints, fast tracepoints being under the control
+     of 'may-insert-fast-tracepoints'.  It defaults to 'on'.
+
+'show may-insert-tracepoints'
+     Show the current permission to insert tracepoints.
+
+'set may-insert-fast-tracepoints on'
+'set may-insert-fast-tracepoints off'
+     This controls whether GDB will attempt to insert fast tracepoints
+     at the beginning of a tracing experiment.  It affects only fast
+     tracepoints, regular (non-fast) tracepoints being under the control
+     of 'may-insert-tracepoints'.  It defaults to 'on'.
+
+'show may-insert-fast-tracepoints'
+     Show the current permission to insert fast tracepoints.
+
+'set may-interrupt on'
+'set may-interrupt off'
+     This controls whether GDB will attempt to interrupt or stop program
+     execution.  When this variable is 'off', the 'interrupt' command
+     will have no effect, nor will 'Ctrl-c'.  It defaults to 'on'.
+
+'show may-interrupt'
+     Show the current permission to interrupt or stop the program.
+
+File: gdb.info,  Node: Reverse Execution,  Next: Process Record and Replay,  Prev: Stopping,  Up: Top
+

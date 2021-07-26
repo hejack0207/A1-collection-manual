@@ -1,0 +1,1004 @@
+E.13 File-I/O Remote Protocol Extension
+=======================================
+
+* Menu:
+
+* File-I/O Overview::
+* Protocol Basics::
+* The F Request Packet::
+* The F Reply Packet::
+* The Ctrl-C Message::
+* Console I/O::
+* List of Supported Calls::
+* Protocol-specific Representation of Datatypes::
+* Constants::
+* File-I/O Examples::
+
+File: gdb.info,  Node: File-I/O Overview,  Next: Protocol Basics,  Up: File-I/O Remote Protocol Extension
+
+E.13.1 File-I/O Overview
+------------------------
+
+The "File I/O remote protocol extension" (short: File-I/O) allows the
+target to use the host's file system and console I/O to perform various
+system calls.  System calls on the target system are translated into a
+remote protocol packet to the host system, which then performs the
+needed actions and returns a response packet to the target system.  This
+simulates file system operations even on targets that lack file systems.
+
+   The protocol is defined to be independent of both the host and target
+systems.  It uses its own internal representation of datatypes and
+values.  Both GDB and the target's GDB stub are responsible for
+translating the system-dependent value representations into the internal
+protocol representations when data is transmitted.
+
+   The communication is synchronous.  A system call is possible only
+when GDB is waiting for a response from the 'C', 'c', 'S' or 's'
+packets.  While GDB handles the request for a system call, the target is
+stopped to allow deterministic access to the target's memory.  Therefore
+File-I/O is not interruptible by target signals.  On the other hand, it
+is possible to interrupt File-I/O by a user interrupt ('Ctrl-C') within
+GDB.
+
+   The target's request to perform a host system call does not finish
+the latest 'C', 'c', 'S' or 's' action.  That means, after finishing the
+system call, the target returns to continuing the previous activity
+(continue, step).  No additional continue or step request from GDB is
+required.
+
+     (gdb) continue
+       <- target requests 'system call X'
+       target is stopped, GDB executes system call
+       -> GDB returns result
+       ... target continues, GDB returns to wait for the target
+       <- target hits breakpoint and sends a Txx packet
+
+   The protocol only supports I/O on the console and to regular files on
+the host file system.  Character or block special devices, pipes, named
+pipes, sockets or any other communication method on the host system are
+not supported by this protocol.
+
+   File I/O is not supported in non-stop mode.
+
+File: gdb.info,  Node: Protocol Basics,  Next: The F Request Packet,  Prev: File-I/O Overview,  Up: File-I/O Remote Protocol Extension
+
+E.13.2 Protocol Basics
+----------------------
+
+The File-I/O protocol uses the 'F' packet as the request as well as
+reply packet.  Since a File-I/O system call can only occur when GDB is
+waiting for a response from the continuing or stepping target, the
+File-I/O request is a reply that GDB has to expect as a result of a
+previous 'C', 'c', 'S' or 's' packet.  This 'F' packet contains all
+information needed to allow GDB to call the appropriate host system
+call:
+
+   * A unique identifier for the requested system call.
+
+   * All parameters to the system call.  Pointers are given as addresses
+     in the target memory address space.  Pointers to strings are given
+     as pointer/length pair.  Numerical values are given as they are.
+     Numerical control flags are given in a protocol-specific
+     representation.
+
+   At this point, GDB has to perform the following actions.
+
+   * If the parameters include pointer values to data needed as input to
+     a system call, GDB requests this data from the target with a
+     standard 'm' packet request.  This additional communication has to
+     be expected by the target implementation and is handled as any
+     other 'm' packet.
+
+   * GDB translates all value from protocol representation to host
+     representation as needed.  Datatypes are coerced into the host
+     types.
+
+   * GDB calls the system call.
+
+   * It then coerces datatypes back to protocol representation.
+
+   * If the system call is expected to return data in buffer space
+     specified by pointer parameters to the call, the data is
+     transmitted to the target using a 'M' or 'X' packet.  This packet
+     has to be expected by the target implementation and is handled as
+     any other 'M' or 'X' packet.
+
+   Eventually GDB replies with another 'F' packet which contains all
+necessary information for the target to continue.  This at least
+contains
+
+   * Return value.
+
+   * 'errno', if has been changed by the system call.
+
+   * "Ctrl-C" flag.
+
+   After having done the needed type and value coercion, the target
+continues the latest continue or step action.
+
+File: gdb.info,  Node: The F Request Packet,  Next: The F Reply Packet,  Prev: Protocol Basics,  Up: File-I/O Remote Protocol Extension
+
+E.13.3 The 'F' Request Packet
+-----------------------------
+
+The 'F' request packet has the following format:
+
+'FCALL-ID,PARAMETER...'
+
+     CALL-ID is the identifier to indicate the host system call to be
+     called.  This is just the name of the function.
+
+     PARAMETER... are the parameters to the system call.  Parameters are
+     hexadecimal integer values, either the actual values in case of
+     scalar datatypes, pointers to target buffer space in case of
+     compound datatypes and unspecified memory areas, or pointer/length
+     pairs in case of string parameters.  These are appended to the
+     CALL-ID as a comma-delimited list.  All values are transmitted in
+     ASCII string representation, pointer/length pairs separated by a
+     slash.
+
+File: gdb.info,  Node: The F Reply Packet,  Next: The Ctrl-C Message,  Prev: The F Request Packet,  Up: File-I/O Remote Protocol Extension
+
+E.13.4 The 'F' Reply Packet
+---------------------------
+
+The 'F' reply packet has the following format:
+
+'FRETCODE,ERRNO,CTRL-C FLAG;CALL-SPECIFIC ATTACHMENT'
+
+     RETCODE is the return code of the system call as hexadecimal value.
+
+     ERRNO is the 'errno' set by the call, in protocol-specific
+     representation.  This parameter can be omitted if the call was
+     successful.
+
+     CTRL-C FLAG is only sent if the user requested a break.  In this
+     case, ERRNO must be sent as well, even if the call was successful.
+     The CTRL-C FLAG itself consists of the character 'C':
+
+          F0,0,C
+
+     or, if the call was interrupted before the host call has been
+     performed:
+
+          F-1,4,C
+
+     assuming 4 is the protocol-specific representation of 'EINTR'.
+
+File: gdb.info,  Node: The Ctrl-C Message,  Next: Console I/O,  Prev: The F Reply Packet,  Up: File-I/O Remote Protocol Extension
+
+E.13.5 The 'Ctrl-C' Message
+---------------------------
+
+If the 'Ctrl-C' flag is set in the GDB reply packet (*note The F Reply
+Packet::), the target should behave as if it had gotten a break message.
+The meaning for the target is "system call interrupted by 'SIGINT'".
+Consequentially, the target should actually stop (as with a break
+message) and return to GDB with a 'T02' packet.
+
+   It's important for the target to know in which state the system call
+was interrupted.  There are two possible cases:
+
+   * The system call hasn't been performed on the host yet.
+
+   * The system call on the host has been finished.
+
+   These two states can be distinguished by the target by the value of
+the returned 'errno'.  If it's the protocol representation of 'EINTR',
+the system call hasn't been performed.  This is equivalent to the
+'EINTR' handling on POSIX systems.  In any other case, the target may
+presume that the system call has been finished -- successfully or not --
+and should behave as if the break message arrived right after the system
+call.
+
+   GDB must behave reliably.  If the system call has not been called
+yet, GDB may send the 'F' reply immediately, setting 'EINTR' as 'errno'
+in the packet.  If the system call on the host has been finished before
+the user requests a break, the full action must be finished by GDB.
+This requires sending 'M' or 'X' packets as necessary.  The 'F' packet
+may only be sent when either nothing has happened or the full action has
+been completed.
+
+File: gdb.info,  Node: Console I/O,  Next: List of Supported Calls,  Prev: The Ctrl-C Message,  Up: File-I/O Remote Protocol Extension
+
+E.13.6 Console I/O
+------------------
+
+By default and if not explicitly closed by the target system, the file
+descriptors 0, 1 and 2 are connected to the GDB console.  Output on the
+GDB console is handled as any other file output operation ('write(1,
+...)' or 'write(2, ...)').  Console input is handled by GDB so that
+after the target read request from file descriptor 0 all following
+typing is buffered until either one of the following conditions is met:
+
+   * The user types 'Ctrl-c'.  The behaviour is as explained above, and
+     the 'read' system call is treated as finished.
+
+   * The user presses <RET>.  This is treated as end of input with a
+     trailing newline.
+
+   * The user types 'Ctrl-d'.  This is treated as end of input.  No
+     trailing character (neither newline nor 'Ctrl-D') is appended to
+     the input.
+
+   If the user has typed more characters than fit in the buffer given to
+the 'read' call, the trailing characters are buffered in GDB until
+either another 'read(0, ...)' is requested by the target, or debugging
+is stopped at the user's request.
+
+File: gdb.info,  Node: List of Supported Calls,  Next: Protocol-specific Representation of Datatypes,  Prev: Console I/O,  Up: File-I/O Remote Protocol Extension
+
+E.13.7 List of Supported Calls
+------------------------------
+
+* Menu:
+
+* open::
+* close::
+* read::
+* write::
+* lseek::
+* rename::
+* unlink::
+* stat/fstat::
+* gettimeofday::
+* isatty::
+* system::
+
+File: gdb.info,  Node: open,  Next: close,  Up: List of Supported Calls
+
+open
+....
+
+Synopsis:
+          int open(const char *pathname, int flags);
+          int open(const char *pathname, int flags, mode_t mode);
+
+Request:
+     'Fopen,PATHPTR/LEN,FLAGS,MODE'
+
+     FLAGS is the bitwise 'OR' of the following values:
+
+     'O_CREAT'
+          If the file does not exist it will be created.  The host rules
+          apply as far as file ownership and time stamps are concerned.
+
+     'O_EXCL'
+          When used with 'O_CREAT', if the file already exists it is an
+          error and open() fails.
+
+     'O_TRUNC'
+          If the file already exists and the open mode allows writing
+          ('O_RDWR' or 'O_WRONLY' is given) it will be truncated to zero
+          length.
+
+     'O_APPEND'
+          The file is opened in append mode.
+
+     'O_RDONLY'
+          The file is opened for reading only.
+
+     'O_WRONLY'
+          The file is opened for writing only.
+
+     'O_RDWR'
+          The file is opened for reading and writing.
+
+     Other bits are silently ignored.
+
+     MODE is the bitwise 'OR' of the following values:
+
+     'S_IRUSR'
+          User has read permission.
+
+     'S_IWUSR'
+          User has write permission.
+
+     'S_IRGRP'
+          Group has read permission.
+
+     'S_IWGRP'
+          Group has write permission.
+
+     'S_IROTH'
+          Others have read permission.
+
+     'S_IWOTH'
+          Others have write permission.
+
+     Other bits are silently ignored.
+
+Return value:
+     'open' returns the new file descriptor or -1 if an error occurred.
+
+Errors:
+
+     'EEXIST'
+          PATHNAME already exists and 'O_CREAT' and 'O_EXCL' were used.
+
+     'EISDIR'
+          PATHNAME refers to a directory.
+
+     'EACCES'
+          The requested access is not allowed.
+
+     'ENAMETOOLONG'
+          PATHNAME was too long.
+
+     'ENOENT'
+          A directory component in PATHNAME does not exist.
+
+     'ENODEV'
+          PATHNAME refers to a device, pipe, named pipe or socket.
+
+     'EROFS'
+          PATHNAME refers to a file on a read-only filesystem and write
+          access was requested.
+
+     'EFAULT'
+          PATHNAME is an invalid pointer value.
+
+     'ENOSPC'
+          No space on device to create the file.
+
+     'EMFILE'
+          The process already has the maximum number of files open.
+
+     'ENFILE'
+          The limit on the total number of files open on the system has
+          been reached.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: close,  Next: read,  Prev: open,  Up: List of Supported Calls
+
+close
+.....
+
+Synopsis:
+          int close(int fd);
+
+Request:
+     'Fclose,FD'
+
+Return value:
+     'close' returns zero on success, or -1 if an error occurred.
+
+Errors:
+
+     'EBADF'
+          FD isn't a valid open file descriptor.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: read,  Next: write,  Prev: close,  Up: List of Supported Calls
+
+read
+....
+
+Synopsis:
+          int read(int fd, void *buf, unsigned int count);
+
+Request:
+     'Fread,FD,BUFPTR,COUNT'
+
+Return value:
+     On success, the number of bytes read is returned.  Zero indicates
+     end of file.  If count is zero, read returns zero as well.  On
+     error, -1 is returned.
+
+Errors:
+
+     'EBADF'
+          FD is not a valid file descriptor or is not open for reading.
+
+     'EFAULT'
+          BUFPTR is an invalid pointer value.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: write,  Next: lseek,  Prev: read,  Up: List of Supported Calls
+
+write
+.....
+
+Synopsis:
+          int write(int fd, const void *buf, unsigned int count);
+
+Request:
+     'Fwrite,FD,BUFPTR,COUNT'
+
+Return value:
+     On success, the number of bytes written are returned.  Zero
+     indicates nothing was written.  On error, -1 is returned.
+
+Errors:
+
+     'EBADF'
+          FD is not a valid file descriptor or is not open for writing.
+
+     'EFAULT'
+          BUFPTR is an invalid pointer value.
+
+     'EFBIG'
+          An attempt was made to write a file that exceeds the
+          host-specific maximum file size allowed.
+
+     'ENOSPC'
+          No space on device to write the data.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: lseek,  Next: rename,  Prev: write,  Up: List of Supported Calls
+
+lseek
+.....
+
+Synopsis:
+          long lseek (int fd, long offset, int flag);
+
+Request:
+     'Flseek,FD,OFFSET,FLAG'
+
+     FLAG is one of:
+
+     'SEEK_SET'
+          The offset is set to OFFSET bytes.
+
+     'SEEK_CUR'
+          The offset is set to its current location plus OFFSET bytes.
+
+     'SEEK_END'
+          The offset is set to the size of the file plus OFFSET bytes.
+
+Return value:
+     On success, the resulting unsigned offset in bytes from the
+     beginning of the file is returned.  Otherwise, a value of -1 is
+     returned.
+
+Errors:
+
+     'EBADF'
+          FD is not a valid open file descriptor.
+
+     'ESPIPE'
+          FD is associated with the GDB console.
+
+     'EINVAL'
+          FLAG is not a proper value.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: rename,  Next: unlink,  Prev: lseek,  Up: List of Supported Calls
+
+rename
+......
+
+Synopsis:
+          int rename(const char *oldpath, const char *newpath);
+
+Request:
+     'Frename,OLDPATHPTR/LEN,NEWPATHPTR/LEN'
+
+Return value:
+     On success, zero is returned.  On error, -1 is returned.
+
+Errors:
+
+     'EISDIR'
+          NEWPATH is an existing directory, but OLDPATH is not a
+          directory.
+
+     'EEXIST'
+          NEWPATH is a non-empty directory.
+
+     'EBUSY'
+          OLDPATH or NEWPATH is a directory that is in use by some
+          process.
+
+     'EINVAL'
+          An attempt was made to make a directory a subdirectory of
+          itself.
+
+     'ENOTDIR'
+          A component used as a directory in OLDPATH or new path is not
+          a directory.  Or OLDPATH is a directory and NEWPATH exists but
+          is not a directory.
+
+     'EFAULT'
+          OLDPATHPTR or NEWPATHPTR are invalid pointer values.
+
+     'EACCES'
+          No access to the file or the path of the file.
+
+     'ENAMETOOLONG'
+
+          OLDPATH or NEWPATH was too long.
+
+     'ENOENT'
+          A directory component in OLDPATH or NEWPATH does not exist.
+
+     'EROFS'
+          The file is on a read-only filesystem.
+
+     'ENOSPC'
+          The device containing the file has no room for the new
+          directory entry.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: unlink,  Next: stat/fstat,  Prev: rename,  Up: List of Supported Calls
+
+unlink
+......
+
+Synopsis:
+          int unlink(const char *pathname);
+
+Request:
+     'Funlink,PATHNAMEPTR/LEN'
+
+Return value:
+     On success, zero is returned.  On error, -1 is returned.
+
+Errors:
+
+     'EACCES'
+          No access to the file or the path of the file.
+
+     'EPERM'
+          The system does not allow unlinking of directories.
+
+     'EBUSY'
+          The file PATHNAME cannot be unlinked because it's being used
+          by another process.
+
+     'EFAULT'
+          PATHNAMEPTR is an invalid pointer value.
+
+     'ENAMETOOLONG'
+          PATHNAME was too long.
+
+     'ENOENT'
+          A directory component in PATHNAME does not exist.
+
+     'ENOTDIR'
+          A component of the path is not a directory.
+
+     'EROFS'
+          The file is on a read-only filesystem.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: stat/fstat,  Next: gettimeofday,  Prev: unlink,  Up: List of Supported Calls
+
+stat/fstat
+..........
+
+Synopsis:
+          int stat(const char *pathname, struct stat *buf);
+          int fstat(int fd, struct stat *buf);
+
+Request:
+     'Fstat,PATHNAMEPTR/LEN,BUFPTR'
+     'Ffstat,FD,BUFPTR'
+
+Return value:
+     On success, zero is returned.  On error, -1 is returned.
+
+Errors:
+
+     'EBADF'
+          FD is not a valid open file.
+
+     'ENOENT'
+          A directory component in PATHNAME does not exist or the path
+          is an empty string.
+
+     'ENOTDIR'
+          A component of the path is not a directory.
+
+     'EFAULT'
+          PATHNAMEPTR is an invalid pointer value.
+
+     'EACCES'
+          No access to the file or the path of the file.
+
+     'ENAMETOOLONG'
+          PATHNAME was too long.
+
+     'EINTR'
+          The call was interrupted by the user.
+
+File: gdb.info,  Node: gettimeofday,  Next: isatty,  Prev: stat/fstat,  Up: List of Supported Calls
+
+gettimeofday
+............
+
+Synopsis:
+          int gettimeofday(struct timeval *tv, void *tz);
+
+Request:
+     'Fgettimeofday,TVPTR,TZPTR'
+
+Return value:
+     On success, 0 is returned, -1 otherwise.
+
+Errors:
+
+     'EINVAL'
+          TZ is a non-NULL pointer.
+
+     'EFAULT'
+          TVPTR and/or TZPTR is an invalid pointer value.
+
+File: gdb.info,  Node: isatty,  Next: system,  Prev: gettimeofday,  Up: List of Supported Calls
+
+isatty
+......
+
+Synopsis:
+          int isatty(int fd);
+
+Request:
+     'Fisatty,FD'
+
+Return value:
+     Returns 1 if FD refers to the GDB console, 0 otherwise.
+
+Errors:
+
+     'EINTR'
+          The call was interrupted by the user.
+
+   Note that the 'isatty' call is treated as a special case: it returns
+1 to the target if the file descriptor is attached to the GDB console, 0
+otherwise.  Implementing through system calls would require implementing
+'ioctl' and would be more complex than needed.
+
+File: gdb.info,  Node: system,  Prev: isatty,  Up: List of Supported Calls
+
+system
+......
+
+Synopsis:
+          int system(const char *command);
+
+Request:
+     'Fsystem,COMMANDPTR/LEN'
+
+Return value:
+     If LEN is zero, the return value indicates whether a shell is
+     available.  A zero return value indicates a shell is not available.
+     For non-zero LEN, the value returned is -1 on error and the return
+     status of the command otherwise.  Only the exit status of the
+     command is returned, which is extracted from the host's 'system'
+     return value by calling 'WEXITSTATUS(retval)'.  In case '/bin/sh'
+     could not be executed, 127 is returned.
+
+Errors:
+
+     'EINTR'
+          The call was interrupted by the user.
+
+   GDB takes over the full task of calling the necessary host calls to
+perform the 'system' call.  The return value of 'system' on the host is
+simplified before it's returned to the target.  Any termination signal
+information from the child process is discarded, and the return value
+consists entirely of the exit status of the called command.
+
+   Due to security concerns, the 'system' call is by default refused by
+GDB.  The user has to allow this call explicitly with the 'set remote
+system-call-allowed 1' command.
+
+'set remote system-call-allowed'
+     Control whether to allow the 'system' calls in the File I/O
+     protocol for the remote target.  The default is zero (disabled).
+
+'show remote system-call-allowed'
+     Show whether the 'system' calls are allowed in the File I/O
+     protocol.
+
+File: gdb.info,  Node: Protocol-specific Representation of Datatypes,  Next: Constants,  Prev: List of Supported Calls,  Up: File-I/O Remote Protocol Extension
+
+E.13.8 Protocol-Specific Representation of Datatypes
+----------------------------------------------------
+
+* Menu:
+
+* Integral Datatypes::
+* Pointer Values::
+* Memory Transfer::
+* struct stat::
+* struct timeval::
+
+File: gdb.info,  Node: Integral Datatypes,  Next: Pointer Values,  Up: Protocol-specific Representation of Datatypes
+
+Integral Datatypes
+..................
+
+The integral datatypes used in the system calls are 'int', 'unsigned
+int', 'long', 'unsigned long', 'mode_t', and 'time_t'.
+
+   'int', 'unsigned int', 'mode_t' and 'time_t' are implemented as 32
+bit values in this protocol.
+
+   'long' and 'unsigned long' are implemented as 64 bit types.
+
+   *Note Limits::, for corresponding MIN and MAX values (similar to
+those in 'limits.h') to allow range checking on host and target.
+
+   'time_t' datatypes are defined as seconds since the Epoch.
+
+   All integral datatypes transferred as part of a memory read or write
+of a structured datatype e.g. a 'struct stat' have to be given in big
+endian byte order.
+
+File: gdb.info,  Node: Pointer Values,  Next: Memory Transfer,  Prev: Integral Datatypes,  Up: Protocol-specific Representation of Datatypes
+
+Pointer Values
+..............
+
+Pointers to target data are transmitted as they are.  An exception is
+made for pointers to buffers for which the length isn't transmitted as
+part of the function call, namely strings.  Strings are transmitted as a
+pointer/length pair, both as hex values, e.g.
+
+     1aaf/12
+
+which is a pointer to data of length 18 bytes at position 0x1aaf.  The
+length is defined as the full string length in bytes, including the
+trailing null byte.  For example, the string '"hello world"' at address
+0x123456 is transmitted as
+
+     123456/d
+
+File: gdb.info,  Node: Memory Transfer,  Next: struct stat,  Prev: Pointer Values,  Up: Protocol-specific Representation of Datatypes
+
+Memory Transfer
+...............
+
+Structured data which is transferred using a memory read or write (for
+example, a 'struct stat') is expected to be in a protocol-specific
+format with all scalar multibyte datatypes being big endian.
+Translation to this representation needs to be done both by the target
+before the 'F' packet is sent, and by GDB before it transfers memory to
+the target.  Transferred pointers to structured data should point to the
+already-coerced data at any time.
+
+File: gdb.info,  Node: struct stat,  Next: struct timeval,  Prev: Memory Transfer,  Up: Protocol-specific Representation of Datatypes
+
+struct stat
+...........
+
+The buffer of type 'struct stat' used by the target and GDB is defined
+as follows:
+
+     struct stat {
+         unsigned int  st_dev;      /* device */
+         unsigned int  st_ino;      /* inode */
+         mode_t        st_mode;     /* protection */
+         unsigned int  st_nlink;    /* number of hard links */
+         unsigned int  st_uid;      /* user ID of owner */
+         unsigned int  st_gid;      /* group ID of owner */
+         unsigned int  st_rdev;     /* device type (if inode device) */
+         unsigned long st_size;     /* total size, in bytes */
+         unsigned long st_blksize;  /* blocksize for filesystem I/O */
+         unsigned long st_blocks;   /* number of blocks allocated */
+         time_t        st_atime;    /* time of last access */
+         time_t        st_mtime;    /* time of last modification */
+         time_t        st_ctime;    /* time of last change */
+     };
+
+   The integral datatypes conform to the definitions given in the
+appropriate section (see *note Integral Datatypes::, for details) so
+this structure is of size 64 bytes.
+
+   The values of several fields have a restricted meaning and/or range
+of values.
+
+'st_dev'
+     A value of 0 represents a file, 1 the console.
+
+'st_ino'
+     No valid meaning for the target.  Transmitted unchanged.
+
+'st_mode'
+     Valid mode bits are described in *note Constants::.  Any other bits
+     have currently no meaning for the target.
+
+'st_uid'
+'st_gid'
+'st_rdev'
+     No valid meaning for the target.  Transmitted unchanged.
+
+'st_atime'
+'st_mtime'
+'st_ctime'
+     These values have a host and file system dependent accuracy.
+     Especially on Windows hosts, the file system may not support exact
+     timing values.
+
+   The target gets a 'struct stat' of the above representation and is
+responsible for coercing it to the target representation before
+continuing.
+
+   Note that due to size differences between the host, target, and
+protocol representations of 'struct stat' members, these members could
+eventually get truncated on the target.
+
+File: gdb.info,  Node: struct timeval,  Prev: struct stat,  Up: Protocol-specific Representation of Datatypes
+
+struct timeval
+..............
+
+The buffer of type 'struct timeval' used by the File-I/O protocol is
+defined as follows:
+
+     struct timeval {
+         time_t tv_sec;  /* second */
+         long   tv_usec; /* microsecond */
+     };
+
+   The integral datatypes conform to the definitions given in the
+appropriate section (see *note Integral Datatypes::, for details) so
+this structure is of size 8 bytes.
+
+File: gdb.info,  Node: Constants,  Next: File-I/O Examples,  Prev: Protocol-specific Representation of Datatypes,  Up: File-I/O Remote Protocol Extension
+
+E.13.9 Constants
+----------------
+
+The following values are used for the constants inside of the protocol.
+GDB and target are responsible for translating these values before and
+after the call as needed.
+
+* Menu:
+
+* Open Flags::
+* mode_t Values::
+* errno Values::
+* Lseek Flags::
+* Limits::
+
+File: gdb.info,  Node: Open Flags,  Next: mode_t Values,  Up: Constants
+
+Open Flags
+..........
+
+All values are given in hexadecimal representation.
+
+       O_RDONLY        0x0
+       O_WRONLY        0x1
+       O_RDWR          0x2
+       O_APPEND        0x8
+       O_CREAT       0x200
+       O_TRUNC       0x400
+       O_EXCL        0x800
+
+File: gdb.info,  Node: mode_t Values,  Next: errno Values,  Prev: Open Flags,  Up: Constants
+
+mode_t Values
+.............
+
+All values are given in octal representation.
+
+       S_IFREG       0100000
+       S_IFDIR        040000
+       S_IRUSR          0400
+       S_IWUSR          0200
+       S_IXUSR          0100
+       S_IRGRP           040
+       S_IWGRP           020
+       S_IXGRP           010
+       S_IROTH            04
+       S_IWOTH            02
+       S_IXOTH            01
+
+File: gdb.info,  Node: errno Values,  Next: Lseek Flags,  Prev: mode_t Values,  Up: Constants
+
+errno Values
+............
+
+All values are given in decimal representation.
+
+       EPERM           1
+       ENOENT          2
+       EINTR           4
+       EBADF           9
+       EACCES         13
+       EFAULT         14
+       EBUSY          16
+       EEXIST         17
+       ENODEV         19
+       ENOTDIR        20
+       EISDIR         21
+       EINVAL         22
+       ENFILE         23
+       EMFILE         24
+       EFBIG          27
+       ENOSPC         28
+       ESPIPE         29
+       EROFS          30
+       ENAMETOOLONG   91
+       EUNKNOWN       9999
+
+   'EUNKNOWN' is used as a fallback error value if a host system returns
+any error value not in the list of supported error numbers.
+
+File: gdb.info,  Node: Lseek Flags,  Next: Limits,  Prev: errno Values,  Up: Constants
+
+Lseek Flags
+...........
+
+       SEEK_SET      0
+       SEEK_CUR      1
+       SEEK_END      2
+
+File: gdb.info,  Node: Limits,  Prev: Lseek Flags,  Up: Constants
+
+Limits
+......
+
+All values are given in decimal representation.
+
+       INT_MIN       -2147483648
+       INT_MAX        2147483647
+       UINT_MAX       4294967295
+       LONG_MIN      -9223372036854775808
+       LONG_MAX       9223372036854775807
+       ULONG_MAX      18446744073709551615
+
+File: gdb.info,  Node: File-I/O Examples,  Prev: Constants,  Up: File-I/O Remote Protocol Extension
+
+E.13.10 File-I/O Examples
+-------------------------
+
+Example sequence of a write call, file descriptor 3, buffer is at target
+address 0x1234, 6 bytes should be written:
+
+     <- Fwrite,3,1234,6
+     _request memory read from target_
+     -> m1234,6
+     <- XXXXXX
+     _return "6 bytes written"_
+     -> F6
+
+   Example sequence of a read call, file descriptor 3, buffer is at
+target address 0x1234, 6 bytes should be read:
+
+     <- Fread,3,1234,6
+     _request memory write to target_
+     -> X1234,6:XXXXXX
+     _return "6 bytes read"_
+     -> F6
+
+   Example sequence of a read call, call fails on the host due to
+invalid file descriptor ('EBADF'):
+
+     <- Fread,3,1234,6
+     -> F-1,9
+
+   Example sequence of a read call, user presses 'Ctrl-c' before syscall
+on host is called:
+
+     <- Fread,3,1234,6
+     -> F-1,4,C
+     <- T02
+
+   Example sequence of a read call, user presses 'Ctrl-c' after syscall
+on host is called:
+
+     <- Fread,3,1234,6
+     -> X1234,6:XXXXXX
+     <- T02
+
+File: gdb.info,  Node: Library List Format,  Next: Library List Format for SVR4 Targets,  Prev: File-I/O Remote Protocol Extension,  Up: Remote Protocol
+

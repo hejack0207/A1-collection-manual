@@ -1,0 +1,149 @@
+30.1 In-process Agent Protocol
+==============================
+
+The in-process agent is able to communicate with both GDB and GDBserver
+(*note In-process Agent::).  This section documents the protocol used
+for communications between GDB or GDBserver and the IPA. In general, GDB
+or GDBserver sends commands (*note IPA Protocol Commands::) and data to
+in-process agent, and then in-process agent replies back with the return
+result of the command, or some other information.  The data sent to
+in-process agent is composed of primitive data types, such as 4-byte or
+8-byte type, and composite types, which are called objects (*note IPA
+Protocol Objects::).
+
+* Menu:
+
+* IPA Protocol Objects::
+* IPA Protocol Commands::
+
+File: gdb.info,  Node: IPA Protocol Objects,  Next: IPA Protocol Commands,  Up: In-process Agent Protocol
+
+30.1.1 IPA Protocol Objects
+---------------------------
+
+The commands sent to and results received from agent may contain some
+complex data types called "objects".
+
+   The in-process agent is running on the same machine with GDB or
+GDBserver, so it doesn't have to handle as much differences between two
+ends as remote protocol (*note Remote Protocol::) tries to handle.
+However, there are still some differences of two ends in two processes:
+
+  1. word size.  On some 64-bit machines, GDB or GDBserver can be
+     compiled as a 64-bit executable, while in-process agent is a 32-bit
+     one.
+  2. ABI. Some machines may have multiple types of ABI, GDB or GDBserver
+     is compiled with one, and in-process agent is compiled with the
+     other one.
+
+   Here are the IPA Protocol Objects:
+
+  1. agent expression object.  It represents an agent expression (*note
+     Agent Expressions::).
+  2. tracepoint action object.  It represents a tracepoint action (*note
+     Tracepoint Action Lists: Tracepoint Actions.) to collect registers,
+     memory, static trace data and to evaluate expression.
+  3. tracepoint object.  It represents a tracepoint (*note
+     Tracepoints::).
+
+   The following table describes important attributes of each IPA
+protocol object:
+
+Name                   Size           Description
+---------------------------------------------------------------------------
+_agent expression
+object_
+length                 4              length of bytes code
+byte code              LENGTH         contents of byte code
+_tracepoint action
+for collecting
+memory_
+'M'                    1              type of tracepoint action
+addr                   8              if BASEREG is '-1', ADDR is the
+                                      address of the lowest byte to
+                                      collect, otherwise ADDR is the
+                                      offset of BASEREG for memory
+                                      collecting.
+len                    8              length of memory for collecting
+basereg                4              the register number containing the
+                                      starting memory address for
+                                      collecting.
+_tracepoint action
+for collecting
+registers_
+'R'                    1              type of tracepoint action
+_tracepoint action
+for collecting
+static trace data_
+'L'                    1              type of tracepoint action
+_tracepoint action
+for expression
+evaluation_
+'X'                    1              type of tracepoint action
+agent expression       length of      *note agent expression object::
+_tracepoint object_
+number                 4              number of tracepoint
+address                8              address of tracepoint inserted on
+type                   4              type of tracepoint
+enabled                1              enable or disable of tracepoint
+step_count             8              step
+pass_count             8              pass
+numactions             4              number of tracepoint actions
+hit count              8              hit count
+trace frame usage      8              trace frame usage
+compiled_cond          8              compiled condition
+orig_size              8              orig size
+condition              4 if           zero if condition is NULL,
+                       condition is   otherwise is
+                       NULL           *note agent expression object::
+                       otherwise
+                       length of
+                       *note agent expression object::
+actions                variable       numactions number of
+                                      *note tracepoint action object::
+
+File: gdb.info,  Node: IPA Protocol Commands,  Prev: IPA Protocol Objects,  Up: In-process Agent Protocol
+
+30.1.2 IPA Protocol Commands
+----------------------------
+
+The spaces in each command are delimiters to ease reading this commands
+specification.  They don't exist in real commands.
+
+'FastTrace:TRACEPOINT_OBJECT GDB_JUMP_PAD_HEAD'
+     Installs a new fast tracepoint described by TRACEPOINT_OBJECT
+     (*note tracepoint object::).  The GDB_JUMP_PAD_HEAD, 8-byte long,
+     is the head of "jumppad", which is used to jump to data collection
+     routine in IPA finally.
+
+     Replies:
+     'OK TARGET_ADDRESS GDB_JUMP_PAD_HEAD FJUMP_SIZE FJUMP'
+          TARGET_ADDRESS is address of tracepoint in the inferior.  The
+          GDB_JUMP_PAD_HEAD is updated head of jumppad.  Both of
+          TARGET_ADDRESS and GDB_JUMP_PAD_HEAD are 8-byte long.  The
+          FJUMP contains a sequence of instructions jump to jumppad
+          entry.  The FJUMP_SIZE, 4-byte long, is the size of FJUMP.
+     'E NN'
+          for an error
+
+'close'
+     Closes the in-process agent.  This command is sent when GDB or
+     GDBserver is about to kill inferiors.
+
+'qTfSTM'
+     *Note qTfSTM::.
+'qTsSTM'
+     *Note qTsSTM::.
+'qTSTMat'
+     *Note qTSTMat::.
+'probe_marker_at:ADDRESS'
+     Asks in-process agent to probe the marker at ADDRESS.
+
+     Replies:
+     'E NN'
+          for an error
+'unprobe_marker_at:ADDRESS'
+     Asks in-process agent to unprobe the marker at ADDRESS.
+
+File: gdb.info,  Node: GDB Bugs,  Next: In Memoriam,  Prev: In-process Agent,  Up: Top
+

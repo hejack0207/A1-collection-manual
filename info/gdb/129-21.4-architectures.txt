@@ -1,0 +1,398 @@
+21.4 Architectures
+==================
+
+This section describes characteristics of architectures that affect all
+uses of GDB with the architecture, both native and cross.
+
+* Menu:
+
+* AArch64::
+* i386::
+* Alpha::
+* MIPS::
+* HPPA::               HP PA architecture
+* PowerPC::
+* Nios II::
+* Sparc64::
+* S12Z::
+
+File: gdb.info,  Node: AArch64,  Next: i386,  Up: Architectures
+
+21.4.1 AArch64
+--------------
+
+When GDB is debugging the AArch64 architecture, it provides the
+following special commands:
+
+'set debug aarch64'
+     This command determines whether AArch64 architecture-specific
+     debugging messages are to be displayed.
+
+'show debug aarch64'
+     Show whether AArch64 debugging messages are displayed.
+
+21.4.1.1 AArch64 SVE
+....................
+
+When GDB is debugging the AArch64 architecture, if the Scalable Vector
+Extension (SVE) is present, then GDB will provide the vector registers
+'$z0' through '$z31', vector predicate registers '$p0' through '$p15',
+and the '$ffr' register.  In addition, the pseudo register '$vg' will be
+provided.  This is the vector granule for the current thread and
+represents the number of 64-bit chunks in an SVE 'z' register.
+
+   If the vector length changes, then the '$vg' register will be
+updated, but the lengths of the 'z' and 'p' registers will not change.
+This is a known limitation of GDB and does not affect the execution of
+the target process.
+
+21.4.1.2 AArch64 Pointer Authentication
+.......................................
+
+When GDB is debugging the AArch64 architecture, and the program is using
+the v8.3-A feature Pointer Authentication (PAC), then whenever the link
+register '$lr' is pointing to an PAC function its value will be masked.
+When GDB prints a backtrace, any addresses that required unmasking will
+be postfixed with the marker [PAC]. When using the MI, this is printed
+as part of the 'addr_flags' field.
+
+File: gdb.info,  Node: i386,  Next: Alpha,  Prev: AArch64,  Up: Architectures
+
+21.4.2 x86 Architecture-Specific Issues
+---------------------------------------
+
+'set struct-convention MODE'
+     Set the convention used by the inferior to return 'struct's and
+     'union's from functions to MODE.  Possible values of MODE are
+     '"pcc"', '"reg"', and '"default"' (the default).  '"default"' or
+     '"pcc"' means that 'struct's are returned on the stack, while
+     '"reg"' means that a 'struct' or a 'union' whose size is 1, 2, 4,
+     or 8 bytes will be returned in a register.
+
+'show struct-convention'
+     Show the current setting of the convention to return 'struct's from
+     functions.
+
+21.4.2.1 Intel "Memory Protection Extensions" (MPX).
+....................................................
+
+Memory Protection Extension (MPX) adds the bound registers 'BND0' (1)
+through 'BND3'.  Bound registers store a pair of 64-bit values which are
+the lower bound and upper bound.  Bounds are effective addresses or
+memory locations.  The upper bounds are architecturally represented in
+1's complement form.  A bound having lower bound = 0, and upper bound =
+0 (1's complement of all bits set) will allow access to the entire
+address space.
+
+   'BND0' through 'BND3' are represented in GDB as 'bnd0raw' through
+'bnd3raw'.  Pseudo registers 'bnd0' through 'bnd3' display the upper
+bound performing the complement of one operation on the upper bound
+value, i.e. when upper bound in 'bnd0raw' is 0 in the GDB 'bnd0' it will
+be '0xfff...'.  In this sense it can also be noted that the upper bounds
+are inclusive.
+
+   As an example, assume that the register BND0 holds bounds for a
+pointer having access allowed for the range between 0x32 and 0x71.  The
+values present on bnd0raw and bnd registers are presented as follows:
+
+     	bnd0raw = {0x32, 0xffffffff8e}
+     	bnd0 = {lbound = 0x32, ubound = 0x71} : size 64
+
+   This way the raw value can be accessed via bnd0raw...bnd3raw.  Any
+change on bnd0...bnd3 or bnd0raw...bnd3raw is reflect on its
+counterpart.  When the bnd0...bnd3 registers are displayed via Python,
+the display includes the memory size, in bits, accessible to the
+pointer.
+
+   Bounds can also be stored in bounds tables, which are stored in
+application memory.  These tables store bounds for pointers by
+specifying the bounds pointer's value along with its bounds.  Evaluating
+and changing bounds located in bound tables is therefore interesting
+while investigating bugs on MPX context.  GDB provides commands for this
+purpose:
+
+'show mpx bound POINTER'
+     Display bounds of the given POINTER.
+
+'set mpx bound POINTER, LBOUND, UBOUND'
+     Set the bounds of a pointer in the bound table.  This command takes
+     three parameters: POINTER is the pointers whose bounds are to be
+     changed, LBOUND and UBOUND are new values for lower and upper
+     bounds respectively.
+
+   When you call an inferior function on an Intel MPX enabled program,
+GDB sets the inferior's bound registers to the init (disabled) state
+before calling the function.  As a consequence, bounds checks for the
+pointer arguments passed to the function will always pass.
+
+   This is necessary because when you call an inferior function, the
+program is usually in the middle of the execution of other function.
+Since at that point bound registers are in an arbitrary state, not
+clearing them would lead to random bound violations in the called
+function.
+
+   You can still examine the influence of the bound registers on the
+execution of the called function by stopping the execution of the called
+function at its prologue, setting bound registers, and continuing the
+execution.  For example:
+
+     	$ break *upper
+     	Breakpoint 2 at 0x4009de: file i386-mpx-call.c, line 47.
+     	$ print upper (a, b, c, d, 1)
+     	Breakpoint 2, upper (a=0x0, b=0x6e0000005b, c=0x0, d=0x0, len=48)....
+     	$ print $bnd0
+     	{lbound = 0x0, ubound = ffffffff} : size -1
+
+   At this last step the value of bnd0 can be changed for investigation
+of bound violations caused along the execution of the call.  In order to
+know how to set the bound registers or bound table for the call consult
+the ABI.
+
+   ---------- Footnotes ----------
+
+   (1) The register named with capital letters represent the
+architecture registers.
+
+File: gdb.info,  Node: Alpha,  Next: MIPS,  Prev: i386,  Up: Architectures
+
+21.4.3 Alpha
+------------
+
+See the following section.
+
+File: gdb.info,  Node: MIPS,  Next: HPPA,  Prev: Alpha,  Up: Architectures
+
+21.4.4 MIPS
+-----------
+
+Alpha- and MIPS-based computers use an unusual stack frame, which
+sometimes requires GDB to search backward in the object code to find the
+beginning of a function.
+
+   To improve response time (especially for embedded applications, where
+GDB may be restricted to a slow serial line for this search) you may
+want to limit the size of this search, using one of these commands:
+
+'set heuristic-fence-post LIMIT'
+     Restrict GDB to examining at most LIMIT bytes in its search for the
+     beginning of a function.  A value of 0 (the default) means there is
+     no limit.  However, except for 0, the larger the limit the more
+     bytes 'heuristic-fence-post' must search and therefore the longer
+     it takes to run.  You should only need to use this command when
+     debugging a stripped executable.
+
+'show heuristic-fence-post'
+     Display the current limit.
+
+These commands are available _only_ when GDB is configured for debugging
+programs on Alpha or MIPS processors.
+
+   Several MIPS-specific commands are available when debugging MIPS
+programs:
+
+'set mips abi ARG'
+     Tell GDB which MIPS ABI is used by the inferior.  Possible values
+     of ARG are:
+
+     'auto'
+          The default ABI associated with the current binary (this is
+          the default).
+     'o32'
+     'o64'
+     'n32'
+     'n64'
+     'eabi32'
+     'eabi64'
+
+'show mips abi'
+     Show the MIPS ABI used by GDB to debug the inferior.
+
+'set mips compression ARG'
+     Tell GDB which MIPS compressed ISA (Instruction Set Architecture)
+     encoding is used by the inferior.  GDB uses this for code
+     disassembly and other internal interpretation purposes.  This
+     setting is only referred to when no executable has been associated
+     with the debugging session or the executable does not provide
+     information about the encoding it uses.  Otherwise this setting is
+     automatically updated from information provided by the executable.
+
+     Possible values of ARG are 'mips16' and 'micromips'.  The default
+     compressed ISA encoding is 'mips16', as executables containing
+     MIPS16 code frequently are not identified as such.
+
+     This setting is "sticky"; that is, it retains its value across
+     debugging sessions until reset either explicitly with this command
+     or implicitly from an executable.
+
+     The compiler and/or assembler typically add symbol table
+     annotations to identify functions compiled for the MIPS16 or
+     microMIPS ISAs.  If these function-scope annotations are present,
+     GDB uses them in preference to the global compressed ISA encoding
+     setting.
+
+'show mips compression'
+     Show the MIPS compressed ISA encoding used by GDB to debug the
+     inferior.
+
+'set mipsfpu'
+'show mipsfpu'
+     *Note set mipsfpu: MIPS Embedded.
+
+'set mips mask-address ARG'
+     This command determines whether the most-significant 32 bits of
+     64-bit MIPS addresses are masked off.  The argument ARG can be
+     'on', 'off', or 'auto'.  The latter is the default setting, which
+     lets GDB determine the correct value.
+
+'show mips mask-address'
+     Show whether the upper 32 bits of MIPS addresses are masked off or
+     not.
+
+'set remote-mips64-transfers-32bit-regs'
+     This command controls compatibility with 64-bit MIPS targets that
+     transfer data in 32-bit quantities.  If you have an old MIPS 64
+     target that transfers 32 bits for some registers, like SR and FSR,
+     and 64 bits for other registers, set this option to 'on'.
+
+'show remote-mips64-transfers-32bit-regs'
+     Show the current setting of compatibility with older MIPS 64
+     targets.
+
+'set debug mips'
+     This command turns on and off debugging messages for the
+     MIPS-specific target code in GDB.
+
+'show debug mips'
+     Show the current setting of MIPS debugging messages.
+
+File: gdb.info,  Node: HPPA,  Next: PowerPC,  Prev: MIPS,  Up: Architectures
+
+21.4.5 HPPA
+-----------
+
+When GDB is debugging the HP PA architecture, it provides the following
+special commands:
+
+'set debug hppa'
+     This command determines whether HPPA architecture-specific
+     debugging messages are to be displayed.
+
+'show debug hppa'
+     Show whether HPPA debugging messages are displayed.
+
+'maint print unwind ADDRESS'
+     This command displays the contents of the unwind table entry at the
+     given ADDRESS.
+
+File: gdb.info,  Node: PowerPC,  Next: Nios II,  Prev: HPPA,  Up: Architectures
+
+21.4.6 PowerPC
+--------------
+
+When GDB is debugging the PowerPC architecture, it provides a set of
+pseudo-registers to enable inspection of 128-bit wide Decimal Floating
+Point numbers stored in the floating point registers.  These values must
+be stored in two consecutive registers, always starting at an even
+register like 'f0' or 'f2'.
+
+   The pseudo-registers go from '$dl0' through '$dl15', and are formed
+by joining the even/odd register pairs 'f0' and 'f1' for '$dl0', 'f2'
+and 'f3' for '$dl1' and so on.
+
+   For POWER7 processors, GDB provides a set of pseudo-registers, the
+64-bit wide Extended Floating Point Registers ('f32' through 'f63').
+
+File: gdb.info,  Node: Nios II,  Next: Sparc64,  Prev: PowerPC,  Up: Architectures
+
+21.4.7 Nios II
+--------------
+
+When GDB is debugging the Nios II architecture, it provides the
+following special commands:
+
+'set debug nios2'
+     This command turns on and off debugging messages for the Nios II
+     target code in GDB.
+
+'show debug nios2'
+     Show the current setting of Nios II debugging messages.
+
+File: gdb.info,  Node: Sparc64,  Next: S12Z,  Prev: Nios II,  Up: Architectures
+
+21.4.8 Sparc64
+--------------
+
+21.4.8.1 ADI Support
+....................
+
+The M7 processor supports an Application Data Integrity (ADI) feature
+that detects invalid data accesses.  When software allocates memory and
+enables ADI on the allocated memory, it chooses a 4-bit version number,
+sets the version in the upper 4 bits of the 64-bit pointer to that data,
+and stores the 4-bit version in every cacheline of that data.  Hardware
+saves the latter in spare bits in the cache and memory hierarchy.  On
+each load and store, the processor compares the upper 4 VA (virtual
+address) bits to the cacheline's version.  If there is a mismatch, the
+processor generates a version mismatch trap which can be either precise
+or disrupting.  The trap is an error condition which the kernel delivers
+to the process as a SIGSEGV signal.
+
+   Note that only 64-bit applications can use ADI and need to be built
+with ADI-enabled.
+
+   Values of the ADI version tags, which are in granularity of a
+cacheline (64 bytes), can be viewed or modified.
+
+'adi (examine | x) [ / N ] ADDR'
+
+     The 'adi examine' command displays the value of one ADI version tag
+     per cacheline.
+
+     N is a decimal integer specifying the number in bytes; the default
+     is 1.  It specifies how much ADI version information, at the ratio
+     of 1:ADI block size, to display.
+
+     ADDR is the address in user address space where you want GDB to
+     begin displaying the ADI version tags.
+
+     Below is an example of displaying ADI versions of variable
+     "shmaddr".
+
+          (gdb) adi x/100 shmaddr
+             0xfff800010002c000:     0 0
+
+'adi (assign | a) [ / N ] ADDR = TAG'
+
+     The 'adi assign' command is used to assign new ADI version tag to
+     an address.
+
+     N is a decimal integer specifying the number in bytes; the default
+     is 1.  It specifies how much ADI version information, at the ratio
+     of 1:ADI block size, to modify.
+
+     ADDR is the address in user address space where you want GDB to
+     begin modifying the ADI version tags.
+
+     TAG is the new ADI version tag.
+
+     For example, do the following to modify then verify ADI versions of
+     variable "shmaddr":
+
+          (gdb) adi a/100 shmaddr = 7
+          (gdb) adi x/100 shmaddr
+             0xfff800010002c000:     7 7
+
+File: gdb.info,  Node: S12Z,  Prev: Sparc64,  Up: Architectures
+
+21.4.9 S12Z
+-----------
+
+When GDB is debugging the S12Z architecture, it provides the following
+special command:
+
+'maint info bdccsr'
+     This command displays the current value of the microprocessor's
+     BDCCSR register.
+
+File: gdb.info,  Node: Controlling GDB,  Next: Extending GDB,  Prev: Configurations,  Up: Top
+

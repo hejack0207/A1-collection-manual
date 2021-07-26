@@ -1,0 +1,71 @@
+17.4 Returning from a Function
+==============================
+
+'return'
+'return EXPRESSION'
+     You can cancel execution of a function call with the 'return'
+     command.  If you give an EXPRESSION argument, its value is used as
+     the function's return value.
+
+   When you use 'return', GDB discards the selected stack frame (and all
+frames within it).  You can think of this as making the discarded frame
+return prematurely.  If you wish to specify a value to be returned, give
+that value as the argument to 'return'.
+
+   This pops the selected stack frame (*note Selecting a Frame:
+Selection.), and any other frames inside of it, leaving its caller as
+the innermost remaining frame.  That frame becomes selected.  The
+specified value is stored in the registers used for returning values of
+functions.
+
+   The 'return' command does not resume execution; it leaves the program
+stopped in the state that would exist if the function had just returned.
+In contrast, the 'finish' command (*note Continuing and Stepping:
+Continuing and Stepping.) resumes execution until the selected stack
+frame returns naturally.
+
+   GDB needs to know how the EXPRESSION argument should be set for the
+inferior.  The concrete registers assignment depends on the OS ABI and
+the type being returned by the selected stack frame.  For example it is
+common for OS ABI to return floating point values in FPU registers while
+integer values in CPU registers.  Still some ABIs return even floating
+point values in CPU registers.  Larger integer widths (such as 'long
+long int') also have specific placement rules.  GDB already knows the OS
+ABI from its current target so it needs to find out also the type being
+returned to make the assignment into the right register(s).
+
+   Normally, the selected stack frame has debug info.  GDB will always
+use the debug info instead of the implicit type of EXPRESSION when the
+debug info is available.  For example, if you type 'return -1', and the
+function in the current stack frame is declared to return a 'long long
+int', GDB transparently converts the implicit 'int' value of -1 into a
+'long long int':
+
+     Breakpoint 1, func () at gdb.base/return-nodebug.c:29
+     29        return 31;
+     (gdb) return -1
+     Make func return now? (y or n) y
+     #0  0x004004f6 in main () at gdb.base/return-nodebug.c:43
+     43        printf ("result=%lld\n", func ());
+     (gdb)
+
+   However, if the selected stack frame does not have a debug info,
+e.g., if the function was compiled without debug info, GDB has to find
+out the type to return from user.  Specifying a different type by
+mistake may set the value in different inferior registers than the
+caller code expects.  For example, typing 'return -1' with its implicit
+type 'int' would set only a part of a 'long long int' result for a debug
+info less function (on 32-bit architectures).  Therefore the user is
+required to specify the return type by an appropriate cast explicitly:
+
+     Breakpoint 2, 0x0040050b in func ()
+     (gdb) return -1
+     Return value type not available for selected stack frame.
+     Please use an explicit cast of the value to return.
+     (gdb) return (long long int) -1
+     Make selected stack frame return now? (y or n) y
+     #0  0x00400526 in main ()
+     (gdb)
+
+File: gdb.info,  Node: Calling,  Next: Patching,  Prev: Returning,  Up: Altering
+

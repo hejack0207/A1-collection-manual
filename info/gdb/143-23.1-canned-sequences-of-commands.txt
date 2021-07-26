@@ -1,0 +1,486 @@
+23.1 Canned Sequences of Commands
+=================================
+
+Aside from breakpoint commands (*note Breakpoint Command Lists: Break
+Commands.), GDB provides two ways to store sequences of commands for
+execution as a unit: user-defined commands and command files.
+
+* Menu:
+
+* Define::             How to define your own commands
+* Hooks::              Hooks for user-defined commands
+* Command Files::      How to write scripts of commands to be stored in a file
+* Output::             Commands for controlled output
+* Auto-loading sequences::  Controlling auto-loaded command files
+
+File: gdb.info,  Node: Define,  Next: Hooks,  Up: Sequences
+
+23.1.1 User-Defined Commands
+----------------------------
+
+A "user-defined command" is a sequence of GDB commands to which you
+assign a new name as a command.  This is done with the 'define' command.
+User commands may accept an unlimited number of arguments separated by
+whitespace.  Arguments are accessed within the user command via
+'$arg0...$argN'.  A trivial example:
+
+     define adder
+       print $arg0 + $arg1 + $arg2
+     end
+
+To execute the command use:
+
+     adder 1 2 3
+
+This defines the command 'adder', which prints the sum of its three
+arguments.  Note the arguments are text substitutions, so they may
+reference variables, use complex expressions, or even perform inferior
+functions calls.
+
+   In addition, '$argc' may be used to find out how many arguments have
+been passed.
+
+     define adder
+       if $argc == 2
+         print $arg0 + $arg1
+       end
+       if $argc == 3
+         print $arg0 + $arg1 + $arg2
+       end
+     end
+
+   Combining with the 'eval' command (*note eval::) makes it easier to
+process a variable number of arguments:
+
+     define adder
+       set $i = 0
+       set $sum = 0
+       while $i < $argc
+         eval "set $sum = $sum + $arg%d", $i
+         set $i = $i + 1
+       end
+       print $sum
+     end
+
+'define COMMANDNAME'
+     Define a command named COMMANDNAME.  If there is already a command
+     by that name, you are asked to confirm that you want to redefine
+     it.  The argument COMMANDNAME may be a bare command name consisting
+     of letters, numbers, dashes, dots, and underscores.  It may also
+     start with any predefined or user-defined prefix command.  For
+     example, 'define target my-target' creates a user-defined 'target
+     my-target' command.
+
+     The definition of the command is made up of other GDB command
+     lines, which are given following the 'define' command.  The end of
+     these commands is marked by a line containing 'end'.
+
+'document COMMANDNAME'
+     Document the user-defined command COMMANDNAME, so that it can be
+     accessed by 'help'.  The command COMMANDNAME must already be
+     defined.  This command reads lines of documentation just as
+     'define' reads the lines of the command definition, ending with
+     'end'.  After the 'document' command is finished, 'help' on command
+     COMMANDNAME displays the documentation you have written.
+
+     You may use the 'document' command again to change the
+     documentation of a command.  Redefining the command with 'define'
+     does not change the documentation.
+
+'define-prefix COMMANDNAME'
+     Define or mark the command COMMANDNAME as a user-defined prefix
+     command.  Once marked, COMMANDNAME can be used as prefix command by
+     the 'define' command.  Note that 'define-prefix' can be used with a
+     not yet defined COMMANDNAME.  In such a case, COMMANDNAME is
+     defined as an empty user-defined command.  In case you redefine a
+     command that was marked as a user-defined prefix command, the
+     subcommands of the redefined command are kept (and GDB indicates so
+     to the user).
+
+     Example:
+          (gdb) define-prefix abc
+          (gdb) define-prefix abc def
+          (gdb) define abc def
+          Type commands for definition of "abc def".
+          End with a line saying just "end".
+          >echo command initial def\n
+          >end
+          (gdb) define abc def ghi
+          Type commands for definition of "abc def ghi".
+          End with a line saying just "end".
+          >echo command ghi\n
+          >end
+          (gdb) define abc def
+          Keeping subcommands of prefix command "def".
+          Redefine command "def"? (y or n) y
+          Type commands for definition of "abc def".
+          End with a line saying just "end".
+          >echo command def\n
+          >end
+          (gdb) abc def ghi
+          command ghi
+          (gdb) abc def
+          command def
+          (gdb)
+
+'dont-repeat'
+     Used inside a user-defined command, this tells GDB that this
+     command should not be repeated when the user hits <RET> (*note
+     repeat last command: Command Syntax.).
+
+'help user-defined'
+     List all user-defined commands and all python commands defined in
+     class COMMAND_USER. The first line of the documentation or
+     docstring is included (if any).
+
+'show user'
+'show user COMMANDNAME'
+     Display the GDB commands used to define COMMANDNAME (but not its
+     documentation).  If no COMMANDNAME is given, display the
+     definitions for all user-defined commands.  This does not work for
+     user-defined python commands.
+
+'show max-user-call-depth'
+'set max-user-call-depth'
+     The value of 'max-user-call-depth' controls how many recursion
+     levels are allowed in user-defined commands before GDB suspects an
+     infinite recursion and aborts the command.  This does not apply to
+     user-defined python commands.
+
+   In addition to the above commands, user-defined commands frequently
+use control flow commands, described in *note Command Files::.
+
+   When user-defined commands are executed, the commands of the
+definition are not printed.  An error in any command stops execution of
+the user-defined command.
+
+   If used interactively, commands that would ask for confirmation
+proceed without asking when used inside a user-defined command.  Many
+GDB commands that normally print messages to say what they are doing
+omit the messages when used in a user-defined command.
+
+File: gdb.info,  Node: Hooks,  Next: Command Files,  Prev: Define,  Up: Sequences
+
+23.1.2 User-Defined Command Hooks
+---------------------------------
+
+You may define "hooks", which are a special kind of user-defined
+command.  Whenever you run the command 'foo', if the user-defined
+command 'hook-foo' exists, it is executed (with no arguments) before
+that command.
+
+   A hook may also be defined which is run after the command you
+executed.  Whenever you run the command 'foo', if the user-defined
+command 'hookpost-foo' exists, it is executed (with no arguments) after
+that command.  Post-execution hooks may exist simultaneously with
+pre-execution hooks, for the same command.
+
+   It is valid for a hook to call the command which it hooks.  If this
+occurs, the hook is not re-executed, thereby avoiding infinite
+recursion.
+
+   In addition, a pseudo-command, 'stop' exists.  Defining ('hook-stop')
+makes the associated commands execute every time execution stops in your
+program: before breakpoint commands are run, displays are printed, or
+the stack frame is printed.
+
+   For example, to ignore 'SIGALRM' signals while single-stepping, but
+treat them normally during normal execution, you could define:
+
+     define hook-stop
+     handle SIGALRM nopass
+     end
+
+     define hook-run
+     handle SIGALRM pass
+     end
+
+     define hook-continue
+     handle SIGALRM pass
+     end
+
+   As a further example, to hook at the beginning and end of the 'echo'
+command, and to add extra text to the beginning and end of the message,
+you could define:
+
+     define hook-echo
+     echo <<<---
+     end
+
+     define hookpost-echo
+     echo --->>>\n
+     end
+
+     (gdb) echo Hello World
+     <<<---Hello World--->>>
+     (gdb)
+
+
+   You can define a hook for any single-word command in GDB, but not for
+command aliases; you should define a hook for the basic command name,
+e.g. 'backtrace' rather than 'bt'.  You can hook a multi-word command by
+adding 'hook-' or 'hookpost-' to the last word of the command, e.g.
+'define target hook-remote' to add a hook to 'target remote'.
+
+   If an error occurs during the execution of your hook, execution of
+GDB commands stops and GDB issues a prompt (before the command that you
+actually typed had a chance to run).
+
+   If you try to define a hook which does not match any known command,
+you get a warning from the 'define' command.
+
+File: gdb.info,  Node: Command Files,  Next: Output,  Prev: Hooks,  Up: Sequences
+
+23.1.3 Command Files
+--------------------
+
+A command file for GDB is a text file made of lines that are GDB
+commands.  Comments (lines starting with '#') may also be included.  An
+empty line in a command file does nothing; it does not mean to repeat
+the last command, as it would from the terminal.
+
+   You can request the execution of a command file with the 'source'
+command.  Note that the 'source' command is also used to evaluate
+scripts that are not Command Files.  The exact behavior can be
+configured using the 'script-extension' setting.  *Note Extending GDB:
+Extending GDB.
+
+'source [-s] [-v] FILENAME'
+     Execute the command file FILENAME.
+
+   The lines in a command file are generally executed sequentially,
+unless the order of execution is changed by one of the _flow-control
+commands_ described below.  The commands are not printed as they are
+executed.  An error in any command terminates execution of the command
+file and control is returned to the console.
+
+   GDB first searches for FILENAME in the current directory.  If the
+file is not found there, and FILENAME does not specify a directory, then
+GDB also looks for the file on the source search path (specified with
+the 'directory' command); except that '$cdir' is not searched because
+the compilation directory is not relevant to scripts.
+
+   If '-s' is specified, then GDB searches for FILENAME on the search
+path even if FILENAME specifies a directory.  The search is done by
+appending FILENAME to each element of the search path.  So, for example,
+if FILENAME is 'mylib/myscript' and the search path contains
+'/home/user' then GDB will look for the script
+'/home/user/mylib/myscript'.  The search is also done if FILENAME is an
+absolute path.  For example, if FILENAME is '/tmp/myscript' and the
+search path contains '/home/user' then GDB will look for the script
+'/home/user/tmp/myscript'.  For DOS-like systems, if FILENAME contains a
+drive specification, it is stripped before concatenation.  For example,
+if FILENAME is 'd:myscript' and the search path contains 'c:/tmp' then
+GDB will look for the script 'c:/tmp/myscript'.
+
+   If '-v', for verbose mode, is given then GDB displays each command as
+it is executed.  The option must be given before FILENAME, and is
+interpreted as part of the filename anywhere else.
+
+   Commands that would ask for confirmation if used interactively
+proceed without asking when used in a command file.  Many GDB commands
+that normally print messages to say what they are doing omit the
+messages when called from command files.
+
+   GDB also accepts command input from standard input.  In this mode,
+normal output goes to standard output and error output goes to standard
+error.  Errors in a command file supplied on standard input do not
+terminate execution of the command file--execution continues with the
+next command.
+
+     gdb < cmds > log 2>&1
+
+   (The syntax above will vary depending on the shell used.)  This
+example will execute commands from the file 'cmds'.  All output and
+errors would be directed to 'log'.
+
+   Since commands stored on command files tend to be more general than
+commands typed interactively, they frequently need to deal with
+complicated situations, such as different or unexpected values of
+variables and symbols, changes in how the program being debugged is
+built, etc.  GDB provides a set of flow-control commands to deal with
+these complexities.  Using these commands, you can write complex scripts
+that loop over data structures, execute commands conditionally, etc.
+
+'if'
+'else'
+     This command allows to include in your script conditionally
+     executed commands.  The 'if' command takes a single argument, which
+     is an expression to evaluate.  It is followed by a series of
+     commands that are executed only if the expression is true (its
+     value is nonzero).  There can then optionally be an 'else' line,
+     followed by a series of commands that are only executed if the
+     expression was false.  The end of the list is marked by a line
+     containing 'end'.
+
+'while'
+     This command allows to write loops.  Its syntax is similar to 'if':
+     the command takes a single argument, which is an expression to
+     evaluate, and must be followed by the commands to execute, one per
+     line, terminated by an 'end'.  These commands are called the "body"
+     of the loop.  The commands in the body of 'while' are executed
+     repeatedly as long as the expression evaluates to true.
+
+'loop_break'
+     This command exits the 'while' loop in whose body it is included.
+     Execution of the script continues after that 'while's 'end' line.
+
+'loop_continue'
+     This command skips the execution of the rest of the body of
+     commands in the 'while' loop in whose body it is included.
+     Execution branches to the beginning of the 'while' loop, where it
+     evaluates the controlling expression.
+
+'end'
+     Terminate the block of commands that are the body of 'if', 'else',
+     or 'while' flow-control commands.
+
+File: gdb.info,  Node: Output,  Next: Auto-loading sequences,  Prev: Command Files,  Up: Sequences
+
+23.1.4 Commands for Controlled Output
+-------------------------------------
+
+During the execution of a command file or a user-defined command, normal
+GDB output is suppressed; the only output that appears is what is
+explicitly printed by the commands in the definition.  This section
+describes three commands useful for generating exactly the output you
+want.
+
+'echo TEXT'
+     Print TEXT.  Nonprinting characters can be included in TEXT using C
+     escape sequences, such as '\n' to print a newline.  *No newline is
+     printed unless you specify one.*  In addition to the standard C
+     escape sequences, a backslash followed by a space stands for a
+     space.  This is useful for displaying a string with spaces at the
+     beginning or the end, since leading and trailing spaces are
+     otherwise trimmed from all arguments.  To print ' and foo = ', use
+     the command 'echo \ and foo = \ '.
+
+     A backslash at the end of TEXT can be used, as in C, to continue
+     the command onto subsequent lines.  For example,
+
+          echo This is some text\n\
+          which is continued\n\
+          onto several lines.\n
+
+     produces the same output as
+
+          echo This is some text\n
+          echo which is continued\n
+          echo onto several lines.\n
+
+'output EXPRESSION'
+     Print the value of EXPRESSION and nothing but that value: no
+     newlines, no '$NN = '.  The value is not entered in the value
+     history either.  *Note Expressions: Expressions, for more
+     information on expressions.
+
+'output/FMT EXPRESSION'
+     Print the value of EXPRESSION in format FMT.  You can use the same
+     formats as for 'print'.  *Note Output Formats: Output Formats, for
+     more information.
+
+'printf TEMPLATE, EXPRESSIONS...'
+     Print the values of one or more EXPRESSIONS under the control of
+     the string TEMPLATE.  To print several values, make EXPRESSIONS be
+     a comma-separated list of individual expressions, which may be
+     either numbers or pointers.  Their values are printed as specified
+     by TEMPLATE, exactly as a C program would do by executing the code
+     below:
+
+          printf (TEMPLATE, EXPRESSIONS...);
+
+     As in 'C' 'printf', ordinary characters in TEMPLATE are printed
+     verbatim, while "conversion specification" introduced by the '%'
+     character cause subsequent EXPRESSIONS to be evaluated, their
+     values converted and formatted according to type and style
+     information encoded in the conversion specifications, and then
+     printed.
+
+     For example, you can print two values in hex like this:
+
+          printf "foo, bar-foo = 0x%x, 0x%x\n", foo, bar-foo
+
+     'printf' supports all the standard 'C' conversion specifications,
+     including the flags and modifiers between the '%' character and the
+     conversion letter, with the following exceptions:
+
+        * The argument-ordering modifiers, such as '2$', are not
+          supported.
+
+        * The modifier '*' is not supported for specifying precision or
+          width.
+
+        * The ''' flag (for separation of digits into groups according
+          to 'LC_NUMERIC'') is not supported.
+
+        * The type modifiers 'hh', 'j', 't', and 'z' are not supported.
+
+        * The conversion letter 'n' (as in '%n') is not supported.
+
+        * The conversion letters 'a' and 'A' are not supported.
+
+     Note that the 'll' type modifier is supported only if the
+     underlying 'C' implementation used to build GDB supports the 'long
+     long int' type, and the 'L' type modifier is supported only if
+     'long double' type is available.
+
+     As in 'C', 'printf' supports simple backslash-escape sequences,
+     such as '\n', '\t', '\\', '\"', '\a', and '\f', that consist of
+     backslash followed by a single character.  Octal and hexadecimal
+     escape sequences are not supported.
+
+     Additionally, 'printf' supports conversion specifications for DFP
+     ("Decimal Floating Point") types using the following length
+     modifiers together with a floating point specifier.  letters:
+
+        * 'H' for printing 'Decimal32' types.
+
+        * 'D' for printing 'Decimal64' types.
+
+        * 'DD' for printing 'Decimal128' types.
+
+     If the underlying 'C' implementation used to build GDB has support
+     for the three length modifiers for DFP types, other modifiers such
+     as width and precision will also be available for GDB to use.
+
+     In case there is no such 'C' support, no additional modifiers will
+     be available and the value will be printed in the standard way.
+
+     Here's an example of printing DFP types using the above conversion
+     letters:
+          printf "D32: %Hf - D64: %Df - D128: %DDf\n",1.2345df,1.2E10dd,1.2E1dl
+
+'eval TEMPLATE, EXPRESSIONS...'
+     Convert the values of one or more EXPRESSIONS under the control of
+     the string TEMPLATE to a command line, and call it.
+
+File: gdb.info,  Node: Auto-loading sequences,  Prev: Output,  Up: Sequences
+
+23.1.5 Controlling Auto-Loading Native GDB Scripts
+--------------------------------------------------
+
+When a new object file is read (for example, due to the 'file' command,
+or because the inferior has loaded a shared library), GDB will look for
+the command file 'OBJFILE-gdb.gdb'.  *Note Auto-loading extensions::.
+
+   Auto-loading can be enabled or disabled, and the list of auto-loaded
+scripts can be printed.
+
+'set auto-load gdb-scripts [on|off]'
+     Enable or disable the auto-loading of canned sequences of commands
+     scripts.
+
+'show auto-load gdb-scripts'
+     Show whether auto-loading of canned sequences of commands scripts
+     is enabled or disabled.
+
+'info auto-load gdb-scripts [REGEXP]'
+     Print the list of all canned sequences of commands scripts that GDB
+     auto-loaded.
+
+   If REGEXP is supplied only canned sequences of commands scripts with
+matching names are printed.
+
+File: gdb.info,  Node: Python,  Next: Guile,  Prev: Sequences,  Up: Extending GDB
+

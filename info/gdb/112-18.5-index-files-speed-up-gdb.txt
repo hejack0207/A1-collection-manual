@@ -1,0 +1,100 @@
+18.5 Index Files Speed Up GDB
+=============================
+
+When GDB finds a symbol file, it scans the symbols in the file in order
+to construct an internal symbol table.  This lets most GDB operations
+work quickly--at the cost of a delay early on.  For large programs, this
+delay can be quite lengthy, so GDB provides a way to build an index,
+which speeds up startup.
+
+   For convenience, GDB comes with a program, 'gdb-add-index', which can
+be used to add the index to a symbol file.  It takes the symbol file as
+its only argument:
+
+     $ gdb-add-index symfile
+
+   *Note gdb-add-index::.
+
+   It is also possible to do the work manually.  Here is what
+'gdb-add-index' does behind the curtains.
+
+   The index is stored as a section in the symbol file.  GDB can write
+the index to a file, then you can put it into the symbol file using
+'objcopy'.
+
+   To create an index file, use the 'save gdb-index' command:
+
+'save gdb-index [-dwarf-5] DIRECTORY'
+     Create index files for all symbol files currently known by GDB.
+     For each known SYMBOL-FILE, this command by default creates it
+     produces a single file 'SYMBOL-FILE.gdb-index'.  If you invoke this
+     command with the '-dwarf-5' option, it produces 2 files:
+     'SYMBOL-FILE.debug_names' and 'SYMBOL-FILE.debug_str'.  The files
+     are created in the given DIRECTORY.
+
+   Once you have created an index file you can merge it into your symbol
+file, here named 'symfile', using 'objcopy':
+
+     $ objcopy --add-section .gdb_index=symfile.gdb-index \
+         --set-section-flags .gdb_index=readonly symfile symfile
+
+   Or for '-dwarf-5':
+
+     $ objcopy --dump-section .debug_str=symfile.debug_str.new symfile
+     $ cat symfile.debug_str >>symfile.debug_str.new
+     $ objcopy --add-section .debug_names=symfile.gdb-index \
+         --set-section-flags .debug_names=readonly \
+         --update-section .debug_str=symfile.debug_str.new symfile symfile
+
+   GDB will normally ignore older versions of '.gdb_index' sections that
+have been deprecated.  Usually they are deprecated because they are
+missing a new feature or have performance issues.  To tell GDB to use a
+deprecated index section anyway specify 'set
+use-deprecated-index-sections on'.  The default is 'off'.  This can
+speed up startup, but may result in some functionality being lost.
+*Note Index Section Format::.
+
+   _Warning:_ Setting 'use-deprecated-index-sections' to 'on' must be
+done before gdb reads the file.  The following will not work:
+
+     $ gdb -ex "set use-deprecated-index-sections on" <program>
+
+   Instead you must do, for example,
+
+     $ gdb -iex "set use-deprecated-index-sections on" <program>
+
+   Indices only work when using DWARF debugging information, not stabs.
+
+18.5.1 Automatic Symbol Index Cache
+-----------------------------------
+
+It is possible for GDB to automatically save a copy of this index in a
+cache on disk and retrieve it from there when loading the same binary in
+the future.  This feature can be turned on with 'set index-cache on'.
+The following commands can be used to tweak the behavior of the index
+cache.
+
+'set index-cache on'
+'set index-cache off'
+     Enable or disable the use of the symbol index cache.
+
+'set index-cache directory DIRECTORY'
+'show index-cache directory'
+     Set/show the directory where index files will be saved.
+
+     The default value for this directory depends on the host platform.
+     On most systems, the index is cached in the 'gdb' subdirectory of
+     the directory pointed to by the 'XDG_CACHE_HOME' environment
+     variable, if it is defined, else in the '.cache/gdb' subdirectory
+     of your home directory.  However, on some systems, the default may
+     differ according to local convention.
+
+     There is no limit on the disk space used by index cache.  It is
+     perfectly safe to delete the content of that directory to free up
+     disk space.
+
+'show index-cache stats'
+     Print the number of cache hits and misses since the launch of GDB.
+
+File: gdb.info,  Node: Symbol Errors,  Next: Data Files,  Prev: Index Files,  Up: GDB Files
+

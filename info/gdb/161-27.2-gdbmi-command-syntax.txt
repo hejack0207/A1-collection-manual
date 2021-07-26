@@ -1,0 +1,189 @@
+27.2 GDB/MI Command Syntax
+==========================
+
+* Menu:
+
+* GDB/MI Input Syntax::
+* GDB/MI Output Syntax::
+
+File: gdb.info,  Node: GDB/MI Input Syntax,  Next: GDB/MI Output Syntax,  Up: GDB/MI Command Syntax
+
+27.2.1 GDB/MI Input Syntax
+--------------------------
+
+'COMMAND ==>'
+     'CLI-COMMAND | MI-COMMAND'
+
+'CLI-COMMAND ==>'
+     '[ TOKEN ] CLI-COMMAND NL', where CLI-COMMAND is any existing GDB
+     CLI command.
+
+'MI-COMMAND ==>'
+     '[ TOKEN ] "-" OPERATION ( " " OPTION )* [ " --" ] ( " " PARAMETER
+     )* NL'
+
+'TOKEN ==>'
+     "any sequence of digits"
+
+'OPTION ==>'
+     '"-" PARAMETER [ " " PARAMETER ]'
+
+'PARAMETER ==>'
+     'NON-BLANK-SEQUENCE | C-STRING'
+
+'OPERATION ==>'
+     _any of the operations described in this chapter_
+
+'NON-BLANK-SEQUENCE ==>'
+     _anything, provided it doesn't contain special characters such as
+     "-", NL, """ and of course " "_
+
+'C-STRING ==>'
+     '""" SEVEN-BIT-ISO-C-STRING-CONTENT """'
+
+'NL ==>'
+     'CR | CR-LF'
+
+Notes:
+
+   * The CLI commands are still handled by the MI interpreter; their
+     output is described below.
+
+   * The 'TOKEN', when present, is passed back when the command
+     finishes.
+
+   * Some MI commands accept optional arguments as part of the parameter
+     list.  Each option is identified by a leading '-' (dash) and may be
+     followed by an optional argument parameter.  Options occur first in
+     the parameter list and can be delimited from normal parameters
+     using '--' (this is useful when some parameters begin with a dash).
+
+   Pragmatics:
+
+   * We want easy access to the existing CLI syntax (for debugging).
+
+   * We want it to be easy to spot a MI operation.
+
+File: gdb.info,  Node: GDB/MI Output Syntax,  Prev: GDB/MI Input Syntax,  Up: GDB/MI Command Syntax
+
+27.2.2 GDB/MI Output Syntax
+---------------------------
+
+The output from GDB/MI consists of zero or more out-of-band records
+followed, optionally, by a single result record.  This result record is
+for the most recent command.  The sequence of output records is
+terminated by '(gdb)'.
+
+   If an input command was prefixed with a 'TOKEN' then the
+corresponding output for that command will also be prefixed by that same
+TOKEN.
+
+'OUTPUT ==>'
+     '( OUT-OF-BAND-RECORD )* [ RESULT-RECORD ] "(gdb)" NL'
+
+'RESULT-RECORD ==>'
+     ' [ TOKEN ] "^" RESULT-CLASS ( "," RESULT )* NL'
+
+'OUT-OF-BAND-RECORD ==>'
+     'ASYNC-RECORD | STREAM-RECORD'
+
+'ASYNC-RECORD ==>'
+     'EXEC-ASYNC-OUTPUT | STATUS-ASYNC-OUTPUT | NOTIFY-ASYNC-OUTPUT'
+
+'EXEC-ASYNC-OUTPUT ==>'
+     '[ TOKEN ] "*" ASYNC-OUTPUT NL'
+
+'STATUS-ASYNC-OUTPUT ==>'
+     '[ TOKEN ] "+" ASYNC-OUTPUT NL'
+
+'NOTIFY-ASYNC-OUTPUT ==>'
+     '[ TOKEN ] "=" ASYNC-OUTPUT NL'
+
+'ASYNC-OUTPUT ==>'
+     'ASYNC-CLASS ( "," RESULT )*'
+
+'RESULT-CLASS ==>'
+     '"done" | "running" | "connected" | "error" | "exit"'
+
+'ASYNC-CLASS ==>'
+     '"stopped" | OTHERS' (where OTHERS will be added depending on the
+     needs--this is still in development).
+
+'RESULT ==>'
+     ' VARIABLE "=" VALUE'
+
+'VARIABLE ==>'
+     ' STRING '
+
+'VALUE ==>'
+     ' CONST | TUPLE | LIST '
+
+'CONST ==>'
+     'C-STRING'
+
+'TUPLE ==>'
+     ' "{}" | "{" RESULT ( "," RESULT )* "}" '
+
+'LIST ==>'
+     ' "[]" | "[" VALUE ( "," VALUE )* "]" | "[" RESULT ( "," RESULT )*
+     "]" '
+
+'STREAM-RECORD ==>'
+     'CONSOLE-STREAM-OUTPUT | TARGET-STREAM-OUTPUT | LOG-STREAM-OUTPUT'
+
+'CONSOLE-STREAM-OUTPUT ==>'
+     '"~" C-STRING NL'
+
+'TARGET-STREAM-OUTPUT ==>'
+     '"@" C-STRING NL'
+
+'LOG-STREAM-OUTPUT ==>'
+     '"&" C-STRING NL'
+
+'NL ==>'
+     'CR | CR-LF'
+
+'TOKEN ==>'
+     _any sequence of digits_.
+
+Notes:
+
+   * All output sequences end in a single line containing a period.
+
+   * The 'TOKEN' is from the corresponding request.  Note that for all
+     async output, while the token is allowed by the grammar and may be
+     output by future versions of GDB for select async output messages,
+     it is generally omitted.  Frontends should treat all async output
+     as reporting general changes in the state of the target and there
+     should be no need to associate async output to any prior command.
+
+   * STATUS-ASYNC-OUTPUT contains on-going status information about the
+     progress of a slow operation.  It can be discarded.  All status
+     output is prefixed by '+'.
+
+   * EXEC-ASYNC-OUTPUT contains asynchronous state change on the target
+     (stopped, started, disappeared).  All async output is prefixed by
+     '*'.
+
+   * NOTIFY-ASYNC-OUTPUT contains supplementary information that the
+     client should handle (e.g., a new breakpoint information).  All
+     notify output is prefixed by '='.
+
+   * CONSOLE-STREAM-OUTPUT is output that should be displayed as is in
+     the console.  It is the textual response to a CLI command.  All the
+     console output is prefixed by '~'.
+
+   * TARGET-STREAM-OUTPUT is the output produced by the target program.
+     All the target output is prefixed by '@'.
+
+   * LOG-STREAM-OUTPUT is output text coming from GDB's internals, for
+     instance messages that should be displayed as part of an error log.
+     All the log output is prefixed by '&'.
+
+   * New GDB/MI commands should only output LISTS containing VALUES.
+
+   *Note GDB/MI Stream Records: GDB/MI Stream Records, for more details
+about the various output records.
+
+File: gdb.info,  Node: GDB/MI Compatibility with CLI,  Next: GDB/MI Development and Front Ends,  Prev: GDB/MI Command Syntax,  Up: GDB/MI
+

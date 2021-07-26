@@ -1,0 +1,224 @@
+27.1 GDB/MI General Design
+==========================
+
+Interaction of a GDB/MI frontend with GDB involves three parts--commands
+sent to GDB, responses to those commands and notifications.  Each
+command results in exactly one response, indicating either successful
+completion of the command, or an error.  For the commands that do not
+resume the target, the response contains the requested information.  For
+the commands that resume the target, the response only indicates whether
+the target was successfully resumed.  Notifications is the mechanism for
+reporting changes in the state of the target, or in GDB state, that
+cannot conveniently be associated with a command and reported as part of
+that command response.
+
+   The important examples of notifications are:
+
+   * Exec notifications.  These are used to report changes in target
+     state--when a target is resumed, or stopped.  It would not be
+     feasible to include this information in response of resuming
+     commands, because one resume commands can result in multiple events
+     in different threads.  Also, quite some time may pass before any
+     event happens in the target, while a frontend needs to know whether
+     the resuming command itself was successfully executed.
+
+   * Console output, and status notifications.  Console output
+     notifications are used to report output of CLI commands, as well as
+     diagnostics for other commands.  Status notifications are used to
+     report the progress of a long-running operation.  Naturally,
+     including this information in command response would mean no output
+     is produced until the command is finished, which is undesirable.
+
+   * General notifications.  Commands may have various side effects on
+     the GDB or target state beyond their official purpose.  For
+     example, a command may change the selected thread.  Although such
+     changes can be included in command response, using notification
+     allows for more orthogonal frontend design.
+
+   There's no guarantee that whenever an MI command reports an error,
+GDB or the target are in any specific state, and especially, the state
+is not reverted to the state before the MI command was processed.
+Therefore, whenever an MI command results in an error, we recommend that
+the frontend refreshes all the information shown in the user interface.
+
+* Menu:
+
+* Context management::
+* Asynchronous and non-stop modes::
+* Thread groups::
+
+File: gdb.info,  Node: Context management,  Next: Asynchronous and non-stop modes,  Up: GDB/MI General Design
+
+27.1.1 Context Management
+-------------------------
+
+27.1.1.1 Threads and Frames
+...........................
+
+In most cases when GDB accesses the target, this access is done in
+context of a specific thread and frame (*note Frames::).  Often, even
+when accessing global data, the target requires that a thread be
+specified.  The CLI interface maintains the selected thread and frame,
+and supplies them to target on each command.  This is convenient,
+because a command line user would not want to specify that information
+explicitly on each command, and because user interacts with GDB via a
+single terminal, so no confusion is possible as to what thread and frame
+are the current ones.
+
+   In the case of MI, the concept of selected thread and frame is less
+useful.  First, a frontend can easily remember this information itself.
+Second, a graphical frontend can have more than one window, each one
+used for debugging a different thread, and the frontend might want to
+access additional threads for internal purposes.  This increases the
+risk that by relying on implicitly selected thread, the frontend may be
+operating on a wrong one.  Therefore, each MI command should explicitly
+specify which thread and frame to operate on.  To make it possible, each
+MI command accepts the '--thread' and '--frame' options, the value to
+each is GDB global identifier for thread and frame to operate on.
+
+   Usually, each top-level window in a frontend allows the user to
+select a thread and a frame, and remembers the user selection for
+further operations.  However, in some cases GDB may suggest that the
+current thread or frame be changed.  For example, when stopping on a
+breakpoint it is reasonable to switch to the thread where breakpoint is
+hit.  For another example, if the user issues the CLI 'thread' or
+'frame' commands via the frontend, it is desirable to change the
+frontend's selection to the one specified by user.  GDB communicates the
+suggestion to change current thread and frame using the
+'=thread-selected' notification.
+
+   Note that historically, MI shares the selected thread with CLI, so
+frontends used the '-thread-select' to execute commands in the right
+context.  However, getting this to work right is cumbersome.  The
+simplest way is for frontend to emit '-thread-select' command before
+every command.  This doubles the number of commands that need to be
+sent.  The alternative approach is to suppress '-thread-select' if the
+selected thread in GDB is supposed to be identical to the thread the
+frontend wants to operate on.  However, getting this optimization right
+can be tricky.  In particular, if the frontend sends several commands to
+GDB, and one of the commands changes the selected thread, then the
+behaviour of subsequent commands will change.  So, a frontend should
+either wait for response from such problematic commands, or explicitly
+add '-thread-select' for all subsequent commands.  No frontend is known
+to do this exactly right, so it is suggested to just always pass the
+'--thread' and '--frame' options.
+
+27.1.1.2 Language
+.................
+
+The execution of several commands depends on which language is selected.
+By default, the current language (*note show language::) is used.  But
+for commands known to be language-sensitive, it is recommended to use
+the '--language' option.  This option takes one argument, which is the
+name of the language to use while executing the command.  For instance:
+
+     -data-evaluate-expression --language c "sizeof (void*)"
+     ^done,value="4"
+     (gdb)
+
+   The valid language names are the same names accepted by the 'set
+language' command (*note Manually::), excluding 'auto', 'local' or
+'unknown'.
+
+File: gdb.info,  Node: Asynchronous and non-stop modes,  Next: Thread groups,  Prev: Context management,  Up: GDB/MI General Design
+
+27.1.2 Asynchronous Command Execution and Non-Stop Mode
+-------------------------------------------------------
+
+On some targets, GDB is capable of processing MI commands even while the
+target is running.  This is called "asynchronous command execution"
+(*note Background Execution::).  The frontend may specify a preference
+for asynchronous execution using the '-gdb-set mi-async 1' command,
+which should be emitted before either running the executable or
+attaching to the target.  After the frontend has started the executable
+or attached to the target, it can find if asynchronous execution is
+enabled using the '-list-target-features' command.
+
+'-gdb-set mi-async on'
+'-gdb-set mi-async off'
+     Set whether MI is in asynchronous mode.
+
+     When 'off', which is the default, MI execution commands (e.g.,
+     '-exec-continue') are foreground commands, and GDB waits for the
+     program to stop before processing further commands.
+
+     When 'on', MI execution commands are background execution commands
+     (e.g., '-exec-continue' becomes the equivalent of the 'c&' CLI
+     command), and so GDB is capable of processing MI commands even
+     while the target is running.
+
+'-gdb-show mi-async'
+     Show whether MI asynchronous mode is enabled.
+
+   Note: In GDB version 7.7 and earlier, this option was called
+'target-async' instead of 'mi-async', and it had the effect of both
+putting MI in asynchronous mode and making CLI background commands
+possible.  CLI background commands are now always possible "out of the
+box" if the target supports them.  The old spelling is kept as a
+deprecated alias for backwards compatibility.
+
+   Even if GDB can accept a command while target is running, many
+commands that access the target do not work when the target is running.
+Therefore, asynchronous command execution is most useful when combined
+with non-stop mode (*note Non-Stop Mode::).  Then, it is possible to
+examine the state of one thread, while other threads are running.
+
+   When a given thread is running, MI commands that try to access the
+target in the context of that thread may not work, or may work only on
+some targets.  In particular, commands that try to operate on thread's
+stack will not work, on any target.  Commands that read memory, or
+modify breakpoints, may work or not work, depending on the target.  Note
+that even commands that operate on global state, such as 'print', 'set',
+and breakpoint commands, still access the target in the context of a
+specific thread, so frontend should try to find a stopped thread and
+perform the operation on that thread (using the '--thread' option).
+
+   Which commands will work in the context of a running thread is highly
+target dependent.  However, the two commands '-exec-interrupt', to stop
+a thread, and '-thread-info', to find the state of a thread, will always
+work.
+
+File: gdb.info,  Node: Thread groups,  Prev: Asynchronous and non-stop modes,  Up: GDB/MI General Design
+
+27.1.3 Thread Groups
+--------------------
+
+GDB may be used to debug several processes at the same time.  On some
+platforms, GDB may support debugging of several hardware systems, each
+one having several cores with several different processes running on
+each core.  This section describes the MI mechanism to support such
+debugging scenarios.
+
+   The key observation is that regardless of the structure of the
+target, MI can have a global list of threads, because most commands that
+accept the '--thread' option do not need to know what process that
+thread belongs to.  Therefore, it is not necessary to introduce neither
+additional '--process' option, nor an notion of the current process in
+the MI interface.  The only strictly new feature that is required is the
+ability to find how the threads are grouped into processes.
+
+   To allow the user to discover such grouping, and to support arbitrary
+hierarchy of machines/cores/processes, MI introduces the concept of a
+"thread group".  Thread group is a collection of threads and other
+thread groups.  A thread group always has a string identifier, a type,
+and may have additional attributes specific to the type.  A new command,
+'-list-thread-groups', returns the list of top-level thread groups,
+which correspond to processes that GDB is debugging at the moment.  By
+passing an identifier of a thread group to the '-list-thread-groups'
+command, it is possible to obtain the members of specific thread group.
+
+   To allow the user to easily discover processes, and other objects, he
+wishes to debug, a concept of "available thread group" is introduced.
+Available thread group is an thread group that GDB is not debugging, but
+that can be attached to, using the '-target-attach' command.  The list
+of available top-level thread groups can be obtained using
+'-list-thread-groups --available'.  In general, the content of a thread
+group may be only retrieved only after attaching to that thread group.
+
+   Thread groups are related to inferiors (*note Inferiors Connections
+and Programs::).  Each inferior corresponds to a thread group of a
+special type 'process', and some additional operations are permitted on
+such thread groups.
+
+File: gdb.info,  Node: GDB/MI Command Syntax,  Next: GDB/MI Compatibility with CLI,  Prev: GDB/MI General Design,  Up: GDB/MI
+

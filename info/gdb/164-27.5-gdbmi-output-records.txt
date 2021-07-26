@@ -1,0 +1,561 @@
+27.5 GDB/MI Output Records
+==========================
+
+* Menu:
+
+* GDB/MI Result Records::
+* GDB/MI Stream Records::
+* GDB/MI Async Records::
+* GDB/MI Breakpoint Information::
+* GDB/MI Frame Information::
+* GDB/MI Thread Information::
+* GDB/MI Ada Exception Information::
+
+File: gdb.info,  Node: GDB/MI Result Records,  Next: GDB/MI Stream Records,  Up: GDB/MI Output Records
+
+27.5.1 GDB/MI Result Records
+----------------------------
+
+In addition to a number of out-of-band notifications, the response to a
+GDB/MI command includes one of the following result indications:
+
+'"^done" [ "," RESULTS ]'
+     The synchronous operation was successful, 'RESULTS' are the return
+     values.
+
+'"^running"'
+     This result record is equivalent to '^done'.  Historically, it was
+     output instead of '^done' if the command has resumed the target.
+     This behaviour is maintained for backward compatibility, but all
+     frontends should treat '^done' and '^running' identically and rely
+     on the '*running' output record to determine which threads are
+     resumed.
+
+'"^connected"'
+     GDB has connected to a remote target.
+
+'"^error" "," "msg=" C-STRING [ "," "code=" C-STRING ]'
+     The operation failed.  The 'msg=C-STRING' variable contains the
+     corresponding error message.
+
+     If present, the 'code=C-STRING' variable provides an error code on
+     which consumers can rely on to detect the corresponding error
+     condition.  At present, only one error code is defined:
+
+     '"undefined-command"'
+          Indicates that the command causing the error does not exist.
+
+'"^exit"'
+     GDB has terminated.
+
+File: gdb.info,  Node: GDB/MI Stream Records,  Next: GDB/MI Async Records,  Prev: GDB/MI Result Records,  Up: GDB/MI Output Records
+
+27.5.2 GDB/MI Stream Records
+----------------------------
+
+GDB internally maintains a number of output streams: the console, the
+target, and the log.  The output intended for each of these streams is
+funneled through the GDB/MI interface using "stream records".
+
+   Each stream record begins with a unique "prefix character" which
+identifies its stream (*note GDB/MI Output Syntax: GDB/MI Output
+Syntax.).  In addition to the prefix, each stream record contains a
+'STRING-OUTPUT'.  This is either raw text (with an implicit new line) or
+a quoted C string (which does not contain an implicit newline).
+
+'"~" STRING-OUTPUT'
+     The console output stream contains text that should be displayed in
+     the CLI console window.  It contains the textual responses to CLI
+     commands.
+
+'"@" STRING-OUTPUT'
+     The target output stream contains any textual output from the
+     running target.  This is only present when GDB's event loop is
+     truly asynchronous, which is currently only the case for remote
+     targets.
+
+'"&" STRING-OUTPUT'
+     The log stream contains debugging messages being produced by GDB's
+     internals.
+
+File: gdb.info,  Node: GDB/MI Async Records,  Next: GDB/MI Breakpoint Information,  Prev: GDB/MI Stream Records,  Up: GDB/MI Output Records
+
+27.5.3 GDB/MI Async Records
+---------------------------
+
+"Async" records are used to notify the GDB/MI client of additional
+changes that have occurred.  Those changes can either be a consequence
+of GDB/MI commands (e.g., a breakpoint modified) or a result of target
+activity (e.g., target stopped).
+
+   The following is the list of possible async records:
+
+'*running,thread-id="THREAD"'
+     The target is now running.  The THREAD field can be the global
+     thread ID of the thread that is now running, and it can be 'all' if
+     all threads are running.  The frontend should assume that no
+     interaction with a running thread is possible after this
+     notification is produced.  The frontend should not assume that this
+     notification is output only once for any command.  GDB may emit
+     this notification several times, either for different threads,
+     because it cannot resume all threads together, or even for a single
+     thread, if the thread must be stepped though some code before
+     letting it run freely.
+
+'*stopped,reason="REASON",thread-id="ID",stopped-threads="STOPPED",core="CORE"'
+     The target has stopped.  The REASON field can have one of the
+     following values:
+
+     'breakpoint-hit'
+          A breakpoint was reached.
+     'watchpoint-trigger'
+          A watchpoint was triggered.
+     'read-watchpoint-trigger'
+          A read watchpoint was triggered.
+     'access-watchpoint-trigger'
+          An access watchpoint was triggered.
+     'function-finished'
+          An -exec-finish or similar CLI command was accomplished.
+     'location-reached'
+          An -exec-until or similar CLI command was accomplished.
+     'watchpoint-scope'
+          A watchpoint has gone out of scope.
+     'end-stepping-range'
+          An -exec-next, -exec-next-instruction, -exec-step,
+          -exec-step-instruction or similar CLI command was
+          accomplished.
+     'exited-signalled'
+          The inferior exited because of a signal.
+     'exited'
+          The inferior exited.
+     'exited-normally'
+          The inferior exited normally.
+     'signal-received'
+          A signal was received by the inferior.
+     'solib-event'
+          The inferior has stopped due to a library being loaded or
+          unloaded.  This can happen when 'stop-on-solib-events' (*note
+          Files::) is set or when a 'catch load' or 'catch unload'
+          catchpoint is in use (*note Set Catchpoints::).
+     'fork'
+          The inferior has forked.  This is reported when 'catch fork'
+          (*note Set Catchpoints::) has been used.
+     'vfork'
+          The inferior has vforked.  This is reported in when 'catch
+          vfork' (*note Set Catchpoints::) has been used.
+     'syscall-entry'
+          The inferior entered a system call.  This is reported when
+          'catch syscall' (*note Set Catchpoints::) has been used.
+     'syscall-return'
+          The inferior returned from a system call.  This is reported
+          when 'catch syscall' (*note Set Catchpoints::) has been used.
+     'exec'
+          The inferior called 'exec'.  This is reported when 'catch
+          exec' (*note Set Catchpoints::) has been used.
+
+     The ID field identifies the global thread ID of the thread that
+     directly caused the stop - for example by hitting a breakpoint.
+     Depending on whether all-stop mode is in effect (*note All-Stop
+     Mode::), GDB may either stop all threads, or only the thread that
+     directly triggered the stop.  If all threads are stopped, the
+     STOPPED field will have the value of '"all"'.  Otherwise, the value
+     of the STOPPED field will be a list of thread identifiers.
+     Presently, this list will always include a single thread, but
+     frontend should be prepared to see several threads in the list.
+     The CORE field reports the processor core on which the stop event
+     has happened.  This field may be absent if such information is not
+     available.
+
+'=thread-group-added,id="ID"'
+'=thread-group-removed,id="ID"'
+     A thread group was either added or removed.  The ID field contains
+     the GDB identifier of the thread group.  When a thread group is
+     added, it generally might not be associated with a running process.
+     When a thread group is removed, its id becomes invalid and cannot
+     be used in any way.
+
+'=thread-group-started,id="ID",pid="PID"'
+     A thread group became associated with a running program, either
+     because the program was just started or the thread group was
+     attached to a program.  The ID field contains the GDB identifier of
+     the thread group.  The PID field contains process identifier,
+     specific to the operating system.
+
+'=thread-group-exited,id="ID"[,exit-code="CODE"]'
+     A thread group is no longer associated with a running program,
+     either because the program has exited, or because it was detached
+     from.  The ID field contains the GDB identifier of the thread
+     group.  The CODE field is the exit code of the inferior; it exists
+     only when the inferior exited with some code.
+
+'=thread-created,id="ID",group-id="GID"'
+'=thread-exited,id="ID",group-id="GID"'
+     A thread either was created, or has exited.  The ID field contains
+     the global GDB identifier of the thread.  The GID field identifies
+     the thread group this thread belongs to.
+
+'=thread-selected,id="ID"[,frame="FRAME"]'
+     Informs that the selected thread or frame were changed.  This
+     notification is not emitted as result of the '-thread-select' or
+     '-stack-select-frame' commands, but is emitted whenever an MI
+     command that is not documented to change the selected thread and
+     frame actually changes them.  In particular, invoking, directly or
+     indirectly (via user-defined command), the CLI 'thread' or 'frame'
+     commands, will generate this notification.  Changing the thread or
+     frame from another user interface (see *note Interpreters::) will
+     also generate this notification.
+
+     The FRAME field is only present if the newly selected thread is
+     stopped.  See *note GDB/MI Frame Information:: for the format of
+     its value.
+
+     We suggest that in response to this notification, front ends
+     highlight the selected thread and cause subsequent commands to
+     apply to that thread.
+
+'=library-loaded,...'
+     Reports that a new library file was loaded by the program.  This
+     notification has 5 fields--ID, TARGET-NAME, HOST-NAME,
+     SYMBOLS-LOADED and RANGES.  The ID field is an opaque identifier of
+     the library.  For remote debugging case, TARGET-NAME and HOST-NAME
+     fields give the name of the library file on the target, and on the
+     host respectively.  For native debugging, both those fields have
+     the same value.  The SYMBOLS-LOADED field is emitted only for
+     backward compatibility and should not be relied on to convey any
+     useful information.  The THREAD-GROUP field, if present, specifies
+     the id of the thread group in whose context the library was loaded.
+     If the field is absent, it means the library was loaded in the
+     context of all present thread groups.  The RANGES field specifies
+     the ranges of addresses belonging to this library.
+
+'=library-unloaded,...'
+     Reports that a library was unloaded by the program.  This
+     notification has 3 fields--ID, TARGET-NAME and HOST-NAME with the
+     same meaning as for the '=library-loaded' notification.  The
+     THREAD-GROUP field, if present, specifies the id of the thread
+     group in whose context the library was unloaded.  If the field is
+     absent, it means the library was unloaded in the context of all
+     present thread groups.
+
+'=traceframe-changed,num=TFNUM,tracepoint=TPNUM'
+'=traceframe-changed,end'
+     Reports that the trace frame was changed and its new number is
+     TFNUM.  The number of the tracepoint associated with this trace
+     frame is TPNUM.
+
+'=tsv-created,name=NAME,initial=INITIAL'
+     Reports that the new trace state variable NAME is created with
+     initial value INITIAL.
+
+'=tsv-deleted,name=NAME'
+'=tsv-deleted'
+     Reports that the trace state variable NAME is deleted or all trace
+     state variables are deleted.
+
+'=tsv-modified,name=NAME,initial=INITIAL[,current=CURRENT]'
+     Reports that the trace state variable NAME is modified with the
+     initial value INITIAL.  The current value CURRENT of trace state
+     variable is optional and is reported if the current value of trace
+     state variable is known.
+
+'=breakpoint-created,bkpt={...}'
+'=breakpoint-modified,bkpt={...}'
+'=breakpoint-deleted,id=NUMBER'
+     Reports that a breakpoint was created, modified, or deleted,
+     respectively.  Only user-visible breakpoints are reported to the MI
+     user.
+
+     The BKPT argument is of the same form as returned by the various
+     breakpoint commands; *Note GDB/MI Breakpoint Commands::.  The
+     NUMBER is the ordinal number of the breakpoint.
+
+     Note that if a breakpoint is emitted in the result record of a
+     command, then it will not also be emitted in an async record.
+
+'=record-started,thread-group="ID",method="METHOD"[,format="FORMAT"]'
+'=record-stopped,thread-group="ID"'
+     Execution log recording was either started or stopped on an
+     inferior.  The ID is the GDB identifier of the thread group
+     corresponding to the affected inferior.
+
+     The METHOD field indicates the method used to record execution.  If
+     the method in use supports multiple recording formats, FORMAT will
+     be present and contain the currently used format.  *Note Process
+     Record and Replay::, for existing method and format values.
+
+'=cmd-param-changed,param=PARAM,value=VALUE'
+     Reports that a parameter of the command 'set PARAM' is changed to
+     VALUE.  In the multi-word 'set' command, the PARAM is the whole
+     parameter list to 'set' command.  For example, In command 'set
+     check type on', PARAM is 'check type' and VALUE is 'on'.
+
+'=memory-changed,thread-group=ID,addr=ADDR,len=LEN[,type="code"]'
+     Reports that bytes from ADDR to DATA + LEN were written in an
+     inferior.  The ID is the identifier of the thread group
+     corresponding to the affected inferior.  The optional 'type="code"'
+     part is reported if the memory written to holds executable code.
+
+File: gdb.info,  Node: GDB/MI Breakpoint Information,  Next: GDB/MI Frame Information,  Prev: GDB/MI Async Records,  Up: GDB/MI Output Records
+
+27.5.4 GDB/MI Breakpoint Information
+------------------------------------
+
+When GDB reports information about a breakpoint, a tracepoint, a
+watchpoint, or a catchpoint, it uses a tuple with the following fields:
+
+'number'
+     The breakpoint number.
+
+'type'
+     The type of the breakpoint.  For ordinary breakpoints this will be
+     'breakpoint', but many values are possible.
+
+'catch-type'
+     If the type of the breakpoint is 'catchpoint', then this indicates
+     the exact type of catchpoint.
+
+'disp'
+     This is the breakpoint disposition--either 'del', meaning that the
+     breakpoint will be deleted at the next stop, or 'keep', meaning
+     that the breakpoint will not be deleted.
+
+'enabled'
+     This indicates whether the breakpoint is enabled, in which case the
+     value is 'y', or disabled, in which case the value is 'n'.  Note
+     that this is not the same as the field 'enable'.
+
+'addr'
+     The address of the breakpoint.  This may be a hexidecimal number,
+     giving the address; or the string '<PENDING>', for a pending
+     breakpoint; or the string '<MULTIPLE>', for a breakpoint with
+     multiple locations.  This field will not be present if no address
+     can be determined.  For example, a watchpoint does not have an
+     address.
+
+'addr_flags'
+     Optional field containing any flags related to the address.  These
+     flags are architecture-dependent; see *note Architectures:: for
+     their meaning for a particular CPU.
+
+'func'
+     If known, the function in which the breakpoint appears.  If not
+     known, this field is not present.
+
+'filename'
+     The name of the source file which contains this function, if known.
+     If not known, this field is not present.
+
+'fullname'
+     The full file name of the source file which contains this function,
+     if known.  If not known, this field is not present.
+
+'line'
+     The line number at which this breakpoint appears, if known.  If not
+     known, this field is not present.
+
+'at'
+     If the source file is not known, this field may be provided.  If
+     provided, this holds the address of the breakpoint, possibly
+     followed by a symbol name.
+
+'pending'
+     If this breakpoint is pending, this field is present and holds the
+     text used to set the breakpoint, as entered by the user.
+
+'evaluated-by'
+     Where this breakpoint's condition is evaluated, either 'host' or
+     'target'.
+
+'thread'
+     If this is a thread-specific breakpoint, then this identifies the
+     thread in which the breakpoint can trigger.
+
+'task'
+     If this breakpoint is restricted to a particular Ada task, then
+     this field will hold the task identifier.
+
+'cond'
+     If the breakpoint is conditional, this is the condition expression.
+
+'ignore'
+     The ignore count of the breakpoint.
+
+'enable'
+     The enable count of the breakpoint.
+
+'traceframe-usage'
+     FIXME.
+
+'static-tracepoint-marker-string-id'
+     For a static tracepoint, the name of the static tracepoint marker.
+
+'mask'
+     For a masked watchpoint, this is the mask.
+
+'pass'
+     A tracepoint's pass count.
+
+'original-location'
+     The location of the breakpoint as originally specified by the user.
+     This field is optional.
+
+'times'
+     The number of times the breakpoint has been hit.
+
+'installed'
+     This field is only given for tracepoints.  This is either 'y',
+     meaning that the tracepoint is installed, or 'n', meaning that it
+     is not.
+
+'what'
+     Some extra data, the exact contents of which are type-dependent.
+
+'locations'
+     This field is present if the breakpoint has multiple locations.  It
+     is also exceptionally present if the breakpoint is enabled and has
+     a single, disabled location.
+
+     The value is a list of locations.  The format of a location is
+     described below.
+
+   A location in a multi-location breakpoint is represented as a tuple
+with the following fields:
+
+'number'
+     The location number as a dotted pair, like '1.2'.  The first digit
+     is the number of the parent breakpoint.  The second digit is the
+     number of the location within that breakpoint.
+
+'enabled'
+     This indicates whether the location is enabled, in which case the
+     value is 'y', or disabled, in which case the value is 'n'.  Note
+     that this is not the same as the field 'enable'.
+
+'addr'
+     The address of this location as an hexidecimal number.
+
+'addr_flags'
+     Optional field containing any flags related to the address.  These
+     flags are architecture-dependent; see *note Architectures:: for
+     their meaning for a particular CPU.
+
+'func'
+     If known, the function in which the location appears.  If not
+     known, this field is not present.
+
+'file'
+     The name of the source file which contains this location, if known.
+     If not known, this field is not present.
+
+'fullname'
+     The full file name of the source file which contains this location,
+     if known.  If not known, this field is not present.
+
+'line'
+     The line number at which this location appears, if known.  If not
+     known, this field is not present.
+
+'thread-groups'
+     The thread groups this location is in.
+
+   For example, here is what the output of '-break-insert' (*note GDB/MI
+Breakpoint Commands::) might be:
+
+     -> -break-insert main
+     <- ^done,bkpt={number="1",type="breakpoint",disp="keep",
+         enabled="y",addr="0x08048564",func="main",file="myprog.c",
+         fullname="/home/nickrob/myprog.c",line="68",thread-groups=["i1"],
+         times="0"}
+     <- (gdb)
+
+File: gdb.info,  Node: GDB/MI Frame Information,  Next: GDB/MI Thread Information,  Prev: GDB/MI Breakpoint Information,  Up: GDB/MI Output Records
+
+27.5.5 GDB/MI Frame Information
+-------------------------------
+
+Response from many MI commands includes an information about stack
+frame.  This information is a tuple that may have the following fields:
+
+'level'
+     The level of the stack frame.  The innermost frame has the level of
+     zero.  This field is always present.
+
+'func'
+     The name of the function corresponding to the frame.  This field
+     may be absent if GDB is unable to determine the function name.
+
+'addr'
+     The code address for the frame.  This field is always present.
+
+'addr_flags'
+     Optional field containing any flags related to the address.  These
+     flags are architecture-dependent; see *note Architectures:: for
+     their meaning for a particular CPU.
+
+'file'
+     The name of the source files that correspond to the frame's code
+     address.  This field may be absent.
+
+'line'
+     The source line corresponding to the frames' code address.  This
+     field may be absent.
+
+'from'
+     The name of the binary file (either executable or shared library)
+     the corresponds to the frame's code address.  This field may be
+     absent.
+
+File: gdb.info,  Node: GDB/MI Thread Information,  Next: GDB/MI Ada Exception Information,  Prev: GDB/MI Frame Information,  Up: GDB/MI Output Records
+
+27.5.6 GDB/MI Thread Information
+--------------------------------
+
+Whenever GDB has to report an information about a thread, it uses a
+tuple with the following fields.  The fields are always present unless
+stated otherwise.
+
+'id'
+     The global numeric id assigned to the thread by GDB.
+
+'target-id'
+     The target-specific string identifying the thread.
+
+'details'
+     Additional information about the thread provided by the target.  It
+     is supposed to be human-readable and not interpreted by the
+     frontend.  This field is optional.
+
+'name'
+     The name of the thread.  If the user specified a name using the
+     'thread name' command, then this name is given.  Otherwise, if GDB
+     can extract the thread name from the target, then that name is
+     given.  If GDB cannot find the thread name, then this field is
+     omitted.
+
+'state'
+     The execution state of the thread, either 'stopped' or 'running',
+     depending on whether the thread is presently running.
+
+'frame'
+     The stack frame currently executing in the thread.  This field is
+     only present if the thread is stopped.  Its format is documented in
+     *note GDB/MI Frame Information::.
+
+'core'
+     The value of this field is an integer number of the processor core
+     the thread was last seen on.  This field is optional.
+
+File: gdb.info,  Node: GDB/MI Ada Exception Information,  Prev: GDB/MI Thread Information,  Up: GDB/MI Output Records
+
+27.5.7 GDB/MI Ada Exception Information
+---------------------------------------
+
+Whenever a '*stopped' record is emitted because the program stopped
+after hitting an exception catchpoint (*note Set Catchpoints::), GDB
+provides the name of the exception that was raised via the
+'exception-name' field.  Also, for exceptions that were raised with an
+exception message, GDB provides that message via the 'exception-message'
+field.
+
+File: gdb.info,  Node: GDB/MI Simple Examples,  Next: GDB/MI Command Description Format,  Prev: GDB/MI Output Records,  Up: GDB/MI
+

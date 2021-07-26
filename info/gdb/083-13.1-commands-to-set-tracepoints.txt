@@ -1,0 +1,775 @@
+13.1 Commands to Set Tracepoints
+================================
+
+Before running such a "trace experiment", an arbitrary number of
+tracepoints can be set.  A tracepoint is actually a special type of
+breakpoint (*note Set Breaks::), so you can manipulate it using standard
+breakpoint commands.  For instance, as with breakpoints, tracepoint
+numbers are successive integers starting from one, and many of the
+commands associated with tracepoints take the tracepoint number as their
+argument, to identify which tracepoint to work on.
+
+   For each tracepoint, you can specify, in advance, some arbitrary set
+of data that you want the target to collect in the trace buffer when it
+hits that tracepoint.  The collected data can include registers, local
+variables, or global data.  Later, you can use GDB commands to examine
+the values these data had at the time the tracepoint was hit.
+
+   Tracepoints do not support every breakpoint feature.  Ignore counts
+on tracepoints have no effect, and tracepoints cannot run GDB commands
+when they are hit.  Tracepoints may not be thread-specific either.
+
+   Some targets may support "fast tracepoints", which are inserted in a
+different way (such as with a jump instead of a trap), that is faster
+but possibly restricted in where they may be installed.
+
+   Regular and fast tracepoints are dynamic tracing facilities, meaning
+that they can be used to insert tracepoints at (almost) any location in
+the target.  Some targets may also support controlling "static
+tracepoints" from GDB.  With static tracing, a set of instrumentation
+points, also known as "markers", are embedded in the target program, and
+can be activated or deactivated by name or address.  These are usually
+placed at locations which facilitate investigating what the target is
+actually doing.  GDB's support for static tracing includes being able to
+list instrumentation points, and attach them with GDB defined high level
+tracepoints that expose the whole range of convenience of GDB's
+tracepoints support.  Namely, support for collecting registers values
+and values of global or local (to the instrumentation point) variables;
+tracepoint conditions and trace state variables.  The act of installing
+a GDB static tracepoint on an instrumentation point, or marker, is
+referred to as "probing" a static tracepoint marker.
+
+   'gdbserver' supports tracepoints on some target systems.  *Note
+Tracepoints support in 'gdbserver': Server.
+
+   This section describes commands to set tracepoints and associated
+conditions and actions.
+
+* Menu:
+
+* Create and Delete Tracepoints::
+* Enable and Disable Tracepoints::
+* Tracepoint Passcounts::
+* Tracepoint Conditions::
+* Trace State Variables::
+* Tracepoint Actions::
+* Listing Tracepoints::
+* Listing Static Tracepoint Markers::
+* Starting and Stopping Trace Experiments::
+* Tracepoint Restrictions::
+
+File: gdb.info,  Node: Create and Delete Tracepoints,  Next: Enable and Disable Tracepoints,  Up: Set Tracepoints
+
+13.1.1 Create and Delete Tracepoints
+------------------------------------
+
+'trace LOCATION'
+     The 'trace' command is very similar to the 'break' command.  Its
+     argument LOCATION can be any valid location.  *Note Specify
+     Location::.  The 'trace' command defines a tracepoint, which is a
+     point in the target program where the debugger will briefly stop,
+     collect some data, and then allow the program to continue.  Setting
+     a tracepoint or changing its actions takes effect immediately if
+     the remote stub supports the 'InstallInTrace' feature (*note
+     install tracepoint in tracing::).  If remote stub doesn't support
+     the 'InstallInTrace' feature, all these changes don't take effect
+     until the next 'tstart' command, and once a trace experiment is
+     running, further changes will not have any effect until the next
+     trace experiment starts.  In addition, GDB supports "pending
+     tracepoints"--tracepoints whose address is not yet resolved.  (This
+     is similar to pending breakpoints.)  Pending tracepoints are not
+     downloaded to the target and not installed until they are resolved.
+     The resolution of pending tracepoints requires GDB support--when
+     debugging with the remote target, and GDB disconnects from the
+     remote stub (*note disconnected tracing::), pending tracepoints can
+     not be resolved (and downloaded to the remote stub) while GDB is
+     disconnected.
+
+     Here are some examples of using the 'trace' command:
+
+          (gdb) trace foo.c:121    // a source file and line number
+
+          (gdb) trace +2           // 2 lines forward
+
+          (gdb) trace my_function  // first source line of function
+
+          (gdb) trace *my_function // EXACT start address of function
+
+          (gdb) trace *0x2117c4    // an address
+
+     You can abbreviate 'trace' as 'tr'.
+
+'trace LOCATION if COND'
+     Set a tracepoint with condition COND; evaluate the expression COND
+     each time the tracepoint is reached, and collect data only if the
+     value is nonzero--that is, if COND evaluates as true.  *Note
+     Tracepoint Conditions: Tracepoint Conditions, for more information
+     on tracepoint conditions.
+
+'ftrace LOCATION [ if COND ]'
+     The 'ftrace' command sets a fast tracepoint.  For targets that
+     support them, fast tracepoints will use a more efficient but
+     possibly less general technique to trigger data collection, such as
+     a jump instruction instead of a trap, or some sort of hardware
+     support.  It may not be possible to create a fast tracepoint at the
+     desired location, in which case the command will exit with an
+     explanatory message.
+
+     GDB handles arguments to 'ftrace' exactly as for 'trace'.
+
+     On 32-bit x86-architecture systems, fast tracepoints normally need
+     to be placed at an instruction that is 5 bytes or longer, but can
+     be placed at 4-byte instructions if the low 64K of memory of the
+     target program is available to install trampolines.  Some Unix-type
+     systems, such as GNU/Linux, exclude low addresses from the
+     program's address space; but for instance with the Linux kernel it
+     is possible to let GDB use this area by doing a 'sysctl' command to
+     set the 'mmap_min_addr' kernel parameter, as in
+
+          sudo sysctl -w vm.mmap_min_addr=32768
+
+     which sets the low address to 32K, which leaves plenty of room for
+     trampolines.  The minimum address should be set to a page boundary.
+
+'strace LOCATION [ if COND ]'
+     The 'strace' command sets a static tracepoint.  For targets that
+     support it, setting a static tracepoint probes a static
+     instrumentation point, or marker, found at LOCATION.  It may not be
+     possible to set a static tracepoint at the desired location, in
+     which case the command will exit with an explanatory message.
+
+     GDB handles arguments to 'strace' exactly as for 'trace', with the
+     addition that the user can also specify '-m MARKER' as LOCATION.
+     This probes the marker identified by the MARKER string identifier.
+     This identifier depends on the static tracepoint backend library
+     your program is using.  You can find all the marker identifiers in
+     the 'ID' field of the 'info static-tracepoint-markers' command
+     output.  *Note Listing Static Tracepoint Markers: Listing Static
+     Tracepoint Markers.  For example, in the following small program
+     using the UST tracing engine:
+
+          main ()
+          {
+            trace_mark(ust, bar33, "str %s", "FOOBAZ");
+          }
+
+     the marker id is composed of joining the first two arguments to the
+     'trace_mark' call with a slash, which translates to:
+
+          (gdb) info static-tracepoint-markers
+          Cnt Enb ID         Address            What
+          1   n   ust/bar33  0x0000000000400ddc in main at stexample.c:22
+                   Data: "str %s"
+          [etc...]
+
+     so you may probe the marker above with:
+
+          (gdb) strace -m ust/bar33
+
+     Static tracepoints accept an extra collect action -- 'collect
+     $_sdata'.  This collects arbitrary user data passed in the probe
+     point call to the tracing library.  In the UST example above,
+     you'll see that the third argument to 'trace_mark' is a printf-like
+     format string.  The user data is then the result of running that
+     formatting string against the following arguments.  Note that 'info
+     static-tracepoint-markers' command output lists that format string
+     in the 'Data:' field.
+
+     You can inspect this data when analyzing the trace buffer, by
+     printing the $_sdata variable like any other variable available to
+     GDB.  *Note Tracepoint Action Lists: Tracepoint Actions.
+
+     The convenience variable '$tpnum' records the tracepoint number of
+     the most recently set tracepoint.
+
+'delete tracepoint [NUM]'
+     Permanently delete one or more tracepoints.  With no argument, the
+     default is to delete all tracepoints.  Note that the regular
+     'delete' command can remove tracepoints also.
+
+     Examples:
+
+          (gdb) delete trace 1 2 3 // remove three tracepoints
+
+          (gdb) delete trace       // remove all tracepoints
+
+     You can abbreviate this command as 'del tr'.
+
+File: gdb.info,  Node: Enable and Disable Tracepoints,  Next: Tracepoint Passcounts,  Prev: Create and Delete Tracepoints,  Up: Set Tracepoints
+
+13.1.2 Enable and Disable Tracepoints
+-------------------------------------
+
+These commands are deprecated; they are equivalent to plain 'disable'
+and 'enable'.
+
+'disable tracepoint [NUM]'
+     Disable tracepoint NUM, or all tracepoints if no argument NUM is
+     given.  A disabled tracepoint will have no effect during a trace
+     experiment, but it is not forgotten.  You can re-enable a disabled
+     tracepoint using the 'enable tracepoint' command.  If the command
+     is issued during a trace experiment and the debug target has
+     support for disabling tracepoints during a trace experiment, then
+     the change will be effective immediately.  Otherwise, it will be
+     applied to the next trace experiment.
+
+'enable tracepoint [NUM]'
+     Enable tracepoint NUM, or all tracepoints.  If this command is
+     issued during a trace experiment and the debug target supports
+     enabling tracepoints during a trace experiment, then the enabled
+     tracepoints will become effective immediately.  Otherwise, they
+     will become effective the next time a trace experiment is run.
+
+File: gdb.info,  Node: Tracepoint Passcounts,  Next: Tracepoint Conditions,  Prev: Enable and Disable Tracepoints,  Up: Set Tracepoints
+
+13.1.3 Tracepoint Passcounts
+----------------------------
+
+'passcount [N [NUM]]'
+     Set the "passcount" of a tracepoint.  The passcount is a way to
+     automatically stop a trace experiment.  If a tracepoint's passcount
+     is N, then the trace experiment will be automatically stopped on
+     the N'th time that tracepoint is hit.  If the tracepoint number NUM
+     is not specified, the 'passcount' command sets the passcount of the
+     most recently defined tracepoint.  If no passcount is given, the
+     trace experiment will run until stopped explicitly by the user.
+
+     Examples:
+
+          (gdb) passcount 5 2 // Stop on the 5th execution of
+                                        // tracepoint 2
+
+          (gdb) passcount 12  // Stop on the 12th execution of the
+                                        // most recently defined tracepoint.
+          (gdb) trace foo
+          (gdb) pass 3
+          (gdb) trace bar
+          (gdb) pass 2
+          (gdb) trace baz
+          (gdb) pass 1        // Stop tracing when foo has been
+                                         // executed 3 times OR when bar has
+                                         // been executed 2 times
+                                         // OR when baz has been executed 1 time.
+
+File: gdb.info,  Node: Tracepoint Conditions,  Next: Trace State Variables,  Prev: Tracepoint Passcounts,  Up: Set Tracepoints
+
+13.1.4 Tracepoint Conditions
+----------------------------
+
+The simplest sort of tracepoint collects data every time your program
+reaches a specified place.  You can also specify a "condition" for a
+tracepoint.  A condition is just a Boolean expression in your
+programming language (*note Expressions: Expressions.).  A tracepoint
+with a condition evaluates the expression each time your program reaches
+it, and data collection happens only if the condition is true.
+
+   Tracepoint conditions can be specified when a tracepoint is set, by
+using 'if' in the arguments to the 'trace' command.  *Note Setting
+Tracepoints: Create and Delete Tracepoints.  They can also be set or
+changed at any time with the 'condition' command, just as with
+breakpoints.
+
+   Unlike breakpoint conditions, GDB does not actually evaluate the
+conditional expression itself.  Instead, GDB encodes the expression into
+an agent expression (*note Agent Expressions::) suitable for execution
+on the target, independently of GDB.  Global variables become raw memory
+locations, locals become stack accesses, and so forth.
+
+   For instance, suppose you have a function that is usually called
+frequently, but should not be called after an error has occurred.  You
+could use the following tracepoint command to collect data about calls
+of that function that happen while the error code is propagating through
+the program; an unconditional tracepoint could end up collecting
+thousands of useless trace frames that you would have to search through.
+
+     (gdb) trace normal_operation if errcode > 0
+
+File: gdb.info,  Node: Trace State Variables,  Next: Tracepoint Actions,  Prev: Tracepoint Conditions,  Up: Set Tracepoints
+
+13.1.5 Trace State Variables
+----------------------------
+
+A "trace state variable" is a special type of variable that is created
+and managed by target-side code.  The syntax is the same as that for
+GDB's convenience variables (a string prefixed with "$"), but they are
+stored on the target.  They must be created explicitly, using a
+'tvariable' command.  They are always 64-bit signed integers.
+
+   Trace state variables are remembered by GDB, and downloaded to the
+target along with tracepoint information when the trace experiment
+starts.  There are no intrinsic limits on the number of trace state
+variables, beyond memory limitations of the target.
+
+   Although trace state variables are managed by the target, you can use
+them in print commands and expressions as if they were convenience
+variables; GDB will get the current value from the target while the
+trace experiment is running.  Trace state variables share the same
+namespace as other "$" variables, which means that you cannot have trace
+state variables with names like '$23' or '$pc', nor can you have a trace
+state variable and a convenience variable with the same name.
+
+'tvariable $NAME [ = EXPRESSION ]'
+     The 'tvariable' command creates a new trace state variable named
+     '$NAME', and optionally gives it an initial value of EXPRESSION.
+     The EXPRESSION is evaluated when this command is entered; the
+     result will be converted to an integer if possible, otherwise GDB
+     will report an error.  A subsequent 'tvariable' command specifying
+     the same name does not create a variable, but instead assigns the
+     supplied initial value to the existing variable of that name,
+     overwriting any previous initial value.  The default initial value
+     is 0.
+
+'info tvariables'
+     List all the trace state variables along with their initial values.
+     Their current values may also be displayed, if the trace experiment
+     is currently running.
+
+'delete tvariable [ $NAME ... ]'
+     Delete the given trace state variables, or all of them if no
+     arguments are specified.
+
+File: gdb.info,  Node: Tracepoint Actions,  Next: Listing Tracepoints,  Prev: Trace State Variables,  Up: Set Tracepoints
+
+13.1.6 Tracepoint Action Lists
+------------------------------
+
+'actions [NUM]'
+     This command will prompt for a list of actions to be taken when the
+     tracepoint is hit.  If the tracepoint number NUM is not specified,
+     this command sets the actions for the one that was most recently
+     defined (so that you can define a tracepoint and then say 'actions'
+     without bothering about its number).  You specify the actions
+     themselves on the following lines, one action at a time, and
+     terminate the actions list with a line containing just 'end'.  So
+     far, the only defined actions are 'collect', 'teval', and
+     'while-stepping'.
+
+     'actions' is actually equivalent to 'commands' (*note Breakpoint
+     Command Lists: Break Commands.), except that only the defined
+     actions are allowed; any other GDB command is rejected.
+
+     To remove all actions from a tracepoint, type 'actions NUM' and
+     follow it immediately with 'end'.
+
+          (gdb) collect DATA // collect some data
+
+          (gdb) while-stepping 5 // single-step 5 times, collect data
+
+          (gdb) end              // signals the end of actions.
+
+     In the following example, the action list begins with 'collect'
+     commands indicating the things to be collected when the tracepoint
+     is hit.  Then, in order to single-step and collect additional data
+     following the tracepoint, a 'while-stepping' command is used,
+     followed by the list of things to be collected after each step in a
+     sequence of single steps.  The 'while-stepping' command is
+     terminated by its own separate 'end' command.  Lastly, the action
+     list is terminated by an 'end' command.
+
+          (gdb) trace foo
+          (gdb) actions
+          Enter actions for tracepoint 1, one per line:
+          > collect bar,baz
+          > collect $regs
+          > while-stepping 12
+            > collect $pc, arr[i]
+            > end
+          end
+
+'collect[/MODS] EXPR1, EXPR2, ...'
+     Collect values of the given expressions when the tracepoint is hit.
+     This command accepts a comma-separated list of any valid
+     expressions.  In addition to global, static, or local variables,
+     the following special arguments are supported:
+
+     '$regs'
+          Collect all registers.
+
+     '$args'
+          Collect all function arguments.
+
+     '$locals'
+          Collect all local variables.
+
+     '$_ret'
+          Collect the return address.  This is helpful if you want to
+          see more of a backtrace.
+
+          _Note:_ The return address location can not always be reliably
+          determined up front, and the wrong address / registers may end
+          up collected instead.  On some architectures the reliability
+          is higher for tracepoints at function entry, while on others
+          it's the opposite.  When this happens, backtracing will stop
+          because the return address is found unavailable (unless
+          another collect rule happened to match it).
+
+     '$_probe_argc'
+          Collects the number of arguments from the static probe at
+          which the tracepoint is located.  *Note Static Probe Points::.
+
+     '$_probe_argN'
+          N is an integer between 0 and 11.  Collects the Nth argument
+          from the static probe at which the tracepoint is located.
+          *Note Static Probe Points::.
+
+     '$_sdata'
+          Collect static tracepoint marker specific data.  Only
+          available for static tracepoints.  *Note Tracepoint Action
+          Lists: Tracepoint Actions.  On the UST static tracepoints
+          library backend, an instrumentation point resembles a 'printf'
+          function call.  The tracing library is able to collect user
+          specified data formatted to a character string using the
+          format provided by the programmer that instrumented the
+          program.  Other backends have similar mechanisms.  Here's an
+          example of a UST marker call:
+
+                const char master_name[] = "$your_name";
+                trace_mark(channel1, marker1, "hello %s", master_name)
+
+          In this case, collecting '$_sdata' collects the string 'hello
+          $yourname'.  When analyzing the trace buffer, you can inspect
+          '$_sdata' like any other variable available to GDB.
+
+     You can give several consecutive 'collect' commands, each one with
+     a single argument, or one 'collect' command with several arguments
+     separated by commas; the effect is the same.
+
+     The optional MODS changes the usual handling of the arguments.  's'
+     requests that pointers to chars be handled as strings, in
+     particular collecting the contents of the memory being pointed at,
+     up to the first zero.  The upper bound is by default the value of
+     the 'print elements' variable; if 's' is followed by a decimal
+     number, that is the upper bound instead.  So for instance
+     'collect/s25 mystr' collects as many as 25 characters at 'mystr'.
+
+     The command 'info scope' (*note info scope: Symbols.) is
+     particularly useful for figuring out what data to collect.
+
+'teval EXPR1, EXPR2, ...'
+     Evaluate the given expressions when the tracepoint is hit.  This
+     command accepts a comma-separated list of expressions.  The results
+     are discarded, so this is mainly useful for assigning values to
+     trace state variables (*note Trace State Variables::) without
+     adding those values to the trace buffer, as would be the case if
+     the 'collect' action were used.
+
+'while-stepping N'
+     Perform N single-step instruction traces after the tracepoint,
+     collecting new data after each step.  The 'while-stepping' command
+     is followed by the list of what to collect while stepping (followed
+     by its own 'end' command):
+
+          > while-stepping 12
+            > collect $regs, myglobal
+            > end
+          >
+
+     Note that '$pc' is not automatically collected by 'while-stepping';
+     you need to explicitly collect that register if you need it.  You
+     may abbreviate 'while-stepping' as 'ws' or 'stepping'.
+
+'set default-collect EXPR1, EXPR2, ...'
+     This variable is a list of expressions to collect at each
+     tracepoint hit.  It is effectively an additional 'collect' action
+     prepended to every tracepoint action list.  The expressions are
+     parsed individually for each tracepoint, so for instance a variable
+     named 'xyz' may be interpreted as a global for one tracepoint, and
+     a local for another, as appropriate to the tracepoint's location.
+
+'show default-collect'
+     Show the list of expressions that are collected by default at each
+     tracepoint hit.
+
+File: gdb.info,  Node: Listing Tracepoints,  Next: Listing Static Tracepoint Markers,  Prev: Tracepoint Actions,  Up: Set Tracepoints
+
+13.1.7 Listing Tracepoints
+--------------------------
+
+'info tracepoints [NUM...]'
+     Display information about the tracepoint NUM.  If you don't specify
+     a tracepoint number, displays information about all the tracepoints
+     defined so far.  The format is similar to that used for 'info
+     breakpoints'; in fact, 'info tracepoints' is the same command,
+     simply restricting itself to tracepoints.
+
+     A tracepoint's listing may include additional information specific
+     to tracing:
+
+        * its passcount as given by the 'passcount N' command
+
+        * the state about installed on target of each location
+
+          (gdb) info trace
+          Num     Type           Disp Enb Address    What
+          1       tracepoint     keep y   0x0804ab57 in foo() at main.cxx:7
+                  while-stepping 20
+                    collect globfoo, $regs
+                  end
+                  collect globfoo2
+                  end
+                  pass count 1200
+          2       tracepoint     keep y   <MULTIPLE>
+                  collect $eip
+          2.1                         y     0x0804859c in func4 at change-loc.h:35
+                  installed on target
+          2.2                         y     0xb7ffc480 in func4 at change-loc.h:35
+                  installed on target
+          2.3                         y     <PENDING>  set_tracepoint
+          3       tracepoint     keep y   0x080485b1 in foo at change-loc.c:29
+                  not installed on target
+          (gdb)
+
+     This command can be abbreviated 'info tp'.
+
+File: gdb.info,  Node: Listing Static Tracepoint Markers,  Next: Starting and Stopping Trace Experiments,  Prev: Listing Tracepoints,  Up: Set Tracepoints
+
+13.1.8 Listing Static Tracepoint Markers
+----------------------------------------
+
+'info static-tracepoint-markers'
+     Display information about all static tracepoint markers defined in
+     the program.
+
+     For each marker, the following columns are printed:
+
+     _Count_
+          An incrementing counter, output to help readability.  This is
+          not a stable identifier.
+     _ID_
+          The marker ID, as reported by the target.
+     _Enabled or Disabled_
+          Probed markers are tagged with 'y'.  'n' identifies marks that
+          are not enabled.
+     _Address_
+          Where the marker is in your program, as a memory address.
+     _What_
+          Where the marker is in the source for your program, as a file
+          and line number.  If the debug information included in the
+          program does not allow GDB to locate the source of the marker,
+          this column will be left blank.
+
+     In addition, the following information may be printed for each
+     marker:
+
+     _Data_
+          User data passed to the tracing library by the marker call.
+          In the UST backend, this is the format string passed as
+          argument to the marker call.
+     _Static tracepoints probing the marker_
+          The list of static tracepoints attached to the marker.
+
+          (gdb) info static-tracepoint-markers
+          Cnt ID         Enb Address            What
+          1   ust/bar2   y   0x0000000000400e1a in main at stexample.c:25
+               Data: number1 %d number2 %d
+               Probed by static tracepoints: #2
+          2   ust/bar33  n   0x0000000000400c87 in main at stexample.c:24
+               Data: str %s
+          (gdb)
+
+File: gdb.info,  Node: Starting and Stopping Trace Experiments,  Next: Tracepoint Restrictions,  Prev: Listing Static Tracepoint Markers,  Up: Set Tracepoints
+
+13.1.9 Starting and Stopping Trace Experiments
+----------------------------------------------
+
+'tstart'
+     This command starts the trace experiment, and begins collecting
+     data.  It has the side effect of discarding all the data collected
+     in the trace buffer during the previous trace experiment.  If any
+     arguments are supplied, they are taken as a note and stored with
+     the trace experiment's state.  The notes may be arbitrary text, and
+     are especially useful with disconnected tracing in a multi-user
+     context; the notes can explain what the trace is doing, supply user
+     contact information, and so forth.
+
+'tstop'
+     This command stops the trace experiment.  If any arguments are
+     supplied, they are recorded with the experiment as a note.  This is
+     useful if you are stopping a trace started by someone else, for
+     instance if the trace is interfering with the system's behavior and
+     needs to be stopped quickly.
+
+     *Note*: a trace experiment and data collection may stop
+     automatically if any tracepoint's passcount is reached (*note
+     Tracepoint Passcounts::), or if the trace buffer becomes full.
+
+'tstatus'
+     This command displays the status of the current trace data
+     collection.
+
+   Here is an example of the commands we described so far:
+
+     (gdb) trace gdb_c_test
+     (gdb) actions
+     Enter actions for tracepoint #1, one per line.
+     > collect $regs,$locals,$args
+     > while-stepping 11
+       > collect $regs
+       > end
+     > end
+     (gdb) tstart
+     	[time passes ...]
+     (gdb) tstop
+
+   You can choose to continue running the trace experiment even if GDB
+disconnects from the target, voluntarily or involuntarily.  For commands
+such as 'detach', the debugger will ask what you want to do with the
+trace.  But for unexpected terminations (GDB crash, network outage), it
+would be unfortunate to lose hard-won trace data, so the variable
+'disconnected-tracing' lets you decide whether the trace should continue
+running without GDB.
+
+'set disconnected-tracing on'
+'set disconnected-tracing off'
+     Choose whether a tracing run should continue to run if GDB has
+     disconnected from the target.  Note that 'detach' or 'quit' will
+     ask you directly what to do about a running trace no matter what
+     this variable's setting, so the variable is mainly useful for
+     handling unexpected situations, such as loss of the network.
+
+'show disconnected-tracing'
+     Show the current choice for disconnected tracing.
+
+   When you reconnect to the target, the trace experiment may or may not
+still be running; it might have filled the trace buffer in the meantime,
+or stopped for one of the other reasons.  If it is running, it will
+continue after reconnection.
+
+   Upon reconnection, the target will upload information about the
+tracepoints in effect.  GDB will then compare that information to the
+set of tracepoints currently defined, and attempt to match them up,
+allowing for the possibility that the numbers may have changed due to
+creation and deletion in the meantime.  If one of the target's
+tracepoints does not match any in GDB, the debugger will create a new
+tracepoint, so that you have a number with which to specify that
+tracepoint.  This matching-up process is necessarily heuristic, and it
+may result in useless tracepoints being created; you may simply delete
+them if they are of no use.
+
+   If your target agent supports a "circular trace buffer", then you can
+run a trace experiment indefinitely without filling the trace buffer;
+when space runs out, the agent deletes already-collected trace frames,
+oldest first, until there is enough room to continue collecting.  This
+is especially useful if your tracepoints are being hit too often, and
+your trace gets terminated prematurely because the buffer is full.  To
+ask for a circular trace buffer, simply set 'circular-trace-buffer' to
+on.  You can set this at any time, including during tracing; if the
+agent can do it, it will change buffer handling on the fly, otherwise it
+will not take effect until the next run.
+
+'set circular-trace-buffer on'
+'set circular-trace-buffer off'
+     Choose whether a tracing run should use a linear or circular buffer
+     for trace data.  A linear buffer will not lose any trace data, but
+     may fill up prematurely, while a circular buffer will discard old
+     trace data, but it will have always room for the latest tracepoint
+     hits.
+
+'show circular-trace-buffer'
+     Show the current choice for the trace buffer.  Note that this may
+     not match the agent's current buffer handling, nor is it guaranteed
+     to match the setting that might have been in effect during a past
+     run, for instance if you are looking at frames from a trace file.
+
+'set trace-buffer-size N'
+'set trace-buffer-size unlimited'
+     Request that the target use a trace buffer of N bytes.  Not all
+     targets will honor the request; they may have a compiled-in size
+     for the trace buffer, or some other limitation.  Set to a value of
+     'unlimited' or '-1' to let the target use whatever size it likes.
+     This is also the default.
+
+'show trace-buffer-size'
+     Show the current requested size for the trace buffer.  Note that
+     this will only match the actual size if the target supports
+     size-setting, and was able to handle the requested size.  For
+     instance, if the target can only change buffer size between runs,
+     this variable will not reflect the change until the next run
+     starts.  Use 'tstatus' to get a report of the actual buffer size.
+
+'set trace-user TEXT'
+
+'show trace-user'
+
+'set trace-notes TEXT'
+     Set the trace run's notes.
+
+'show trace-notes'
+     Show the trace run's notes.
+
+'set trace-stop-notes TEXT'
+     Set the trace run's stop notes.  The handling of the note is as for
+     'tstop' arguments; the set command is convenient way to fix a stop
+     note that is mistaken or incomplete.
+
+'show trace-stop-notes'
+     Show the trace run's stop notes.
+
+File: gdb.info,  Node: Tracepoint Restrictions,  Prev: Starting and Stopping Trace Experiments,  Up: Set Tracepoints
+
+13.1.10 Tracepoint Restrictions
+-------------------------------
+
+There are a number of restrictions on the use of tracepoints.  As
+described above, tracepoint data gathering occurs on the target without
+interaction from GDB.  Thus the full capabilities of the debugger are
+not available during data gathering, and then at data examination time,
+you will be limited by only having what was collected.  The following
+items describe some common problems, but it is not exhaustive, and you
+may run into additional difficulties not mentioned here.
+
+   * Tracepoint expressions are intended to gather objects (lvalues).
+     Thus the full flexibility of GDB's expression evaluator is not
+     available.  You cannot call functions, cast objects to aggregate
+     types, access convenience variables or modify values (except by
+     assignment to trace state variables).  Some language features may
+     implicitly call functions (for instance Objective-C fields with
+     accessors), and therefore cannot be collected either.
+
+   * Collection of local variables, either individually or in bulk with
+     '$locals' or '$args', during 'while-stepping' may behave
+     erratically.  The stepping action may enter a new scope (for
+     instance by stepping into a function), or the location of the
+     variable may change (for instance it is loaded into a register).
+     The tracepoint data recorded uses the location information for the
+     variables that is correct for the tracepoint location.  When the
+     tracepoint is created, it is not possible, in general, to determine
+     where the steps of a 'while-stepping' sequence will advance the
+     program--particularly if a conditional branch is stepped.
+
+   * Collection of an incompletely-initialized or partially-destroyed
+     object may result in something that GDB cannot display, or displays
+     in a misleading way.
+
+   * When GDB displays a pointer to character it automatically
+     dereferences the pointer to also display characters of the string
+     being pointed to.  However, collecting the pointer during tracing
+     does not automatically collect the string.  You need to explicitly
+     dereference the pointer and provide size information if you want to
+     collect not only the pointer, but the memory pointed to.  For
+     example, '*ptr@50' can be used to collect the 50 element array
+     pointed to by 'ptr'.
+
+   * It is not possible to collect a complete stack backtrace at a
+     tracepoint.  Instead, you may collect the registers and a few
+     hundred bytes from the stack pointer with something like
+     '*(unsigned char *)$esp@300' (adjust to use the name of the actual
+     stack pointer register on your target architecture, and the amount
+     of stack you wish to capture).  Then the 'backtrace' command will
+     show a partial backtrace when using a trace frame.  The number of
+     stack frames that can be examined depends on the sizes of the
+     frames in the collected stack.  Note that if you ask for a block so
+     large that it goes past the bottom of the stack, the target agent
+     may report an error trying to read from an invalid address.
+
+   * If you do not collect registers at a tracepoint, GDB can infer that
+     the value of '$pc' must be the same as the address of the
+     tracepoint and use that when you are looking at a trace frame for
+     that tracepoint.  However, this cannot work if the tracepoint has
+     multiple locations (for instance if it was set in a function that
+     was inlined), or if it has a 'while-stepping' loop.  In those cases
+     GDB will warn you that it can't infer '$pc', and default it to
+     zero.
+
+File: gdb.info,  Node: Analyze Collected Data,  Next: Tracepoint Variables,  Prev: Set Tracepoints,  Up: Tracepoints
+

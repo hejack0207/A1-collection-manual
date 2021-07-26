@@ -1,0 +1,208 @@
+9.2 Specifying a Location
+=========================
+
+* Menu:
+
+* Linespec Locations::                Linespec locations
+* Explicit Locations::                Explicit locations
+* Address Locations::                 Address locations
+
+Several GDB commands accept arguments that specify a location of your
+program's code.  Since GDB is a source-level debugger, a location
+usually specifies some line in the source code.  Locations may be
+specified using three different formats: linespec locations, explicit
+locations, or address locations.
+
+File: gdb.info,  Node: Linespec Locations,  Next: Explicit Locations,  Up: Specify Location
+
+9.2.1 Linespec Locations
+------------------------
+
+A "linespec" is a colon-separated list of source location parameters
+such as file name, function name, etc.  Here are all the different ways
+of specifying a linespec:
+
+'LINENUM'
+     Specifies the line number LINENUM of the current source file.
+
+'-OFFSET'
+'+OFFSET'
+     Specifies the line OFFSET lines before or after the "current line".
+     For the 'list' command, the current line is the last one printed;
+     for the breakpoint commands, this is the line at which execution
+     stopped in the currently selected "stack frame" (*note Frames:
+     Frames, for a description of stack frames.)  When used as the
+     second of the two linespecs in a 'list' command, this specifies the
+     line OFFSET lines up or down from the first linespec.
+
+'FILENAME:LINENUM'
+     Specifies the line LINENUM in the source file FILENAME.  If
+     FILENAME is a relative file name, then it will match any source
+     file name with the same trailing components.  For example, if
+     FILENAME is 'gcc/expr.c', then it will match source file name of
+     '/build/trunk/gcc/expr.c', but not '/build/trunk/libcpp/expr.c' or
+     '/build/trunk/gcc/x-expr.c'.
+
+'FUNCTION'
+     Specifies the line that begins the body of the function FUNCTION.
+     For example, in C, this is the line with the open brace.
+
+     By default, in C++ and Ada, FUNCTION is interpreted as specifying
+     all functions named FUNCTION in all scopes.  For C++, this means in
+     all namespaces and classes.  For Ada, this means in all packages.
+
+     For example, assuming a program with C++ symbols named 'A::B::func'
+     and 'B::func', both commands 'break func' and 'break B::func' set a
+     breakpoint on both symbols.
+
+     Commands that accept a linespec let you override this with the
+     '-qualified' option.  For example, 'break -qualified func' sets a
+     breakpoint on a free-function named 'func' ignoring any C++ class
+     methods and namespace functions called 'func'.
+
+     *Note Explicit Locations::.
+
+'FUNCTION:LABEL'
+     Specifies the line where LABEL appears in FUNCTION.
+
+'FILENAME:FUNCTION'
+     Specifies the line that begins the body of the function FUNCTION in
+     the file FILENAME.  You only need the file name with a function
+     name to avoid ambiguity when there are identically named functions
+     in different source files.
+
+'LABEL'
+     Specifies the line at which the label named LABEL appears in the
+     function corresponding to the currently selected stack frame.  If
+     there is no current selected stack frame (for instance, if the
+     inferior is not running), then GDB will not search for a label.
+
+'-pstap|-probe-stap [OBJFILE:[PROVIDER:]]NAME'
+     The GNU/Linux tool 'SystemTap' provides a way for applications to
+     embed static probes.  *Note Static Probe Points::, for more
+     information on finding and using static probes.  This form of
+     linespec specifies the location of such a static probe.
+
+     If OBJFILE is given, only probes coming from that shared library or
+     executable matching OBJFILE as a regular expression are considered.
+     If PROVIDER is given, then only probes from that provider are
+     considered.  If several probes match the spec, GDB will insert a
+     breakpoint at each one of those probes.
+
+File: gdb.info,  Node: Explicit Locations,  Next: Address Locations,  Prev: Linespec Locations,  Up: Specify Location
+
+9.2.2 Explicit Locations
+------------------------
+
+"Explicit locations" allow the user to directly specify the source
+location's parameters using option-value pairs.
+
+   Explicit locations are useful when several functions, labels, or file
+names have the same name (base name for files) in the program's sources.
+In these cases, explicit locations point to the source line you meant
+more accurately and unambiguously.  Also, using explicit locations might
+be faster in large programs.
+
+   For example, the linespec 'foo:bar' may refer to a function 'bar'
+defined in the file named 'foo' or the label 'bar' in a function named
+'foo'.  GDB must search either the file system or the symbol table to
+know.
+
+   The list of valid explicit location options is summarized in the
+following table:
+
+'-source FILENAME'
+     The value specifies the source file name.  To differentiate between
+     files with the same base name, prepend as many directories as is
+     necessary to uniquely identify the desired file, e.g.,
+     'foo/bar/baz.c'.  Otherwise GDB will use the first file it finds
+     with the given base name.  This option requires the use of either
+     '-function' or '-line'.
+
+'-function FUNCTION'
+     The value specifies the name of a function.  Operations on function
+     locations unmodified by other options (such as '-label' or '-line')
+     refer to the line that begins the body of the function.  In C, for
+     example, this is the line with the open brace.
+
+     By default, in C++ and Ada, FUNCTION is interpreted as specifying
+     all functions named FUNCTION in all scopes.  For C++, this means in
+     all namespaces and classes.  For Ada, this means in all packages.
+
+     For example, assuming a program with C++ symbols named 'A::B::func'
+     and 'B::func', both commands 'break -function func' and
+     'break -function B::func' set a breakpoint on both symbols.
+
+     You can use the '-qualified' flag to override this (see below).
+
+'-qualified'
+
+     This flag makes GDB interpret a function name specified with
+     '-function' as a complete fully-qualified name.
+
+     For example, assuming a C++ program with symbols named 'A::B::func'
+     and 'B::func', the 'break -qualified -function B::func' command
+     sets a breakpoint on 'B::func', only.
+
+     (Note: the '-qualified' option can precede a linespec as well
+     (*note Linespec Locations::), so the particular example above could
+     be simplified as 'break -qualified B::func'.)
+
+'-label LABEL'
+     The value specifies the name of a label.  When the function name is
+     not specified, the label is searched in the function of the
+     currently selected stack frame.
+
+'-line NUMBER'
+     The value specifies a line offset for the location.  The offset may
+     either be absolute ('-line 3') or relative ('-line +3'), depending
+     on the command.  When specified without any other options, the line
+     offset is relative to the current line.
+
+   Explicit location options may be abbreviated by omitting any
+non-unique trailing characters from the option name, e.g.,
+'break -s main.c -li 3'.
+
+File: gdb.info,  Node: Address Locations,  Prev: Explicit Locations,  Up: Specify Location
+
+9.2.3 Address Locations
+-----------------------
+
+"Address locations" indicate a specific program address.  They have the
+generalized form *ADDRESS.
+
+   For line-oriented commands, such as 'list' and 'edit', this specifies
+a source line that contains ADDRESS.  For 'break' and other
+breakpoint-oriented commands, this can be used to set breakpoints in
+parts of your program which do not have debugging information or source
+files.
+
+   Here ADDRESS may be any expression valid in the current working
+language (*note working language: Languages.) that specifies a code
+address.  In addition, as a convenience, GDB extends the semantics of
+expressions used in locations to cover several situations that
+frequently occur during debugging.  Here are the various forms of
+ADDRESS:
+
+'EXPRESSION'
+     Any expression valid in the current working language.
+
+'FUNCADDR'
+     An address of a function or procedure derived from its name.  In C,
+     C++, Objective-C, Fortran, minimal, and assembly, this is simply
+     the function's name FUNCTION (and actually a special case of a
+     valid expression).  In Pascal and Modula-2, this is '&FUNCTION'.
+     In Ada, this is 'FUNCTION'Address' (although the Pascal form also
+     works).
+
+     This form specifies the address of the function's first
+     instruction, before the stack frame and arguments have been set up.
+
+''FILENAME':FUNCADDR'
+     Like FUNCADDR above, but also specifies the name of the source file
+     explicitly.  This is useful if the name of the function does not
+     specify the function unambiguously, e.g., if there are several
+     functions with identical names in different source files.
+
+File: gdb.info,  Node: Edit,  Next: Search,  Prev: Specify Location,  Up: Source
+

@@ -1,0 +1,229 @@
+10.12 Convenience Functions
+===========================
+
+GDB also supplies some "convenience functions".  These have a syntax
+similar to convenience variables.  A convenience function can be used in
+an expression just like an ordinary function; however, a convenience
+function is implemented internally to GDB.
+
+   These functions do not require GDB to be configured with 'Python'
+support, which means that they are always available.
+
+'$_isvoid (EXPR)'
+     Return one if the expression EXPR is 'void'.  Otherwise it returns
+     zero.
+
+     A 'void' expression is an expression where the type of the result
+     is 'void'.  For example, you can examine a convenience variable
+     (see *note Convenience Variables: Convenience Vars.) to check
+     whether it is 'void':
+
+          (gdb) print $_exitcode
+          $1 = void
+          (gdb) print $_isvoid ($_exitcode)
+          $2 = 1
+          (gdb) run
+          Starting program: ./a.out
+          [Inferior 1 (process 29572) exited normally]
+          (gdb) print $_exitcode
+          $3 = 0
+          (gdb) print $_isvoid ($_exitcode)
+          $4 = 0
+
+     In the example above, we used '$_isvoid' to check whether
+     '$_exitcode' is 'void' before and after the execution of the
+     program being debugged.  Before the execution there is no exit code
+     to be examined, therefore '$_exitcode' is 'void'.  After the
+     execution the program being debugged returned zero, therefore
+     '$_exitcode' is zero, which means that it is not 'void' anymore.
+
+     The 'void' expression can also be a call of a function from the
+     program being debugged.  For example, given the following function:
+
+          void
+          foo (void)
+          {
+          }
+
+     The result of calling it inside GDB is 'void':
+
+          (gdb) print foo ()
+          $1 = void
+          (gdb) print $_isvoid (foo ())
+          $2 = 1
+          (gdb) set $v = foo ()
+          (gdb) print $v
+          $3 = void
+          (gdb) print $_isvoid ($v)
+          $4 = 1
+
+'$_gdb_setting_str (SETTING)'
+     Return the value of the GDB SETTING as a string.  SETTING is any
+     setting that can be used in a 'set' or 'show' command (*note
+     Controlling GDB::).
+
+          (gdb) show print frame-arguments
+          Printing of non-scalar frame arguments is "scalars".
+          (gdb) p $_gdb_setting_str("print frame-arguments")
+          $1 = "scalars"
+          (gdb) p $_gdb_setting_str("height")
+          $2 = "30"
+          (gdb)
+
+'$_gdb_setting (SETTING)'
+     Return the value of the GDB SETTING.  The type of the returned
+     value depends on the setting.
+
+     The value type for boolean and auto boolean settings is 'int'.  The
+     boolean values 'off' and 'on' are converted to the integer values
+     '0' and '1'.  The value 'auto' is converted to the value '-1'.
+
+     The value type for integer settings is either 'unsigned int' or
+     'int', depending on the setting.
+
+     Some integer settings accept an 'unlimited' value.  Depending on
+     the setting, the 'set' command also accepts the value '0' or the
+     value '-1' as a synonym for 'unlimited'.  For example, 'set height
+     unlimited' is equivalent to 'set height 0'.
+
+     Some other settings that accept the 'unlimited' value use the value
+     '0' to literally mean zero.  For example, 'set history size 0'
+     indicates to not record any GDB commands in the command history.
+     For such settings, '-1' is the synonym for 'unlimited'.
+
+     See the documentation of the corresponding 'set' command for the
+     numerical value equivalent to 'unlimited'.
+
+     The '$_gdb_setting' function converts the unlimited value to a '0'
+     or a '-1' value according to what the 'set' command uses.
+
+          (gdb) p $_gdb_setting_str("height")
+          $1 = "30"
+          (gdb) p $_gdb_setting("height")
+          $2 = 30
+          (gdb) set height unlimited
+          (gdb) p $_gdb_setting_str("height")
+          $3 = "unlimited"
+          (gdb) p $_gdb_setting("height")
+          $4 = 0
+          (gdb) p $_gdb_setting_str("history size")
+          $5 = "unlimited"
+          (gdb) p $_gdb_setting("history size")
+          $6 = -1
+          (gdb) p $_gdb_setting_str("disassemble-next-line")
+          $7 = "auto"
+          (gdb) p $_gdb_setting("disassemble-next-line")
+          $8 = -1
+          (gdb)
+
+     Other setting types (enum, filename, optional filename, string,
+     string noescape) are returned as string values.
+
+'$_gdb_maint_setting_str (SETTING)'
+     Like the '$_gdb_setting_str' function, but works with 'maintenance
+     set' variables.
+
+'$_gdb_maint_setting (SETTING)'
+     Like the '$_gdb_setting' function, but works with 'maintenance set'
+     variables.
+
+   The following functions require GDB to be configured with 'Python'
+support.
+
+'$_memeq(BUF1, BUF2, LENGTH)'
+     Returns one if the LENGTH bytes at the addresses given by BUF1 and
+     BUF2 are equal.  Otherwise it returns zero.
+
+'$_regex(STR, REGEX)'
+     Returns one if the string STR matches the regular expression REGEX.
+     Otherwise it returns zero.  The syntax of the regular expression is
+     that specified by 'Python''s regular expression support.
+
+'$_streq(STR1, STR2)'
+     Returns one if the strings STR1 and STR2 are equal.  Otherwise it
+     returns zero.
+
+'$_strlen(STR)'
+     Returns the length of string STR.
+
+'$_caller_is(NAME[, NUMBER_OF_FRAMES])'
+     Returns one if the calling function's name is equal to NAME.
+     Otherwise it returns zero.
+
+     If the optional argument NUMBER_OF_FRAMES is provided, it is the
+     number of frames up in the stack to look.  The default is 1.
+
+     Example:
+
+          (gdb) backtrace
+          #0  bottom_func ()
+              at testsuite/gdb.python/py-caller-is.c:21
+          #1  0x00000000004005a0 in middle_func ()
+              at testsuite/gdb.python/py-caller-is.c:27
+          #2  0x00000000004005ab in top_func ()
+              at testsuite/gdb.python/py-caller-is.c:33
+          #3  0x00000000004005b6 in main ()
+              at testsuite/gdb.python/py-caller-is.c:39
+          (gdb) print $_caller_is ("middle_func")
+          $1 = 1
+          (gdb) print $_caller_is ("top_func", 2)
+          $1 = 1
+
+'$_caller_matches(REGEXP[, NUMBER_OF_FRAMES])'
+     Returns one if the calling function's name matches the regular
+     expression REGEXP.  Otherwise it returns zero.
+
+     If the optional argument NUMBER_OF_FRAMES is provided, it is the
+     number of frames up in the stack to look.  The default is 1.
+
+'$_any_caller_is(NAME[, NUMBER_OF_FRAMES])'
+     Returns one if any calling function's name is equal to NAME.
+     Otherwise it returns zero.
+
+     If the optional argument NUMBER_OF_FRAMES is provided, it is the
+     number of frames up in the stack to look.  The default is 1.
+
+     This function differs from '$_caller_is' in that this function
+     checks all stack frames from the immediate caller to the frame
+     specified by NUMBER_OF_FRAMES, whereas '$_caller_is' only checks
+     the frame specified by NUMBER_OF_FRAMES.
+
+'$_any_caller_matches(REGEXP[, NUMBER_OF_FRAMES])'
+     Returns one if any calling function's name matches the regular
+     expression REGEXP.  Otherwise it returns zero.
+
+     If the optional argument NUMBER_OF_FRAMES is provided, it is the
+     number of frames up in the stack to look.  The default is 1.
+
+     This function differs from '$_caller_matches' in that this function
+     checks all stack frames from the immediate caller to the frame
+     specified by NUMBER_OF_FRAMES, whereas '$_caller_matches' only
+     checks the frame specified by NUMBER_OF_FRAMES.
+
+'$_as_string(VALUE)'
+     Return the string representation of VALUE.
+
+     This function is useful to obtain the textual label (enumerator) of
+     an enumeration value.  For example, assuming the variable NODE is
+     of an enumerated type:
+
+          (gdb) printf "Visiting node of type %s\n", $_as_string(node)
+          Visiting node of type NODE_INTEGER
+
+'$_cimag(VALUE)'
+'$_creal(VALUE)'
+     Return the imaginary ('$_cimag') or real ('$_creal') part of the
+     complex number VALUE.
+
+     The type of the imaginary or real part depends on the type of the
+     complex number, e.g., using '$_cimag' on a 'float complex' will
+     return an imaginary part of type 'float'.
+
+   GDB provides the ability to list and get help on convenience
+functions.
+
+'help function'
+     Print a list of all convenience functions.
+
+File: gdb.info,  Node: Registers,  Next: Floating Point Hardware,  Prev: Convenience Funs,  Up: Data
+

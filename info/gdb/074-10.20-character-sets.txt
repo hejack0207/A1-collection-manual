@@ -1,0 +1,182 @@
+10.20 Character Sets
+====================
+
+If the program you are debugging uses a different character set to
+represent characters and strings than the one GDB uses itself, GDB can
+automatically translate between the character sets for you.  The
+character set GDB uses we call the "host character set"; the one the
+inferior program uses we call the "target character set".
+
+   For example, if you are running GDB on a GNU/Linux system, which uses
+the ISO Latin 1 character set, but you are using GDB's remote protocol
+(*note Remote Debugging::) to debug a program running on an IBM
+mainframe, which uses the EBCDIC character set, then the host character
+set is Latin-1, and the target character set is EBCDIC.  If you give GDB
+the command 'set target-charset EBCDIC-US', then GDB translates between
+EBCDIC and Latin 1 as you print character or string values, or use
+character and string literals in expressions.
+
+   GDB has no way to automatically recognize which character set the
+inferior program uses; you must tell it, using the 'set target-charset'
+command, described below.
+
+   Here are the commands for controlling GDB's character set support:
+
+'set target-charset CHARSET'
+     Set the current target character set to CHARSET.  To display the
+     list of supported target character sets, type
+     'set target-charset <TAB><TAB>'.
+
+'set host-charset CHARSET'
+     Set the current host character set to CHARSET.
+
+     By default, GDB uses a host character set appropriate to the system
+     it is running on; you can override that default using the 'set
+     host-charset' command.  On some systems, GDB cannot automatically
+     determine the appropriate host character set.  In this case, GDB
+     uses 'UTF-8'.
+
+     GDB can only use certain character sets as its host character set.
+     If you type 'set host-charset <TAB><TAB>', GDB will list the host
+     character sets it supports.
+
+'set charset CHARSET'
+     Set the current host and target character sets to CHARSET.  As
+     above, if you type 'set charset <TAB><TAB>', GDB will list the
+     names of the character sets that can be used for both host and
+     target.
+
+'show charset'
+     Show the names of the current host and target character sets.
+
+'show host-charset'
+     Show the name of the current host character set.
+
+'show target-charset'
+     Show the name of the current target character set.
+
+'set target-wide-charset CHARSET'
+     Set the current target's wide character set to CHARSET.  This is
+     the character set used by the target's 'wchar_t' type.  To display
+     the list of supported wide character sets, type
+     'set target-wide-charset <TAB><TAB>'.
+
+'show target-wide-charset'
+     Show the name of the current target's wide character set.
+
+   Here is an example of GDB's character set support in action.  Assume
+that the following source code has been placed in the file
+'charset-test.c':
+
+     #include <stdio.h>
+
+     char ascii_hello[]
+       = {72, 101, 108, 108, 111, 44, 32, 119,
+          111, 114, 108, 100, 33, 10, 0};
+     char ibm1047_hello[]
+       = {200, 133, 147, 147, 150, 107, 64, 166,
+          150, 153, 147, 132, 90, 37, 0};
+
+     main ()
+     {
+       printf ("Hello, world!\n");
+     }
+
+   In this program, 'ascii_hello' and 'ibm1047_hello' are arrays
+containing the string 'Hello, world!' followed by a newline, encoded in
+the ASCII and IBM1047 character sets.
+
+   We compile the program, and invoke the debugger on it:
+
+     $ gcc -g charset-test.c -o charset-test
+     $ gdb -nw charset-test
+     GNU gdb 2001-12-19-cvs
+     Copyright 2001 Free Software Foundation, Inc.
+     ...
+     (gdb)
+
+   We can use the 'show charset' command to see what character sets GDB
+is currently using to interpret and display characters and strings:
+
+     (gdb) show charset
+     The current host and target character set is `ISO-8859-1'.
+     (gdb)
+
+   For the sake of printing this manual, let's use ASCII as our initial
+character set:
+     (gdb) set charset ASCII
+     (gdb) show charset
+     The current host and target character set is `ASCII'.
+     (gdb)
+
+   Let's assume that ASCII is indeed the correct character set for our
+host system -- in other words, let's assume that if GDB prints
+characters using the ASCII character set, our terminal will display them
+properly.  Since our current target character set is also ASCII, the
+contents of 'ascii_hello' print legibly:
+
+     (gdb) print ascii_hello
+     $1 = 0x401698 "Hello, world!\n"
+     (gdb) print ascii_hello[0]
+     $2 = 72 'H'
+     (gdb)
+
+   GDB uses the target character set for character and string literals
+you use in expressions:
+
+     (gdb) print '+'
+     $3 = 43 '+'
+     (gdb)
+
+   The ASCII character set uses the number 43 to encode the '+'
+character.
+
+   GDB relies on the user to tell it which character set the target
+program uses.  If we print 'ibm1047_hello' while our target character
+set is still ASCII, we get jibberish:
+
+     (gdb) print ibm1047_hello
+     $4 = 0x4016a8 "\310\205\223\223\226k@\246\226\231\223\204Z%"
+     (gdb) print ibm1047_hello[0]
+     $5 = 200 '\310'
+     (gdb)
+
+   If we invoke the 'set target-charset' followed by <TAB><TAB>, GDB
+tells us the character sets it supports:
+
+     (gdb) set target-charset
+     ASCII       EBCDIC-US   IBM1047     ISO-8859-1
+     (gdb) set target-charset
+
+   We can select IBM1047 as our target character set, and examine the
+program's strings again.  Now the ASCII string is wrong, but GDB
+translates the contents of 'ibm1047_hello' from the target character
+set, IBM1047, to the host character set, ASCII, and they display
+correctly:
+
+     (gdb) set target-charset IBM1047
+     (gdb) show charset
+     The current host character set is `ASCII'.
+     The current target character set is `IBM1047'.
+     (gdb) print ascii_hello
+     $6 = 0x401698 "\110\145%%?\054\040\167?\162%\144\041\012"
+     (gdb) print ascii_hello[0]
+     $7 = 72 '\110'
+     (gdb) print ibm1047_hello
+     $8 = 0x4016a8 "Hello, world!\n"
+     (gdb) print ibm1047_hello[0]
+     $9 = 200 'H'
+     (gdb)
+
+   As above, GDB uses the target character set for character and string
+literals you use in expressions:
+
+     (gdb) print '+'
+     $10 = 78 '+'
+     (gdb)
+
+   The IBM1047 character set uses the number 78 to encode the '+'
+character.
+
+File: gdb.info,  Node: Caching Target Data,  Next: Searching Memory,  Prev: Character Sets,  Up: Data
+

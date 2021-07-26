@@ -1,0 +1,175 @@
+10.9 Pretty Printing
+====================
+
+GDB provides a mechanism to allow pretty-printing of values using Python
+code.  It greatly simplifies the display of complex objects.  This
+mechanism works for both MI and the CLI.
+
+* Menu:
+
+* Pretty-Printer Introduction::  Introduction to pretty-printers
+* Pretty-Printer Example::       An example pretty-printer
+* Pretty-Printer Commands::      Pretty-printer commands
+
+File: gdb.info,  Node: Pretty-Printer Introduction,  Next: Pretty-Printer Example,  Up: Pretty Printing
+
+10.9.1 Pretty-Printer Introduction
+----------------------------------
+
+When GDB prints a value, it first sees if there is a pretty-printer
+registered for the value.  If there is then GDB invokes the
+pretty-printer to print the value.  Otherwise the value is printed
+normally.
+
+   Pretty-printers are normally named.  This makes them easy to manage.
+The 'info pretty-printer' command will list all the installed
+pretty-printers with their names.  If a pretty-printer can handle
+multiple data types, then its "subprinters" are the printers for the
+individual data types.  Each such subprinter has its own name.  The
+format of the name is PRINTER-NAME;SUBPRINTER-NAME.
+
+   Pretty-printers are installed by "registering" them with GDB.
+Typically they are automatically loaded and registered when the
+corresponding debug information is loaded, thus making them available
+without having to do anything special.
+
+   There are three places where a pretty-printer can be registered.
+
+   * Pretty-printers registered globally are available when debugging
+     all inferiors.
+
+   * Pretty-printers registered with a program space are available only
+     when debugging that program.  *Note Progspaces In Python::, for
+     more details on program spaces in Python.
+
+   * Pretty-printers registered with an objfile are loaded and unloaded
+     with the corresponding objfile (e.g., shared library).  *Note
+     Objfiles In Python::, for more details on objfiles in Python.
+
+   *Note Selecting Pretty-Printers::, for further information on how
+pretty-printers are selected,
+
+   *Note Writing a Pretty-Printer::, for implementing pretty printers
+for new types.
+
+File: gdb.info,  Node: Pretty-Printer Example,  Next: Pretty-Printer Commands,  Prev: Pretty-Printer Introduction,  Up: Pretty Printing
+
+10.9.2 Pretty-Printer Example
+-----------------------------
+
+Here is how a C++ 'std::string' looks without a pretty-printer:
+
+     (gdb) print s
+     $1 = {
+       static npos = 4294967295,
+       _M_dataplus = {
+         <std::allocator<char>> = {
+           <__gnu_cxx::new_allocator<char>> = {
+             <No data fields>}, <No data fields>
+           },
+         members of std::basic_string<char, std::char_traits<char>,
+           std::allocator<char> >::_Alloc_hider:
+         _M_p = 0x804a014 "abcd"
+       }
+     }
+
+   With a pretty-printer for 'std::string' only the contents are
+printed:
+
+     (gdb) print s
+     $2 = "abcd"
+
+File: gdb.info,  Node: Pretty-Printer Commands,  Prev: Pretty-Printer Example,  Up: Pretty Printing
+
+10.9.3 Pretty-Printer Commands
+------------------------------
+
+'info pretty-printer [OBJECT-REGEXP [NAME-REGEXP]]'
+     Print the list of installed pretty-printers.  This includes
+     disabled pretty-printers, which are marked as such.
+
+     OBJECT-REGEXP is a regular expression matching the objects whose
+     pretty-printers to list.  Objects can be 'global', the program
+     space's file (*note Progspaces In Python::), and the object files
+     within that program space (*note Objfiles In Python::).  *Note
+     Selecting Pretty-Printers::, for details on how GDB looks up a
+     printer from these three objects.
+
+     NAME-REGEXP is a regular expression matching the name of the
+     printers to list.
+
+'disable pretty-printer [OBJECT-REGEXP [NAME-REGEXP]]'
+     Disable pretty-printers matching OBJECT-REGEXP and NAME-REGEXP.  A
+     disabled pretty-printer is not forgotten, it may be enabled again
+     later.
+
+'enable pretty-printer [OBJECT-REGEXP [NAME-REGEXP]]'
+     Enable pretty-printers matching OBJECT-REGEXP and NAME-REGEXP.
+
+   Example:
+
+   Suppose we have three pretty-printers installed: one from library1.so
+named 'foo' that prints objects of type 'foo', and another from
+library2.so named 'bar' that prints two types of objects, 'bar1' and
+'bar2'.
+
+     (gdb) info pretty-printer
+     library1.so:
+       foo
+     library2.so:
+       bar
+         bar1
+         bar2
+     (gdb) info pretty-printer library2
+     library2.so:
+       bar
+         bar1
+         bar2
+     (gdb) disable pretty-printer library1
+     1 printer disabled
+     2 of 3 printers enabled
+     (gdb) info pretty-printer
+     library1.so:
+       foo [disabled]
+     library2.so:
+       bar
+         bar1
+         bar2
+     (gdb) disable pretty-printer library2 bar;bar1
+     1 printer disabled
+     1 of 3 printers enabled
+     (gdb) info pretty-printer library2
+     library1.so:
+       foo [disabled]
+     library2.so:
+       bar
+         bar1 [disabled]
+         bar2
+     (gdb) disable pretty-printer library2 bar
+     1 printer disabled
+     0 of 3 printers enabled
+     (gdb) info pretty-printer library2
+     library1.so:
+       foo [disabled]
+     library2.so:
+       bar [disabled]
+         bar1 [disabled]
+         bar2
+
+   Note that for 'bar' the entire printer can be disabled, as can each
+individual subprinter.
+
+   Printing values and frame arguments is done by default using the
+enabled pretty printers.
+
+   The print option '-raw-values' and GDB setting 'set print raw-values'
+(*note set print raw-values::) can be used to print values without
+applying the enabled pretty printers.
+
+   Similarly, the backtrace option '-raw-frame-arguments' and GDB
+setting 'set print raw-frame-arguments' (*note set print
+raw-frame-arguments::) can be used to ignore the enabled pretty printers
+when printing frame argument values.
+
+File: gdb.info,  Node: Value History,  Next: Convenience Vars,  Prev: Pretty Printing,  Up: Data
+

@@ -1,0 +1,285 @@
+20.1 Connecting to a Remote Target
+==================================
+
+This section describes how to connect to a remote target, including the
+types of connections and their differences, how to set up executable and
+symbol files on the host and target, and the commands used for
+connecting to and disconnecting from the remote target.
+
+20.1.1 Types of Remote Connections
+----------------------------------
+
+GDB supports two types of remote connections, 'target remote' mode and
+'target extended-remote' mode.  Note that many remote targets support
+only 'target remote' mode.  There are several major differences between
+the two types of connections, enumerated here:
+
+Result of detach or program exit
+     *With target remote mode:* When the debugged program exits or you
+     detach from it, GDB disconnects from the target.  When using
+     'gdbserver', 'gdbserver' will exit.
+
+     *With target extended-remote mode:* When the debugged program exits
+     or you detach from it, GDB remains connected to the target, even
+     though no program is running.  You can rerun the program, attach to
+     a running program, or use 'monitor' commands specific to the
+     target.
+
+     When using 'gdbserver' in this case, it does not exit unless it was
+     invoked using the '--once' option.  If the '--once' option was not
+     used, you can ask 'gdbserver' to exit using the 'monitor exit'
+     command (*note Monitor Commands for gdbserver::).
+
+Specifying the program to debug
+     For both connection types you use the 'file' command to specify the
+     program on the host system.  If you are using 'gdbserver' there are
+     some differences in how to specify the location of the program on
+     the target.
+
+     *With target remote mode:* You must either specify the program to
+     debug on the 'gdbserver' command line or use the '--attach' option
+     (*note Attaching to a Running Program: Attaching to a program.).
+
+     *With target extended-remote mode:* You may specify the program to
+     debug on the 'gdbserver' command line, or you can load the program
+     or attach to it using GDB commands after connecting to 'gdbserver'.
+
+     You can start 'gdbserver' without supplying an initial command to
+     run or process ID to attach.  To do this, use the '--multi' command
+     line option.  Then you can connect using 'target extended-remote'
+     and start the program you want to debug (see below for details on
+     using the 'run' command in this scenario).  Note that the
+     conditions under which 'gdbserver' terminates depend on how GDB
+     connects to it ('target remote' or 'target extended-remote').  The
+     '--multi' option to 'gdbserver' has no influence on that.
+
+The 'run' command
+     *With target remote mode:* The 'run' command is not supported.
+     Once a connection has been established, you can use all the usual
+     GDB commands to examine and change data.  The remote program is
+     already running, so you can use commands like 'step' and
+     'continue'.
+
+     *With target extended-remote mode:* The 'run' command is supported.
+     The 'run' command uses the value set by 'set remote exec-file'
+     (*note set remote exec-file::) to select the program to run.
+     Command line arguments are supported, except for wildcard expansion
+     and I/O redirection (*note Arguments::).
+
+     If you specify the program to debug on the command line, then the
+     'run' command is not required to start execution, and you can
+     resume using commands like 'step' and 'continue' as with 'target
+     remote' mode.
+
+Attaching
+     *With target remote mode:* The GDB command 'attach' is not
+     supported.  To attach to a running program using 'gdbserver', you
+     must use the '--attach' option (*note Running gdbserver::).
+
+     *With target extended-remote mode:* To attach to a running program,
+     you may use the 'attach' command after the connection has been
+     established.  If you are using 'gdbserver', you may also invoke
+     'gdbserver' using the '--attach' option (*note Running
+     gdbserver::).
+
+     Some remote targets allow GDB to determine the executable file
+     running in the process the debugger is attaching to.  In such a
+     case, GDB uses the value of 'exec-file-mismatch' to handle a
+     possible mismatch between the executable file name running in the
+     process and the name of the current exec-file loaded by GDB (*note
+     set exec-file-mismatch::).
+
+20.1.2 Host and Target Files
+----------------------------
+
+GDB, running on the host, needs access to symbol and debugging
+information for your program running on the target.  This requires
+access to an unstripped copy of your program, and possibly any
+associated symbol files.  Note that this section applies equally to both
+'target remote' mode and 'target extended-remote' mode.
+
+   Some remote targets (*note qXfer executable filename read::, and
+*note Host I/O Packets::) allow GDB to access program files over the
+same connection used to communicate with GDB.  With such a target, if
+the remote program is unstripped, the only command you need is 'target
+remote' (or 'target extended-remote').
+
+   If the remote program is stripped, or the target does not support
+remote program file access, start up GDB using the name of the local
+unstripped copy of your program as the first argument, or use the 'file'
+command.  Use 'set sysroot' to specify the location (on the host) of
+target libraries (unless your GDB was compiled with the correct sysroot
+using '--with-sysroot').  Alternatively, you may use 'set
+solib-search-path' to specify how GDB locates target libraries.
+
+   The symbol file and target libraries must exactly match the
+executable and libraries on the target, with one exception: the files on
+the host system should not be stripped, even if the files on the target
+system are.  Mismatched or missing files will lead to confusing results
+during debugging.  On GNU/Linux targets, mismatched or missing files may
+also prevent 'gdbserver' from debugging multi-threaded programs.
+
+20.1.3 Remote Connection Commands
+---------------------------------
+
+GDB can communicate with the target over a serial line, a local Unix
+domain socket, or over an IP network using TCP or UDP.  In each case,
+GDB uses the same protocol for debugging your program; only the medium
+carrying the debugging packets varies.  The 'target remote' and 'target
+extended-remote' commands establish a connection to the target.  Both
+commands accept the same arguments, which indicate the medium to use:
+
+'target remote SERIAL-DEVICE'
+'target extended-remote SERIAL-DEVICE'
+     Use SERIAL-DEVICE to communicate with the target.  For example, to
+     use a serial line connected to the device named '/dev/ttyb':
+
+          target remote /dev/ttyb
+
+     If you're using a serial line, you may want to give GDB the
+     '--baud' option, or use the 'set serial baud' command (*note set
+     serial baud: Remote Configuration.) before the 'target' command.
+
+'target remote LOCAL-SOCKET'
+'target extended-remote LOCAL-SOCKET'
+     Use LOCAL-SOCKET to communicate with the target.  For example, to
+     use a local Unix domain socket bound to the file system entry
+     '/tmp/gdb-socket0':
+
+          target remote /tmp/gdb-socket0
+
+     Note that this command has the same form as the command to connect
+     to a serial line.  GDB will automatically determine which kind of
+     file you have specified and will make the appropriate kind of
+     connection.  This feature is not available if the host system does
+     not support Unix domain sockets.
+
+'target remote HOST:PORT'
+'target remote [HOST]:PORT'
+'target remote tcp:HOST:PORT'
+'target remote tcp:[HOST]:PORT'
+'target remote tcp4:HOST:PORT'
+'target remote tcp6:HOST:PORT'
+'target remote tcp6:[HOST]:PORT'
+'target extended-remote HOST:PORT'
+'target extended-remote [HOST]:PORT'
+'target extended-remote tcp:HOST:PORT'
+'target extended-remote tcp:[HOST]:PORT'
+'target extended-remote tcp4:HOST:PORT'
+'target extended-remote tcp6:HOST:PORT'
+'target extended-remote tcp6:[HOST]:PORT'
+     Debug using a TCP connection to PORT on HOST.  The HOST may be
+     either a host name, a numeric IPv4 address, or a numeric IPv6
+     address (with or without the square brackets to separate the
+     address from the port); PORT must be a decimal number.  The HOST
+     could be the target machine itself, if it is directly connected to
+     the net, or it might be a terminal server which in turn has a
+     serial line to the target.
+
+     For example, to connect to port 2828 on a terminal server named
+     'manyfarms':
+
+          target remote manyfarms:2828
+
+     To connect to port 2828 on a terminal server whose address is
+     '2001:0db8:85a3:0000:0000:8a2e:0370:7334', you can either use the
+     square bracket syntax:
+
+          target remote [2001:0db8:85a3:0000:0000:8a2e:0370:7334]:2828
+
+     or explicitly specify the IPv6 protocol:
+
+          target remote tcp6:2001:0db8:85a3:0000:0000:8a2e:0370:7334:2828
+
+     This last example may be confusing to the reader, because there is
+     no visible separation between the hostname and the port number.
+     Therefore, we recommend the user to provide IPv6 addresses using
+     square brackets for clarity.  However, it is important to mention
+     that for GDB there is no ambiguity: the number after the last colon
+     is considered to be the port number.
+
+     If your remote target is actually running on the same machine as
+     your debugger session (e.g. a simulator for your target running on
+     the same host), you can omit the hostname.  For example, to connect
+     to port 1234 on your local machine:
+
+          target remote :1234
+
+     Note that the colon is still required here.
+
+'target remote udp:HOST:PORT'
+'target remote udp:[HOST]:PORT'
+'target remote udp4:HOST:PORT'
+'target remote udp6:[HOST]:PORT'
+'target extended-remote udp:HOST:PORT'
+'target extended-remote udp:HOST:PORT'
+'target extended-remote udp:[HOST]:PORT'
+'target extended-remote udp4:HOST:PORT'
+'target extended-remote udp6:HOST:PORT'
+'target extended-remote udp6:[HOST]:PORT'
+     Debug using UDP packets to PORT on HOST.  For example, to connect
+     to UDP port 2828 on a terminal server named 'manyfarms':
+
+          target remote udp:manyfarms:2828
+
+     When using a UDP connection for remote debugging, you should keep
+     in mind that the 'U' stands for "Unreliable".  UDP can silently
+     drop packets on busy or unreliable networks, which will cause havoc
+     with your debugging session.
+
+'target remote | COMMAND'
+'target extended-remote | COMMAND'
+     Run COMMAND in the background and communicate with it using a pipe.
+     The COMMAND is a shell command, to be parsed and expanded by the
+     system's command shell, '/bin/sh'; it should expect remote protocol
+     packets on its standard input, and send replies on its standard
+     output.  You could use this to run a stand-alone simulator that
+     speaks the remote debugging protocol, to make net connections using
+     programs like 'ssh', or for other similar tricks.
+
+     If COMMAND closes its standard output (perhaps by exiting), GDB
+     will try to send it a 'SIGTERM' signal.  (If the program has
+     already exited, this will have no effect.)
+
+   Whenever GDB is waiting for the remote program, if you type the
+interrupt character (often 'Ctrl-c'), GDB attempts to stop the program.
+This may or may not succeed, depending in part on the hardware and the
+serial drivers the remote system uses.  If you type the interrupt
+character once again, GDB displays this prompt:
+
+     Interrupted while waiting for the program.
+     Give up (and stop debugging it)?  (y or n)
+
+   In 'target remote' mode, if you type 'y', GDB abandons the remote
+debugging session.  (If you decide you want to try again later, you can
+use 'target remote' again to connect once more.)  If you type 'n', GDB
+goes back to waiting.
+
+   In 'target extended-remote' mode, typing 'n' will leave GDB connected
+to the target.
+
+'detach'
+     When you have finished debugging the remote program, you can use
+     the 'detach' command to release it from GDB control.  Detaching
+     from the target normally resumes its execution, but the results
+     will depend on your particular remote stub.  After the 'detach'
+     command in 'target remote' mode, GDB is free to connect to another
+     target.  In 'target extended-remote' mode, GDB is still connected
+     to the target.
+
+'disconnect'
+     The 'disconnect' command closes the connection to the target, and
+     the target is generally not resumed.  It will wait for GDB (this
+     instance or another one) to connect and continue debugging.  After
+     the 'disconnect' command, GDB is again free to connect to another
+     target.
+
+'monitor CMD'
+     This command allows you to send arbitrary commands directly to the
+     remote monitor.  Since GDB doesn't care about the commands it sends
+     like this, this command is the way to extend GDB--you can add new
+     commands that only the external monitor will understand and
+     implement.
+
+File: gdb.info,  Node: File Transfer,  Next: Server,  Prev: Connecting,  Up: Remote Debugging
+
