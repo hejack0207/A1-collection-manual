@@ -1,0 +1,278 @@
+27.2 Symbolic Modes
+===================
+
+“Symbolic modes” represent changes to files’ mode bits as operations on
+single-character symbols.  They allow you to modify either all or
+selected parts of files’ mode bits, optionally based on their previous
+values, and perhaps on the current ‘umask’ as well (*note Umask and
+Protection::).
+
+   The format of symbolic modes is:
+
+     [ugoa...][-+=]PERMS...[,...]
+
+where PERMS is either zero or more letters from the set ‘rwxXst’, or a
+single letter from the set ‘ugo’.
+
+   The following sections describe the operators and other details of
+symbolic modes.
+
+* Menu:
+
+* Setting Permissions::          Basic operations on permissions.
+* Copying Permissions::          Copying existing permissions.
+* Changing Special Mode Bits::   Special mode bits.
+* Conditional Executability::    Conditionally affecting executability.
+* Multiple Changes::             Making multiple changes.
+* Umask and Protection::              The effect of the umask.
+
+File: coreutils.info,  Node: Setting Permissions,  Next: Copying Permissions,  Up: Symbolic Modes
+
+27.2.1 Setting Permissions
+--------------------------
+
+The basic symbolic operations on a file’s permissions are adding,
+removing, and setting the permission that certain users have to read,
+write, and execute or search the file.  These operations have the
+following format:
+
+     USERS OPERATION PERMISSIONS
+
+The spaces between the three parts above are shown for readability only;
+symbolic modes cannot contain spaces.
+
+   The USERS part tells which users’ access to the file is changed.  It
+consists of one or more of the following letters (or it can be empty;
+*note Umask and Protection::, for a description of what happens then).
+When more than one of these letters is given, the order that they are in
+does not matter.
+
+‘u’
+     the user who owns the file;
+‘g’
+     other users who are in the file’s group;
+‘o’
+     all other users;
+‘a’
+     all users; the same as ‘ugo’.
+
+   The OPERATION part tells how to change the affected users’ access to
+the file, and is one of the following symbols:
+
+‘+’
+     to add the PERMISSIONS to whatever permissions the USERS already
+     have for the file;
+‘-’
+     to remove the PERMISSIONS from whatever permissions the USERS
+     already have for the file;
+‘=’
+     to make the PERMISSIONS the only permissions that the USERS have
+     for the file.
+
+   The PERMISSIONS part tells what kind of access to the file should be
+changed; it is normally zero or more of the following letters.  As with
+the USERS part, the order does not matter when more than one letter is
+given.  Omitting the PERMISSIONS part is useful only with the ‘=’
+operation, where it gives the specified USERS no access at all to the
+file.
+
+‘r’
+     the permission the USERS have to read the file;
+‘w’
+     the permission the USERS have to write to the file;
+‘x’
+     the permission the USERS have to execute the file, or search it if
+     it is a directory.
+
+   For example, to give everyone permission to read and write a regular
+file, but not to execute it, use:
+
+     a=rw
+
+   To remove write permission for all users other than the file’s owner,
+use:
+
+     go-w
+
+The above command does not affect the access that the owner of the file
+has to it, nor does it affect whether other users can read or execute
+the file.
+
+   To give everyone except a file’s owner no permission to do anything
+with that file, use the mode below.  Other users could still remove the
+file, if they have write permission on the directory it is in.
+
+     go=
+
+Another way to specify the same thing is:
+
+     og-rwx
+
+File: coreutils.info,  Node: Copying Permissions,  Next: Changing Special Mode Bits,  Prev: Setting Permissions,  Up: Symbolic Modes
+
+27.2.2 Copying Existing Permissions
+-----------------------------------
+
+You can base a file’s permissions on its existing permissions.  To do
+this, instead of using a series of ‘r’, ‘w’, or ‘x’ letters after the
+operator, you use the letter ‘u’, ‘g’, or ‘o’.  For example, the mode
+
+     o+g
+
+adds the permissions for users who are in a file’s group to the
+permissions that other users have for the file.  Thus, if the file
+started out as mode 664 (‘rw-rw-r--’), the above mode would change it to
+mode 666 (‘rw-rw-rw-’).  If the file had started out as mode 741
+(‘rwxr----x’), the above mode would change it to mode 745 (‘rwxr--r-x’).
+The ‘-’ and ‘=’ operations work analogously.
+
+File: coreutils.info,  Node: Changing Special Mode Bits,  Next: Conditional Executability,  Prev: Copying Permissions,  Up: Symbolic Modes
+
+27.2.3 Changing Special Mode Bits
+---------------------------------
+
+In addition to changing a file’s read, write, and execute/search
+permissions, you can change its special mode bits.  *Note Mode
+Structure::, for a summary of these special mode bits.
+
+   To change the file mode bits to set the user ID on execution, use ‘u’
+in the USERS part of the symbolic mode and ‘s’ in the PERMISSIONS part.
+
+   To change the file mode bits to set the group ID on execution, use
+‘g’ in the USERS part of the symbolic mode and ‘s’ in the PERMISSIONS
+part.
+
+   To set both user and group ID on execution, omit the USERS part of
+the symbolic mode (or use ‘a’) and use ‘s’ in the PERMISSIONS part.
+
+   To change the file mode bits to set the restricted deletion flag or
+sticky bit, omit the USERS part of the symbolic mode (or use ‘a’) and
+use ‘t’ in the PERMISSIONS part.
+
+   For example, to set the set-user-ID mode bit of a program, you can
+use the mode:
+
+     u+s
+
+   To remove both set-user-ID and set-group-ID mode bits from it, you
+can use the mode:
+
+     a-s
+
+   To set the restricted deletion flag or sticky bit, you can use the
+mode:
+
+     +t
+
+   The combination ‘o+s’ has no effect.  On GNU systems the combinations
+‘u+t’ and ‘g+t’ have no effect, and ‘o+t’ acts like plain ‘+t’.
+
+   The ‘=’ operator is not very useful with special mode bits.  For
+example, the mode:
+
+     o=t
+
+does set the restricted deletion flag or sticky bit, but it also removes
+all read, write, and execute/search permissions that users not in the
+file’s group might have had for it.
+
+   *Note Directory Setuid and Setgid::, for additional rules concerning
+set-user-ID and set-group-ID bits and directories.
+
+File: coreutils.info,  Node: Conditional Executability,  Next: Multiple Changes,  Prev: Changing Special Mode Bits,  Up: Symbolic Modes
+
+27.2.4 Conditional Executability
+--------------------------------
+
+There is one more special type of symbolic permission: if you use ‘X’
+instead of ‘x’, execute/search permission is affected only if the file
+is a directory or already had execute permission.
+
+   For example, this mode:
+
+     a+X
+
+gives all users permission to search directories, or to execute files if
+anyone could execute them before.
+
+File: coreutils.info,  Node: Multiple Changes,  Next: Umask and Protection,  Prev: Conditional Executability,  Up: Symbolic Modes
+
+27.2.5 Making Multiple Changes
+------------------------------
+
+The format of symbolic modes is actually more complex than described
+above (*note Setting Permissions::).  It provides two ways to make
+multiple changes to files’ mode bits.
+
+   The first way is to specify multiple OPERATION and PERMISSIONS parts
+after a USERS part in the symbolic mode.
+
+   For example, the mode:
+
+     og+rX-w
+
+gives users other than the owner of the file read permission and, if it
+is a directory or if someone already had execute permission to it, gives
+them execute/search permission; and it also denies them write permission
+to the file.  It does not affect the permission that the owner of the
+file has for it.  The above mode is equivalent to the two modes:
+
+     og+rX
+     og-w
+
+   The second way to make multiple changes is to specify more than one
+simple symbolic mode, separated by commas.  For example, the mode:
+
+     a+r,go-w
+
+gives everyone permission to read the file and removes write permission
+on it for all users except its owner.  Another example:
+
+     u=rwx,g=rx,o=
+
+sets all of the permission bits for the file explicitly.  (It gives
+users who are not in the file’s group no permission at all for it.)
+
+   The two methods can be combined.  The mode:
+
+     a+r,g+x-w
+
+gives all users permission to read the file, and gives users who are in
+the file’s group permission to execute/search it as well, but not
+permission to write to it.  The above mode could be written in several
+different ways; another is:
+
+     u+r,g+rx,o+r,g-w
+
+File: coreutils.info,  Node: Umask and Protection,  Prev: Multiple Changes,  Up: Symbolic Modes
+
+27.2.6 The Umask and Protection
+-------------------------------
+
+If the USERS part of a symbolic mode is omitted, it defaults to ‘a’
+(affect all users), except that any permissions that are _set_ in the
+system variable ‘umask’ are _not affected_.  The value of ‘umask’ can be
+set using the ‘umask’ command.  Its default value varies from system to
+system.
+
+   Omitting the USERS part of a symbolic mode is generally not useful
+with operations other than ‘+’.  It is useful with ‘+’ because it allows
+you to use ‘umask’ as an easily customizable protection against giving
+away more permission to files than you intended to.
+
+   As an example, if ‘umask’ has the value 2, which removes write
+permission for users who are not in the file’s group, then the mode:
+
+     +w
+
+adds permission to write to the file to its owner and to other users who
+are in the file’s group, but _not_ to other users.  In contrast, the
+mode:
+
+     a+w
+
+ignores ‘umask’, and _does_ give write permission for the file to all
+users.
+
+File: coreutils.info,  Node: Numeric Modes,  Next: Operator Numeric Modes,  Prev: Symbolic Modes,  Up: File permissions
+

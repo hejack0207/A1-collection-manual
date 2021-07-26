@@ -18,7 +18,7 @@ csplit $txtfile -n4 -f "$name/$name-" -b "%03d.txt" '/^[*=]\{8,\}/-1' '{*}'
 for f in $name/$name-*.txt; do
 	i=${${f%.txt}##$name/$name-}
 	nn=$(head -n1 $f | tr $'A-Z ' "a-z-")
-	nn=$(echo "$nn" | tr -sd $'/?\'' "")
+	nn=$(echo "$nn" | tr -sd $'/?\'()' "")
 	nn=${nn%%--*}
 	mv $name/$name-$i.txt "$name/$i-$nn.txt"
 done

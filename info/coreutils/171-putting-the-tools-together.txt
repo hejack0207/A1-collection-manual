@@ -1,0 +1,317 @@
+Putting the Tools Together
+==========================
+
+Now, let’s suppose this is a large ISP server system with dozens of
+users logged in.  The management wants the system administrator to write
+a program that will generate a sorted list of logged in users.
+Furthermore, even if a user is logged in multiple times, his or her name
+should only show up in the output once.
+
+   The administrator could sit down with the system documentation and
+write a C program that did this.  It would take perhaps a couple of
+hundred lines of code and about two hours to write it, test it, and
+debug it.  However, knowing the software toolbox, the administrator can
+instead start out by generating just a list of logged on users:
+
+     $ who | cut -c1-8
+     ⊣ arnold
+     ⊣ miriam
+     ⊣ bill
+     ⊣ arnold
+
+   Next, sort the list:
+
+     $ who | cut -c1-8 | sort
+     ⊣ arnold
+     ⊣ arnold
+     ⊣ bill
+     ⊣ miriam
+
+   Finally, run the sorted list through ‘uniq’, to weed out duplicates:
+
+     $ who | cut -c1-8 | sort | uniq
+     ⊣ arnold
+     ⊣ bill
+     ⊣ miriam
+
+   The ‘sort’ command actually has a ‘-u’ option that does what ‘uniq’
+does.  However, ‘uniq’ has other uses for which one cannot substitute
+‘sort -u’.
+
+   The administrator puts this pipeline into a shell script, and makes
+it available for all the users on the system (‘#’ is the system
+administrator, or ‘root’, prompt):
+
+     # cat > /usr/local/bin/listusers
+     who | cut -c1-8 | sort | uniq
+     ^D
+     # chmod +x /usr/local/bin/listusers
+
+   There are four major points to note here.  First, with just four
+programs, on one command line, the administrator was able to save about
+two hours worth of work.  Furthermore, the shell pipeline is just about
+as efficient as the C program would be, and it is much more efficient in
+terms of programmer time.  People time is much more expensive than
+computer time, and in our modern “there’s never enough time to do
+everything” society, saving two hours of programmer time is no mean
+feat.
+
+   Second, it is also important to emphasize that with the _combination_
+of the tools, it is possible to do a special purpose job never imagined
+by the authors of the individual programs.
+
+   Third, it is also valuable to build up your pipeline in stages, as we
+did here.  This allows you to view the data at each stage in the
+pipeline, which helps you acquire the confidence that you are indeed
+using these tools correctly.
+
+   Finally, by bundling the pipeline in a shell script, other users can
+use your command, without having to remember the fancy plumbing you set
+up for them.  In terms of how you run them, shell scripts and compiled
+programs are indistinguishable.
+
+   After the previous warm-up exercise, we’ll look at two additional,
+more complicated pipelines.  For them, we need to introduce two more
+tools.
+
+   The first is the ‘tr’ command, which stands for “transliterate.” The
+‘tr’ command works on a character-by-character basis, changing
+characters.  Normally it is used for things like mapping upper case to
+lower case:
+
+     $ echo ThIs ExAmPlE HaS MIXED case! | tr '[:upper:]' '[:lower:]'
+     ⊣ this example has mixed case!
+
+   There are several options of interest:
+
+‘-c’
+     work on the complement of the listed characters, i.e., operations
+     apply to characters not in the given set
+
+‘-d’
+     delete characters in the first set from the output
+
+‘-s’
+     squeeze repeated characters in the output into just one character.
+
+   We will be using all three options in a moment.
+
+   The other command we’ll look at is ‘comm’.  The ‘comm’ command takes
+two sorted input files as input data, and prints out the files’ lines in
+three columns.  The output columns are the data lines unique to the
+first file, the data lines unique to the second file, and the data lines
+that are common to both.  The ‘-1’, ‘-2’, and ‘-3’ command line options
+_omit_ the respective columns.  (This is non-intuitive and takes a
+little getting used to.)  For example:
+
+     $ cat f1
+     ⊣ 11111
+     ⊣ 22222
+     ⊣ 33333
+     ⊣ 44444
+     $ cat f2
+     ⊣ 00000
+     ⊣ 22222
+     ⊣ 33333
+     ⊣ 55555
+     $ comm f1 f2
+     ⊣         00000
+     ⊣ 11111
+     ⊣                 22222
+     ⊣                 33333
+     ⊣ 44444
+     ⊣         55555
+
+   The file name ‘-’ tells ‘comm’ to read standard input instead of a
+regular file.
+
+   Now we’re ready to build a fancy pipeline.  The first application is
+a word frequency counter.  This helps an author determine if he or she
+is over-using certain words.
+
+   The first step is to change the case of all the letters in our input
+file to one case.  “The” and “the” are the same word when doing
+counting.
+
+     $ tr '[:upper:]' '[:lower:]' < whats.gnu | ...
+
+   The next step is to get rid of punctuation.  Quoted words and
+unquoted words should be treated identically; it’s easiest to just get
+the punctuation out of the way.
+
+     $ tr '[:upper:]' '[:lower:]' < whats.gnu | tr -cd '[:alnum:]_ \n' | ...
+
+   The second ‘tr’ command operates on the complement of the listed
+characters, which are all the letters, the digits, the underscore, and
+the blank.  The ‘\n’ represents the newline character; it has to be left
+alone.  (The ASCII tab character should also be included for good
+measure in a production script.)
+
+   At this point, we have data consisting of words separated by blank
+space.  The words only contain alphanumeric characters (and the
+underscore).  The next step is break the data apart so that we have one
+word per line.  This makes the counting operation much easier, as we
+will see shortly.
+
+     $ tr '[:upper:]' '[:lower:]' < whats.gnu | tr -cd '[:alnum:]_ \n' |
+     > tr -s ' ' '\n' | ...
+
+   This command turns blanks into newlines.  The ‘-s’ option squeezes
+multiple newline characters in the output into just one, removing blank
+lines.  (The ‘>’ is the shell’s “secondary prompt.” This is what the
+shell prints when it notices you haven’t finished typing in all of a
+command.)
+
+   We now have data consisting of one word per line, no punctuation, all
+one case.  We’re ready to count each word:
+
+     $ tr '[:upper:]' '[:lower:]' < whats.gnu | tr -cd '[:alnum:]_ \n' |
+     > tr -s ' ' '\n' | sort | uniq -c | ...
+
+   At this point, the data might look something like this:
+
+          60 a
+           2 able
+           6 about
+           1 above
+           2 accomplish
+           1 acquire
+           1 actually
+           2 additional
+
+   The output is sorted by word, not by count!  What we want is the most
+frequently used words first.  Fortunately, this is easy to accomplish,
+with the help of two more ‘sort’ options:
+
+‘-n’
+     do a numeric sort, not a textual one
+
+‘-r’
+     reverse the order of the sort
+
+   The final pipeline looks like this:
+
+     $ tr '[:upper:]' '[:lower:]' < whats.gnu | tr -cd '[:alnum:]_ \n' |
+     > tr -s ' ' '\n' | sort | uniq -c | sort -n -r
+     ⊣    156 the
+     ⊣     60 a
+     ⊣     58 to
+     ⊣     51 of
+     ⊣     51 and
+     ...
+
+   Whew!  That’s a lot to digest.  Yet, the same principles apply.  With
+six commands, on two lines (really one long one split for convenience),
+we’ve created a program that does something interesting and useful, in
+much less time than we could have written a C program to do the same
+thing.
+
+   A minor modification to the above pipeline can give us a simple
+spelling checker!  To determine if you’ve spelled a word correctly, all
+you have to do is look it up in a dictionary.  If it is not there, then
+chances are that your spelling is incorrect.  So, we need a dictionary.
+The conventional location for a dictionary is ‘/usr/dict/words’.  On my
+GNU/Linux system,(1) this is a sorted, 45,402 word dictionary.
+
+   Now, how to compare our file with the dictionary?  As before, we
+generate a sorted list of words, one per line:
+
+     $ tr '[:upper:]' '[:lower:]' < whats.gnu | tr -cd '[:alnum:]_ \n' |
+     > tr -s ' ' '\n' | sort -u | ...
+
+   Now, all we need is a list of words that are _not_ in the dictionary.
+Here is where the ‘comm’ command comes in.
+
+     $ tr '[:upper:]' '[:lower:]' < whats.gnu | tr -cd '[:alnum:]_ \n' |
+     > tr -s ' ' '\n' | sort -u |
+     > comm -23 - /usr/dict/words
+
+   The ‘-2’ and ‘-3’ options eliminate lines that are only in the
+dictionary (the second file), and lines that are in both files.  Lines
+only in the first file (standard input, our stream of words), are words
+that are not in the dictionary.  These are likely candidates for
+spelling errors.  This pipeline was the first cut at a production
+spelling checker on Unix.
+
+   There are some other tools that deserve brief mention.
+
+‘grep’
+     search files for text that matches a regular expression
+
+‘wc’
+     count lines, words, characters
+
+‘tee’
+     a T-fitting for data pipes, copies data to files and to standard
+     output
+
+‘sed’
+     the stream editor, an advanced tool
+
+‘awk’
+     a data manipulation language, another advanced tool
+
+   The software tools philosophy also espoused the following bit of
+advice: “Let someone else do the hard part.” This means, take something
+that gives you most of what you need, and then massage it the rest of
+the way until it’s in the form that you want.
+
+   To summarize:
+
+  1. Each program should do one thing well.  No more, no less.
+
+  2. Combining programs with appropriate plumbing leads to results where
+     the whole is greater than the sum of the parts.  It also leads to
+     novel uses of programs that the authors might never have imagined.
+
+  3. Programs should never print extraneous header or trailer data,
+     since these could get sent on down a pipeline.  (A point we didn’t
+     mention earlier.)
+
+  4. Let someone else do the hard part.
+
+  5. Know your toolbox!  Use each program appropriately.  If you don’t
+     have an appropriate tool, build one.
+
+   All the programs discussed are available as described in GNU core
+utilities (https://www.gnu.org/software/coreutils/coreutils.html).
+
+   None of what I have presented in this column is new.  The Software
+Tools philosophy was first introduced in the book ‘Software Tools’, by
+Brian Kernighan and P.J. Plauger (Addison-Wesley, ISBN 0-201-03669-X).
+This book showed how to write and use software tools.  It was written in
+1976, using a preprocessor for FORTRAN named ‘ratfor’ (RATional
+FORtran).  At the time, C was not as ubiquitous as it is now; FORTRAN
+was.  The last chapter presented a ‘ratfor’ to FORTRAN processor,
+written in ‘ratfor’.  ‘ratfor’ looks an awful lot like C; if you know C,
+you won’t have any problem following the code.
+
+   In 1981, the book was updated and made available as ‘Software Tools
+in Pascal’ (Addison-Wesley, ISBN 0-201-10342-7).  Both books are still
+in print and are well worth reading if you’re a programmer.  They
+certainly made a major change in how I view programming.
+
+   The programs in both books are available from Brian Kernighan’s home
+page (https://www.cs.princeton.edu/~bwk/).  For a number of years, there
+was an active Software Tools Users Group, whose members had ported the
+original ‘ratfor’ programs to essentially every computer system with a
+FORTRAN compiler.  The popularity of the group waned in the middle 1980s
+as Unix began to spread beyond universities.
+
+   With the current proliferation of GNU code and other clones of Unix
+programs, these programs now receive little attention; modern C versions
+are much more efficient and do more than these programs do.
+Nevertheless, as exposition of good programming style, and evangelism
+for a still-valuable philosophy, these books are unparalleled, and I
+recommend them highly.
+
+   Acknowledgment: I would like to express my gratitude to Brian
+Kernighan of Bell Labs, the original Software Toolsmith, for reviewing
+this column.
+
+   ---------- Footnotes ----------
+
+   (1) Redhat Linux 6.1, for the November 2000 revision of this article.
+
+File: coreutils.info,  Node: GNU Free Documentation License,  Next: Concept index,  Prev: Opening the software toolbox,  Up: Top
+

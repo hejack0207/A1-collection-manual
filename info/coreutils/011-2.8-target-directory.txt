@@ -1,0 +1,75 @@
+2.8 Target directory
+====================
+
+The ‘cp’, ‘install’, ‘ln’, and ‘mv’ commands normally treat the last
+operand specially when it is a directory or a symbolic link to a
+directory.  For example, ‘cp source dest’ is equivalent to ‘cp source
+dest/source’ if ‘dest’ is a directory.  Sometimes this behavior is not
+exactly what is wanted, so these commands support the following options
+to allow more fine-grained control:
+
+‘-T’
+‘--no-target-directory’
+     Do not treat the last operand specially when it is a directory or a
+     symbolic link to a directory.  This can help avoid race conditions
+     in programs that operate in a shared area.  For example, when the
+     command ‘mv /tmp/source /tmp/dest’ succeeds, there is no guarantee
+     that ‘/tmp/source’ was renamed to ‘/tmp/dest’: it could have been
+     renamed to ‘/tmp/dest/source’ instead, if some other process
+     created ‘/tmp/dest’ as a directory.  However, if ‘mv -T /tmp/source
+     /tmp/dest’ succeeds, there is no question that ‘/tmp/source’ was
+     renamed to ‘/tmp/dest’.
+
+     In the opposite situation, where you want the last operand to be
+     treated as a directory and want a diagnostic otherwise, you can use
+     the ‘--target-directory’ (‘-t’) option.
+
+‘-t DIRECTORY’
+‘--target-directory=DIRECTORY’
+     Use DIRECTORY as the directory component of each destination file
+     name.
+
+     The interface for most programs is that after processing options
+     and a finite (possibly zero) number of fixed-position arguments,
+     the remaining argument list is either expected to be empty, or is a
+     list of items (usually files) that will all be handled identically.
+     The ‘xargs’ program is designed to work well with this convention.
+
+     The commands in the ‘mv’-family are unusual in that they take a
+     variable number of arguments with a special case at the _end_
+     (namely, the target directory).  This makes it nontrivial to
+     perform some operations, e.g., “move all files from here to ../d/”,
+     because ‘mv * ../d/’ might exhaust the argument space, and ‘ls |
+     xargs ...’ doesn’t have a clean way to specify an extra final
+     argument for each invocation of the subject command.  (It can be
+     done by going through a shell command, but that requires more human
+     labor and brain power than it should.)
+
+     The ‘--target-directory’ (‘-t’) option allows the ‘cp’, ‘install’,
+     ‘ln’, and ‘mv’ programs to be used conveniently with ‘xargs’.  For
+     example, you can move the files from the current directory to a
+     sibling directory, ‘d’ like this:
+
+          ls | xargs mv -t ../d --
+
+     However, this doesn’t move files whose names begin with ‘.’.  If
+     you use the GNU ‘find’ program, you can move those files too, with
+     this command:
+
+          find . -mindepth 1 -maxdepth 1 \
+            | xargs mv -t ../d
+
+     But both of the above approaches fail if there are no files in the
+     current directory, or if any file has a name containing a blank or
+     some other special characters.  The following example removes those
+     limitations and requires both GNU ‘find’ and GNU ‘xargs’:
+
+          find . -mindepth 1 -maxdepth 1 -print0 \
+            | xargs --null --no-run-if-empty \
+                mv -t ../d
+
+The ‘--target-directory’ (‘-t’) and ‘--no-target-directory’ (‘-T’)
+options cannot be combined.
+
+File: coreutils.info,  Node: Trailing slashes,  Next: Traversing symlinks,  Prev: Target directory,  Up: Common options
+
