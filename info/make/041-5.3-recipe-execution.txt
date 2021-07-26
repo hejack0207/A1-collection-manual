@@ -1,0 +1,208 @@
+5.3 Recipe Execution
+====================
+
+When it is time to execute recipes to update a target, they are executed
+by invoking a new sub-shell for each line of the recipe, unless the
+'.ONESHELL' special target is in effect (*note Using One Shell: One
+Shell.) (In practice, 'make' may take shortcuts that do not affect the
+results.)
+
+   *Please note:* this implies that setting shell variables and invoking
+shell commands such as 'cd' that set a context local to each process
+will not affect the following lines in the recipe.(1)  If you want to
+use 'cd' to affect the next statement, put both statements in a single
+recipe line.  Then 'make' will invoke one shell to run the entire line,
+and the shell will execute the statements in sequence.  For example:
+
+     foo : bar/lose
+             cd $(@D) && gobble $(@F) > ../$@
+
+Here we use the shell AND operator ('&&') so that if the 'cd' command
+fails, the script will fail without trying to invoke the 'gobble'
+command in the wrong directory, which could cause problems (in this case
+it would certainly cause '../foo' to be truncated, at least).
+
+* Menu:
+
+* One Shell::                   One shell for all lines in a recipe.
+* Choosing the Shell::          How 'make' chooses the shell used
+                                  to run recipes.
+
+   ---------- Footnotes ----------
+
+   (1) On MS-DOS, the value of current working directory is *global*, so
+changing it _will_ affect the following recipe lines on those systems.
+
+File: make.info,  Node: One Shell,  Next: Choosing the Shell,  Prev: Execution,  Up: Execution
+
+5.3.1 Using One Shell
+---------------------
+
+Sometimes you would prefer that all the lines in the recipe be passed to
+a single invocation of the shell.  There are generally two situations
+where this is useful: first, it can improve performance in makefiles
+where recipes consist of many command lines, by avoiding extra
+processes.  Second, you might want newlines to be included in your
+recipe command (for example perhaps you are using a very different
+interpreter as your 'SHELL').  If the '.ONESHELL' special target appears
+anywhere in the makefile then _all_ recipe lines for each target will be
+provided to a single invocation of the shell.  Newlines between recipe
+lines will be preserved.  For example:
+
+     .ONESHELL:
+     foo : bar/lose
+             cd $(@D)
+             gobble $(@F) > ../$@
+
+would now work as expected even though the commands are on different
+recipe lines.
+
+   If '.ONESHELL' is provided, then only the first line of the recipe
+will be checked for the special prefix characters ('@', '-', and '+').
+Subsequent lines will include the special characters in the recipe line
+when the 'SHELL' is invoked.  If you want your recipe to start with one
+of these special characters you'll need to arrange for them to not be
+the first characters on the first line, perhaps by adding a comment or
+similar.  For example, this would be a syntax error in Perl because the
+first '@' is removed by make:
+
+     .ONESHELL:
+     SHELL = /usr/bin/perl
+     .SHELLFLAGS = -e
+     show :
+             @f = qw(a b c);
+             print "@f\n";
+
+However, either of these alternatives would work properly:
+
+     .ONESHELL:
+     SHELL = /usr/bin/perl
+     .SHELLFLAGS = -e
+     show :
+             # Make sure "@" is not the first character on the first line
+             @f = qw(a b c);
+             print "@f\n";
+
+or
+
+     .ONESHELL:
+     SHELL = /usr/bin/perl
+     .SHELLFLAGS = -e
+     show :
+             my @f = qw(a b c);
+             print "@f\n";
+
+   As a special feature, if 'SHELL' is determined to be a POSIX-style
+shell, the special prefix characters in "internal" recipe lines will
+_removed_ before the recipe is processed.  This feature is intended to
+allow existing makefiles to add the '.ONESHELL' special target and still
+run properly without extensive modifications.  Since the special prefix
+characters are not legal at the beginning of a line in a POSIX shell
+script this is not a loss in functionality.  For example, this works as
+expected:
+
+     .ONESHELL:
+     foo : bar/lose
+             @cd $(@D)
+             @gobble $(@F) > ../$@
+
+   Even with this special feature, however, makefiles with '.ONESHELL'
+will behave differently in ways that could be noticeable.  For example,
+normally if any line in the recipe fails, that causes the rule to fail
+and no more recipe lines are processed.  Under '.ONESHELL' a failure of
+any but the final recipe line will not be noticed by 'make'.  You can
+modify '.SHELLFLAGS' to add the '-e' option to the shell which will
+cause any failure anywhere in the command line to cause the shell to
+fail, but this could itself cause your recipe to behave differently.
+Ultimately you may need to harden your recipe lines to allow them to
+work with '.ONESHELL'.
+
+File: make.info,  Node: Choosing the Shell,  Prev: One Shell,  Up: Execution
+
+5.3.2 Choosing the Shell
+------------------------
+
+The program used as the shell is taken from the variable 'SHELL'.  If
+this variable is not set in your makefile, the program '/bin/sh' is used
+as the shell.  The argument(s) passed to the shell are taken from the
+variable '.SHELLFLAGS'.  The default value of '.SHELLFLAGS' is '-c'
+normally, or '-ec' in POSIX-conforming mode.
+
+   Unlike most variables, the variable 'SHELL' is never set from the
+environment.  This is because the 'SHELL' environment variable is used
+to specify your personal choice of shell program for interactive use.
+It would be very bad for personal choices like this to affect the
+functioning of makefiles.  *Note Variables from the Environment:
+Environment.
+
+   Furthermore, when you do set 'SHELL' in your makefile that value is
+_not_ exported in the environment to recipe lines that 'make' invokes.
+Instead, the value inherited from the user's environment, if any, is
+exported.  You can override this behavior by explicitly exporting
+'SHELL' (*note Communicating Variables to a Sub-'make':
+Variables/Recursion.), forcing it to be passed in the environment to
+recipe lines.
+
+   However, on MS-DOS and MS-Windows the value of 'SHELL' in the
+environment *is* used, since on those systems most users do not set this
+variable, and therefore it is most likely set specifically to be used by
+'make'.  On MS-DOS, if the setting of 'SHELL' is not suitable for
+'make', you can set the variable 'MAKESHELL' to the shell that 'make'
+should use; if set it will be used as the shell instead of the value of
+'SHELL'.
+
+Choosing a Shell in DOS and Windows
+...................................
+
+Choosing a shell in MS-DOS and MS-Windows is much more complex than on
+other systems.
+
+   On MS-DOS, if 'SHELL' is not set, the value of the variable 'COMSPEC'
+(which is always set) is used instead.
+
+   The processing of lines that set the variable 'SHELL' in Makefiles is
+different on MS-DOS. The stock shell, 'command.com', is ridiculously
+limited in its functionality and many users of 'make' tend to install a
+replacement shell.  Therefore, on MS-DOS, 'make' examines the value of
+'SHELL', and changes its behavior based on whether it points to a
+Unix-style or DOS-style shell.  This allows reasonable functionality
+even if 'SHELL' points to 'command.com'.
+
+   If 'SHELL' points to a Unix-style shell, 'make' on MS-DOS
+additionally checks whether that shell can indeed be found; if not, it
+ignores the line that sets 'SHELL'.  In MS-DOS, GNU 'make' searches for
+the shell in the following places:
+
+  1. In the precise place pointed to by the value of 'SHELL'.  For
+     example, if the makefile specifies 'SHELL = /bin/sh', 'make' will
+     look in the directory '/bin' on the current drive.
+
+  2. In the current directory.
+
+  3. In each of the directories in the 'PATH' variable, in order.
+
+   In every directory it examines, 'make' will first look for the
+specific file ('sh' in the example above).  If this is not found, it
+will also look in that directory for that file with one of the known
+extensions which identify executable files.  For example '.exe', '.com',
+'.bat', '.btm', '.sh', and some others.
+
+   If any of these attempts is successful, the value of 'SHELL' will be
+set to the full pathname of the shell as found.  However, if none of
+these is found, the value of 'SHELL' will not be changed, and thus the
+line that sets it will be effectively ignored.  This is so 'make' will
+only support features specific to a Unix-style shell if such a shell is
+actually installed on the system where 'make' runs.
+
+   Note that this extended search for the shell is limited to the cases
+where 'SHELL' is set from the Makefile; if it is set in the environment
+or command line, you are expected to set it to the full pathname of the
+shell, exactly as things are on Unix.
+
+   The effect of the above DOS-specific processing is that a Makefile
+that contains 'SHELL = /bin/sh' (as many Unix makefiles do), will work
+on MS-DOS unaltered if you have e.g. 'sh.exe' installed in some
+directory along your 'PATH'.
+
+File: make.info,  Node: Parallel,  Next: Errors,  Prev: Execution,  Up: Recipes
+

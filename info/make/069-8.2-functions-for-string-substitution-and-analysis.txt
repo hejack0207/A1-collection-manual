@@ -1,0 +1,232 @@
+8.2 Functions for String Substitution and Analysis
+==================================================
+
+Here are some functions that operate on strings:
+
+'$(subst FROM,TO,TEXT)'
+     Performs a textual replacement on the text TEXT: each occurrence of
+     FROM is replaced by TO.  The result is substituted for the function
+     call.  For example,
+
+          $(subst ee,EE,feet on the street)
+
+     substitutes the string 'fEEt on the strEEt'.
+
+'$(patsubst PATTERN,REPLACEMENT,TEXT)'
+     Finds whitespace-separated words in TEXT that match PATTERN and
+     replaces them with REPLACEMENT.  Here PATTERN may contain a '%'
+     which acts as a wildcard, matching any number of any characters
+     within a word.  If REPLACEMENT also contains a '%', the '%' is
+     replaced by the text that matched the '%' in PATTERN.  Only the
+     first '%' in the PATTERN and REPLACEMENT is treated this way; any
+     subsequent '%' is unchanged.
+
+     '%' characters in 'patsubst' function invocations can be quoted
+     with preceding backslashes ('\').  Backslashes that would otherwise
+     quote '%' characters can be quoted with more backslashes.
+     Backslashes that quote '%' characters or other backslashes are
+     removed from the pattern before it is compared file names or has a
+     stem substituted into it.  Backslashes that are not in danger of
+     quoting '%' characters go unmolested.  For example, the pattern
+     'the\%weird\\%pattern\\' has 'the%weird\' preceding the operative
+     '%' character, and 'pattern\\' following it.  The final two
+     backslashes are left alone because they cannot affect any '%'
+     character.
+
+     Whitespace between words is folded into single space characters;
+     leading and trailing whitespace is discarded.
+
+     For example,
+
+          $(patsubst %.c,%.o,x.c.c bar.c)
+
+     produces the value 'x.c.o bar.o'.
+
+     Substitution references (*note Substitution References:
+     Substitution Refs.) are a simpler way to get the effect of the
+     'patsubst' function:
+
+          $(VAR:PATTERN=REPLACEMENT)
+
+     is equivalent to
+
+          $(patsubst PATTERN,REPLACEMENT,$(VAR))
+
+     The second shorthand simplifies one of the most common uses of
+     'patsubst': replacing the suffix at the end of file names.
+
+          $(VAR:SUFFIX=REPLACEMENT)
+
+     is equivalent to
+
+          $(patsubst %SUFFIX,%REPLACEMENT,$(VAR))
+
+     For example, you might have a list of object files:
+
+          objects = foo.o bar.o baz.o
+
+     To get the list of corresponding source files, you could simply
+     write:
+
+          $(objects:.o=.c)
+
+     instead of using the general form:
+
+          $(patsubst %.o,%.c,$(objects))
+
+'$(strip STRING)'
+     Removes leading and trailing whitespace from STRING and replaces
+     each internal sequence of one or more whitespace characters with a
+     single space.  Thus, '$(strip a b c )' results in 'a b c'.
+
+     The function 'strip' can be very useful when used in conjunction
+     with conditionals.  When comparing something with the empty string
+     '' using 'ifeq' or 'ifneq', you usually want a string of just
+     whitespace to match the empty string (*note Conditionals::).
+
+     Thus, the following may fail to have the desired results:
+
+          .PHONY: all
+          ifneq   "$(needs_made)" ""
+          all: $(needs_made)
+          else
+          all:;@echo 'Nothing to make!'
+          endif
+
+     Replacing the variable reference '$(needs_made)' with the function
+     call '$(strip $(needs_made))' in the 'ifneq' directive would make
+     it more robust.
+
+'$(findstring FIND,IN)'
+     Searches IN for an occurrence of FIND.  If it occurs, the value is
+     FIND; otherwise, the value is empty.  You can use this function in
+     a conditional to test for the presence of a specific substring in a
+     given string.  Thus, the two examples,
+
+          $(findstring a,a b c)
+          $(findstring a,b c)
+
+     produce the values 'a' and '' (the empty string), respectively.
+     *Note Testing Flags::, for a practical application of 'findstring'.
+
+'$(filter PATTERN...,TEXT)'
+     Returns all whitespace-separated words in TEXT that _do_ match any
+     of the PATTERN words, removing any words that _do not_ match.  The
+     patterns are written using '%', just like the patterns used in the
+     'patsubst' function above.
+
+     The 'filter' function can be used to separate out different types
+     of strings (such as file names) in a variable.  For example:
+
+          sources := foo.c bar.c baz.s ugh.h
+          foo: $(sources)
+                  cc $(filter %.c %.s,$(sources)) -o foo
+
+     says that 'foo' depends of 'foo.c', 'bar.c', 'baz.s' and 'ugh.h'
+     but only 'foo.c', 'bar.c' and 'baz.s' should be specified in the
+     command to the compiler.
+
+'$(filter-out PATTERN...,TEXT)'
+     Returns all whitespace-separated words in TEXT that _do not_ match
+     any of the PATTERN words, removing the words that _do_ match one or
+     more.  This is the exact opposite of the 'filter' function.
+
+     For example, given:
+
+          objects=main1.o foo.o main2.o bar.o
+          mains=main1.o main2.o
+
+     the following generates a list which contains all the object files
+     not in 'mains':
+
+          $(filter-out $(mains),$(objects))
+
+'$(sort LIST)'
+     Sorts the words of LIST in lexical order, removing duplicate words.
+     The output is a list of words separated by single spaces.  Thus,
+
+          $(sort foo bar lose)
+
+     returns the value 'bar foo lose'.
+
+     Incidentally, since 'sort' removes duplicate words, you can use it
+     for this purpose even if you don't care about the sort order.
+
+'$(word N,TEXT)'
+     Returns the Nth word of TEXT.  The legitimate values of N start
+     from 1.  If N is bigger than the number of words in TEXT, the value
+     is empty.  For example,
+
+          $(word 2, foo bar baz)
+
+     returns 'bar'.
+
+'$(wordlist S,E,TEXT)'
+     Returns the list of words in TEXT starting with word S and ending
+     with word E (inclusive).  The legitimate values of S start from 1;
+     E may start from 0.  If S is bigger than the number of words in
+     TEXT, the value is empty.  If E is bigger than the number of words
+     in TEXT, words up to the end of TEXT are returned.  If S is greater
+     than E, nothing is returned.  For example,
+
+          $(wordlist 2, 3, foo bar baz)
+
+     returns 'bar baz'.
+
+'$(words TEXT)'
+     Returns the number of words in TEXT.  Thus, the last word of TEXT
+     is '$(word $(words TEXT),TEXT)'.
+
+'$(firstword NAMES...)'
+     The argument NAMES is regarded as a series of names, separated by
+     whitespace.  The value is the first name in the series.  The rest
+     of the names are ignored.
+
+     For example,
+
+          $(firstword foo bar)
+
+     produces the result 'foo'.  Although '$(firstword TEXT)' is the
+     same as '$(word 1,TEXT)', the 'firstword' function is retained for
+     its simplicity.
+
+'$(lastword NAMES...)'
+     The argument NAMES is regarded as a series of names, separated by
+     whitespace.  The value is the last name in the series.
+
+     For example,
+
+          $(lastword foo bar)
+
+     produces the result 'bar'.  Although '$(lastword TEXT)' is the same
+     as '$(word $(words TEXT),TEXT)', the 'lastword' function was added
+     for its simplicity and better performance.
+
+   Here is a realistic example of the use of 'subst' and 'patsubst'.
+Suppose that a makefile uses the 'VPATH' variable to specify a list of
+directories that 'make' should search for prerequisite files (*note
+'VPATH' Search Path for All Prerequisites: General Search.).  This
+example shows how to tell the C compiler to search for header files in
+the same list of directories.
+
+   The value of 'VPATH' is a list of directories separated by colons,
+such as 'src:../headers'.  First, the 'subst' function is used to change
+the colons to spaces:
+
+     $(subst :, ,$(VPATH))
+
+This produces 'src ../headers'.  Then 'patsubst' is used to turn each
+directory name into a '-I' flag.  These can be added to the value of the
+variable 'CFLAGS', which is passed automatically to the C compiler, like
+this:
+
+     override CFLAGS += $(patsubst %,-I%,$(subst :, ,$(VPATH)))
+
+The effect is to append the text '-Isrc -I../headers' to the previously
+given value of 'CFLAGS'.  The 'override' directive is used so that the
+new value is assigned even if the previous value of 'CFLAGS' was
+specified with a command argument (*note The 'override' Directive:
+Override Directive.).
+
+File: make.info,  Node: File Name Functions,  Next: Conditional Functions,  Prev: Text Functions,  Up: Functions
+

@@ -1,0 +1,59 @@
+8.9 The 'eval' Function
+=======================
+
+The 'eval' function is very special: it allows you to define new
+makefile constructs that are not constant; which are the result of
+evaluating other variables and functions.  The argument to the 'eval'
+function is expanded, then the results of that expansion are parsed as
+makefile syntax.  The expanded results can define new 'make' variables,
+targets, implicit or explicit rules, etc.
+
+   The result of the 'eval' function is always the empty string; thus,
+it can be placed virtually anywhere in a makefile without causing syntax
+errors.
+
+   It's important to realize that the 'eval' argument is expanded
+_twice_; first by the 'eval' function, then the results of that
+expansion are expanded again when they are parsed as makefile syntax.
+This means you may need to provide extra levels of escaping for "$"
+characters when using 'eval'.  The 'value' function (*note Value
+Function::) can sometimes be useful in these situations, to circumvent
+unwanted expansions.
+
+   Here is an example of how 'eval' can be used; this example combines a
+number of concepts and other functions.  Although it might seem overly
+complex to use 'eval' in this example, rather than just writing out the
+rules, consider two things: first, the template definition (in
+'PROGRAM_template') could need to be much more complex than it is here;
+and second, you might put the complex, "generic" part of this example
+into another makefile, then include it in all the individual makefiles.
+Now your individual makefiles are quite straightforward.
+
+     PROGRAMS    = server client
+
+     server_OBJS = server.o server_priv.o server_access.o
+     server_LIBS = priv protocol
+
+     client_OBJS = client.o client_api.o client_mem.o
+     client_LIBS = protocol
+
+     # Everything after this is generic
+
+     .PHONY: all
+     all: $(PROGRAMS)
+
+     define PROGRAM_template =
+      $(1): $$($(1)_OBJS) $$($(1)_LIBS:%=-l%)
+      ALL_OBJS   += $$($(1)_OBJS)
+     endef
+
+     $(foreach prog,$(PROGRAMS),$(eval $(call PROGRAM_template,$(prog))))
+
+     $(PROGRAMS):
+             $(LINK.o) $^ $(LDLIBS) -o $@
+
+     clean:
+             rm -f $(ALL_OBJS) $(PROGRAMS)
+
+File: make.info,  Node: Origin Function,  Next: Flavor Function,  Prev: Eval Function,  Up: Functions
+

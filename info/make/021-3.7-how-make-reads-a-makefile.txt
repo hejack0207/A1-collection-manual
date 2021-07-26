@@ -1,0 +1,101 @@
+3.7 How 'make' Reads a Makefile
+===============================
+
+GNU 'make' does its work in two distinct phases.  During the first phase
+it reads all the makefiles, included makefiles, etc.  and internalizes
+all the variables and their values, implicit and explicit rules, and
+constructs a dependency graph of all the targets and their
+prerequisites.  During the second phase, 'make' uses these internal
+structures to determine what targets will need to be rebuilt and to
+invoke the rules necessary to do so.
+
+   It's important to understand this two-phase approach because it has a
+direct impact on how variable and function expansion happens; this is
+often a source of some confusion when writing makefiles.  Here we will
+present a summary of the phases in which expansion happens for different
+constructs within the makefile.  We say that expansion is "immediate" if
+it happens during the first phase: in this case 'make' will expand any
+variables or functions in that section of a construct as the makefile is
+parsed.  We say that expansion is "deferred" if expansion is not
+performed immediately.  Expansion of a deferred construct is not
+performed until either the construct appears later in an immediate
+context, or until the second phase.
+
+   You may not be familiar with some of these constructs yet.  You can
+reference this section as you become familiar with them, in later
+chapters.
+
+Variable Assignment
+-------------------
+
+Variable definitions are parsed as follows:
+
+     IMMEDIATE = DEFERRED
+     IMMEDIATE ?= DEFERRED
+     IMMEDIATE := IMMEDIATE
+     IMMEDIATE ::= IMMEDIATE
+     IMMEDIATE += DEFERRED or IMMEDIATE
+     IMMEDIATE != IMMEDIATE
+
+     define IMMEDIATE
+       DEFERRED
+     endef
+
+     define IMMEDIATE =
+       DEFERRED
+     endef
+
+     define IMMEDIATE ?=
+       DEFERRED
+     endef
+
+     define IMMEDIATE :=
+       IMMEDIATE
+     endef
+
+     define IMMEDIATE ::=
+       IMMEDIATE
+     endef
+
+     define IMMEDIATE +=
+       DEFERRED or IMMEDIATE
+     endef
+
+     define IMMEDIATE !=
+       IMMEDIATE
+     endef
+
+   For the append operator, '+=', the right-hand side is considered
+immediate if the variable was previously set as a simple variable (':='
+or '::='), and deferred otherwise.
+
+   For the shell assignment operator, '!=', the right-hand side is
+evaluated immediately and handed to the shell.  The result is stored in
+the variable named on the left, and that variable becomes a simple
+variable (and will thus be re-evaluated on each reference).
+
+Conditional Directives
+----------------------
+
+Conditional directives are parsed immediately.  This means, for example,
+that automatic variables cannot be used in conditional directives, as
+automatic variables are not set until the recipe for that rule is
+invoked.  If you need to use automatic variables in a conditional
+directive you _must_ move the condition into the recipe and use shell
+conditional syntax instead.
+
+Rule Definition
+---------------
+
+A rule is always expanded the same way, regardless of the form:
+
+     IMMEDIATE : IMMEDIATE ; DEFERRED
+             DEFERRED
+
+   That is, the target and prerequisite sections are expanded
+immediately, and the recipe used to construct the target is always
+deferred.  This general rule is true for explicit rules, pattern rules,
+suffix rules, static pattern rules, and simple prerequisite definitions.
+
+File: make.info,  Node: Secondary Expansion,  Prev: Reading Makefiles,  Up: Makefiles
+

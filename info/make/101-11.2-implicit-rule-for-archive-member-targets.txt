@@ -1,0 +1,79 @@
+11.2 Implicit Rule for Archive Member Targets
+=============================================
+
+Recall that a target that looks like 'A(M)' stands for the member named
+M in the archive file A.
+
+   When 'make' looks for an implicit rule for such a target, as a
+special feature it considers implicit rules that match '(M)', as well as
+those that match the actual target 'A(M)'.
+
+   This causes one special rule whose target is '(%)' to match.  This
+rule updates the target 'A(M)' by copying the file M into the archive.
+For example, it will update the archive member target 'foo.a(bar.o)' by
+copying the _file_ 'bar.o' into the archive 'foo.a' as a _member_ named
+'bar.o'.
+
+   When this rule is chained with others, the result is very powerful.
+Thus, 'make "foo.a(bar.o)"' (the quotes are needed to protect the '('
+and ')' from being interpreted specially by the shell) in the presence
+of a file 'bar.c' is enough to cause the following recipe to be run,
+even without a makefile:
+
+     cc -c bar.c -o bar.o
+     ar r foo.a bar.o
+     rm -f bar.o
+
+Here 'make' has envisioned the file 'bar.o' as an intermediate file.
+*Note Chains of Implicit Rules: Chained Rules.
+
+   Implicit rules such as this one are written using the automatic
+variable '$%'.  *Note Automatic Variables::.
+
+   An archive member name in an archive cannot contain a directory name,
+but it may be useful in a makefile to pretend that it does.  If you
+write an archive member target 'foo.a(dir/file.o)', 'make' will perform
+automatic updating with this recipe:
+
+     ar r foo.a dir/file.o
+
+which has the effect of copying the file 'dir/file.o' into a member
+named 'file.o'.  In connection with such usage, the automatic variables
+'%D' and '%F' may be useful.
+
+* Menu:
+
+* Archive Symbols::             How to update archive symbol directories.
+
+File: make.info,  Node: Archive Symbols,  Prev: Archive Update,  Up: Archive Update
+
+11.2.1 Updating Archive Symbol Directories
+------------------------------------------
+
+An archive file that is used as a library usually contains a special
+member named '__.SYMDEF' that contains a directory of the external
+symbol names defined by all the other members.  After you update any
+other members, you need to update '__.SYMDEF' so that it will summarize
+the other members properly.  This is done by running the 'ranlib'
+program:
+
+     ranlib ARCHIVEFILE
+
+   Normally you would put this command in the rule for the archive file,
+and make all the members of the archive file prerequisites of that rule.
+For example,
+
+     libfoo.a: libfoo.a(x.o) libfoo.a(y.o) ...
+             ranlib libfoo.a
+
+The effect of this is to update archive members 'x.o', 'y.o', etc., and
+then update the symbol directory member '__.SYMDEF' by running 'ranlib'.
+The rules for updating the members are not shown here; most likely you
+can omit them and use the implicit rule which copies files into the
+archive, as described in the preceding section.
+
+   This is not necessary when using the GNU 'ar' program, which updates
+the '__.SYMDEF' member automatically.
+
+File: make.info,  Node: Archive Pitfalls,  Next: Archive Suffix Rules,  Prev: Archive Update,  Up: Archives
+

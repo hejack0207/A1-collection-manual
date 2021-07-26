@@ -1,0 +1,174 @@
+5.1 Recipe Syntax
+=================
+
+Makefiles have the unusual property that there are really two distinct
+syntaxes in one file.  Most of the makefile uses 'make' syntax (*note
+Writing Makefiles: Makefiles.).  However, recipes are meant to be
+interpreted by the shell and so they are written using shell syntax.
+The 'make' program does not try to understand shell syntax: it performs
+only a very few specific translations on the content of the recipe
+before handing it to the shell.
+
+   Each line in the recipe must start with a tab (or the first character
+in the value of the '.RECIPEPREFIX' variable; *note Special
+Variables::), except that the first recipe line may be attached to the
+target-and-prerequisites line with a semicolon in between.  _Any_ line
+in the makefile that begins with a tab and appears in a "rule context"
+(that is, after a rule has been started until another rule or variable
+definition) will be considered part of a recipe for that rule.  Blank
+lines and lines of just comments may appear among the recipe lines; they
+are ignored.
+
+   Some consequences of these rules include:
+
+   * A blank line that begins with a tab is not blank: it's an empty
+     recipe (*note Empty Recipes::).
+
+   * A comment in a recipe is not a 'make' comment; it will be passed to
+     the shell as-is.  Whether the shell treats it as a comment or not
+     depends on your shell.
+
+   * A variable definition in a "rule context" which is indented by a
+     tab as the first character on the line, will be considered part of
+     a recipe, not a 'make' variable definition, and passed to the
+     shell.
+
+   * A conditional expression ('ifdef', 'ifeq', etc.  *note Syntax of
+     Conditionals: Conditional Syntax.) in a "rule context" which is
+     indented by a tab as the first character on the line, will be
+     considered part of a recipe and be passed to the shell.
+
+* Menu:
+
+* Splitting Recipe Lines::      Breaking long recipe lines for readability.
+* Variables in Recipes::        Using 'make' variables in recipes.
+
+File: make.info,  Node: Splitting Recipe Lines,  Next: Variables in Recipes,  Prev: Recipe Syntax,  Up: Recipe Syntax
+
+5.1.1 Splitting Recipe Lines
+----------------------------
+
+One of the few ways in which 'make' does interpret recipes is checking
+for a backslash just before the newline.  As in normal makefile syntax,
+a single logical recipe line can be split into multiple physical lines
+in the makefile by placing a backslash before each newline.  A sequence
+of lines like this is considered a single recipe line, and one instance
+of the shell will be invoked to run it.
+
+   However, in contrast to how they are treated in other places in a
+makefile (*note Splitting Long Lines: Splitting Lines.),
+backslash/newline pairs are _not_ removed from the recipe.  Both the
+backslash and the newline characters are preserved and passed to the
+shell.  How the backslash/newline is interpreted depends on your shell.
+If the first character of the next line after the backslash/newline is
+the recipe prefix character (a tab by default; *note Special
+Variables::), then that character (and only that character) is removed.
+Whitespace is never added to the recipe.
+
+   For example, the recipe for the all target in this makefile:
+
+     all :
+             @echo no\
+     space
+             @echo no\
+             space
+             @echo one \
+             space
+             @echo one\
+              space
+
+consists of four separate shell commands where the output is:
+
+     nospace
+     nospace
+     one space
+     one space
+
+   As a more complex example, this makefile:
+
+     all : ; @echo 'hello \
+             world' ; echo "hello \
+         world"
+
+will invoke one shell with a command of:
+
+     echo 'hello \
+     world' ; echo "hello \
+         world"
+
+which, according to shell quoting rules, will yield the following
+output:
+
+     hello \
+     world
+     hello     world
+
+Notice how the backslash/newline pair was removed inside the string
+quoted with double quotes ('"..."'), but not from the string quoted with
+single quotes (''...'').  This is the way the default shell ('/bin/sh')
+handles backslash/newline pairs.  If you specify a different shell in
+your makefiles it may treat them differently.
+
+   Sometimes you want to split a long line inside of single quotes, but
+you don't want the backslash/newline to appear in the quoted content.
+This is often the case when passing scripts to languages such as Perl,
+where extraneous backslashes inside the script can change its meaning or
+even be a syntax error.  One simple way of handling this is to place the
+quoted string, or even the entire command, into a 'make' variable then
+use the variable in the recipe.  In this situation the newline quoting
+rules for makefiles will be used, and the backslash/newline will be
+removed.  If we rewrite our example above using this method:
+
+     HELLO = 'hello \
+     world'
+
+     all : ; @echo $(HELLO)
+
+we will get output like this:
+
+     hello world
+
+   If you like, you can also use target-specific variables (*note
+Target-specific Variable Values: Target-specific.) to obtain a tighter
+correspondence between the variable and the recipe that uses it.
+
+File: make.info,  Node: Variables in Recipes,  Prev: Splitting Recipe Lines,  Up: Recipe Syntax
+
+5.1.2 Using Variables in Recipes
+--------------------------------
+
+The other way in which 'make' processes recipes is by expanding any
+variable references in them (*note Basics of Variable References:
+Reference.).  This occurs after make has finished reading all the
+makefiles and the target is determined to be out of date; so, the
+recipes for targets which are not rebuilt are never expanded.
+
+   Variable and function references in recipes have identical syntax and
+semantics to references elsewhere in the makefile.  They also have the
+same quoting rules: if you want a dollar sign to appear in your recipe,
+you must double it ('$$').  For shells like the default shell, that use
+dollar signs to introduce variables, it's important to keep clear in
+your mind whether the variable you want to reference is a 'make'
+variable (use a single dollar sign) or a shell variable (use two dollar
+signs).  For example:
+
+     LIST = one two three
+     all:
+             for i in $(LIST); do \
+                 echo $$i; \
+             done
+
+results in the following command being passed to the shell:
+
+     for i in one two three; do \
+         echo $i; \
+     done
+
+which generates the expected result:
+
+     one
+     two
+     three
+
+File: make.info,  Node: Echoing,  Next: Execution,  Prev: Recipe Syntax,  Up: Recipes
+

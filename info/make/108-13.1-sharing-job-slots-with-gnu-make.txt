@@ -1,0 +1,140 @@
+13.1 Sharing Job Slots with GNU 'make'
+======================================
+
+GNU 'make' has the ability to run multiple recipes in parallel (*note
+Parallel Execution: Parallel.) and to cap the total number of parallel
+jobs even across recursive invocations of 'make' (*note Communicating
+Options to a Sub-'make': Options/Recursion.).  Tools that 'make' invokes
+which are also able to run multiple operations in parallel, either using
+multiple threads or multiple processes, can be enhanced to participate
+in GNU 'make''s job management facility to ensure that the total number
+of active threads/processes running on the system does not exceed the
+maximum number of slots provided to GNU 'make'.
+
+   GNU 'make' uses a method called the "jobserver" to control the number
+of active jobs across recursive invocations.  The actual implementation
+of the jobserver varies across different operating systems, but some
+fundamental aspects are always true.
+
+   First, only command lines that 'make' understands to be recursive
+invocations of 'make' (*note How the 'MAKE' Variable Works: MAKE
+Variable.) will have access to the jobserver.  When writing makefiles
+you must be sure to mark the command as recursive (most commonly by
+prefixing the command line with the '+' indicator (*note Recursive Use
+of 'make': Recursion.).
+
+   Second, 'make' will provide information necessary for accessing the
+jobserver through the environment to its children, in the 'MAKEFLAGS'
+environment variable.  Tools which want to participate in the jobserver
+protocol will need to parse this environment variable, as described in
+subsequent sections.
+
+   Third, every command 'make' starts has one implicit job slot reserved
+for it before it starts.  Any tool which wants to participate in the
+jobserver protocol should assume it can always run one job without
+having to contact the jobserver at all.
+
+   Finally, it's critical that tools that participate in the jobserver
+protocol return the exact number of slots they obtained from the
+jobserver back to the jobserver before they exit, even under error
+conditions.  Remember that the implicit job slot should *not* be
+returned to the jobserver!  Returning too few slots means that those
+slots will be lost for the rest of the build process; returning too many
+slots means that extra slots will be available.  The top-level 'make'
+command will print an error message at the end of the build if it
+detects an incorrect number of slots available in the jobserver.
+
+   As an example, suppose you are implementing a linker which provides
+for multithreaded operation.  You would like to enhance the linker so
+that if it is invoked by GNU 'make' it can participate in the jobserver
+protocol to control how many threads are used during link.  First you
+will need to modify the linker to determine if the 'MAKEFLAGS'
+environment variable is set.  Next you will need to parse the value of
+that variable to determine if the jobserver is available, and how to
+access it.  If it is available then you can access it to obtain job
+slots controlling how much parallelism your tool can use.  Once done
+your tool must return those job slots back to the jobserver.
+
+* Menu:
+
+* POSIX Jobserver::             Using the jobserver on POSIX systems.
+* Windows Jobserver::           Using the jobserver on Windows systems.
+
+File: make.info,  Node: POSIX Jobserver,  Next: Windows Jobserver,  Prev: Job Slots,  Up: Job Slots
+
+13.1.1 POSIX Jobserver Interaction
+----------------------------------
+
+On POSIX systems the jobserver is implemented as a simple UNIX pipe.
+The pipe will be pre-loaded with one single-character token for each
+available job.  To obtain an extra slot you must read a single character
+from the jobserver pipe; to release a slot you must write a single
+character back into the jobserver pipe.
+
+   To access the pipe you must parse the 'MAKEFLAGS' variable and look
+for the argument string '--jobserver-auth=R,W' where 'R' and 'W' are
+non-negative integers representing file descriptors: 'R' is the read
+file descriptor and 'W' is the write file descriptor.
+
+   It's important that when you release the job slot, you write back the
+same character you read from the pipe for that slot.  Don't assume that
+all tokens are the same character; different characters may have
+different meanings to GNU 'make'.  The order is not important, since
+'make' has no idea in what order jobs will complete anyway.
+
+   There are various error conditions you must consider to ensure your
+implementation is robust:
+
+   * Usually you will have a command-line argument controlling the
+     parallel operation of your tool.  Consider whether your tool should
+     detect situations where both the jobserver and the command-line
+     argument are specified, and how it should react.
+
+   * If your tool determines that the '--jobserver-auth' option is
+     available in 'MAKEFLAGS' but that the file descriptors specified
+     are closed, this means that the calling 'make' process did not
+     think that your tool was a recursive 'make' invocation (e.g., the
+     command line was not prefixed with a '+' character).  You should
+     notify your users of this situation.
+
+   * Your tool should also examine the first word of the 'MAKEFLAGS'
+     variable and look for the character 'n'.  If this character is
+     present then 'make' was invoked with the '-n' option and your tool
+     should stop without performing any operations.
+
+   * Your tool should be sure to write back the tokens it read, even
+     under error conditions.  This includes not only errors in your tool
+     but also outside influences such as interrupts ('SIGINT'), etc.
+     You may want to install signal handlers to manage this write-back.
+
+File: make.info,  Node: Windows Jobserver,  Prev: POSIX Jobserver,  Up: Job Slots
+
+13.1.2 Windows Jobserver Interaction
+------------------------------------
+
+On Windows systems the jobserver is implemented as a named semaphore.
+The semaphore will be set with an initial count equal to the number of
+available slots; to obtain a slot you must wait on the semaphore (with
+or without a timeout).  To release a slot, release the semaphore.
+
+   To access the semaphore you must parse the 'MAKEFLAGS' variable and
+look for the argument string '--jobserver-auth=NAME' where 'NAME' is the
+name of the named semaphore.  Use this name with 'OpenSemaphore' to
+create a handle to the semaphore.
+
+   There are various error conditions you must consider to ensure your
+implementation is robust:
+
+   * Usually you will have a command-line argument controlling the
+     parallel operation of your tool.  Consider whether your tool should
+     detect situations where both the jobserver and the command-line
+     argument are specified, and how it should react.
+
+   * Your tool should be sure to release the semaphore for the tokens it
+     read, even under error conditions.  This includes not only errors
+     in your tool but also outside influences such as interrupts
+     ('SIGINT'), etc.  You may want to install signal handlers to manage
+     this write-back.
+
+File: make.info,  Node: Terminal Output,  Prev: Job Slots,  Up: Integrating make
+
