@@ -1,12 +1,15 @@
 # algorithm
 * [algoxy](https://github.com/liuxinyu95/AlgoXY)
 * [graphbook](https://github.com/jonasagx/graphbook)
+* [graph-theory-algorithms-book](https://github.com/IMCG/graph-theory-algorithms-book)
 
 # os
 * [os01](https://github.com/tuhdo/os01)
 
 # computer sci
 * [milewski-ctfp-pdf](https://github.com/hmemcpy/milewski-ctfp-pdf)
+* [category-theory-for-programmers](https://github.com/onlurking/category-theory-for-programmers)
+* [category-theory-programmers](https://github.com/jwbuurlage/category-theory-programmers)
 * [papers-we-love](https://github.com/papers-we-love/papers-we-love)
 
 # math
