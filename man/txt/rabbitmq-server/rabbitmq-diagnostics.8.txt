@@ -1,0 +1,474 @@
+RABBITMQ-DIAGNOSTICS(8)                      BSD System Manager's Manual                      RABBITMQ-DIAGNOSTICS(8)
+
+NAME
+     rabbitmq-diagnostics -- RabbitMQ diagnostics, monitoring and health checks tools
+
+SYNOPSIS
+     rabbitmq-diagnostics [-q] [-s] [-l] [-n node] [-t timeout] command [command_options]
+
+DESCRIPTION
+     rabbitmq-diagnostics is a command line tool that provides commands used for diagnostics, monitoring and health
+     checks of RabbitMQ nodes.  See the RabbitMQ documentation guides: https://rabbitmq.com/documentation.html to
+     learn more about RabbitMQ diagnostics, monitoring and health checks.
+
+     rabbitmq-diagnostics allows the operator to inspect node and cluster state. A number of health checks are avail-
+     able to be used interactively and by monitoring tools.
+
+     By default if it is not possible to connect to and authenticate with the target node (for example if it is
+     stopped), the operation will fail.  To learn more, see the RabbitMQ Monitoring guide:
+     https://rabbitmq.com/monitoring.html
+
+OPTIONS
+     -n node
+             Default node is "rabbit@target-hostname", where target-hostname is the local host.  On a host named
+             "myserver.example.com", the node name will usually be "rabbit@myserver" (unless RABBITMQ_NODENAME has
+             been overridden).  The output of "hostname -s" is usually the correct suffix to use after the "@" sign.
+             See rabbitmq-server(8) for details of configuring a RabbitMQ node.
+
+     -q, --quiet
+             Quiet output mode is selected.  Informational messages are reduced when quiet mode is in effect.
+
+     -s, --silent
+             Silent output mode is selected.  Informational messages are reduced and table headers are suppressed
+             when silent mode is in effect.
+
+     -t timeout, --timeout timeout
+             Operation timeout in seconds.  Not all commands support timeouts.  Default is infinity.
+
+     -l, --longnames
+             Must be specified when the cluster is configured to use long (FQDN) node names.  To learn more, see the
+             RabbitMQ Clustering guide: https://rabbitmq.com/clustering.html
+
+     --erlang-cookie cookie
+             Shared secret to use to authenticate to the target node.  Prefer using a local file or the
+             RABBITMQ_ERLANG_COOKIE environment variable instead of specifying this option on the command line.  To
+             learn more, see the RabbitMQ CLI Tools guide: https://rabbitmq.com/cli.html
+
+COMMANDS
+     Most commands provided by rabbitmq-diagnostics inspect node and cluster state or perform health checks.
+
+     Commands that list topology entities (e.g. queues) use tab as column delimiter.  These commands and their argu-
+     ments are delegated to rabbitmqctl(8).
+
+     Some commands ( list_queues, list_exchanges, list_bindings and list_consumers) accept an optional vhost parame-
+     ter.
+
+     The list_queues, list_exchanges and list_bindings commands accept an optional virtual host parameter for which
+     to display results.  The default value is "/".
+
+ Help
+   help [-l] [command_name]
+
+           Prints usage for all available commands.
+
+           -l, --list-commands
+                   List command usages only, without parameter explanation.
+
+           command_name
+                   Prints usage for the specified command.
+
+   version
+
+           Displays CLI tools version
+
+ Nodes
+   wait
+
+           See wait in rabbitmqctl(8)
+
+ Cluster
+   cluster_status
+
+           See cluster_status in rabbitmqctl(8)
+
+ Users
+   list_users
+
+           See list_users in rabbitmqctl(8)
+
+ Access Control
+   list_permissions [-p vhost]
+
+           See list_permissions in rabbitmqctl(8)
+
+   list_topic_permissions [-p vhost]
+
+           See list_topic_permissions in rabbitmqctl(8)
+
+   list_user_permissions username
+
+           See list_user_permissions in rabbitmqctl(8)
+
+   list_user_topic_permissions username
+
+           See list_user_topic_permissions in rabbitmqctl(8)
+
+   list_vhosts [vhostinfoitem ...]
+
+           See list_vhosts in rabbitmqctl(8)
+
+ Monitoring, observability and health checks
+   alarms
+
+           Lists resource alarms, if any, in the cluster.
+
+           See RabbitMQ Resource Alarms guide: https://rabbitmq.com/alarms.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics alarms
+
+   certificates
+
+           Displays the node certificates for every listener on target node that is configured to use TLS.
+
+           Example:
+
+                 rabbitmq-diagnostics certificates
+
+   check_alarms
+
+           Health check that fails (returns with a non-zero code) if there are alarms in effect on any of the cluster
+           nodes.
+
+           See RabbitMQ Resource Alarms guide: https://rabbitmq.com/alarms.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics check_alarms
+
+   check_certificate_expiration [--unit time_unit] [--within seconds]
+
+           Checks the expiration date on the certificates for every listener on target node that is configured to use
+           TLS.  Supported time units are:
+
+           o   days
+
+           o   weeks
+
+           o   months
+
+           o   years
+
+           Example:
+                 rabbitmq-diagnostics check_certificate_expiration --unit weeks --within 6
+
+   check_local_alarms
+
+           Health check that fails (returns with a non-zero code) if there are alarms in effect on the target node.
+
+           See RabbitMQ Resource Alarms guide: https://rabbitmq.com/alarms.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics check_local_alarms
+
+   check_port_connectivity
+
+           Health check that fails (returns with a non-zero code) if any listener ports on the target node cannot ac-
+           cept a new TCP connection opened by rabbitmq-diagnostics
+
+           The check only validates if a new TCP connection is accepted. It does not perform messaging protocol hand-
+           shake or authenticate.
+
+           See RabbitMQ Networking guide: https://rabbitmq.com/networking.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics check_port_connectivity
+
+   check_port_listener port
+
+           Health check that fails (returns with a non-zero code) if the target node is not listening on the speci-
+           fied port (there is no listener that uses that port).
+
+           See RabbitMQ Networking guide: https://rabbitmq.com/networking.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics check_port_listener 5672
+
+   check_protocol_listener protocol
+
+           Health check that fails (returns with a non-zero code) if the target node does not have a listener for the
+           specified protocol.
+
+           See RabbitMQ Networking guide: https://rabbitmq.com/networking.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics check_protocol_listener mqtt
+
+   check_running
+
+           Health check that fails (returns with a non-zero code) if the RabbitMQ application is not running on the
+           target node.
+
+           If rabbitmqctl(8) was used to stop the application, this check will fail.
+
+           Example:
+                 rabbitmq-diagnostics check_running
+
+   check_virtual_hosts
+
+           Health check that checks if all vhosts are running in the target node
+
+           Example:
+                 rabbitmq-diagnostics check_virtual_hosts --timeout 60
+
+   cipher_suites
+
+           Lists cipher suites enabled by default. To list all available cipher suites, add the --all argument.
+
+           Example:
+                 rabbitmq-diagnostics cipher_suites --format openssl --all
+
+   command_line_arguments
+
+           Displays target node's command-line arguments and flags as reported by the runtime.
+
+           Example:
+                 rabbitmq-diagnostics command_line_arguments -n rabbit@hostname
+
+   consume_event_stream [--duration seconds | -d seconds] [--pattern pattern] [--timeout milliseconds]
+
+           Streams internal events from a running node. Output is jq-compatible.
+
+           Example:
+                 rabbitmq-diagnostics consume_event_stream -n rabbit@hostname --duration 20 --pattern queue_.*
+
+   discover_peers
+
+           Runs a peer discovery on the target node and prints the discovered nodes, if any.
+
+           See RabbitMQ Cluster Formation guide: https://rabbitmq.com/cluster-formation.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics discover_peers --timeout 60
+
+   environment
+           See environment in rabbitmqctl(8)
+
+   erlang_cookie_hash
+
+           Outputs a hashed value of the shared secret used by the target node to authenticate CLI tools and peers.
+           The value can be compared with the hash found in error messages of CLI tools.
+
+           See RabbitMQ Clustering guide: https://rabbitmq.com/clustering.html#erlang-cookie to learn more.
+
+           Example:
+                 rabbitmq-diagnostics erlang_cookie_hash -q
+
+   erlang_version
+
+           Reports target node's Erlang/OTP version.
+
+           Example:
+                 rabbitmq-diagnostics erlang_version -q
+
+   is_booting
+
+           Reports if RabbitMQ application is currently booting (not booted/running or stopped) on the target node.
+
+           Example:
+                 rabbitmq-diagnostics is_booting
+
+   is_running
+
+           Reports if RabbitMQ application is fully booted and running (that is, not stopped) on the target node.
+
+           Example:
+                 rabbitmq-diagnostics is_running
+
+   list_bindings [-p vhost] [bindinginfoitem ...]
+
+           See list_bindings in rabbitmqctl(8)
+
+   list_channels [channelinfoitem ...]
+
+           See list_channels in rabbitmqctl(8)
+
+   list_ciphers
+
+           See list_ciphers in rabbitmqctl(8)
+
+   list_connections [connectioninfoitem ...]
+
+           See list_connections in rabbitmqctl(8)
+
+   list_consumers [-p vhost]
+
+           See list_consumers in rabbitmqctl(8)
+
+   list_exchanges [-p vhost] [exchangeinfoitem ...]
+
+           See list_exchanges in rabbitmqctl(8)
+
+   list_hashes
+
+           See list_hashes in rabbitmqctl(8)
+
+   list_queues [-p vhost] [--offline | --online | --local] [queueinfoitem ...]
+
+           See list_queues in rabbitmqctl(8)
+           ] [--local] [--queue-timeout milliseconds] [column ...] [--no-table-headers]
+
+   list_unresponsive_queues
+
+           See list_unresponsive_queues in rabbitmqctl(8)
+
+   listeners
+
+           Lists listeners (bound sockets) on this node. Use this to inspect what protocols and ports the node is
+           listening on for client, CLI tool and peer connections.
+
+           See RabbitMQ Networking guide: https://rabbitmq.com/networking.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics listeners
+
+   log_tail --number number | -N number [--timeout milliseconds]
+
+           Prints the last N lines of the log on the node
+
+           Example:
+                 rabbitmq-diagnostics log_tail -number 100
+
+   log_tail_stream [--duration seconds | -d seconds] [--timeout milliseconds]
+
+           Streams logs from a running node for a period of time
+
+           Example:
+                 rabbitmq-diagnostics log_tail_stream --duration 60
+
+   maybe_stuck
+
+           Periodically samples stack traces of all Erlang processes ("lightweight threads") on the node. Reports the
+           processes for which stack trace samples are identical.
+
+           Identical samples may indicate that the process is not making any progress but is not necessarily an indi-
+           cation of a problem.
+
+           Example:
+                 rabbitmq-diagnostics maybe_stuck -q
+
+   memory_breakdown [--unit memory_unit]
+
+           Displays node's memory usage by category.  Supported memory units are:
+
+           o   bytes
+
+           o   megabytes
+
+           o   gigabytes
+
+           o   terabytes
+
+           See RabbitMQ Memory Use guide: https://rabbitmq.com/memory-use.html to learn more.
+
+           Example:
+
+                 rabbitmq-diagnostics memory_breakdown --unit gigabytes
+
+   observer [--interval seconds]
+
+           Starts a CLI observer interface on the target node
+
+           Example:
+                 rabbitmq-diagnostics observer --interval 10
+
+   ping
+
+           Most basic health check. Succeeds if target node (runtime) is running and rabbitmq-diagnostics can authen-
+           ticate with it successfully.
+
+   report
+
+           See report in rabbitmqctl(8)
+
+   runtime_thread_stats [--sample-interval interval]
+
+           Performs sampling of runtime (kernel) threads' activity for interval seconds and reports it.
+
+           For this command to work, Erlang/OTP on the target node must be compiled with microstate accounting sup-
+           port and have the runtime_tools package available.
+
+           Example:
+                 rabbitmq-diagnostics runtime_thread_stats --sample-interval 15
+
+   schema_info [--no_table_headers] [column ...] [--timeout milliseconds]
+
+           See schema_info in rabbitmqctl(8)
+
+   server_version
+
+           Reports target node's version.
+
+           Example:
+                 rabbitmq-diagnostics server_version -q
+
+   status
+
+           See status in rabbitmqctl(8)
+
+   tls_versions
+
+           Lists all TLS versions supported by the runtime on the target node.  Note that RabbitMQ can be configured
+           to only accept a subset of those versions, for example, SSLv3 is disabled by default.
+
+           See RabbitMQ TLS guide: https://rabbitmq.com/ssl.html to learn more.
+
+           Example:
+                 rabbitmq-diagnostics tls_versions -q
+
+ Parameters
+   list_global_parameters
+
+           See list_global_parameters in rabbitmqctl(8)
+
+   list_parameters [-p vhost]
+
+           See list_parameters in rabbitmqctl(8)
+
+ Policies
+   list_operator_policies [-p vhost]
+
+           See list_operator_policies in rabbitmqctl(8)
+
+   list_policies [-p vhost]
+
+           See list_policies in rabbitmqctl(8)
+
+ Virtual hosts
+   list_vhost_limits [--vhost vhost] [--global] [--no-table-headers]
+
+           See list_vhost_limits in rabbitmqctl(8)
+
+ Node configuration
+   log_location [--all | -a] [--timeout milliseconds]
+
+           Shows log file location(s) on target node
+
+           Example:
+                 rabbitmq-diagnostics log_location -a
+
+ Feature flags
+   list_feature_flags [column ...] [--timeout milliseconds]
+
+           See list_feature_flags in rabbitmqctl(8)
+
+ Queues
+   quorum_status queue [--vhost vhost]
+
+           See quorum_status in rabbitmq-queues(8)
+
+   check_if_node_is_mirror_sync_critical
+
+           See check_if_node_is_mirror_sync_critical in rabbitmq-queues(8)
+
+   check_if_node_is_quorum_critical
+
+           See check_if_node_is_quorum_critical in rabbitmq-queues(8)
+
+SEE ALSO
+     rabbitmqctl(8), rabbitmq-server(8), rabbitmq-queues(8), rabbitmq-upgrade(8), rabbitmq-service(8),
+     rabbitmq-env.conf(5), rabbitmq-echopid(8)
+
+AUTHOR
+     The RabbitMQ Team <info@rabbitmq.com>
+
+RabbitMQ Server                                     June 19, 2021                                     RabbitMQ Server
