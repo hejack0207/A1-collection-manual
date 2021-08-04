@@ -2,6 +2,7 @@
 * [algoxy](https://github.com/liuxinyu95/AlgoXY)
 * [graphbook](https://github.com/jonasagx/graphbook)
 * [graph-theory-algorithms-book](https://github.com/IMCG/graph-theory-algorithms-book)
+* [Consensus: Bridging Theory and Practice](https://github.com/ongardie/dissertation)
 
 # os
 * [os01](https://github.com/tuhdo/os01)
