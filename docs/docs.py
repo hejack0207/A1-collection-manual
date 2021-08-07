@@ -12,6 +12,7 @@ with open("docs.yaml") as f:
         branch = doc["branch"]
         basedir = doc["basedir"]
 
+        print("repo:%s,branch:%s,basedir:%s" % (repo, branch, basedir))
         if not path.exists(basedir):
 
             subprocess.call(["mkdir", basedir])
