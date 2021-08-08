@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-import yaml
+import json
 import subprocess
 from os import path
 
-with open("docs.yaml") as f:
+with open("docs.json") as f:
 
-    docs = yaml.safe_load(f)
+    docs = json.load(f)
     ret = 0
 
     for doc in docs:
