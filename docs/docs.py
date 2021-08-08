@@ -13,11 +13,14 @@ with open("docs.yaml") as f:
         basedir = doc["basedir"]
 
         print("repo:%s,branch:%s,basedir:%s" % (repo, branch, basedir))
-        if not path.exists(basedir):
+        try:
+            if not path.exists(basedir):
 
-            subprocess.call(["mkdir", basedir])
+                subprocess.call(["mkdir", basedir])
 
-            for p in doc["paths"]:
-                srcpath = p["srcpath"]
-                path = p["path"]
-                subprocess.call(["fetch","--repo", repo,"--branch", branch,"--source-path", srcpath, basedir+"/"+path])
+                for p in doc["paths"]:
+                    srcpath = p["srcpath"]
+                    tpath = p["path"]
+                    subprocess.check_call(["fetch","--repo", repo,"--branch", branch,"--source-path", srcpath, basedir+"/"+tpath])
+        except:
+            subprocess.call(["rm","-rf",basedir])
