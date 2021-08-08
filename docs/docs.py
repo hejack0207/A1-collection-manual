@@ -6,6 +6,7 @@ from os import path
 with open("docs.yaml") as f:
 
     docs = yaml.safe_load(f)
+    ret = 0
 
     for doc in docs:
         repo = doc["repo"]
@@ -24,3 +25,6 @@ with open("docs.yaml") as f:
                     subprocess.check_call(["fetch","--repo", repo,"--branch", branch,"--source-path", srcpath, basedir+"/"+tpath])
         except:
             subprocess.call(["rm","-rf",basedir])
+            ret = 1
+
+exit(ret)
