@@ -1,0 +1,133 @@
+virt-v2v-input-xen(1)                           Virtualization Support                          virt-v2v-input-xen(1)
+
+NAME
+       virt-v2v-input-xen - Using virt-v2v to convert guests from Xen
+
+SYNOPSIS
+        export LIBGUESTFS_BACKEND=direct
+        virt-v2v -ic 'xen+ssh://root@xen.example.com'
+                 -ip passwordfile
+                 GUEST_NAME [-o* options]
+
+DESCRIPTION
+       This page documents how to use virt-v2v(1) to convert guests from RHEL 5 Xen, or SLES and OpenSUSE Xen hosts.
+
+INPUT FROM XEN
+   SSH authentication
+       You can use SSH password authentication, by supplying the name of a file containing the password to the -ip
+       option (note this option does not take the password directly).
+
+       If you are not using password authentication, an alternative is to use ssh-agent, and add your ssh public key
+       to /root/.ssh/authorized_keys (on the Xen host).  After doing this, you should check that passwordless access
+       works from the virt-v2v server to the Xen host.  For example:
+
+        $ ssh root@xen.example.com
+        [ logs straight into the shell, no password is requested ]
+
+       With some modern ssh implementations, legacy crypto policies required to interoperate with RHEL 5 sshd are
+       disabled.  To enable them you may need to run this command on the conversion server (ie. ssh client), but read
+       update-crypto-policies(8) first:
+
+        # update-crypto-policies --set LEGACY
+
+   Test libvirt connection to remote Xen host
+       Use the virsh(1) command to list the guests on the remote Xen host:
+
+        $ virsh -c xen+ssh://root@xen.example.com list --all
+         Id    Name                           State
+        ----------------------------------------------------
+         0     Domain-0                       running
+         -     rhel49-x86_64-pv               shut off
+
+       You should also try dumping the metadata from any guest on your server, like this:
+
+        $ virsh -c xen+ssh://root@xen.example.com dumpxml rhel49-x86_64-pv
+        <domain type='xen'>
+          <name>rhel49-x86_64-pv</name>
+          [...]
+        </domain>
+
+       If the above commands do not work, then virt-v2v is not going to work either.  Fix your libvirt configuration
+       or the remote server before continuing.
+
+       If the guest disks are located on a host block device, then the conversion will fail.  See "Xen or ssh
+       conversions from block devices" below for a workaround.
+
+   Importing a guest
+       To import a particular guest from a Xen server, do:
+
+        $ LIBGUESTFS_BACKEND=direct \
+              virt-v2v -ic 'xen+ssh://root@xen.example.com' \
+                  rhel49-x86_64-pv \
+                  -o local -os /var/tmp
+
+       where "rhel49-x86_64-pv" is the name of the guest (which must be shut down).
+
+       In this case the output flags are set to write the converted guest to a temporary directory as this is just an
+       example, but you can also write to libvirt or any other supported target.
+
+       Setting the backend to "direct" is a temporary workaround until libvirt bug 1140166 is fixed.
+
+   Xen or ssh conversions from block devices
+       Currently virt-v2v cannot directly access a Xen guest (or any guest located remotely over ssh) if that guest's
+       disks are located on host block devices.
+
+       To tell if a Xen guest uses host block devices, look at the guest XML.  You will see:
+
+         <disk type='block' device='disk'>
+           ...
+           <source dev='/dev/VG/guest'/>
+
+       where "type='block'", "source dev=" and "/dev/..." are all indications that the disk is located on a host
+       block device.
+
+       This happens because the qemu ssh block driver that we use to access remote disks uses the ssh sftp protocol,
+       and this protocol cannot correctly detect the size of host block devices.
+
+       The workaround is to copy the guest over to the conversion server, using the separate
+       virt-v2v-copy-to-local(1) tool, followed by running virt-v2v.  You will need sufficient space on the
+       conversion server to store a full copy of the guest.
+
+        virt-v2v-copy-to-local -ic xen+ssh://root@xen.example.com guest
+        virt-v2v -i libvirtxml guest.xml -o local -os /var/tmp
+        rm guest.xml guest-disk*
+
+SEE ALSO
+       virt-v2v(1).
+
+AUTHOR
+       Richard W.M. Jones
+
+COPYRIGHT
+       Copyright (C) 2009-2020 Red Hat Inc.
+
+LICENSE
+       This program is free software; you can redistribute it and/or modify it under the terms of the GNU General
+       Public License as published by the Free Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+       This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+       implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+       for more details.
+
+       You should have received a copy of the GNU General Public License along with this program; if not, write to
+       the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+BUGS
+       To get a list of bugs against libguestfs, use this link:
+       https://bugzilla.redhat.com/buglist.cgi?component=libguestfs&product=Virtualization+Tools
+
+       To report a new bug against libguestfs, use this link:
+       https://bugzilla.redhat.com/enter_bug.cgi?component=libguestfs&product=Virtualization+Tools
+
+       When reporting a bug, please supply:
+
+       o   The version of libguestfs.
+
+       o   Where you got libguestfs (eg. which Linux distro, compiled from source, etc)
+
+       o   Describe the bug accurately and give a way to reproduce it.
+
+       o   Run libguestfs-test-tool(1) and paste the complete, unedited output into the bug report.
+
+virt-v2v-1.44.0                                       2021-04-30                                virt-v2v-input-xen(1)
