@@ -1,0 +1,97 @@
+# abrt\-auto\-reportin(1)
+
+abrt 2\&.14\&.4, 09/24/2020
+
+.ie \n(.g .ds Aq '
+.el       .ds Aq '
+
+
+
+
+.nh
+
+
+
+
+
+<a name="name"></a>
+
+# Name
+
+abrt-auto-reporting - Get or modify the auto reporting option values
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+
+ abrt-auto-reporting [-v] [ enabled | yes | 1 | on | disabled | no | 0 | off ]
+```
+
+<a name="description"></a>
+
+# Description
+
+
+Reads the configuration from abrt.conf and saves the changes to the same file.
+
+The changes will take effect immediately without necessity to restart any ABRT process and will be persistent.
+
+_disabled_
+User have to report the detect problems manually
+
+_enabled_
+ABRT uploads an uReport which was generated for a detected problem immediately after the detection phase.
+
+<a name="ureport-description"></a>
+
+### uReport description
+
+
+ABRT supports uReports for four types of crashes: crashes of C/C++ programs that result in a core dump, uncaught Python exceptions, uncaught Java exceptions and kernel oopses.
+
+Each uReport generally contains a stack trace, or multiple stack traces in the case of multi-threaded C/C++ and Java programs. The stack trace only describes the call stack of the program at the time of the crash and does not contain contents of any variables.
+
+Every uReport also contains identification of the operating system, versions of the RPM packages involved in the crash, and whether the program ran under a root user.
+
+There are also items specific to each crash type:
+
+C/C++ crashes
+these are path to the executable and signal delivered to the program,
+
+Python exceptions
+there is the type of the exception (without the error message, which may contain sensitive data),
+
+for kernel oopses
+these are list of loaded kernel modules, list of taint flags, and full text of the kernel oops.
+
+_Warning_: The full text of a kernel oops might contain information like the identification of the host hardware type. You should disable the autoreporting feature if you do not want to share this information with Red Hat.
+
+<a name="options"></a>
+
+# Options
+
+
+-v, --verbose
+Be more verbose. Can be given multiple times.
+
+<a name="see-also"></a>
+
+# See Also
+
+
+abrt.conf(5)
+
+<a name="authors"></a>
+
+# Authors
+
+
+.ie n \{\h'-04'·\h'+03'\c
+.\}
+.el \{.sp -1
+
+* ·  
+  .\}
+  ABRT team

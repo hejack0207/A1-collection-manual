@@ -1,0 +1,207 @@
+'\" t
+.\"     Title: report_event.conf
+.\"    Author: [see the "AUTHOR" section]
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 09/29/2020
+.\"    Manual: LIBREPORT MANUAL
+.\"    Source: LIBREPORT 2.14.0
+.\"  Language: English
+.\"
+.TH "REPORT_EVENT\&.CONF" "5" "09/29/2020" "LIBREPORT 2\&.14\&.0" "LIBREPORT MANUAL"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
+.SH "NAME"
+report_event.conf \- configuration file for libreport\&.
+.SH "DESCRIPTION"
+.sp
+This configuration file specifies which programs should be run when the specified event occurs in problem directory lifetime\&.
+.sp
+It consists of directives and rules\&.
+.sp
+Directives start with a reserved word\&. Currently, there is only one directive, "include"\&.
+.PP
+include \fIFILE\fR
+.RS 4
+This directive causes files which match FILE to be read and parsed as if they are inserted textually where this directive occurs\&. FILE can use shell pattern metacharacters (*,?,etc) to specify multiple files\&. Relative paths are interpreted relative to current file\&.
+.RE
+.sp
+Rule starts with a line with non\-space leading character\&. All subsequent lines which start with space or tab form one rule\&. Note that separating newline is retained\&.
+.sp
+Rules may be commented out with #\&. One # is sufficient to comment out even a multi\-line rule (no need to comment out every line)\&.
+.sp
+Rules specify which programs to run on the problem directory\&. Each rule may have conditions to be checked before the program is run\&.
+.sp
+Conditions have form VAR=VAL or VAL~=REGEX, where VAR is either word "EVENT" or a name of problem directory element to be checked (for example, "executable", "package", hostname" etc)\&.
+.sp
+If all conditions match, the remaining part of the rule (the "program" part) is run in the shell\&. All shell language constructs are valid\&. All stdout and stderr output is captured and passed to ABRT and possibly to ABRT\(cqs frontends and shown to the user\&.
+.sp
+If the program terminates with nonzero exit code, the event processing is considered unsuccessful and is stopped\&. Last captured output line, if any, is considered to be the error message indicating the reason of the failure, and may be used by abrt as such\&.
+.sp
+If the program terminates successfully, next rule is read and processed\&. This process is repeated until the end of this file\&.
+.SS "Event XML configuration"
+.sp
+These configuration files provides event meta data\&.
+.sp
+Each file has XML formatting with the following DTD:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+<!ELEMENT event            (name+,description+,requires\-items?,exclude\-items\-by\-default?,exclude\-items\-always?,exclude\-binary\-items?,include\-items\-by\-default?,minimal\-rating?,gui\-review\-elements?,options?)>
+<!ELEMENT name             (#PCDATA)>
+<!ATTLIST name             xml:lang CDATA #IMPLIED>
+<!ELEMENT description      (#PCDATA)>
+<!ATTLIST description      xml:lang CDATA #IMPLIED>
+<!ELEMENT requires\-items           (#PCDATA)>
+<!ELEMENT exclude\-items\-by\-default (#PCDATA)>
+<!ELEMENT include\-items\-by\-default (#PCDATA)>
+<!ELEMENT exclude\-items\-always     (#PCDATA)>
+<!ELEMENT exclude\-binary\-items     ("yes"|"no")>
+<!ELEMENT minimal\-rating           ("0"|"1"|"2"|"3"|"4")>
+<!ELEMENT gui\-review\-elements      ("yes"|"no")>
+<!ELEMENT support\-restricted\-access ("yes"|"no")>
+<!ATTLIST support\-restricted\-access optionname CDATA #IMPLIED>
+<!ELEMENT options          (option*,advanced\-options)>
+<!ELEMENT advanced\-options (option)*>
+<!ELEMENT option           (label+,description+,note\-html+,allow\-empty?,default\-value?)>
+<!ATTLIST option           type (text|bool|password|number|hint\-html) #REQUIRED
+                           name CDATA #REQUIRED>
+<!ELEMENT label            (#PCDATA)>
+<!ATTLIST label            xml:lang CDATA #IMPLIED>
+<!ELEMENT note\-html        (#PCDATA)>
+<!ATTLIST note\-html        xml:lang CDATA #IMPLIED>
+<!ELEMENT allow\-empty      ("yes"|"no")>
+<!ELEMENT default\-value    (#PCDATA)>
+<!ELEMENT requires\-details ("yes"|"no")>
+.fi
+.if n \{\
+.RE
+.\}
+.PP
+name
+.RS 4
+User visible name of event
+.RE
+.PP
+description
+.RS 4
+User visible description
+.RE
+.PP
+exclude\-items\-by\-default
+.RS 4
+Comma separated names of excluded problem elements\&. User can include any of these elements if he wishes it\&.
+.RE
+.PP
+include\-items\-by\-default
+.RS 4
+Comma separated names of included problem elements\&. User can exclude any of these elements if he wishes it\&.
+.RE
+.PP
+exclude\-items\-always
+.RS 4
+Comma separated names of included problem elements\&. User cannot include any of these elements\&.
+.RE
+.PP
+exclude\-binary\-items
+.RS 4
+If "yes" then all binary problem elements are excluded\&. User can include them if he wishes it\&.
+.RE
+.PP
+minimal\-rating
+.RS 4
+Minimal backtrace rating required for executing the event\&. Backtrace rating is a measure of backtrace usability and understandability\&. With an increasing number of unresolved frames the backtrace rating gets lower values\&.
+.RE
+.PP
+gui\-review\-elements
+.RS 4
+If "yes", user must explicitly approve that all included problem elements can be published\&. If "no", the event is executed automatically\&. If not provided, "yes" is expected\&.
+.RE
+.PP
+support\-restricted\-access
+.RS 4
+If "yes", the UI tools will offer the users to enter the new report with restricted access\&. If "no", the UI tools will never offer the users to enter the report with restricted access\&. "no" is the default value\&. The element should have one argument named
+\fIoptionname\fR
+which defines name of an option holding configuration of the restricted access feature\&. The option must of
+\fIbool\fR
+type\&.
+.RE
+.PP
+advanced\-options
+.RS 4
+List of options which are hidden in the default view\&.
+.RE
+.PP
+label
+.RS 4
+Event option label
+.RE
+.PP
+note\-html
+.RS 4
+Event option HTML formatted description
+.RE
+.PP
+allow\-empty
+.RS 4
+Determines if user can leave the option empty
+.RE
+.PP
+default\-value
+.RS 4
+A value which is used by default
+.RE
+.PP
+option:name
+.RS 4
+Name of exported environment variable name\&. libreport tools communicate through Environment Variables\&.
+.RE
+.PP
+requires\-details
+.RS 4
+If "yes", the UI tools will offer the users to fill "comment", "reproducer" and "reproducible" during a reporting\&. If "no", only "comment" will be offered to fill\&.
+.RE
+.SH "EXAMPLES"
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+EVENT=post\-create analyzer=Python   abrt\-action\-analyze\-python
+
+EVENT=post\-create
+        getent passwd "`cat uid`" | cut \-d: \-f1 >username
+.fi
+.if n \{\
+.RE
+.\}
+.SH "SEE ALSO"
+.sp
+abrtd(8)
+.SH "AUTHOR"
+.sp
+Manual page written by Denys Vlasenko <\m[blue]\fBdvlasenk@redhat\&.com\fR\m[]\&\s-2\u[1]\d\s+2>\&.
+.SH "NOTES"
+.IP " 1." 4
+dvlasenk@redhat.com
+.RS 4
+\%mailto:dvlasenk@redhat.com
+.RE
