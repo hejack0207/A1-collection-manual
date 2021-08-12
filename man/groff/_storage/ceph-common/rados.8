@@ -1,0 +1,333 @@
+.\" Man page generated from reStructuredText.
+.
+.TH "RADOS" "8" "Apr 21, 2020" "dev" "Ceph"
+.SH NAME
+rados \- rados object storage utility
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+.nf
+\fBrados\fP [ \fIoptions\fP ] [ \fIcommand\fP ]
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+\fBrados\fP is a utility for interacting with a Ceph object storage
+cluster (RADOS), part of the Ceph distributed storage system.
+.SH OPTIONS
+.INDENT 0.0
+.TP
+.B \-p pool, \-\-pool pool
+Interact with the given pool. Required by most commands.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-pgid
+As an alternative to \fB\-\-pool\fP, \fB\-\-pgid\fP also allow users to specify the
+PG id to which the command will be directed. With this option, certain
+commands like \fBls\fP allow users to limit the scope of the command to the given PG.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-N namespace, \-\-namespace namespace
+Specify the rados namespace to use for the object.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-s snap, \-\-snap snap
+Read from the given pool snapshot. Valid for all pool\-specific read operations.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-i infile
+will specify an input file to be passed along as a payload with the
+command to the monitor cluster. This is only used for specific
+monitor commands.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-o outfile
+will write any payload returned by the monitor cluster with its
+reply to outfile. Only specific monitor commands (e.g. osd getmap)
+return a payload.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-c ceph.conf, \-\-conf=ceph.conf
+Use ceph.conf configuration file instead of the default
+/etc/ceph/ceph.conf to determine monitor addresses during startup.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-m monaddress[:port]
+Connect to specified monitor (instead of looking through ceph.conf).
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-b block_size
+Set the block size for put/get/append ops and for write benchmarking.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-striper
+Uses the striping API of rados rather than the default one.
+Available for stat, stat2, get, put, append, truncate, rm, ls
+and all xattr related operation
+.UNINDENT
+.SH GLOBAL COMMANDS
+.INDENT 0.0
+.TP
+\fBlspools\fP
+List object pools
+.TP
+\fBdf\fP
+Show utilization statistics, including disk usage (bytes) and object
+counts, over the entire system and broken down by pool.
+.TP
+\fBlist\-inconsistent\-pg\fP \fIpool\fP
+List inconsistent PGs in given pool.
+.TP
+\fBlist\-inconsistent\-obj\fP \fIpgid\fP
+List inconsistent objects in given PG.
+.TP
+\fBlist\-inconsistent\-snapset\fP \fIpgid\fP
+List inconsistent snapsets in given PG.
+.UNINDENT
+.SH POOL SPECIFIC COMMANDS
+.INDENT 0.0
+.TP
+\fBget\fP \fIname\fP \fIoutfile\fP
+Read object name from the cluster and write it to outfile.
+.TP
+\fBput\fP \fIname\fP \fIinfile\fP [\-\-offset offset]
+Write object name with start offset (default:0) to the cluster with contents from infile.
+\fBWarning:\fP The put command creates a single RADOS object, sized just as
+large as your input file. Unless your objects are of reasonable and consistent sizes, that
+is probably not what you want \-\- consider using RGW/S3, CephFS, or RBD instead.
+.TP
+\fBappend\fP \fIname\fP \fIinfile\fP
+Append object name to the cluster with contents from infile.
+.TP
+\fBrm\fP \fIname\fP
+Remove object name.
+.TP
+\fBlistwatchers\fP \fIname\fP
+List the watchers of object name.
+.TP
+\fBls\fP \fIoutfile\fP
+List objects in the given pool and write to outfile. Instead of \fB\-\-pool\fP if \fB\-\-pgid\fP will be specified, \fBls\fP will only list the objects in the given PG.
+.TP
+\fBlssnap\fP
+List snapshots for given pool.
+.TP
+\fBclonedata\fP \fIsrcname\fP \fIdstname\fP \-\-object\-locator \fIkey\fP
+Clone object byte data from \fIsrcname\fP to \fIdstname\fP\&.  Both objects must be stored with the locator key \fIkey\fP (usually either \fIsrcname\fP or \fIdstname\fP).  Object attributes and omap keys are not copied or cloned.
+.TP
+\fBmksnap\fP \fIfoo\fP
+Create pool snapshot named \fIfoo\fP\&.
+.TP
+\fBrmsnap\fP \fIfoo\fP
+Remove pool snapshot named \fIfoo\fP\&.
+.TP
+\fBbench\fP \fIseconds\fP \fImode\fP [ \-b \fIobjsize\fP ] [ \-t \fIthreads\fP ]
+Benchmark for \fIseconds\fP\&. The mode can be \fIwrite\fP, \fIseq\fP, or
+\fIrand\fP\&. \fIseq\fP and \fIrand\fP are read benchmarks, either
+sequential or random. Before running one of the reading benchmarks,
+run a write benchmark with the \fI\-\-no\-cleanup\fP option. The default
+object size is 4 MB, and the default number of simulated threads
+(parallel writes) is 16. The \fI\-\-run\-name <label>\fP option is useful
+for benchmarking a workload test from multiple clients. The \fI<label>\fP
+is an arbitrary object name. It is "benchmark_last_metadata" by
+default, and is used as the underlying object name for "read" and
+"write" ops.
+Note: \-b \fIobjsize\fP option is valid only in \fIwrite\fP mode.
+Note: \fIwrite\fP and \fIseq\fP must be run on the same host otherwise the
+objects created by \fIwrite\fP will have names that will fail \fIseq\fP\&.
+.TP
+\fBcleanup\fP [ \-\-run\-name \fIrun_name\fP ] [ \-\-prefix \fIprefix\fP ]
+Clean up a previous benchmark operation.
+Note: the default run\-name is "benchmark_last_metadata"
+.TP
+\fBlistxattr\fP \fIname\fP
+List all extended attributes of an object.
+.TP
+\fBgetxattr\fP \fIname\fP \fIattr\fP
+Dump the extended attribute value of \fIattr\fP of an object.
+.TP
+\fBsetxattr\fP \fIname\fP \fIattr\fP \fIvalue\fP
+Set the value of \fIattr\fP in the extended attributes of an object.
+.TP
+\fBrmxattr\fP \fIname\fP \fIattr\fP
+Remove \fIattr\fP from the extended attributes of an object.
+.TP
+\fBstat\fP \fIname\fP
+Get stat (ie. mtime, size) of given object
+.TP
+\fBstat2\fP \fIname\fP
+Get stat (similar to stat, but with high precision time) of given object
+.TP
+\fBlistomapkeys\fP \fIname\fP
+List all the keys stored in the object map of object name.
+.TP
+\fBlistomapvals\fP \fIname\fP
+List all key/value pairs stored in the object map of object name.
+The values are dumped in hexadecimal.
+.TP
+\fBgetomapval\fP [ \-\-omap\-key\-file \fIfile\fP ] \fIname\fP \fIkey\fP [ \fIout\-file\fP ]
+Dump the hexadecimal value of key in the object map of object name.
+If the optional \fIout\-file\fP argument is not provided, the value will be
+written to standard output.
+.TP
+\fBsetomapval\fP [ \-\-omap\-key\-file \fIfile\fP ] \fIname\fP \fIkey\fP [ \fIvalue\fP ]
+Set the value of key in the object map of object name. If the optional
+\fIvalue\fP argument is not provided, the value will be read from standard
+input.
+.TP
+\fBrmomapkey\fP [ \-\-omap\-key\-file \fIfile\fP ] \fIname\fP \fIkey\fP
+Remove key from the object map of object name.
+.TP
+\fBgetomapheader\fP \fIname\fP
+Dump the hexadecimal value of the object map header of object name.
+.TP
+\fBsetomapheader\fP \fIname\fP \fIvalue\fP
+Set the value of the object map header of object name.
+.TP
+\fBexport\fP \fIfilename\fP
+Serialize pool contents to a file or standard output.n"
+.TP
+\fBimport\fP [\-\-dry\-run] [\-\-no\-overwrite] < filename | \- >
+Load pool contents from a file or standard input
+.UNINDENT
+.SH EXAMPLES
+.sp
+To view cluster utilization:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados df
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To get a list object in pool foo sent to stdout:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados \-p foo ls \-
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To get a list of objects in PG 0.6:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados \-\-pgid 0.6 ls
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To write an object:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados \-p foo put myobject blah.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To create a snapshot:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados \-p foo mksnap mysnap
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To delete the object:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados \-p foo rm myobject
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To read a previously snapshotted version of an object:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados \-p foo \-s mysnap get myobject blah.txt.old
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To list inconsistent objects in PG 0.6:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rados list\-inconsistent\-obj 0.6 \-\-format=json\-pretty
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH AVAILABILITY
+.sp
+\fBrados\fP is part of Ceph, a massively scalable, open\-source, distributed storage system. Please refer to
+the Ceph documentation at \fI\%http://ceph.com/docs\fP for more information.
+.SH SEE ALSO
+.sp
+ceph(8)
+.SH COPYRIGHT
+2010-2014, Inktank Storage, Inc. and contributors. Licensed under Creative Commons Attribution Share Alike 3.0 (CC-BY-SA-3.0)
+.\" Generated by docutils manpage writer.
+.

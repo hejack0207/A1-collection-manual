@@ -1,0 +1,591 @@
+.\" Man page generated from reStructuredText.
+.
+.TH "CEPH-VOLUME" "8" "Apr 21, 2020" "dev" "Ceph"
+.SH NAME
+ceph-volume \- Ceph OSD deployment and inspection tool
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+.nf
+\fBceph\-volume\fP [\-h] [\-\-cluster CLUSTER] [\-\-log\-level LOG_LEVEL]
+.in +2
+[\-\-log\-path LOG_PATH]
+.in -2
+.fi
+.sp
+.nf
+\fBceph\-volume\fP \fBinventory\fP
+.fi
+.sp
+.nf
+\fBceph\-volume\fP \fBlvm\fP [ \fItrigger\fP | \fIcreate\fP | \fIactivate\fP | \fIprepare\fP
+\fIzap\fP | \fIlist\fP | \fIbatch\fP]
+.fi
+.sp
+.nf
+\fBceph\-volume\fP \fBsimple\fP [ \fItrigger\fP | \fIscan\fP | \fIactivate\fP ]
+.fi
+.sp
+.SH DESCRIPTION
+.sp
+\fBceph\-volume\fP is a single purpose command line tool to deploy logical
+volumes as OSDs, trying to maintain a similar API to \fBceph\-disk\fP when
+preparing, activating, and creating OSDs.
+.sp
+It deviates from \fBceph\-disk\fP by not interacting or relying on the udev rules
+that come installed for Ceph. These rules allow automatic detection of
+previously setup devices that are in turn fed into \fBceph\-disk\fP to activate
+them.
+.SH COMMANDS
+.SS inventory
+.sp
+This subcommand provides information about a host\(aqs physical disc inventory and
+reports metadata about these discs. Among this metadata one can find disc
+specific data items (like model, size, rotational or solid state) as well as
+data items specific to ceph using a device, such as if it is available for
+use with ceph or if logical volumes are present.
+.sp
+Examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume inventory
+ceph\-volume inventory /dev/sda
+ceph\-volume inventory \-\-format json\-pretty
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Optional arguments:
+.INDENT 0.0
+.IP \(bu 2
+[\-h, \-\-help]          show the help message and exit
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B [\-\-format]            report format, valid values are \fBplain\fP (default),
+\fBjson\fP and \fBjson\-pretty\fP
+.UNINDENT
+.UNINDENT
+.SS lvm
+.sp
+By making use of LVM tags, the \fBlvm\fP sub\-command is able to store and later
+re\-discover and query devices associated with OSDs so that they can later
+activated.
+.sp
+Subcommands:
+.sp
+\fBbatch\fP
+Creates OSDs from a list of devices using a \fBfilestore\fP
+or \fBbluestore\fP (default) setup. It will create all necessary volume groups
+and logical volumes required to have a working OSD.
+.sp
+Example usage with three devices:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm batch \-\-bluestore /dev/sda /dev/sdb /dev/sdc
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Optional arguments:
+.INDENT 0.0
+.IP \(bu 2
+[\-h, \-\-help]          show the help message and exit
+.IP \(bu 2
+[\-\-bluestore]         Use the bluestore objectstore (default)
+.IP \(bu 2
+[\-\-filestore]         Use the filestore objectstore
+.IP \(bu 2
+[\-\-yes]               Skip the report and prompt to continue provisioning
+.IP \(bu 2
+[\-\-prepare]           Only prepare OSDs, do not activate
+.IP \(bu 2
+[\-\-dmcrypt]           Enable encryption for the underlying OSD devices
+.IP \(bu 2
+[\-\-crush\-device\-class] Define a CRUSH device class to assign the OSD to
+.IP \(bu 2
+[\-\-no\-systemd]         Do not enable or create any systemd units
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B [\-\-report]         Report what the potential outcome would be for the
+current input (requires devices to be passed in)
+.UNINDENT
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B [\-\-format]         Output format when reporting (used along with
+\-\-report), can be one of \(aqpretty\(aq (default) or \(aqjson\(aq
+.UNINDENT
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B [\-\-block\-db\-size]     Set (or override) the "bluestore_block_db_size" value,
+in bytes
+.UNINDENT
+.IP \(bu 2
+[\-\-journal\-size]      Override the "osd_journal_size" value, in megabytes
+.UNINDENT
+.sp
+Required positional arguments:
+.INDENT 0.0
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B <DEVICE>    Full path to a raw device, like \fB/dev/sda\fP\&. Multiple
+\fB<DEVICE>\fP paths can be passed in.
+.UNINDENT
+.UNINDENT
+.sp
+\fBactivate\fP
+Enables a systemd unit that persists the OSD ID and its UUID (also called
+\fBfsid\fP in Ceph CLI tools), so that at boot time it can understand what OSD is
+enabled and needs to be mounted.
+.sp
+Usage:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm activate \-\-bluestore <osd id> <osd fsid>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Optional Arguments:
+.INDENT 0.0
+.IP \(bu 2
+[\-h, \-\-help]  show the help message and exit
+.IP \(bu 2
+[\-\-auto\-detect\-objectstore] Automatically detect the objectstore by inspecting
+the OSD
+.IP \(bu 2
+[\-\-bluestore] bluestore objectstore (default)
+.IP \(bu 2
+[\-\-filestore] filestore objectstore
+.IP \(bu 2
+[\-\-all] Activate all OSDs found in the system
+.IP \(bu 2
+[\-\-no\-systemd] Skip creating and enabling systemd units and starting of OSD
+services
+.UNINDENT
+.sp
+Multiple OSDs can be activated at once by using the (idempotent) \fB\-\-all\fP flag:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm activate \-\-all
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBprepare\fP
+Prepares a logical volume to be used as an OSD and journal using a \fBfilestore\fP
+or \fBbluestore\fP (default) setup. It will not create or modify the logical volumes
+except for adding extra metadata.
+.sp
+Usage:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm prepare \-\-filestore \-\-data <data lv> \-\-journal <journal device>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Optional arguments:
+.INDENT 0.0
+.IP \(bu 2
+[\-h, \-\-help]          show the help message and exit
+.IP \(bu 2
+[\-\-journal JOURNAL]   A logical group name, path to a logical volume, or path to a device
+.IP \(bu 2
+[\-\-bluestore]         Use the bluestore objectstore (default)
+.IP \(bu 2
+[\-\-block.wal]         Path to a bluestore block.wal logical volume or partition
+.IP \(bu 2
+[\-\-block.db]          Path to a bluestore block.db logical volume or partition
+.IP \(bu 2
+[\-\-filestore]         Use the filestore objectstore
+.IP \(bu 2
+[\-\-dmcrypt]           Enable encryption for the underlying OSD devices
+.IP \(bu 2
+[\-\-osd\-id OSD_ID]     Reuse an existing OSD id
+.IP \(bu 2
+[\-\-osd\-fsid OSD_FSID] Reuse an existing OSD fsid
+.IP \(bu 2
+[\-\-crush\-device\-class] Define a CRUSH device class to assign the OSD to
+.UNINDENT
+.sp
+Required arguments:
+.INDENT 0.0
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B \-\-data
+A logical group name or a path to a logical volume
+.UNINDENT
+.UNINDENT
+.sp
+For encrypting an OSD, the \fB\-\-dmcrypt\fP flag must be added when preparing
+(also supported in the \fBcreate\fP sub\-command).
+.sp
+\fBcreate\fP
+Wraps the two\-step process to provision a new osd (calling \fBprepare\fP first
+and then \fBactivate\fP) into a single one. The reason to prefer \fBprepare\fP and
+then \fBactivate\fP is to gradually introduce new OSDs into a cluster, and
+avoiding large amounts of data being rebalanced.
+.sp
+The single\-call process unifies exactly what \fBprepare\fP and \fBactivate\fP do,
+with the convenience of doing it all at once. Flags and general usage are
+equivalent to those of the \fBprepare\fP and \fBactivate\fP subcommand.
+.sp
+\fBtrigger\fP
+This subcommand is not meant to be used directly, and it is used by systemd so
+that it proxies input to \fBceph\-volume lvm activate\fP by parsing the
+input from systemd, detecting the UUID and ID associated with an OSD.
+.sp
+Usage:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm trigger <SYSTEMD\-DATA>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The systemd "data" is expected to be in the format of:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+<OSD ID>\-<OSD UUID>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The lvs associated with the OSD need to have been prepared previously,
+so that all needed tags and metadata exist.
+.sp
+Positional arguments:
+.INDENT 0.0
+.IP \(bu 2
+<SYSTEMD_DATA>  Data from a systemd unit containing ID and UUID of the OSD.
+.UNINDENT
+.sp
+\fBlist\fP
+List devices or logical volumes associated with Ceph. An association is
+determined if a device has information relating to an OSD. This is
+verified by querying LVM\(aqs metadata and correlating it with devices.
+.sp
+The lvs associated with the OSD need to have been prepared previously by
+ceph\-volume so that all needed tags and metadata exist.
+.sp
+Usage:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm list
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+List a particular device, reporting all metadata about it:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm list /dev/sda1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+List a logical volume, along with all its metadata (vg is a volume
+group, and lv the logical volume name):
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm list {vg/lv}
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Positional arguments:
+.INDENT 0.0
+.IP \(bu 2
+<DEVICE>  Either in the form of \fBvg/lv\fP for logical volumes,
+\fB/path/to/sda1\fP or \fB/path/to/sda\fP for regular devices.
+.UNINDENT
+.sp
+\fBzap\fP
+Zaps the given logical volume or partition. If given a path to a logical
+volume it must be in the format of vg/lv. Any filesystems present
+on the given lv or partition will be removed and all data will be purged.
+.sp
+However, the lv or partition will be kept intact.
+.sp
+Usage, for logical volumes:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm zap {vg/lv}
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Usage, for logical partitions:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm zap /dev/sdc1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For full removal of the device use the \fB\-\-destroy\fP flag (allowed for all
+device types):
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm zap \-\-destroy /dev/sdc1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Multiple devices can be removed by specifying the OSD ID and/or the OSD FSID:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume lvm zap \-\-destroy \-\-osd\-id 1
+ceph\-volume lvm zap \-\-destroy \-\-osd\-id 1 \-\-osd\-fsid C9605912\-8395\-4D76\-AFC0\-7DFDAC315D59
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Positional arguments:
+.INDENT 0.0
+.IP \(bu 2
+<DEVICE>  Either in the form of \fBvg/lv\fP for logical volumes,
+\fB/path/to/sda1\fP or \fB/path/to/sda\fP for regular devices.
+.UNINDENT
+.SS simple
+.sp
+Scan legacy OSD directories or data devices that may have been created by
+ceph\-disk, or manually.
+.sp
+Subcommands:
+.sp
+\fBactivate\fP
+Enables a systemd unit that persists the OSD ID and its UUID (also called
+\fBfsid\fP in Ceph CLI tools), so that at boot time it can understand what OSD is
+enabled and needs to be mounted, while reading information that was previously
+created and persisted at \fB/etc/ceph/osd/\fP in JSON format.
+.sp
+Usage:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume simple activate \-\-bluestore <osd id> <osd fsid>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Optional Arguments:
+.INDENT 0.0
+.IP \(bu 2
+[\-h, \-\-help]  show the help message and exit
+.IP \(bu 2
+[\-\-bluestore] bluestore objectstore (default)
+.IP \(bu 2
+[\-\-filestore] filestore objectstore
+.UNINDENT
+.sp
+Note: It requires a matching JSON file with the following format:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+/etc/ceph/osd/<osd id>\-<osd fsid>.json
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBscan\fP
+Scan a running OSD or data device for an OSD for metadata that can later be
+used to activate and manage the OSD with ceph\-volume. The scan method will
+create a JSON file with the required information plus anything found in the OSD
+directory as well.
+.sp
+Optionally, the JSON blob can be sent to stdout for further inspection.
+.sp
+Usage on all running OSDs:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-voume simple scan
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Usage on data devices:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume simple scan <data device>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Running OSD directories:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume simple scan <path to osd dir>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Optional arguments:
+.INDENT 0.0
+.IP \(bu 2
+[\-h, \-\-help]          show the help message and exit
+.IP \(bu 2
+[\-\-stdout]            Send the JSON blob to stdout
+.IP \(bu 2
+[\-\-force]             If the JSON file exists at destination, overwrite it
+.UNINDENT
+.sp
+Optional Positional arguments:
+.INDENT 0.0
+.IP \(bu 2
+<DATA DEVICE or OSD DIR>  Actual data partition or a path to the running OSD
+.UNINDENT
+.sp
+\fBtrigger\fP
+This subcommand is not meant to be used directly, and it is used by systemd so
+that it proxies input to \fBceph\-volume simple activate\fP by parsing the
+input from systemd, detecting the UUID and ID associated with an OSD.
+.sp
+Usage:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ceph\-volume simple trigger <SYSTEMD\-DATA>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The systemd "data" is expected to be in the format of:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+<OSD ID>\-<OSD UUID>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The JSON file associated with the OSD need to have been persisted previously by
+a scan (or manually), so that all needed metadata can be used.
+.sp
+Positional arguments:
+.INDENT 0.0
+.IP \(bu 2
+<SYSTEMD_DATA>  Data from a systemd unit containing ID and UUID of the OSD.
+.UNINDENT
+.SH AVAILABILITY
+.sp
+\fBceph\-volume\fP is part of Ceph, a massively scalable, open\-source, distributed storage system. Please refer to
+the documentation at \fI\%http://docs.ceph.com/\fP for more information.
+.SH SEE ALSO
+.sp
+ceph\-osd(8),
+.SH COPYRIGHT
+2010-2014, Inktank Storage, Inc. and contributors. Licensed under Creative Commons Attribution Share Alike 3.0 (CC-BY-SA-3.0)
+.\" Generated by docutils manpage writer.
+.
