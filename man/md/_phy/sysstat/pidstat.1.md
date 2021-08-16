@@ -1,9 +1,9 @@
 # pidstat(1) - Report statistics for Linux tasks.
 
-Linux, JANUARY 2018
+Linux, JULY 2018
 
 ```
-pidstat [ -d ] [ -H ] [ -h ] [ -I ] [ -l ] [ -R ] [ -r ] [ -s ] [ -t ] [ -U [ username ] ] [ -u ] [ -V ] [ -v ] [ -w ] [ -C comm ] [ -G process_name ] [ --human ] [ -p { pid [,...] | SELF | ALL } ] [ -T { TASK | CHILD | ALL } ] [ interval [ count ] ] [ -e program args ]
+pidstat [ -d ] [ -H ] [ -h ] [ -I ] [ -l ] [ -R ] [ -r ] [ -s ] [ -t ] [ -U [ username ] ] [ -u ] [ -V ] [ -v ] [ -w ] [ -C comm ] [ -G process_name ] [ --dec={ 0 | 1 | 2 } ] [ --human ] [ -p { pid [,...] | SELF | ALL } ] [ -T { TASK | CHILD | ALL } ] [ interval [ count ] ] [ -e program args ]
 ```
 
 <a name="description"></a>
@@ -99,6 +99,8 @@ Not specifying any flags selects only CPU activity.
       
       **Command**
           The command name of the task.
+* --dec={ 0 | 1 | 2 }  
+  Specify the number of decimal places to use (0 to 2, default value is 2).
 * -e program args  
   Execute
   _program_
@@ -523,5 +525,7 @@ Sebastien Godard (sysstat &lt;at&gt; orange.fr)
 **mpstat**(1),
 **iostat**(1),
 **vmstat**(8)
+
+_https://github.com/sysstat/sysstat_
 
 _http://pagesperso-orange.fr/sebastien.godard/_
