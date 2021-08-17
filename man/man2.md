@@ -1,4 +1,9 @@
 # file io
+* open
+* write
+* read
+* close
+
 # processes
 # memory allocation
 # user and group
@@ -57,493 +62,489 @@
 # alternative io models
 # pseudoterminals
 
-accept
-accept4
-access
-acct
-add_key
-adjtimex
-afs_syscall
-alarm
-alloc_hugepages
-arch_prctl
-arm_fadvise
-arm_fadvise64_64
-arm_sync_file_range
-bdflush
-bind
-bpf
-break
-brk
-cacheflush
-capget
-capset
-chdir
-chmod
-chown
-chown32
-chroot
-clock_getres
-clock_gettime
-clock_nanosleep
-clock_settime
-__clone2
-clone2
-clone
-close
-connect
-copy_file_range
-creat
-create_module
-delete_module
-dup2
-dup
-dup3
-epoll_create1
-epoll_create
-epoll_ctl
-epoll_pwait
-epoll_wait
-eventfd2
-eventfd
-execve
-execveat
-_exit
-exit
-exit_group
-faccessat
-fadvise64
-fadvise64_64
-fallocate
-fanotify_init
-fanotify_mark
-fattach
-fchdir
-fchmod
-fchmodat
-fchown
-fchown32
-fchownat
-fcntl
-fcntl64
-fdatasync
-fdetach
-fgetxattr
-finit_module
-flistxattr
-flock
-fork
-free_hugepages
-fremovexattr
-fsetxattr
-fstat
-fstat64
-fstatat
-fstatat64
-fstatfs
-fstatfs64
-fstatvfs
-fsync
-ftruncate
-ftruncate64
-futex
-futimesat
-getcontext
-getcpu
-getcwd
-getdents
-getdents64
-getdomainname
-getdtablesize
-getegid
-getegid32
-geteuid
-geteuid32
-getgid
-getgid32
-getgroups
-getgroups32
-gethostid
-gethostname
-getitimer
-get_kernel_syms
-get_mempolicy
-getmsg
-getpagesize
-getpeername
-getpgid
-getpgrp
-getpid
-getpmsg
-getppid
-getpriority
-getrandom
-getresgid
-getresgid32
-getresuid
-getresuid32
-getrlimit
-get_robust_list
-getrusage
-getsid
-getsockname
-getsockopt
-get_thread_area
-gettid
-gettimeofday
-getuid
-getuid32
-getunwind
-getxattr
-gtty
-idle
-inb
-inb_p
-init_module
-inl
-inl_p
-inotify_add_watch
-inotify_init1
-inotify_init
-inotify_rm_watch
-insb
-insl
-insw
-intro
-inw
-inw_p
-io_cancel
-ioctl
-ioctl_console
-ioctl_fat
-ioctl_ficlone
-ioctl_ficlonerange
-ioctl_fideduperange
-ioctl_getfsmap
-ioctl_iflags
-ioctl_list
-ioctl_ns
-ioctl_tty
-ioctl_userfaultfd
-io_destroy
-io_getevents
-ioperm
-iopl
-ioprio_get
-ioprio_set
-io_setup
-io_submit
-ipc
-isastream
-kcmp
-kexec_file_load
-kexec_load
-keyctl
-kill
-killpg
-lchown
-lchown32
-lgetxattr
-link
-linkat
-listen
-listxattr
-llistxattr
-_llseek
-llseek
-lock
-lookup_dcookie
-lremovexattr
-lseek
-lsetxattr
-lstat
-lstat64
-madvise1
-madvise
-mbind
-membarrier
-memfd_create
-migrate_pages
-mincore
-mkdir
-mkdirat
-mknod
-mknodat
-mlock2
-mlock
-mlockall
-mmap2
-mmap
-modify_ldt
-mount
-move_pages
-mprotect
-mpx
-mq_getsetattr
-mq_notify
-mq_open
-mq_timedreceive
-mq_timedsend
-mq_unlink
-mremap
-msgctl
-msgget
-msgop
-msgrcv
-msgsnd
-msync
-munlock
-munlockall
-munmap
-name_to_handle_at
-nanosleep
-newfstatat
-_newselect
-nfsservctl
-nice
-oldfstat
-oldlstat
-oldolduname
-oldstat
-olduname
-open
-openat
-open_by_handle_at
-outb
-outb_p
-outl
-outl_p
-outsb
-outsl
-outsw
-outw
-outw_p
-pause
-perf_event_open
-perfmonctl
-personality
-phys
-pipe2
-pipe
-pivot_root
-pkey_alloc
-pkey_free
-pkey_mprotect
-poll
-posix_fadvise
-ppoll
-prctl
-pread
-pread64
-preadv2
-preadv
-prlimit
-prlimit64
-process_vm_readv
-process_vm_writev
-prof
-pselect
-pselect6
-ptrace
-putmsg
-putpmsg
-pwrite
-pwrite64
-pwritev2
-pwritev
-query_module
-quotactl
-read
-readahead
-readdir
-readlink
-readlinkat
-readv
-reboot
-recv
-recvfrom
-recvmmsg
-recvmsg
-remap_file_pages
-removexattr
-rename
-renameat2
-renameat
-request_key
-restart_syscall
-rmdir
-rtas
-rt_sigaction
-rt_sigpending
-rt_sigprocmask
-rt_sigqueueinfo
-rt_sigreturn
-rt_sigsuspend
-rt_sigtimedwait
-rt_tgsigqueueinfo
-s390_pci_mmio_read
-s390_pci_mmio_write
-s390_runtime_instr
-s390_sthyi
-sbrk
-sched_getaffinity
-sched_getattr
-sched_getparam
-sched_get_priority_max
-sched_get_priority_min
-sched_getscheduler
-sched_rr_get_interval
-sched_setaffinity
-sched_setattr
-sched_setparam
-sched_setscheduler
-sched_yield
-seccomp
-security
-select
-select_tut
-semctl
-semget
-semop
-semtimedop
-send
-sendfile
-sendfile64
-sendmmsg
-sendmsg
-sendto
-setcontext
-setdomainname
-setegid
-seteuid
-setfsgid
-setfsgid32
-setfsuid
-setfsuid32
-setgid
-setgid32
-setgroups
-setgroups32
-sethostid
-sethostname
-setitimer
-set_mempolicy
-setns
-setpgid
-setpgrp
-setpriority
-setregid
-setregid32
-setresgid
-setresgid32
-setresuid
-setresuid32
-setreuid
-setreuid32
-setrlimit
-set_robust_list
-setsid
-setsockopt
-set_thread_area
-set_tid_address
-settimeofday
-setuid
-setuid32
-setup
-setxattr
-sgetmask
-shmat
-shmctl
-shmdt
-shmget
-shmop
-shutdown
-sigaction
-sigaltstack
-signal
-signalfd
-signalfd4
-sigpending
-sigprocmask
-sigqueue
-sigreturn
-sigsuspend
-sigtimedwait
-sigwaitinfo
-socket
-socketcall
-socketpair
-splice
-spu_create
-spu_run
-ssetmask
-stat
-stat64
-statfs
-statfs64
-statvfs
-statx
-stime
-stty
-subpage_prot
-swapcontext
-swapoff
-swapon
-symlink
-symlinkat
-sync
-sync_file_range2
-sync_file_range
-syncfs
-_syscall
-syscall
-syscalls
-_sysctl
-sysctl
-sysfs
-sysinfo
-syslog
-tee
-tgkill
-time
-timer_create
-timer_delete
-timerfd_create
-timerfd_gettime
-timerfd_settime
-timer_getoverrun
-timer_gettime
-timer_settime
-times
-tkill
-truncate
-truncate64
-tuxcall
-ugetrlimit
-umask
-umount2
-umount
-uname
-unimplemented
-unlink
-unlinkat
-unshare
-uselib
-userfaultfd
-ustat
-utime
-utimensat
-utimes
-vfork
-vhangup
-vm86
-vm86old
-vmsplice
-vserver
-wait
-wait3
-wait4
-waitid
-waitpid
-write
-writev
+* accept
+* accept4
+* access
+* acct
+* add_key
+* adjtimex
+* afs_syscall
+* alarm
+* alloc_hugepages
+* arch_prctl
+* arm_fadvise
+* arm_fadvise64_64
+* arm_sync_file_range
+* bdflush
+* bind
+* bpf
+* break
+* brk
+* cacheflush
+* capget
+* capset
+* chdir
+* chmod
+* chown
+* chown32
+* chroot
+* clock_getres
+* clock_gettime
+* clock_nanosleep
+* clock_settime
+* __clone2
+* clone2
+* clone
+* connect
+* copy_file_range
+* creat
+* create_module
+* delete_module
+* dup2
+* dup
+* dup3
+* epoll_create1
+* epoll_create
+* epoll_ctl
+* epoll_pwait
+* epoll_wait
+* eventfd2
+* eventfd
+* execve
+* execveat
+* _exit
+* exit
+* exit_group
+* faccessat
+* fadvise64
+* fadvise64_64
+* fallocate
+* fanotify_init
+* fanotify_mark
+* fattach
+* fchdir
+* fchmod
+* fchmodat
+* fchown
+* fchown32
+* fchownat
+* fcntl
+* fcntl64
+* fdatasync
+* fdetach
+* fgetxattr
+* finit_module
+* flistxattr
+* flock
+* fork
+* free_hugepages
+* fremovexattr
+* fsetxattr
+* fstat
+* fstat64
+* fstatat
+* fstatat64
+* fstatfs
+* fstatfs64
+* fstatvfs
+* fsync
+* ftruncate
+* ftruncate64
+* futex
+* futimesat
+* getcontext
+* getcpu
+* getcwd
+* getdents
+* getdents64
+* getdomainname
+* getdtablesize
+* getegid
+* getegid32
+* geteuid
+* geteuid32
+* getgid
+* getgid32
+* getgroups
+* getgroups32
+* gethostid
+* gethostname
+* getitimer
+* get_kernel_syms
+* get_mempolicy
+* getmsg
+* getpagesize
+* getpeername
+* getpgid
+* getpgrp
+* getpid
+* getpmsg
+* getppid
+* getpriority
+* getrandom
+* getresgid
+* getresgid32
+* getresuid
+* getresuid32
+* getrlimit
+* get_robust_list
+* getrusage
+* getsid
+* getsockname
+* getsockopt
+* get_thread_area
+* gettid
+* gettimeofday
+* getuid
+* getuid32
+* getunwind
+* getxattr
+* gtty
+* idle
+* inb
+* inb_p
+* init_module
+* inl
+* inl_p
+* inotify_add_watch
+* inotify_init1
+* inotify_init
+* inotify_rm_watch
+* insb
+* insl
+* insw
+* intro
+* inw
+* inw_p
+* io_cancel
+* ioctl
+* ioctl_console
+* ioctl_fat
+* ioctl_ficlone
+* ioctl_ficlonerange
+* ioctl_fideduperange
+* ioctl_getfsmap
+* ioctl_iflags
+* ioctl_list
+* ioctl_ns
+* ioctl_tty
+* ioctl_userfaultfd
+* io_destroy
+* io_getevents
+* ioperm
+* iopl
+* ioprio_get
+* ioprio_set
+* io_setup
+* io_submit
+* ipc
+* isastream
+* kcmp
+* kexec_file_load
+* kexec_load
+* keyctl
+* kill
+* killpg
+* lchown
+* lchown32
+* lgetxattr
+* link
+* linkat
+* listen
+* listxattr
+* llistxattr
+* _llseek
+* llseek
+* lock
+* lookup_dcookie
+* lremovexattr
+* lseek
+* lsetxattr
+* lstat
+* lstat64
+* madvise1
+* madvise
+* mbind
+* membarrier
+* memfd_create
+* migrate_pages
+* mincore
+* mkdir
+* mkdirat
+* mknod
+* mknodat
+* mlock2
+* mlock
+* mlockall
+* mmap2
+* mmap
+* modify_ldt
+* mount
+* move_pages
+* mprotect
+* mpx
+* mq_getsetattr
+* mq_notify
+* mq_open
+* mq_timedreceive
+* mq_timedsend
+* mq_unlink
+* mremap
+* msgctl
+* msgget
+* msgop
+* msgrcv
+* msgsnd
+* msync
+* munlock
+* munlockall
+* munmap
+* name_to_handle_at
+* nanosleep
+* newfstatat
+* _newselect
+* nfsservctl
+* nice
+* oldfstat
+* oldlstat
+* oldolduname
+* oldstat
+* olduname
+* openat
+* open_by_handle_at
+* outb
+* outb_p
+* outl
+* outl_p
+* outsb
+* outsl
+* outsw
+* outw
+* outw_p
+* pause
+* perf_event_open
+* perfmonctl
+* personality
+* phys
+* pipe2
+* pipe
+* pivot_root
+* pkey_alloc
+* pkey_free
+* pkey_mprotect
+* poll
+* posix_fadvise
+* ppoll
+* prctl
+* pread
+* pread64
+* preadv2
+* preadv
+* prlimit
+* prlimit64
+* process_vm_readv
+* process_vm_writev
+* prof
+* pselect
+* pselect6
+* ptrace
+* putmsg
+* putpmsg
+* pwrite
+* pwrite64
+* pwritev2
+* pwritev
+* query_module
+* quotactl
+* readahead
+* readdir
+* readlink
+* readlinkat
+* readv
+* reboot
+* recv
+* recvfrom
+* recvmmsg
+* recvmsg
+* remap_file_pages
+* removexattr
+* rename
+* renameat2
+* renameat
+* request_key
+* restart_syscall
+* rmdir
+* rtas
+* rt_sigaction
+* rt_sigpending
+* rt_sigprocmask
+* rt_sigqueueinfo
+* rt_sigreturn
+* rt_sigsuspend
+* rt_sigtimedwait
+* rt_tgsigqueueinfo
+* s390_pci_mmio_read
+* s390_pci_mmio_write
+* s390_runtime_instr
+* s390_sthyi
+* sbrk
+* sched_getaffinity
+* sched_getattr
+* sched_getparam
+* sched_get_priority_max
+* sched_get_priority_min
+* sched_getscheduler
+* sched_rr_get_interval
+* sched_setaffinity
+* sched_setattr
+* sched_setparam
+* sched_setscheduler
+* sched_yield
+* seccomp
+* security
+* select
+* select_tut
+* semctl
+* semget
+* semop
+* semtimedop
+* send
+* sendfile
+* sendfile64
+* sendmmsg
+* sendmsg
+* sendto
+* setcontext
+* setdomainname
+* setegid
+* seteuid
+* setfsgid
+* setfsgid32
+* setfsuid
+* setfsuid32
+* setgid
+* setgid32
+* setgroups
+* setgroups32
+* sethostid
+* sethostname
+* setitimer
+* set_mempolicy
+* setns
+* setpgid
+* setpgrp
+* setpriority
+* setregid
+* setregid32
+* setresgid
+* setresgid32
+* setresuid
+* setresuid32
+* setreuid
+* setreuid32
+* setrlimit
+* set_robust_list
+* setsid
+* setsockopt
+* set_thread_area
+* set_tid_address
+* settimeofday
+* setuid
+* setuid32
+* setup
+* setxattr
+* sgetmask
+* shmat
+* shmctl
+* shmdt
+* shmget
+* shmop
+* shutdown
+* sigaction
+* sigaltstack
+* signal
+* signalfd
+* signalfd4
+* sigpending
+* sigprocmask
+* sigqueue
+* sigreturn
+* sigsuspend
+* sigtimedwait
+* sigwaitinfo
+* socket
+* socketcall
+* socketpair
+* splice
+* spu_create
+* spu_run
+* ssetmask
+* stat
+* stat64
+* statfs
+* statfs64
+* statvfs
+* statx
+* stime
+* stty
+* subpage_prot
+* swapcontext
+* swapoff
+* swapon
+* symlink
+* symlinkat
+* sync
+* sync_file_range2
+* sync_file_range
+* syncfs
+* _syscall
+* syscall
+* syscalls
+* _sysctl
+* sysctl
+* sysfs
+* sysinfo
+* syslog
+* tee
+* tgkill
+* time
+* timer_create
+* timer_delete
+* timerfd_create
+* timerfd_gettime
+* timerfd_settime
+* timer_getoverrun
+* timer_gettime
+* timer_settime
+* times
+* tkill
+* truncate
+* truncate64
+* tuxcall
+* ugetrlimit
+* umask
+* umount2
+* umount
+* uname
+* unimplemented
+* unlink
+* unlinkat
+* unshare
+* uselib
+* userfaultfd
+* ustat
+* utime
+* utimensat
+* utimes
+* vfork
+* vhangup
+* vm86
+* vm86old
+* vmsplice
+* vserver
+* wait
+* wait3
+* wait4
+* waitid
+* waitpid
+* writev
