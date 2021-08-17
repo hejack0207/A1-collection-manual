@@ -3,6 +3,7 @@
 * write
 * read
 * close
+* lseek
 
 # processes
 # memory allocation
@@ -258,7 +259,6 @@
 * lock
 * lookup_dcookie
 * lremovexattr
-* lseek
 * lsetxattr
 * lstat
 * lstat64
