@@ -1,23 +1,138 @@
 # file io
 * open
+* openat
 * write
 * read
 * close
 * lseek
+* ioctl
+* fcntl
+* dup
+* dup2
+* dup3
+* pread
+* pwrite
+* readv
+* writev
+* truncate
+* ftruncate
 
 # processes
+* getpid
+* getppid
+
 # memory allocation
+* brk
+* sbrk
+
 # user and group
+
 # process credential
+* setfsuid
+* setfsgid
+* getuid
+* geteuid
+* getgid
+* getegid
+* setuid
+* setgid
+* seteuid
+* setegid
+* setreuid
+* setregid
+* getresuid
+* getresgid
+* setresuid
+* setresgid
+* getgroups
+* setgroups
+
 # time
+* gettimeofday
+* time
+* adjtimex
+* times
+
 # system limits
+* getdtablesize
+* getpagesize
+
 # system process info
+* uname
+* gethostname
+* getdomainname
+* sethostname
+* setdomainname
+
 # file io buffering
+* fsync
+* fdatasync
+* sync
+* posix_fadvise
+
 # file system
+* mount
+* umount
+* umount2
+* statvfs
+* fstatvfs
+
 # file attributes
+* stat
+* lstat
+* fstat
+* utime
+* utimes
+* utimensat
+* chown
+* fchown
+* lchown
+* access
+* umask
+* chmod
+* fchmod
+
 # extended attributes
+* setxattr
+* lsetxattr
+* fsetxattr
+* getxattr
+* lgetxattr
+* fgetxattr
+* removexattr
+* lremovexattr
+* fremovexattr
+* listxattr
+* llistxattr
+* flistxattr
+
 # access control lists
 # directories and links
+* link
+* unlink
+* rename
+* symlink
+* readlink
+* mkdir
+* rmdir
+* readdir
+* getcwd
+* chdir
+* fchdir
+* faccessat
+* fchmodat
+* fchownat
+* fstatat
+* linkat
+* mkdirat
+* mknod
+* mknodat
+* readlinkat
+* renameat
+* symlinkat
+* unlinkat
+* chroot
+
 # file events
 # signal fundamental
 # signal handlers
@@ -65,10 +180,8 @@
 
 * accept
 * accept4
-* access
 * acct
 * add_key
-* adjtimex
 * afs_syscall
 * alarm
 * alloc_hugepages
@@ -80,15 +193,10 @@
 * bind
 * bpf
 * break
-* brk
 * cacheflush
 * capget
 * capset
-* chdir
-* chmod
-* chown
 * chown32
-* chroot
 * clock_getres
 * clock_gettime
 * clock_nanosleep
@@ -101,9 +209,6 @@
 * creat
 * create_module
 * delete_module
-* dup2
-* dup
-* dup3
 * epoll_create1
 * epoll_create
 * epoll_ctl
@@ -116,76 +221,46 @@
 * _exit
 * exit
 * exit_group
-* faccessat
 * fadvise64
 * fadvise64_64
 * fallocate
 * fanotify_init
 * fanotify_mark
 * fattach
-* fchdir
-* fchmod
-* fchmodat
-* fchown
 * fchown32
-* fchownat
-* fcntl
 * fcntl64
-* fdatasync
 * fdetach
-* fgetxattr
 * finit_module
-* flistxattr
 * flock
 * fork
 * free_hugepages
-* fremovexattr
-* fsetxattr
-* fstat
 * fstat64
-* fstatat
 * fstatat64
 * fstatfs
 * fstatfs64
-* fstatvfs
-* fsync
-* ftruncate
 * ftruncate64
 * futex
 * futimesat
 * getcontext
 * getcpu
-* getcwd
 * getdents
 * getdents64
-* getdomainname
-* getdtablesize
-* getegid
 * getegid32
-* geteuid
 * geteuid32
-* getgid
 * getgid32
-* getgroups
 * getgroups32
 * gethostid
-* gethostname
 * getitimer
 * get_kernel_syms
 * get_mempolicy
 * getmsg
-* getpagesize
 * getpeername
 * getpgid
 * getpgrp
-* getpid
 * getpmsg
-* getppid
 * getpriority
 * getrandom
-* getresgid
 * getresgid32
-* getresuid
 * getresuid32
 * getrlimit
 * get_robust_list
@@ -195,11 +270,8 @@
 * getsockopt
 * get_thread_area
 * gettid
-* gettimeofday
-* getuid
 * getuid32
 * getunwind
-* getxattr
 * gtty
 * idle
 * inb
@@ -218,7 +290,6 @@
 * inw
 * inw_p
 * io_cancel
-* ioctl
 * ioctl_console
 * ioctl_fat
 * ioctl_ficlone
@@ -246,21 +317,12 @@
 * keyctl
 * kill
 * killpg
-* lchown
 * lchown32
-* lgetxattr
-* link
-* linkat
 * listen
-* listxattr
-* llistxattr
 * _llseek
 * llseek
 * lock
 * lookup_dcookie
-* lremovexattr
-* lsetxattr
-* lstat
 * lstat64
 * madvise1
 * madvise
@@ -269,17 +331,13 @@
 * memfd_create
 * migrate_pages
 * mincore
-* mkdir
-* mkdirat
 * mknod
-* mknodat
 * mlock2
 * mlock
 * mlockall
 * mmap2
 * mmap
 * modify_ldt
-* mount
 * move_pages
 * mprotect
 * mpx
@@ -333,10 +391,8 @@
 * pkey_free
 * pkey_mprotect
 * poll
-* posix_fadvise
 * ppoll
 * prctl
-* pread
 * pread64
 * preadv2
 * preadv
@@ -350,30 +406,21 @@
 * ptrace
 * putmsg
 * putpmsg
-* pwrite
 * pwrite64
 * pwritev2
 * pwritev
 * query_module
 * quotactl
 * readahead
-* readdir
-* readlink
-* readlinkat
-* readv
 * reboot
 * recv
 * recvfrom
 * recvmmsg
 * recvmsg
 * remap_file_pages
-* removexattr
-* rename
 * renameat2
-* renameat
 * request_key
 * restart_syscall
-* rmdir
 * rtas
 * rt_sigaction
 * rt_sigpending
@@ -387,7 +434,6 @@
 * s390_pci_mmio_write
 * s390_runtime_instr
 * s390_sthyi
-* sbrk
 * sched_getaffinity
 * sched_getattr
 * sched_getparam
@@ -415,32 +461,20 @@
 * sendmsg
 * sendto
 * setcontext
-* setdomainname
-* setegid
-* seteuid
-* setfsgid
 * setfsgid32
-* setfsuid
 * setfsuid32
-* setgid
 * setgid32
-* setgroups
 * setgroups32
 * sethostid
-* sethostname
 * setitimer
 * set_mempolicy
 * setns
 * setpgid
 * setpgrp
 * setpriority
-* setregid
 * setregid32
-* setresgid
 * setresgid32
-* setresuid
 * setresuid32
-* setreuid
 * setreuid32
 * setrlimit
 * set_robust_list
@@ -449,10 +483,8 @@
 * set_thread_area
 * set_tid_address
 * settimeofday
-* setuid
 * setuid32
 * setup
-* setxattr
 * sgetmask
 * shmat
 * shmctl
@@ -479,11 +511,9 @@
 * spu_create
 * spu_run
 * ssetmask
-* stat
 * stat64
 * statfs
 * statfs64
-* statvfs
 * statx
 * stime
 * stty
@@ -491,9 +521,6 @@
 * swapcontext
 * swapoff
 * swapon
-* symlink
-* symlinkat
-* sync
 * sync_file_range2
 * sync_file_range
 * syncfs
@@ -507,7 +534,6 @@
 * syslog
 * tee
 * tgkill
-* time
 * timer_create
 * timer_delete
 * timerfd_create
@@ -516,26 +542,15 @@
 * timer_getoverrun
 * timer_gettime
 * timer_settime
-* times
 * tkill
-* truncate
 * truncate64
 * tuxcall
 * ugetrlimit
-* umask
-* umount2
-* umount
-* uname
 * unimplemented
-* unlink
-* unlinkat
 * unshare
 * uselib
 * userfaultfd
 * ustat
-* utime
-* utimensat
-* utimes
 * vfork
 * vhangup
 * vm86
@@ -547,4 +562,3 @@
 * wait4
 * waitid
 * waitpid
-* writev
