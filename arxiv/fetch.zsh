@@ -1,2 +1,6 @@
 #!/usr/bin/env -S zsh -il
-arxiv-fetch
+
+cat arxiv.tsv | while read id title category; do
+	echo $id $title $category
+	# arxiv-fetch
+done
