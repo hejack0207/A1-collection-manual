@@ -30,6 +30,7 @@ shift $((OPTIND-1))
 
 for p in $(rpm -qa G $1); do
 	if rpm -ql $p | grep -q /usr/share/man; then
-		print $p;
+		print $p | sed -re 's#\-([[:digit:]]+).*##g'
+		# print $p | sed -re 's#\-([[:digit:]]+|svn).*##g'
 	fi
-done | awk -F- '{print $1"-"$2}'
+done
