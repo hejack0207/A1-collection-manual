@@ -2,12 +2,13 @@
 # set -x
 
 usage() {
-    echo "Usage: $0 [-p <package name>] [-s <section num>] -D -h" 1>&2;
+    echo "Usage: $0 [-p <package name>] [-s <section num>] [-c category] -D -h" 1>&2;
     exit 1;
 }
 
 pkg=""
 sect=""
+category=""
 debug=0
 while getopts "p:s:Dh" o; do
     case "${o}" in
@@ -16,6 +17,9 @@ while getopts "p:s:Dh" o; do
             ;;
         s)
             sect=${OPTARG}
+            ;;
+        c)
+            category=${OPTARG}
             ;;
         D)
             debug=1
@@ -49,11 +53,12 @@ done
 echo "man pages: ${mans[@]}"
 set -- ${mans[@]}
 
-test -d groff/$pkg$sect || mkdir -p groff/$pkg$sect
-test -d txt/$pkg$sect || mkdir -p txt/$pkg$sect
-test -d md/$pkg$sect || mkdir -p md/$pkg$sect
+test -z $category || category=$category/
+test -d groff/$category$pkg$sect || mkdir -p groff/$category$pkg$sect
+test -d txt/$category$pkg$sect || mkdir -p txt/$category$pkg$sect
+test -d md/$category$pkg$sect || mkdir -p md/$category$pkg$sect
 for manname; do
-	zcat $(man -w $manname) >groff/$pkg$sect/$manname
-	man_dump $manname >txt/$pkg$sect/$manname.txt
-	MANWIDTH=40 zcat $(man -w $manname) | awk '/^.TH.*/ || p { p = 1; print }' | man-to-md.pl >md/$pkg$sect/$manname.md
+	zcat $(man -w $manname) >groff/$category$pkg$sect/$manname
+	man_dump $manname >txt/$category$pkg$sect/$manname.txt
+	MANWIDTH=40 zcat $(man -w $manname) | awk '/^.TH.*/ || p { p = 1; print }' | man-to-md.pl >md/$category$pkg$sect/$manname.md
 done
