@@ -1,3 +1,6 @@
+![image1](/md/x.png)
+![image2](https://github.com/hejack0207/A1-collection-manual/blob/master/md/x.png)
+
 ![background image](https://github.com/hejack2007/A1-collection-manual/blob/master/md/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm001.png)
 
 In Search of an Understandable Consensus Algorithm
