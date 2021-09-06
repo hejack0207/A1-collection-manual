@@ -7,6 +7,6 @@ test -d $basename || mkdir $basename
 pushd $basename
 cp $pdffile .
 pdftohtml -s -noframes $filename
-html2md -i ${basename}.html >$basename.md
+html2md -i ${basename}.html >README.md
 rm *.html *.pdf
 popd
