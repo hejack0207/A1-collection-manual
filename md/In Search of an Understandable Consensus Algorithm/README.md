@@ -432,7 +432,7 @@ timize Paxos, such as [26], [39], and [13], but these differ
 
 2
 
-![background image](/In Search of an Understandable Consensus Algorithm003.png)
+![background image](/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm003.png)
 
 from each other and from Lamport’s sketches. Systems
 
