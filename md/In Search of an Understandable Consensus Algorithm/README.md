@@ -1,4 +1,4 @@
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm001.png)
+![background%20image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm001.png)
 
 In Search of an Understandable Consensus Algorithm
 
@@ -220,7 +220,7 @@ of the servers are down. Replicated state machines are
 
 1
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm002.png)
+![background%20image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm002.png)
 
 Figure 1: Replicated state machine architecture. The con-
 
