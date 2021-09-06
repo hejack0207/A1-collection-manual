@@ -220,7 +220,7 @@ of the servers are down. Replicated state machines are
 
 1
 
-![background image](In Search of an Understandable Consensus Algorithm002.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm002.png)
 
 Figure 1: Replicated state machine architecture. The con-
 
