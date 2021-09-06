@@ -8,3 +8,5 @@
 # image
 ![image1](/md/x.png)
 ![image2](https://github.com/hejack0207/A1-collection-manual/blob/master/md/x.png)
+![watermark example](https://i.imgur.com/GIRsTnT.png)
+[![image1](/md/x.png)]](https://bing.com)
