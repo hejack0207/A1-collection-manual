@@ -220,7 +220,7 @@ of the servers are down. Replicated state machines are
 
 1
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm002.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/master/md/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm/In%20Search%20of%20an%20Understandable%20Consensus%20Algorithm002.png)
 
 Figure 1: Replicated state machine architecture. The con-
 
@@ -432,7 +432,7 @@ timize Paxos, such as [26], [39], and [13], but these differ
 
 2
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm003.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blog/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm003.png)
 
 from each other and from Lamport’s sketches. Systems
 
@@ -662,7 +662,7 @@ Log replication: the leader must accept log entries
 
 3
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm004.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm004.png)
 
 Invoked by candidates to gather votes (§5.2).
 
@@ -914,7 +914,7 @@ indicate where particular features are discussed. A formal specification
 
 4
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm005.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm005.png)
 
 Election Safety: at most one leader can be elected in a
 
@@ -1112,7 +1112,7 @@ server remains in follower state as long as it receives valid
 
 5
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm006.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm006.png)
 
 RPCs from a leader or candidate. Leaders send periodic
 
@@ -1308,7 +1308,7 @@ in Figure 3. Each log entry also has an integer index iden-
 
 6
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm007.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm007.png)
 
 tifying its position in the log.
 
@@ -1514,7 +1514,7 @@ when rejecting an AppendEntries request, the follower
 
 7
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm008.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm008.png)
 
 can include the term of the conflicting entry and the first
 
@@ -1724,7 +1724,7 @@ committed once it is stored on a majority of servers. Fig-
 
 8
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm009.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm009.png)
 
 Figure 9: If S1 (leader for term T) commits a new log entry
 
@@ -1932,7 +1932,7 @@ set of log entries to their state machines, in the same order.
 
 9
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm010.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm010.png)
 
 5.5
 
@@ -2148,7 +2148,7 @@ figurations.
 
 10
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm011.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm011.png)
 
 Figure 11: Timeline for a configuration change. Dashed lines
 
@@ -2360,7 +2360,7 @@ to a _snapshot_ on stable storage, then the entire log up to
 
 11
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm012.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm012.png)
 
 Figure 12: A server replaces the committed entries in its log
 
@@ -2598,7 +2598,7 @@ cisions conflict. Data still only flows from leaders to fol-
 
 12
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm013.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm013.png)
 
 lowers, just followers can now reorganize their data.
 
@@ -2824,7 +2824,7 @@ tent of this paper except for log compaction; the Paxos
 
 13
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm014.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm014.png)
 
  0
 
@@ -3070,7 +3070,7 @@ Table 1: Concerns of possible bias against Paxos in the study, steps�
 
 14
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm015.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm015.png)
 
 0%
 
@@ -3346,7 +3346,7 @@ essential part of the consensus protocol, and it concen-
 
 15
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm016.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm016.png)
 
 trates as much functionality as possible in the leader. This
 
@@ -3566,7 +3566,7 @@ including Ed Bugnion, Michael Chan, Hugues Evrard,
 
 16
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm017.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm017.png)
 
 Daniel Giffin, Arjun Gopalan, Jon Howell, Vimalkumar
 
@@ -3836,7 +3836,7 @@ logcabin/logcabin
 
 17
 
-![background image](https://raw.githubusercontent.com/hejack2007/A1-collection-manual/master/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm018.png)
+![background image](https://github.com/hejack2007/A1-collection-manual/blob/manual/md/In Search of an Understandable Consensus Algorithm/In Search of an Understandable Consensus Algorithm018.png)
 
 [24] LORCH, J. R., ADYA, A., BOLOSKY, W. J., CHAIKEN,
 
