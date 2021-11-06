@@ -1,0 +1,67 @@
+# systemd\-vconsole\-setup\&.service(8)
+
+systemd 241, ""
+
+.ie \n(.g .ds Aq '
+.el       .ds Aq '
+
+
+
+
+.nh
+
+
+
+
+
+<a name="name"></a>
+
+# Name
+
+systemd-vconsole-setup.service, systemd-vconsole-setup - Configure the virtual consoles
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+
+ systemd-vconsole-setup.service .HP \w'/usr/lib/systemd/systemd-vconsole-setup&nbsp;'u /usr/lib/systemd/systemd-vconsole-setup [TTY]
+```
+
+<a name="description"></a>
+
+# Description
+
+
+systemd-vconsole-setup
+sets up and configures either all virtual consoles, or — if the optional
+_TTY_
+parameter is provided — a specific one. When the system is booting up its called by
+**systemd-udevd**(8)
+during VT console subsystem initialization. Also,
+**systemd-localed.service**(8)
+invokes it as needed when language or console changes are made. Internally, this program calls
+**loadkeys**(1)
+and
+**setfont**(8).
+
+Execute
+**systemctl restart systemd-vconsole-setup.service**
+in order to apply any manual changes made to
+/etc/vconsole.conf.
+
+See
+**vconsole.conf**(5)
+for information about the configuration files and kernel command line options understood by this program.
+
+<a name="see-also"></a>
+
+# See Also
+
+
+**systemd**(1),
+**vconsole.conf**(5),
+**loadkeys**(1),
+**setfont**(8),
+**systemd-localed.service**(8)
