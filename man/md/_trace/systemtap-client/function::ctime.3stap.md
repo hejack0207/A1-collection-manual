@@ -1,0 +1,79 @@
+# function::ctime(3stap)
+
+SystemTap Tapset Reference, May 2021
+
+.ie \n(.g .ds Aq '
+.el       .ds Aq '
+
+
+
+
+.nh
+
+
+
+
+
+<a name="name"></a>
+
+# Name
+
+function::ctime - Convert seconds since epoch into human readable date/time string
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+
+
+</synopsis>
+    1) ctime:string(epochsecs:long)
+<synopsis>
+
+
+```
+    2) ctime:string()
+
+<a name="arguments"></a>
+
+# Arguments
+
+
+_epochsecs_
+Number of seconds since epoch (as returned by
+**gettimeofday\_s**)
+
+<a name="description"></a>
+
+# Description
+
+
+1) Takes an argument of seconds since the epoch as returned by**gettimeofday\_s**. Returns a string of the form
+
+2)
+“Wed Jun 30 21:49:08 1993”
+
+The string will always be exactly 24 characters. If the time would be unreasonable far in the past (before what can be represented with a 32 bit offset in seconds from the epoch) an error will occur (which can be avoided with try/catch). If the time would be unreasonable far in the future, an error will also occur.
+
+Note that the epoch (zero) corresponds to
+
+“Thu Jan 1 00:00:00 1970”
+
+The earliest full date given by ctime, corresponding to epochsecs -2147483648 is
+“Fri Dec 13 20:45:52 1901”. The latest full date given by ctime, corresponding to epochsecs 2147483647 is
+“Tue Jan 19 03:14:07 2038”.
+
+The abbreviations for the days of the week are ‘Sun’, ‘Mon’, ‘Tue’, ‘Wed’, ‘Thu’, ‘Fri’, and ‘Sat’. The abbreviations for the months are ‘Jan’, ‘Feb’, ‘Mar’, ‘Apr’, ‘May’, ‘Jun’, ‘Jul’, ‘Aug’, ‘Sep’, ‘Oct’, ‘Nov’, and ‘Dec’.
+
+Note that the real C library
+**ctime**
+function puts a newline (\en\*(Aq) character at the end of the string that this function does not. Also note that since the kernel has no concept of timezones, the returned time is always in GMT.
+
+
+
+<a name="see-alson-"></a>
+
+# See Also\N 
+
+_tapset::ctime_(3stap)
