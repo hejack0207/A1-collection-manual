@@ -1,0 +1,104 @@
+EVP_KDF_TLS1_PRF(7)                                    OpenSSL                                    EVP_KDF_TLS1_PRF(7)
+
+NAME
+       EVP_KDF_TLS1_PRF - The TLS1 PRF EVP_KDF implementation
+
+DESCRIPTION
+       Support for computing the TLS1 PRF through the EVP_KDF API.
+
+       The EVP_KDF_TLS1_PRF algorithm implements the PRF used by TLS versions up to and including TLS 1.2.
+
+   Numeric identity
+       EVP_KDF_TLS1_PRF is the numeric identity for this implementation; it can be used with the EVP_KDF_CTX_new_id()
+       function.
+
+   Supported controls
+       The supported controls are:
+
+       EVP_KDF_CTRL_SET_MD
+           This control works as described in "CONTROLS" in EVP_KDF_CTX(3).
+
+           The "EVP_KDF_CTRL_SET_MD" control is used to set the message digest associated with the TLS PRF.
+           EVP_md5_sha1() is treated as a special case which uses the PRF algorithm using both MD5 and SHA1 as used
+           in TLS 1.0 and 1.1.
+
+       EVP_KDF_CTRL_SET_TLS_SECRET
+           This control expects two arguments: "unsigned char *sec", "size_t seclen"
+
+           Sets the secret value of the TLS PRF to seclen bytes of the buffer sec.  Any existing secret value is
+           replaced.
+
+           EVP_KDF_ctrl_str() takes two type strings for this control:
+
+           "secret"
+               The value string is used as is.
+
+           "hexsecret"
+               The value string is expected to be a hexadecimal number, which will be decoded before being passed on
+               as the control value.
+
+       EVP_KDF_CTRL_RESET_TLS_SEED
+           This control does not expect any arguments.
+
+           Resets the context seed buffer to zero length.
+
+       EVP_KDF_CTRL_ADD_TLS_SEED
+           This control expects two arguments: "unsigned char *seed", "size_t seedlen"
+
+           Sets the seed to seedlen bytes of seed.  If a seed is already set it is appended to the existing value.
+
+           The total length of the context seed buffer cannot exceed 1024 bytes; this should be more than enough for
+           any normal use of the TLS PRF.
+
+           EVP_KDF_ctrl_str() takes two type strings for this control:
+
+           "seed"
+               The value string is used as is.
+
+           "hexseed"
+               The value string is expected to be a hexadecimal number, which will be decoded before being passed on
+               as the control value.
+
+NOTES
+       A context for the TLS PRF can be obtained by calling:
+
+        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new_id(EVP_KDF_TLS1_PRF, NULL);
+
+       The digest, secret value and seed must be set before a key is derived otherwise an error will occur.
+
+       The output length of the PRF is specified by the "keylen" parameter to the EVP_KDF_derive() function.
+
+EXAMPLE
+       This example derives 10 bytes using SHA-256 with the secret key "secret" and seed value "seed":
+
+        EVP_KDF_CTX *kctx;
+        unsigned char out[10];
+
+        kctx = EVP_KDF_CTX_new_id(EVP_KDF_TLS1_PRF);
+        if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MD, EVP_sha256()) <= 0) {
+            error("EVP_KDF_CTRL_SET_MD");
+        }
+        if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_TLS_SECRET,
+                         "secret", (size_t)6) <= 0) {
+            error("EVP_KDF_CTRL_SET_TLS_SECRET");
+        }
+        if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_ADD_TLS_SEED, "seed", (size_t)4) <= 0) {
+            error("EVP_KDF_CTRL_ADD_TLS_SEED");
+        }
+        if (EVP_KDF_derive(kctx, out, sizeof(out)) <= 0) {
+            error("EVP_KDF_derive");
+        }
+        EVP_KDF_CTX_free(kctx);
+
+SEE ALSO
+       EVP_KDF_CTX, EVP_KDF_CTX_new_id(3), EVP_KDF_CTX_free(3), EVP_KDF_ctrl(3), EVP_KDF_derive(3), "CONTROLS" in
+       EVP_KDF_CTX(3)
+
+COPYRIGHT
+       Copyright 2018 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use this file except in compliance with
+       the License.  You can obtain a copy in the file LICENSE in the source distribution or at
+       <https://www.openssl.org/source/license.html>.
+
+1.1.1l                                                2021-09-15                                  EVP_KDF_TLS1_PRF(7)
