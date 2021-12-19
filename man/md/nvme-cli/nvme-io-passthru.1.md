@@ -1,0 +1,118 @@
+# nvme\-io\-passthru(1)
+
+NVMe, 04/24/2020
+
+.ie \n(.g .ds Aq '
+.el       .ds Aq '
+
+
+
+
+.nh
+
+
+
+
+
+<a name="name"></a>
+
+# Name
+
+nvme-io-passthru - Submit an arbitrary io command, return results
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+
+
+```
+    nvme-io-passthru <device> [--opcode=<opcode> | -o <opcode>]
+                    [--flags=<flags> | -f <flags>] [-rsvd=<rsvd> | -R <rsvd>]
+                    [--namespace-id=<nsid> | -nsid <nsid>]
+                    [--cdw2=<cdw2>] [--cdw3=<cdw3>] [--cdw10=<cdw10>]
+                    [--cdw11=<cdw11>] [--cdw12=<cdw12>] [--cdw13=<cdw13>]
+                    [--cdw14=<cdw14>] [--cdw15=<cdw15>]
+                    [--data-len=<data-len> | -l <data-len>]
+                    [--metadata-len=<len> | -m <len>]
+                    [--read | -r ] [--write | -w]
+                    [--input-file=<file> | -i <file>]
+                    [--timeout=<to> | -t <to>]
+                    [--show-command | -s]
+                    [--dry-run | -d]
+                    [--raw-binary | -b]
+                    [--prefill=<prefill> | -p <prefill>]
+
+<a name="description"></a>
+
+# Description
+
+
+Submits an arbitrary NVMe IO command and returns the applicable results. This may be the simply the command’s result and status, or may also include a buffer if the command returns one. This command does no interpretation of the opcodes or options.
+
+The &lt;device&gt; parameter is mandatory and may be either the NVMe character device (ex: /dev/nvme0), or a namespace block device (ex: /dev/nvme0n1).
+
+On success, the returned structure (if applicable) may be returned in one of several ways depending on the option flags; the structure may printed by the program as a hex dump, or may be returned as a raw buffer printed to stdout for another program to parse.
+
+<a name="options"></a>
+
+# Options
+
+
+-o &lt;opcode&gt;, --opcode=&lt;opcode&gt;
+The NVMe opcode to send to the device in the command
+
+-f &lt;flags&gt;, --flags=&lt;flags&gt;
+The NVMe command flags to send to the device in the command
+
+-R &lt;rsvd&gt;, --rsvd=&lt;rsvd&gt;
+The value for the reserved field in the command.
+
+-n &lt;nsid&gt;, --namespace-id=&lt;nsid&gt;
+The value for the ns-id in the command. Defaults to
+_0_.
+
+--cdw[2-3,10-15]=&lt;cdw&gt;
+Specifies the command dword value for that specified entry in the command
+
+-r, --read, -w, --write
+Used for the data-direction for the command and required for commands sending/receiving data. Don’t use both read and write at the same time.
+
+-i &lt;file&gt;, --input-file=&lt;file&gt;
+If the command is a data-out (write) command, use this file to fill the buffer sent to the device. If no file is given, assumed to use STDIN.
+
+-l &lt;data-len&gt;, --data-len=&lt;data-len&gt;
+The data length for the buffer used for this command.
+
+-m &lt;data-len&gt;, --metadata-len=&lt;data-len&gt;
+The metadata length for the buffer used for this command.
+
+-s, --show-cmd
+Print out the command to be sent.
+
+-d, --dry-run
+Do not actually send the command. If want to use --dry-run option, --show-cmd option
+_must_
+be set. Otherwise --dry-run option will be
+_ignored_.
+
+-b, --raw-binary
+Print the raw returned buffer to stdout if the command returns data or a structure.
+
+-p &lt;prefill&gt;, --prefill &lt;prefill&gt;
+Prefill the buffer with a predetermined byte value. Defaults to 0. This may be useful if the data you are writing is shorter than the required buffer, and you need to pad it with a known value. It may also be useful if you need to confirm if a device is overwriting a buffer on a data-in command.
+
+<a name="examples"></a>
+
+# Examples
+
+
+nvme io-passthru /dev/nvme0n1 --opcode=2 --namespace-id=1 --data-len=4096 --read --cdw10=0 --cdw11=0 --cdw12=0x70000 --raw-binary
+
+<a name="nvme"></a>
+
+# Nvme
+
+
+Part of the nvme-user suite
