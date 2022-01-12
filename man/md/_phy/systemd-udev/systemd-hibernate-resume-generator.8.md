@@ -1,0 +1,72 @@
+# systemd\-hibernate\-resume\-generator(8)
+
+systemd 241, ""
+
+.ie \n(.g .ds Aq '
+.el       .ds Aq '
+
+
+
+
+.nh
+
+
+
+
+
+<a name="name"></a>
+
+# Name
+
+systemd-hibernate-resume-generator - Unit generator for resume= kernel parameter
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+
+ /usr/lib/systemd/system-generators/systemd-hibernate-resume-generator
+```
+
+<a name="description"></a>
+
+# Description
+
+
+**systemd-hibernate-resume-generator**
+is a generator that initiates the procedure to resume the system from hibernation. It instantiates the
+**systemd-hibernate-resume@.service**(8)
+unit according to the value of
+**resume=**
+parameter specified on the kernel command line, which will instruct the kernel to resume the system from the hibernation image on that device.
+
+<a name="kernel-command-line"></a>
+
+# Kernel Command Line
+
+
+systemd-hibernate-resume-generator
+understands the following kernel command line parameters:
+
+_resume=_
+Takes a path to the resume device. Both persistent block device paths like
+/dev/disk/by-foo/bar
+and
+**fstab**(5)-style specifiers like
+"FOO=bar"
+are supported.
+
+_noresume_
+Do not try to resume from hibernation. If this parameter is present,
+_resume=_
+is ignored.
+
+<a name="see-also"></a>
+
+# See Also
+
+
+**systemd**(1),
+**systemd-hibernate-resume@.service**(8),
+**kernel-command-line**(7)

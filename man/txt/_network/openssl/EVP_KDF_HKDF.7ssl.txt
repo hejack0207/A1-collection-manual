@@ -1,0 +1,130 @@
+EVP_KDF_HKDF(7)                                        OpenSSL                                        EVP_KDF_HKDF(7)
+
+NAME
+       EVP_KDF_HKDF - The HKDF EVP_KDF implementation
+
+DESCRIPTION
+       Support for computing the HKDF KDF through the EVP_KDF API.
+
+       The EVP_KDF_HKDF algorithm implements the HKDF key derivation function.  HKDF follows the "extract-then-
+       expand" paradigm, where the KDF logically consists of two modules. The first stage takes the input keying
+       material and "extracts" from it a fixed-length pseudorandom key K. The second stage "expands" the key K into
+       several additional pseudorandom keys (the output of the KDF).
+
+   Numeric identity
+       EVP_KDF_HKDF is the numeric identity for this implementation; it can be used with the EVP_KDF_CTX_new_id()
+       function.
+
+   Supported controls
+       The supported controls are:
+
+       EVP_KDF_CTRL_SET_SALT
+       EVP_KDF_CTRL_SET_MD
+       EVP_KDF_CTRL_SET_KEY
+           These controls work as described in "CONTROLS" in EVP_KDF_CTX(3).
+
+       EVP_KDF_CTRL_RESET_HKDF_INFO
+           This control does not expect any arguments.
+
+           Resets the context info buffer to zero length.
+
+       EVP_KDF_CTRL_ADD_HKDF_INFO
+           This control expects two arguments: "unsigned char *info", "size_t infolen"
+
+           Sets the info value to the first infolen bytes of the buffer info.  If a value is already set, the
+           contents of the buffer are appended to the existing value.
+
+           The total length of the context info buffer cannot exceed 1024 bytes; this should be more than enough for
+           any normal use of HKDF.
+
+           EVP_KDF_ctrl_str() takes two type strings for this control:
+
+           "info"
+               The value string is used as is.
+
+           "hexinfo"
+               The value string is expected to be a hexadecimal number, which will be decoded before being passed on
+               as the control value.
+
+       EVP_KDF_CTRL_SET_HKDF_MODE
+           This control expects one argument: "int mode"
+
+           Sets the mode for the HKDF operation. There are three modes that are currently defined:
+
+           EVP_KDF_HKDF_MODE_EXTRACT_AND_EXPAND
+               This is the default mode.  Calling EVP_KDF_derive(3) on an EVP_KDF_CTX set up for HKDF will perform an
+               extract followed by an expand operation in one go.  The derived key returned will be the result after
+               the expand operation. The intermediate fixed-length pseudorandom key K is not returned.
+
+               In this mode the digest, key, salt and info values must be set before a key is derived otherwise an
+               error will occur.
+
+           EVP_KDF_HKDF_MODE_EXTRACT_ONLY
+               In this mode calling EVP_KDF_derive(3) will just perform the extract operation. The value returned
+               will be the intermediate fixed-length pseudorandom key K.  The "keylen" parameter must match the size
+               of K, which can be looked up by calling EVP_KDF_size() after setting the mode and digest.
+
+               The digest, key and salt values must be set before a key is derived otherwise an error will occur.
+
+           EVP_KDF_HKDF_MODE_EXPAND_ONLY
+               In this mode calling EVP_KDF_derive(3) will just perform the expand operation. The input key should be
+               set to the intermediate fixed-length pseudorandom key K returned from a previous extract operation.
+
+               The digest, key and info values must be set before a key is derived otherwise an error will occur.
+
+           EVP_KDF_ctrl_str() type string: "mode"
+
+           The value string is expected to be one of: "EXTRACT_AND_EXPAND", "EXTRACT_ONLY" or "EXPAND_ONLY".
+
+NOTES
+       A context for HKDF can be obtained by calling:
+
+        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new_id(EVP_KDF_HKDF);
+
+       The output length of an HKDF expand operation is specified via the "keylen" parameter to the EVP_KDF_derive(3)
+       function.  When using EVP_KDF_HKDF_MODE_EXTRACT_ONLY the "keylen" parameter must equal the size of the
+       intermediate fixed-length pseudorandom key otherwise an error will occur.  For that mode, the fixed output
+       size can be looked up by calling EVP_KDF_size() after setting the mode and digest on the "EVP_KDF_CTX".
+
+EXAMPLE
+       This example derives 10 bytes using SHA-256 with the secret key "secret", salt value "salt" and info value
+       "label":
+
+        EVP_KDF_CTX *kctx;
+        unsigned char out[10];
+
+        kctx = EVP_KDF_CTX_new_id(EVP_KDF_HKDF);
+
+        if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MD, EVP_sha256()) <= 0) {
+            error("EVP_KDF_CTRL_SET_MD");
+        }
+        if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SALT, "salt", (size_t)4) <= 0) {
+            error("EVP_KDF_CTRL_SET_SALT");
+        }
+        if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_KEY, "secret", (size_t)6) <= 0) {
+            error("EVP_KDF_CTRL_SET_KEY");
+        }
+        if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_ADD_HKDF_INFO, "label", (size_t)5) <= 0) {
+            error("EVP_KDF_CTRL_ADD_HKDF_INFO");
+        }
+        if (EVP_KDF_derive(kctx, out, sizeof(out)) <= 0) {
+            error("EVP_KDF_derive");
+        }
+
+        EVP_KDF_CTX_free(kctx);
+
+CONFORMING TO
+       RFC 5869
+
+SEE ALSO
+       EVP_KDF_CTX, EVP_KDF_CTX_new_id(3), EVP_KDF_CTX_free(3), EVP_KDF_ctrl(3), EVP_KDF_size(3), EVP_KDF_derive(3),
+       "CONTROLS" in EVP_KDF_CTX(3)
+
+COPYRIGHT
+       Copyright 2016-2018 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use this file except in compliance with
+       the License.  You can obtain a copy in the file LICENSE in the source distribution or at
+       <https://www.openssl.org/source/license.html>.
+
+1.1.1l                                                2021-09-15                                      EVP_KDF_HKDF(7)

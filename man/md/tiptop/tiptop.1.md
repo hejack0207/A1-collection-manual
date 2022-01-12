@@ -1,0 +1,472 @@
+# tiptop(1)
+
+Linux, February 2013
+
+
+
+<a name="name"></a>
+
+# Name
+
+tiptop - display hardware performance counters for Linux tasks
+
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+tiptop [OPTION]
+</synopsis>
+
+<synopsis>
+tiptop [OPTION] -- command  (EXPERIMENTAL)
+</synopsis>
+
+<synopsis>
+ptiptop PATTERN [OPTIONS]
+```
+
+
+<a name="description"></a>
+
+# Description
+
+The **tiptop** program provides a dynamic real-time view of the tasks
+running in the system. tiptop is very similar to top (1), but the
+information displayed comes from hardware counters.
+
+tiptop has two running _modes_: live-mode and batch-mode. In both
+modes, the system is periodically queried for the values of hardware
+counters, and various ratios are printed for each task. In live-mode,
+the display is regularly updated with new values at constant time
+intervals. In batch-mode, the same information is emitted to
+stdout. Batch-mode is appropriate for saving to a file or for further
+processing. No interaction is possible in batch-mode.
+
+Unless tiptop is run by root, or the executable is setuid-root, a user
+can only monitor the tasks it owns.
+
+The results produced by tiptop are organized in _screens_. A screen
+consists in rows representing tasks, and columns reporting various
+values and ratios collected from hardware counters. Many screens can
+be defined. Only one screen is displayed at a time. The default screen
+(number 0) reports target independent values as defined in the file
+/usr/include/linux/event_counter.h. Other screens may rely on
+target-dependent counters.
+
+When an expression would result in a division by zero, a '-' sign is
+printed. When a counter involved in an expression could not be read,
+a '?' sign is printed.
+
+If -- appears in the command line, tiptop treats the rest of the line
+as a command. A new process is forked, and hardware counters are
+attached just before execvp is called. This makes it possible to trace
+an application from the first instruction. Only the child is traced,
+and idle-mode is enabled (in live mode, this can be overridden by
+hitting keys 'p' and 'i').  This is commonly used in combination with
+sticky mode to track a command from start to finish. This is
+experimental!
+
+ptiptop is simply a shortcut for tiptop -p.
+
+tiptop requires Linux 2.6.31+.
+
+
+
+<a name="command-line-options"></a>
+
+# Command-Line Options
+
+Command line options with a parameter override values specified in the
+configuration file. Toggles set the value or invert the value read in
+the configuration file (if any).
+
+
+* -**b**  
+  Start tiptop in batch-mode. Output is sent to stdout, and no
+  interactive command is accepted. tiptop will run forever, or until the
+  number of iterations specified by **-n**.
+  
+* -**c**  
+  display the command line of the task instead of its name. (toggle)
+  
+* --**cpu-min** VALUE  
+  %CPU activity threshold. Below this value, a task is considered
+   idle and is not reported (unless idle-mode is on, see flag -i).
+  
+* -**d** VALUE  
+  Specify the delay between refreshes. VALUE can be fractional. It must
+  be larger than 0.01.
+  
+* -**E** FILENAME  
+  Specify file where errors are logged. By default errors are logged to
+  stderr in batch-mode, and a temporary file in live-mode.
+  
+* --**epoch**  
+  Print the Epoch at each refresh. In batch-mode, it is printed at the
+  beginning of each row. In live-mode, it is at the bottom of the
+  display. (toggle)
+  
+* -**h --help**  
+  Print a brief help message and exit.
+  
+* -**H**  
+  Show threads. (toggle)
+  
+* -**i**  
+  Show idle tasks. (toggle)
+  
+* -**K --kernel**  
+  Include kernel activity in the reported values. This is only possible
+  is the user is root, the tiptop executable is setuid root, or the
+  paranoia level is low enough. (toggle)
+    See file /proc/sys/kernel/perf_event_paranoid
+    (perf_counter_paranoid on Linux 2.6.31).
+  
+* --**list-screens**  
+  List available screens and exit.
+  
+* -**n** VALUE  
+  Automatically exit after VALUE iterations.
+  
+* --**no-collect**  
+  By default, when the maximum number of open files is reached, and new
+  processes appear, tiptop searches for idle processes and closes the
+  files in order to make room for the new ones. This flag disables this
+  behavior: in case of file shortage, new processes will not get more
+  chances than older ones.
+  
+* -**o** FILENAME  
+  Specify the filename for the output of batch mode.
+  
+* --**only-conf**  
+  Only screens defined in configuration file displayed (no default).
+  
+* -**p --pid** VALUE  
+  Filters processes according to VALUE. VALUE can be either the numeric
+  value PID, or a string. In case of a string, all tasks whose names or
+  command lines (depending on the display, see -c) contain VALUE are
+  reported.
+  
+* -**S** VALUE  
+  Start tiptop with screen number VALUE if VALUE is an integer. Otherwise
+  looks for the first screen whose name contains VALUE.
+  
+* --**sticky**  
+  Start in sticky mode: tasks stay in the list after they die. In
+  live-mode, they appear in a different color (when supported). In
+  batch-mode, the word DEAD is appended. (toggle)
+  
+* --**timestamp**  
+  Print a timestamp at the beginning of each row. The timestamp is the
+  number of refreshes so far. In batch-mode, it is printed at the
+  beginning of each row. In live-mode, it is at the bottom of the
+  display. (toggle)
+  
+* -**u** USER  
+  Only show tasks owned by USER. USER can be either a login name, or the
+  numeric value UID.
+  
+* -**U**  
+  Show the owner of each task. (toggle)
+  
+* -**v**  
+  Display build information and exit.
+  
+* --**version**  
+  Display version information and disclaimer and exit.
+  
+* -**w** VALUE  
+  Watch the task specified by VALUE. VALUE can be either the numeric
+  value PID, or a string. In case of a string, all tasks whose names or
+  command lines (depending on the display, see -c) contain VALUE are
+  reported. In live-mode, watched tasks are shown in a different color
+  (when supported). In batch-mode, an ASCII arrow points to the watched
+  tasks.
+  
+* -**W** PATH  
+  Directory where the configuration file is located.
+  
+
+<a name="interactive-commands"></a>
+
+# Interactive Commands
+
+In live-mode, tiptop accepts single-key commands.
+
+
+* **LEFT**, **RIGHT**  
+  Rotate through available screens.
+  
+* **&lt;**, **&gt;**  
+  Change the reference column for sorting to the left or to the right.
+  
+* **c**  
+  Toggle between showing task names and command lines.
+  
+* **d**  
+  Change the refresh interval. The new value is queried. Fractional
+  values larger than 0.01 are accepted.
+  
+* **e**  
+  Display the errors encoutered so far. Scroll with UP, DOWN, PAGE_UP,
+  PAGE_DOWN, HOME and END.
+  
+* **h**  
+  Display a brief description of the screen and each column.
+  
+* **H**  
+  Toggle between showing individual threads and accumulating values per
+  process.
+  
+* **i**  
+  Toggle between showing only active tasks and showing also idle tasks.
+  
+* **K**  
+  Toggle between showing kernel activity and only user activity. Kernel
+  mode is only available to root. Switching to and from kernel mode
+  resets all counters.
+  
+* **k**  
+  Kill a process. The user is asked for the PID, and the signal to send.
+  
+* **p**  
+  Filter tasks by name or PID. The user is asked for a PID or string. In
+  case a string is entered, only the tasks whose name or command line
+  contain the string are displayed. Changing the filter resets all
+  counters.
+  
+* **q**  
+  Quit.
+  
+* **R**  
+  Change sorting order: ascending or descending.
+  
+* **S**  
+  Toggle sticky mode.
+  
+* **s**  
+  Same as d.
+  
+* **u**  
+  Filter tasks by user. The user name or PID is queried. Note that,
+  unless tiptop is run by root or setuid root, tasks owned by somebody
+  else cannot be monitored. Changing the filter resets all counters.
+  
+* **U**  
+  Toggle displaying each task's owner.
+  
+* **w**  
+  Used to track a particular task. The user is asked for a PID or
+  string. In case a string is entered, all tasks whose name or command
+  line contain the string are highlighted.
+  
+* **W**  
+  Writes a configuration file for the current state in the current
+  directory.
+  
+  
+
+<a name="files"></a>
+
+# Files
+
+During startup, **tiptop** attempts to read a configuration file. The file
+must be named **.tiptoprc**. This file is first searched in the
+current directory, then in the directory defined by the environment
+variable **TIPTOP** if it exists, finally in the user's home.
+
+
+<a name="syntax"></a>
+
+### Syntax
+
+The file is structured in XML. The syntax is as follows.
+
+
+* Root of tree  
+  The root of the xml tree is tiptop.
+  &lt;tiptop&gt; ... &lt;/tiptop&gt;
+  
+* Options  
+  Options can be specified on an &lt;options&gt; block.
+  
+  &lt;options&gt;
+    &lt;option name="option1" value="value_option1"/&gt;
+    &lt;option name="option2" value="value_option2"/&gt;
+         ...
+  &lt;/options&gt;
+  
+  Recognized options listed below, with their corresponding command line
+  option.
+  
+  cpu_threshold (--cpu-min), delay (-d), idle
+  (-i), max_iter (-n), show_cmdline (-c), show_epoch (--epoch),
+  show_kernel (-K), show_timestamp (--timestamp), show_threads (-H),
+  show_user (-U), watch_name (-w), sticky (--sticky), watch_uid (-w)
+  
+* Screens  
+  Screens are defined inside a &lt;screen&gt; block. A screen is made of
+  counters and columns. A screen has a name and an optional description.
+  
+  &lt;screen name="my_screen" desc="what this screen is about"&gt;
+         ....
+  &lt;/screen&gt;
+  
+  Counters must provide an alias (used for further reference) and a
+  configuration. The configuration is either a predefined value, or the
+  actual value that must be provided to the perf_even_open system call
+  (typically found in vendor architecture manuals).
+  
+  Predefined values are: CPU_CYCLES, INSTRUCTIONS, CACHE_REFERENCES,
+  CACHE_MISSES, BRANCH_INSTRUCTIONS, BRANCH_MISSES, and BUS_CYCLES.
+  
+    <counter alias="instr" config="INSTRUCTIONS" />
+  
+  For non-predefined configs, a type must be provided. Currently, only
+  RAW and HW_CACHE are supported.
+  
+  Optionally, a counter may be restricted to a specific architecture
+  (such as "x86"), and a model. The definition of the model is
+  architecture-dependent. For x86, it is defined as
+  DisplayFamily_DisplayModel as computed by the instruction CPUID.  A
+  counter for issued micro-ops on Sandy Bridge may look like the
+  following:
+  
+    <counter alias="uops_issued" config="0x010e"
+             type="RAW" arch="x86" model="06_2A" />
+  
+  For the x86 architecture, a single counter can be valid for several
+  models.
+  
+    <counter alias="uOP" config="0x1c2" type="RAW"
+             arch="x86" model="06_1A;06_1E;06_1F;06_2E" />
+  
+  When the type is HW_CACHE, the config is specified by shifting and
+  ORing predefined values. The 8 least significant bits represent the
+  cache level (possible values L1D, L1I, LL, DTLB, ITLB, BPU). The next
+  8 bits represent the type of access (OP_READ, OP_WRITE,
+  OP_PREFETCH). The last 8 bits represent are one of RESULT_ACCESS or
+  RESULT_MISS.
+  
+  Note that "shift left" is expressed as shl (the usual &lt;&lt; does not fit
+  well in xml).
+  
+    <counter alias="L1Rmiss" type="HW_CACHE"
+             config="L1D | (OP_READ shl 8) | (RESULT_MISS shl 16)" />
+  
+  See also /usr/include/linux/perf_events.h for more on config and type.
+  
+  A column defines its header, the printf-like format for values, and an
+  expression. Expressions evaluate as double precision. A description is
+  optional.
+  
+    <counter alias="instr" config="INSTRUCTIONS" />
+    <counter alias="cycle" config="CPU_CYCLES" />
+    <column header=" IPC" format="%4.2f"
+            desc="Total instructions per cycle"
+            expr="instr/cycle"/>
+    <column header=" ipc" format="%4.2f"
+            desc="Total instructions per cycle"
+            expr="instr/cycle" />
+  
+  The syntax of expressions supports basic arithmetic (+ - * /
+  parentheses and constants). The special notation "delta(counter)"
+  evaluates as the variation of the counter between refreshes.
+  Expressions can also refer to predefined variables such as CPU_TOT
+  (CPU usage), CPU_SYS (system CPU usage), CPU_USER (user CPU usage),
+  PROC_ID (processor where the process was last seen).
+  
+    <column header=" ipc" format="%4.2f"
+          desc="Average IPC over last period"
+          expr="delta(instr) / delta(cycle)" />
+  
+  
+* Sample config file  
+  
+    <tiptop>
+    
+      <options>
+        <option name="delay" value="2.0" />
+        <option name="stick" value="1" />
+      </options>
+    
+      <screen name="example" desc="Sample config file">
+        <counter alias="cycle" config="CPU_CYCLES"  />
+        <counter alias="instr" config="INSTRUCTIONS" />
+        <counter alias="miss" config="CACHE_MISSES" />
+        <counter alias="br_miss" config="BRANCH_MISSES" />
+    
+        <!-- Sandy Bridge only -->
+        <counter alias="uops_issued" config="0x010e"
+                 type="RAW" arch="x86" model="06_2A" />
+    
+        <column header=" %CPU" format="%5.1f"
+                desc="CPU usage" expr="CPU_TOT" />
+        <column header="   P" format="  %2.0f"
+                desc="Processor where last seen" expr="PROC_ID" />
+        <column header="  Mcycle" format="%8.2f"
+                desc="Cycles (millions)"
+                expr="delta(cycle) / 1e6" />
+        <column header="  Minstr" format="%8.2f"
+                desc="Instructions (millions)"
+                expr="delta(instr) / 1e6" />
+        <column header=" IPC" format="%4.2f"
+                desc="Executed instructions per cycle"
+                expr="delta(instr) / delta(cycle)" />
+        <column header=" %MISS" format="%6.2f"
+                desc="Cache miss per instructions (in %)"
+                expr="100 * delta(miss) / delta(instr)" />
+        <column header=" %BMIS" format="%6.2f"
+                desc="Branch misprediction per instruction (in %)"
+                expr="100 * delta(br_miss) / delta(instr)" />
+        <column header="uops/inst" format="     %4.1f"
+                desc="Number of issued uops per instruction"
+                expr="delta(uops_issued) / delta(instr)" />
+      </screen>
+    </tiptop>
+  
+  
+
+<a name="caveats"></a>
+
+# Caveats
+
+tiptop does not seem to work within a virtualized environment.
+
+Attaching counters to processes may fail for various reasons, such as
+asking for more than available in hardware (tiptop does not implement
+sampling), or reaching the maximum number of open files. In these
+cases, you may consider filtering the processes (see flags -u, -p).
+
+To mitigate the limitation of the maximum number of open files, tiptop
+tries to close the events attached to idle processes. If this is a
+problem, see the flag --no-collect.
+
+
+
+<a name="bugs"></a>
+
+# Bugs
+
+Send bug reports to:
+   Erven Rohou &lt;erven.rohou@inria.fr&gt;
+
+
+
+<a name="author"></a>
+
+# Author
+
+Written by Erven Rohou.
+
+
+<a name="see-also"></a>
+
+# See Also
+
+**top**(1),
+**ps**(1)
+    /usr/include/linux/perf_counter.h (Linux 2.6.31)
+    /usr/include/linux/event_counter.h (Linux 2.6.32+)

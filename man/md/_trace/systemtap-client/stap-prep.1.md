@@ -1,0 +1,62 @@
+# stap\-prep(1) - prepare system for systemtap use
+
+
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+
+```
+
+stap-prep [ KERNEL_VERSION ]
+```
+
+
+<a name="description"></a>
+
+# Description
+
+
+The stap-prep executable prepares the system for systemtap use by
+installing kernel headers, debug symbols and build tools that match
+the currently running kernel or optionally the kernel version given by
+the user.
+
+If the debuginfod-find tool is installed and is able to fetch
+debuginfo for a kernel component, it is assumed to remain available
+later.  In this case, no debug symbols will be downloaded during
+stap-prep.
+
+The exact behavior of stap-prep may be customized by the
+distribution maintainers. It might for example only give suggestions
+and not actually install the required packages if that is difficult to
+automate.
+
+
+<a name="examples"></a>
+
+# Examples
+
+.SAMPLE
+$ stap-prep
+Please install linux-image-3.2.0-2-amd64-dbg
+.ESAMPLE
+
+
+<a name="see-also"></a>
+
+# See Also
+
+.nh
+**http://sourceware.org/elfutils/Debuginfod.html**
+    stap(1)
+    
+
+<a name="bugs"></a>
+
+# Bugs
+
+Use the Bugzilla link of the project web page or our mailing list.
+.nh
+**http://sourceware.org/systemtap/**,**&lt;systemtap@sourceware.org&gt;**.
