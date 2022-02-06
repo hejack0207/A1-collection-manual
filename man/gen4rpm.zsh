@@ -43,7 +43,7 @@ if [[ "$pkg" = "man-pages" && "$sect" = "2" ]]; then
 fi
 pkgversion=$(rpm -qi $pkg | grep Version | sed -re 's/(.*:\s+)//g')
 mans=()
-for p in $(rpm -ql $pkg | eval grep --color=never -e "/man/man$sect/" ${grepv[@]});
+for p in $(rpm -ql $pkg | eval egrep --color=never -e "/man/man(.|$sect)?/" ${grepv[@]});
 do
 	(( debug )) && echo $p
 	mpage=($(echo $p | sed -re 's#.*/(.*\.[[:digit:]].*)\.gz#\1#g'))
