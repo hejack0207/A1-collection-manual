@@ -1,6 +1,6 @@
 # ntpq(8)
 
-4.2.8p13, 20 Feb 2019
+4.2.8p15, 23 Jun 2020
 
 -Font]ntpq
 - standard NTP query program
@@ -1285,7 +1285,7 @@ The University of Delaware and Network Time Foundation
 
 # Copyright
 
-Copyright (C) 1992-2017 The University of Delaware and Network Time Foundation all rights reserved.
+Copyright (C) 1992-2020 The University of Delaware and Network Time Foundation all rights reserved.
 This program is released under the terms of the NTP license, &lt;http://ntp.org/license&gt;.
 
 <a name="bugs"></a>
