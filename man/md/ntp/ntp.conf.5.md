@@ -1,6 +1,6 @@
 # ntp.conf(5)
 
-4.2.8p13, 20 Feb 2019
+4.2.8p15, 23 Jun 2020
 
 -Font]ntp.conf
 - Network Time Protocol (NTP) daemon configuration file format
@@ -162,8 +162,8 @@ qualifier forces DNS resolution to the IPv6 namespace.
 See IPv6 references for the
 equivalent classes for that address family.
 
-* .NOP -Font]pool\f[] \f\*[I-Font]address\f[] [\f\*[B-Font]burst\f[]] [\f\*[B-Font]iburst\f[]] [\f\*[B-Font]version\f[] \f\*[I-Font]version\f[]] [\f\*[B-Font]prefer\f[]] [\f\*[B-Font]minpoll\f[] \f\*[I-Font]minpoll\f[]] [\f\*[B-Font]maxpoll\f[] \f\*[I-Font]maxpoll\f[]]  
-* .NOP -Font]server\f[] \f\*[I-Font]address\f[] [\f\*[B-Font]key\f[] \f\*[I-Font]key\f[] \f\*[I-Font]|\f[] \f\*[B-Font]autokey\f[]] [\f\*[B-Font]burst\f[]] [\f\*[B-Font]iburst\f[]] [\f\*[B-Font]version\f[] \f\*[I-Font]version\f[]] [\f\*[B-Font]prefer\f[]] [\f\*[B-Font]minpoll\f[] \f\*[I-Font]minpoll\f[]] [\f\*[B-Font]maxpoll\f[] \f\*[I-Font]maxpoll\f[]] [\f\*[B-Font]true\f[]]  
+* .NOP -Font]pool\f[] \f\*[I-Font]address\f[] [\f\*[B-Font]burst\f[]] [\f\*[B-Font]iburst\f[]] [\f\*[B-Font]version\f[] \f\*[I-Font]version\f[]] [\f\*[B-Font]prefer\f[]] [\f\*[B-Font]minpoll\f[] \f\*[I-Font]minpoll\f[]] [\f\*[B-Font]maxpoll\f[] \f\*[I-Font]maxpoll\f[]] [\f\*[B-Font]xmtnonce\f[]]  
+* .NOP -Font]server\f[] \f\*[I-Font]address\f[] [\f\*[B-Font]key\f[] \f\*[I-Font]key\f[] \f\*[I-Font]|\f[] \f\*[B-Font]autokey\f[]] [\f\*[B-Font]burst\f[]] [\f\*[B-Font]iburst\f[]] [\f\*[B-Font]version\f[] \f\*[I-Font]version\f[]] [\f\*[B-Font]prefer\f[]] [\f\*[B-Font]minpoll\f[] \f\*[I-Font]minpoll\f[]] [\f\*[B-Font]maxpoll\f[] \f\*[I-Font]maxpoll\f[]] [\f\*[B-Font]true\f[]] [\f\*[B-Font]xmtnonce\f[]]  
 * .NOP -Font]peer\f[] \f\*[I-Font]address\f[] [\f\*[B-Font]key\f[] \f\*[I-Font]key\f[] \f\*[I-Font]|\f[] \f\*[B-Font]autokey\f[]] [\f\*[B-Font]version\f[] \f\*[I-Font]version\f[]] [\f\*[B-Font]prefer\f[]] [\f\*[B-Font]minpoll\f[] \f\*[I-Font]minpoll\f[]] [\f\*[B-Font]maxpoll\f[] \f\*[I-Font]maxpoll\f[]] [\f\*[B-Font]true\f[]] [\f\*[B-Font]xleave\f[]]  
 * .NOP -Font]broadcast\f[] \f\*[I-Font]address\f[] [\f\*[B-Font]key\f[] \f\*[I-Font]key\f[] \f\*[I-Font]|\f[] \f\*[B-Font]autokey\f[]] [\f\*[B-Font]version\f[] \f\*[I-Font]version\f[]] [\f\*[B-Font]prefer\f[]] [\f\*[B-Font]minpoll\f[] \f\*[I-Font]minpoll\f[]] [\f\*[B-Font]ttl\f[] \f\*[I-Font]ttl\f[]] [\f\*[B-Font]xleave\f[]]  
 * .NOP -Font]manycastclient\f[] \f\*[I-Font]address\f[] [\f\*[B-Font]key\f[] \f\*[I-Font]key\f[] \f\*[I-Font]|\f[] \f\*[B-Font]autokey\f[]] [\f\*[B-Font]version\f[] \f\*[I-Font]version\f[]] [\f\*[B-Font]prefer\f[]] [\f\*[B-Font]minpoll\f[] \f\*[I-Font]minpoll\f[]] [\f\*[B-Font]maxpoll\f[] \f\*[I-Font]maxpoll\f[]] [\f\*[B-Font]ttl\f[] \f\*[I-Font]ttl\f[]]  
@@ -337,9 +337,6 @@ Options:
   The server is discarded by the selection algroithm.
 * .NOP -Font]preempt\f[]  
   Says the association can be preempted.
-* .NOP -Font]true\f[]  
-  Marks the server as a truechimer.
-  Use this option only for testing.
 * .NOP -Font]prefer\f[]  
   Marks the server as preferred.
   All other things being equal,
@@ -353,7 +350,8 @@ Options:
   /usr/share/doc/ntp\f[])
   for further information.
 * .NOP -Font]true\f[]  
-  Forces the association to always survive the selection and clustering algorithms.
+  Marks the server as a truechimer,
+  forcing the association to always survive the selection and clustering algorithms.
   This option should almost certainly
   only\f[]
   be used while testing an association.
@@ -381,6 +379,12 @@ Options:
   and
   -Font]broadcast\f[]
   modes only, this flag enables interleave mode.
+* .NOP -Font]xmtnonce\f[]  
+  Valid only for
+  -Font]server\f[]
+  and
+  -Font]pool\f[]
+  modes, this flag puts a random number in the packet's transmit timestamp.
 
 
 <a name="auxiliary-commands"></a>
@@ -1772,6 +1776,10 @@ It will happen at the server only if the server operator cooperates.
       -Font]ntpport\f[]
       is considered more specific and
       is sorted later in the list.
+    * .NOP -Font]serverresponse fuzz\f[]  
+      When reponding to server requests,
+      fuzz the low order bits of the
+      -Font]reftime\f[].
     * .NOP -Font]version\f[]  
       Deny packets that do not match the current NTP version.
 
@@ -2988,6 +2996,21 @@ peers, system events and so on is suppressed.
   one telephone number used to dial the telephone JJY service.
   The Hayes command ATDT is normally prepended to the number.
   The number can contain other modem control codes as well.
+* .NOP -Font]pollskewlist\f[] [\f\*[I-Font]poll\f[] \f\*[I-Font]value\f[] | \f\*[I-Font]value\f[]] \f\*[I-Font]...\f[] [\f\*[B-Font]default\f[] \f\*[I-Font]value\f[] | \f\*[I-Font]value\f[]]  
+  Enable skewing of our poll requests to our servers.
+  -Font]poll\f[]
+  is a number between 3 and 17 inclusive, identifying a specific poll interval.
+  A poll interval is 2^n seconds in duration,
+  so a poll value of 3 corresponds to 8 seconds
+  and
+  a poll interval of 17 corresponds to
+  131,072 seconds, or about a day and a half.
+  The next two numbers must be between 0 and one-half of the poll interval,
+  inclusive.
+  The first number specifies how early the poll may start,
+  while
+  the second number specifies how late the poll may be delayed.
+  With no arguments, internally specified default values are chosen.
 * .NOP -Font]reset\f[] [\f\*[B-Font]allpeers\f[]] [\f\*[B-Font]auth\f[]] [\f\*[B-Font]ctl\f[]] [\f\*[B-Font]io\f[]] [\f\*[B-Font]mem\f[]] [\f\*[B-Font]sys\f[]] [\f\*[B-Font]timer\f[]]  
   Reset one or more groups of counters maintained by
   -Font]ntpd\f[]
@@ -3313,7 +3336,7 @@ The University of Delaware and Network Time Foundation
 
 # Copyright
 
-Copyright (C) 1992-2017 The University of Delaware and Network Time Foundation all rights reserved.
+Copyright (C) 1992-2020 The University of Delaware and Network Time Foundation all rights reserved.
 This program is released under the terms of the NTP license, &lt;http://ntp.org/license&gt;.
 
 <a name="bugs"></a>
