@@ -93,7 +93,7 @@ range s3-s3:c0.c1023 = black tan
 range s5-s5:c0.c1023 = white blue  
 range s7-s7:c0.c1023 = black red  
 range s9-s9:c0.c1023 = black orange  
-range s15-s15:c0.c1023   = black yellow
+range s15:c0.c1023   = black yellow
 
 
 Example 2 entries are:
@@ -116,7 +116,7 @@ user xguest_u     = black yellow
 role xguest_r     = black red  
 type xguest_t     = black green  
 user sysadm_u     = white black  
-range s0-s0:c0.c1023 = black white  
+range s0:c0.c1023 = black white  
 user *            = black white  
 role *            = black white  
 type *            = black white
