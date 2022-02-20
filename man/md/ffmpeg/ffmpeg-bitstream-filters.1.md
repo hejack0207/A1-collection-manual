@@ -1,0 +1,758 @@
+# ffmpeg-bitstream-filters(1)
+
+ ,  
+
+.if n .ad l
+.nh
+
+<a name="name"></a>
+
+# Name
+
+ffmpeg-bitstream-filters - FFmpeg bitstream filters
+
+<a name="description"></a>
+
+# Description
+
+.IX Header "DESCRIPTION"
+This document describes the bitstream filters provided by the
+libavcodec library.
+
+A bitstream filter operates on the encoded stream data, and performs
+bitstream level modifications without performing decoding.
+
+<a name="bitstream-filters"></a>
+
+# Bitstream Filters
+
+.IX Header "BITSTREAM FILTERS"
+When you configure your FFmpeg build, all the supported bitstream
+filters are enabled by default. You can list all available ones using
+the configure option \f(CW`--list-bsfs\*(C'.
+
+You can disable all the bitstream filters using the configure option
+\f(CW`--disable-bsfs\*(C', and selectively enable any bitstream filter using
+the option \f(CW`--enable-bsf=BSF\*(C', or you can disable a particular
+bitstream filter using the option \f(CW`--disable-bsf=BSF\*(C'.
+
+The option \f(CW`-bsfs\*(C' of the ff* tools will display the list of
+all the supported bitstream filters included in your build.
+
+The ff* tools have a -bsf option applied per stream, taking a
+comma-separated list of filters, whose parameters follow the filter
+name after a '='.
+
+.Vb 1
+        ffmpeg -i INPUT -c:v copy -bsf:v filter1[=opt1=str1:opt2=str2][,filter2] OUTPUT
+.Ve
+
+Below is a description of the currently available bitstream filters,
+with their parameters, if any.
+
+<a name="aac_adtstoasc"></a>
+
+### aac_adtstoasc
+
+.IX Subsection "aac_adtstoasc"
+Convert \s-1MPEG-2/4 AAC ADTS\s0 to an \s-1MPEG-4\s0 Audio Specific Configuration
+bitstream.
+
+This filter creates an \s-1MPEG-4\s0 AudioSpecificConfig from an \s-1MPEG-2/4
+ADTS\s0 header and removes the \s-1ADTS\s0 header.
+
+This filter is required for example when copying an \s-1AAC\s0 stream from a
+raw \s-1ADTS AAC\s0 or an MPEG-TS container to \s-1MP4A-LATM,\s0 to an \s-1FLV\s0 file, or
+to \s-1MOV/MP4\s0 files and related formats such as 3GP or M4A. Please note
+that it is auto-inserted for \s-1MP4A-LATM\s0 and \s-1MOV/MP4\s0 and related formats.
+
+<a name="av1_metadata"></a>
+
+### av1_metadata
+
+.IX Subsection "av1_metadata"
+Modify metadata embedded in an \s-1AV1\s0 stream.
+
+* **td**  
+  .IX Item "td"
+  Insert or remove temporal delimiter OBUs in all temporal units of the
+  stream.
+    * **insert**  
+      .IX Item "insert"
+      Insert a \s-1TD\s0 at the beginning of every \s-1TU\s0 which does not already have one.
+    * **remove**  
+      .IX Item "remove"
+      Remove the \s-1TD\s0 from the beginning of every \s-1TU\s0 which has one.
+* **color\_primaries**  
+  .IX Item "color_primaries"
+* **transfer\_characteristics**  
+  .IX Item "transfer_characteristics"
+* **matrix\_coefficients**  
+  .IX Item "matrix_coefficients"
+  Set the color description fields in the stream (see \s-1AV1\s0 section 6.4.2).
+* **color\_range**  
+  .IX Item "color_range"
+  Set the color range in the stream (see \s-1AV1\s0 section 6.4.2; note that
+  this cannot be set for streams using \s-1BT.709\s0 primaries, sRGB transfer
+  characteristic and identity (\s-1RGB\s0) matrix coefficients).
+    * **tv**  
+      .IX Item "tv"
+      Limited range.
+    * **pc**  
+      .IX Item "pc"
+      Full range.
+* **chroma\_sample\_position**  
+  .IX Item "chroma_sample_position"
+  Set the chroma sample location in the stream (see \s-1AV1\s0 section 6.4.2).
+  This can only be set for 4:2:0 streams.
+    * **vertical**  
+      .IX Item "vertical"
+      Left position (matching the default in \s-1MPEG-2\s0 and H.264).
+    * **colocated**  
+      .IX Item "colocated"
+      Top-left position.
+* **tick\_rate**  
+  .IX Item "tick_rate"
+  Set the tick rate (_num_units_in_display_tick / time\_scale_) in
+  the timing info in the sequence header.
+* **num\_ticks\_per\_picture**  
+  .IX Item "num_ticks_per_picture"
+  Set the number of ticks in each picture, to indicate that the stream
+  has a fixed framerate.  Ignored if **tick\_rate** is not also set.
+
+<a name="chomp"></a>
+
+### chomp
+
+.IX Subsection "chomp"
+Remove zero padding at the end of a packet.
+
+<a name="dca_core"></a>
+
+### dca_core
+
+.IX Subsection "dca_core"
+Extract the core from a \s-1DCA/DTS\s0 stream, dropping extensions such as
+DTS-HD.
+
+<a name="dump_extra"></a>
+
+### dump_extra
+
+.IX Subsection "dump_extra"
+Add extradata to the beginning of the filtered packets.
+
+* **freq**  
+  .IX Item "freq"
+  The additional argument specifies which packets should be filtered.
+  It accepts the values:
+    * **k**  
+      .IX Item "k"
+    * **keyframe**  
+      .IX Item "keyframe"
+      add extradata to all key packets
+    * **e**  
+      .IX Item "e"
+    * **all**  
+      .IX Item "all"
+      add extradata to all packets
+
+If not specified it is assumed **e**.
+
+For example the following **ffmpeg** command forces a global
+header (thus disabling individual packet headers) in the H.264 packets
+generated by the \f(CW`libx264\*(C' encoder, but corrects them by adding
+the header stored in extradata to the key packets:
+
+.Vb 1
+        ffmpeg -i INPUT -map 0 -flags:v +global_header -c:v libx264 -bsf:v dump_extra out.ts
+.Ve
+
+<a name="eac3_core"></a>
+
+### eac3_core
+
+.IX Subsection "eac3_core"
+Extract the core from a E-AC-3 stream, dropping extra channels.
+
+<a name="extract_extradata"></a>
+
+### extract_extradata
+
+.IX Subsection "extract_extradata"
+Extract the in-band extradata.
+
+Certain codecs allow the long-term headers (e.g. \s-1MPEG-2\s0 sequence headers,
+or H.264/HEVC (\s-1VPS/\s0)SPS/PPS) to be transmitted either in-band\*(R" (i.e. as a part
+of the bitstream containing the coded frames) or out of band\*(R" (e.g. on the
+container level). This latter form is called extradata\*(R" in FFmpeg terminology.
+
+This bitstream filter detects the in-band headers and makes them available as
+extradata.
+
+* **remove**  
+  .IX Item "remove"
+  When this option is enabled, the long-term headers are removed from the
+  bitstream after extraction.
+
+<a name="filter_units"></a>
+
+### filter_units
+
+.IX Subsection "filter_units"
+Remove units with types in or not in a given set from the stream.
+
+* **pass\_types**  
+  .IX Item "pass_types"
+  List of unit types or ranges of unit types to pass through while removing
+  all others.  This is specified as a '|'-separated list of unit type values
+  or ranges of values with '-'.
+* **remove\_types**  
+  .IX Item "remove_types"
+  Identical to **pass\_types**, except the units in the given set
+  removed and all others passed through.
+
+Extradata is unchanged by this transformation, but note that if the stream
+contains inline parameter sets then the output may be unusable if they are
+removed.
+
+For example, to remove all non-VCL \s-1NAL\s0 units from an H.264 stream:
+
+.Vb 1
+        ffmpeg -i INPUT -c:v copy -bsf:v filter_units=pass_types=1-5\*(Aq OUTPUT
+.Ve
+
+To remove all AUDs, \s-1SEI\s0 and filler from an H.265 stream:
+
+.Vb 1
+        ffmpeg -i INPUT -c:v copy -bsf:v filter_units=remove_types=35|38-40\*(Aq OUTPUT
+.Ve
+
+<a name="hapqa_extract"></a>
+
+### hapqa_extract
+
+.IX Subsection "hapqa_extract"
+Extract Rgb or Alpha part of an \s-1HAPQA\s0 file, without recompression, in order to create an \s-1HAPQ\s0 or an HAPAlphaOnly file.
+
+* **texture**  
+  .IX Item "texture"
+  Specifies the texture to keep.
+    * **color**  
+      .IX Item "color"
+    * **alpha**  
+      .IX Item "alpha"
+
+Convert \s-1HAPQA\s0 to \s-1HAPQ\s0
+
+.Vb 1
+        ffmpeg -i hapqa_inputfile.mov -c copy -bsf:v hapqa_extract=texture=color -tag:v HapY -metadata:s:v:0 encoder="HAPQ" hapq_file.mov
+.Ve
+
+Convert \s-1HAPQA\s0 to HAPAlphaOnly
+
+.Vb 1
+        ffmpeg -i hapqa_inputfile.mov -c copy -bsf:v hapqa_extract=texture=alpha -tag:v HapA -metadata:s:v:0 encoder="HAPAlpha Only" hapalphaonly_file.mov
+.Ve
+
+<a name="h264_metadata"></a>
+
+### h264_metadata
+
+.IX Subsection "h264_metadata"
+Modify metadata embedded in an H.264 stream.
+
+* **aud**  
+  .IX Item "aud"
+  Insert or remove \s-1AUD NAL\s0 units in all access units of the stream.
+    * **insert**  
+      .IX Item "insert"
+    * **remove**  
+      .IX Item "remove"
+* **sample\_aspect\_ratio**  
+  .IX Item "sample_aspect_ratio"
+  Set the sample aspect ratio of the stream in the \s-1VUI\s0 parameters.
+* **video\_format**  
+  .IX Item "video_format"
+* **video\_full\_range\_flag**  
+  .IX Item "video_full_range_flag"
+  Set the video format in the stream (see H.264 section E.2.1 and
+  table E-2).
+* **colour\_primaries**  
+  .IX Item "colour_primaries"
+* **transfer\_characteristics**  
+  .IX Item "transfer_characteristics"
+* **matrix\_coefficients**  
+  .IX Item "matrix_coefficients"
+  Set the colour description in the stream (see H.264 section E.2.1
+  and tables E-3, E-4 and E-5).
+* **chroma\_sample\_loc\_type**  
+  .IX Item "chroma_sample_loc_type"
+  Set the chroma sample location in the stream (see H.264 section
+  E.2.1 and figure E-1).
+* **tick\_rate**  
+  .IX Item "tick_rate"
+  Set the tick rate (num_units_in_tick / time_scale) in the \s-1VUI\s0
+  parameters.  This is the smallest time unit representable in the
+  stream, and in many cases represents the field rate of the stream
+  (double the frame rate).
+* **fixed\_frame\_rate\_flag**  
+  .IX Item "fixed_frame_rate_flag"
+  Set whether the stream has fixed framerate - typically this indicates
+  that the framerate is exactly half the tick rate, but the exact
+  meaning is dependent on interlacing and the picture structure (see
+  H.264 section E.2.1 and table E-6).
+* **crop\_left**  
+  .IX Item "crop_left"
+* **crop\_right**  
+  .IX Item "crop_right"
+* **crop\_top**  
+  .IX Item "crop_top"
+* **crop\_bottom**  
+  .IX Item "crop_bottom"
+  Set the frame cropping offsets in the \s-1SPS.\s0  These values will replace
+  the current ones if the stream is already cropped.
+  .Sp
+  These fields are set in pixels.  Note that some sizes may not be
+  representable if the chroma is subsampled or the stream is interlaced
+  (see H.264 section 7.4.2.1.1).
+* **sei\_user\_data**  
+  .IX Item "sei_user_data"
+  Insert a string as \s-1SEI\s0 unregistered user data.  The argument must
+  be of the form _UUID+string_, where the \s-1UUID\s0 is as hex digits
+  possibly separated by hyphens, and the string can be anything.
+  .Sp
+  For example, **086f3693-b7b3-4f2c-9653-21492feee5b8+hello** will
+  insert the string \`\`hello'' associated with the given \s-1UUID.\s0
+* **delete\_filler**  
+  .IX Item "delete_filler"
+  Deletes both filler \s-1NAL\s0 units and filler \s-1SEI\s0 messages.
+* **level**  
+  .IX Item "level"
+  Set the level in the \s-1SPS.\s0  Refer to H.264 section A.3 and tables A-1
+  to A-5.
+  .Sp
+  The argument must be the name of a level (for example, **4.2**), a
+  level_idc value (for example, **42**), or the special name **auto**
+  indicating that the filter should attempt to guess the level from the
+  input stream properties.
+
+<a name="h264_mp4toannexb"></a>
+
+### h264_mp4toannexb
+
+.IX Subsection "h264_mp4toannexb"
+Convert an H.264 bitstream from length prefixed mode to start code
+prefixed mode (as defined in the Annex B of the ITU-T H.264
+specification).
+
+This is required by some streaming formats, typically the \s-1MPEG-2\s0
+transport stream format (muxer \f(CW`mpegts\*(C').
+
+For example to remux an \s-1MP4\s0 file containing an H.264 stream to mpegts
+format with **ffmpeg**, you can use the command:
+
+.Vb 1
+        ffmpeg -i INPUT.mp4 -codec copy -bsf:v h264_mp4toannexb OUTPUT.ts
+.Ve
+
+Please note that this filter is auto-inserted for MPEG-TS (muxer
+\f(CW`mpegts\*(C') and raw H.264 (muxer \f(CW\*(C\`h264\*(C') output formats.
+
+<a name="h264_redundant_pps"></a>
+
+### h264_redundant_pps
+
+.IX Subsection "h264_redundant_pps"
+This applies a specific fixup to some Blu-ray streams which contain
+redundant PPSs modifying irrelevant parameters of the stream which
+confuse other transformations which require correct extradata.
+
+A new single global \s-1PPS\s0 is created, and all of the redundant PPSs
+within the stream are removed.
+
+<a name="hevc_metadata"></a>
+
+### hevc_metadata
+
+.IX Subsection "hevc_metadata"
+Modify metadata embedded in an \s-1HEVC\s0 stream.
+
+* **aud**  
+  .IX Item "aud"
+  Insert or remove \s-1AUD NAL\s0 units in all access units of the stream.
+    * **insert**  
+      .IX Item "insert"
+    * **remove**  
+      .IX Item "remove"
+* **sample\_aspect\_ratio**  
+  .IX Item "sample_aspect_ratio"
+  Set the sample aspect ratio in the stream in the \s-1VUI\s0 parameters.
+* **video\_format**  
+  .IX Item "video_format"
+* **video\_full\_range\_flag**  
+  .IX Item "video_full_range_flag"
+  Set the video format in the stream (see H.265 section E.3.1 and
+  table E.2).
+* **colour\_primaries**  
+  .IX Item "colour_primaries"
+* **transfer\_characteristics**  
+  .IX Item "transfer_characteristics"
+* **matrix\_coefficients**  
+  .IX Item "matrix_coefficients"
+  Set the colour description in the stream (see H.265 section E.3.1
+  and tables E.3, E.4 and E.5).
+* **chroma\_sample\_loc\_type**  
+  .IX Item "chroma_sample_loc_type"
+  Set the chroma sample location in the stream (see H.265 section
+  E.3.1 and figure E.1).
+* **tick\_rate**  
+  .IX Item "tick_rate"
+  Set the tick rate in the \s-1VPS\s0 and \s-1VUI\s0 parameters (num_units_in_tick /
+  time_scale).  Combined with **num\_ticks\_poc\_diff\_one**, this can
+  set a constant framerate in the stream.  Note that it is likely to be
+  overridden by container parameters when the stream is in a container.
+* **num\_ticks\_poc\_diff\_one**  
+  .IX Item "num_ticks_poc_diff_one"
+  Set poc_proportional_to_timing_flag in \s-1VPS\s0 and \s-1VUI\s0 and use this value
+  to set num_ticks_poc_diff_one_minus1 (see H.265 sections 7.4.3.1 and
+  E.3.1).  Ignored if **tick\_rate** is not also set.
+* **crop\_left**  
+  .IX Item "crop_left"
+* **crop\_right**  
+  .IX Item "crop_right"
+* **crop\_top**  
+  .IX Item "crop_top"
+* **crop\_bottom**  
+  .IX Item "crop_bottom"
+  Set the conformance window cropping offsets in the \s-1SPS.\s0  These values
+  will replace the current ones if the stream is already cropped.
+  .Sp
+  These fields are set in pixels.  Note that some sizes may not be
+  representable if the chroma is subsampled (H.265 section 7.4.3.2.1).
+
+<a name="hevc_mp4toannexb"></a>
+
+### hevc_mp4toannexb
+
+.IX Subsection "hevc_mp4toannexb"
+Convert an \s-1HEVC/H.265\s0 bitstream from length prefixed mode to start code
+prefixed mode (as defined in the Annex B of the ITU-T H.265
+specification).
+
+This is required by some streaming formats, typically the \s-1MPEG-2\s0
+transport stream format (muxer \f(CW`mpegts\*(C').
+
+For example to remux an \s-1MP4\s0 file containing an \s-1HEVC\s0 stream to mpegts
+format with **ffmpeg**, you can use the command:
+
+.Vb 1
+        ffmpeg -i INPUT.mp4 -codec copy -bsf:v hevc_mp4toannexb OUTPUT.ts
+.Ve
+
+Please note that this filter is auto-inserted for MPEG-TS (muxer
+\f(CW`mpegts\*(C') and raw \s-1HEVC/H.265\s0 (muxer \f(CW\*(C\`h265\*(C' or
+\f(CW`hevc\*(C') output formats.
+
+<a name="imxdump"></a>
+
+### imxdump
+
+.IX Subsection "imxdump"
+Modifies the bitstream to fit in \s-1MOV\s0 and to be usable by the Final Cut
+Pro decoder. This filter only applies to the mpeg2video codec, and is
+likely not needed for Final Cut Pro 7 and newer with the appropriate
+**-tag:v**.
+
+For example, to remux 30 MB/sec \s-1NTSC IMX\s0 to \s-1MOV:\s0
+
+.Vb 1
+        ffmpeg -i input.mxf -c copy -bsf:v imxdump -tag:v mx3n output.mov
+.Ve
+
+<a name="mjpeg2jpeg"></a>
+
+### mjpeg2jpeg
+
+.IX Subsection "mjpeg2jpeg"
+Convert \s-1MJPEG/AVI1\s0 packets to full \s-1JPEG/JFIF\s0 packets.
+
+\s-1MJPEG\s0 is a video codec wherein each video frame is essentially a
+\s-1JPEG\s0 image. The individual frames can be extracted without loss,
+e.g. by
+
+.Vb 1
+        ffmpeg -i ../some_mjpeg.avi -c:v copy frames_%d.jpg
+.Ve
+
+Unfortunately, these chunks are incomplete \s-1JPEG\s0 images, because
+they lack the \s-1DHT\s0 segment required for decoding. Quoting from
+&lt;**http://www.digitalpreservation.gov/formats/fdd/fdd000063.shtml**&gt;:
+
+Avery Lee, writing in the rec.video.desktop newsgroup in 2001,
+commented that \s-1MJPEG,\s0 or at least the \s-1MJPEG\s0 in AVIs having the
+\s-1MJPG\s0 fourcc, is restricted \s-1JPEG\s0 with a fixed  and *omitted* \*(--
+Huffman table. The \s-1JPEG\s0 must be YCbCr colorspace, it must be 4:2:2,
+and it must use basic Huffman encoding, not arithmetic or
+progressive. . . . You can indeed extract the \s-1MJPEG\s0 frames and
+decode them with a regular \s-1JPEG\s0 decoder, but you have to prepend
+the \s-1DHT\s0 segment to them, or else the decoder won't have any idea
+how to decompress the data. The exact table necessary is given in
+the OpenDML spec.
+
+This bitstream filter patches the header of frames extracted from an \s-1MJPEG\s0
+stream (carrying the \s-1AVI1\s0 header \s-1ID\s0 and lacking a \s-1DHT\s0 segment) to
+produce fully qualified \s-1JPEG\s0 images.
+
+.Vb 3
+        ffmpeg -i mjpeg-movie.avi -c:v copy -bsf:v mjpeg2jpeg frame_%d.jpg
+        exiftran -i -9 frame*.jpg
+        ffmpeg -i frame_%d.jpg -c:v copy rotated.avi
+.Ve
+
+<a name="mjpegadump"></a>
+
+### mjpegadump
+
+.IX Subsection "mjpegadump"
+Add an \s-1MJPEG A\s0 header to the bitstream, to enable decoding by
+Quicktime.
+
+<a name="mov2textsub"></a>
+
+### mov2textsub
+
+.IX Subsection "mov2textsub"
+Extract a representable text file from \s-1MOV\s0 subtitles, stripping the
+metadata header from each subtitle packet.
+
+See also the **text2movsub** filter.
+
+<a name="mp3decomp"></a>
+
+### mp3decomp
+
+.IX Subsection "mp3decomp"
+Decompress non-standard compressed \s-1MP3\s0 audio headers.
+
+<a name="mpeg2_metadata"></a>
+
+### mpeg2_metadata
+
+.IX Subsection "mpeg2_metadata"
+Modify metadata embedded in an \s-1MPEG-2\s0 stream.
+
+* **display\_aspect\_ratio**  
+  .IX Item "display_aspect_ratio"
+  Set the display aspect ratio in the stream.
+  .Sp
+  The following fixed values are supported:
+    * **4/3**  
+      .IX Item "4/3"
+    * **16/9**  
+      .IX Item "16/9"
+    * **221/100**  
+      .IX Item "221/100"
+      .Sp
+      Any other value will result in square pixels being signalled instead
+      (see H.262 section 6.3.3 and table 6-3).
+* **frame\_rate**  
+  .IX Item "frame_rate"
+  Set the frame rate in the stream.  This is constructed from a table
+  of known values combined with a small multiplier and divisor - if
+  the supplied value is not exactly representable, the nearest
+  representable value will be used instead (see H.262 section 6.3.3
+  and table 6-4).
+* **video\_format**  
+  .IX Item "video_format"
+  Set the video format in the stream (see H.262 section 6.3.6 and
+  table 6-6).
+* **colour\_primaries**  
+  .IX Item "colour_primaries"
+* **transfer\_characteristics**  
+  .IX Item "transfer_characteristics"
+* **matrix\_coefficients**  
+  .IX Item "matrix_coefficients"
+  Set the colour description in the stream (see H.262 section 6.3.6
+  and tables 6-7, 6-8 and 6-9).
+
+<a name="mpeg4_unpack_bframes"></a>
+
+### mpeg4_unpack_bframes
+
+.IX Subsection "mpeg4_unpack_bframes"
+Unpack DivX-style packed B-frames.
+
+DivX-style packed B-frames are not valid \s-1MPEG-4\s0 and were only a
+workaround for the broken Video for Windows subsystem.
+They use more space, can cause minor \s-1AV\s0 sync issues, require more
+\s-1CPU\s0 power to decode (unless the player has some decoded picture queue
+to compensate the 2,0,2,0 frame per packet style) and cause
+trouble if copied into a standard container like mp4 or mpeg-ps/ts,
+because \s-1MPEG-4\s0 decoders may not be able to decode them, since they are
+not valid \s-1MPEG-4.\s0
+
+For example to fix an \s-1AVI\s0 file containing an \s-1MPEG-4\s0 stream with
+DivX-style packed B-frames using **ffmpeg**, you can use the command:
+
+.Vb 1
+        ffmpeg -i INPUT.avi -codec copy -bsf:v mpeg4_unpack_bframes OUTPUT.avi
+.Ve
+
+<a name="noise"></a>
+
+### noise
+
+.IX Subsection "noise"
+Damages the contents of packets or simply drops them without damaging the
+container. Can be used for fuzzing or testing error resilience/concealment.
+
+Parameters:
+
+* **amount**  
+  .IX Item "amount"
+  A numeral string, whose value is related to how often output bytes will
+  be modified. Therefore, values below or equal to 0 are forbidden, and
+  the lower the more frequent bytes will be modified, with 1 meaning
+  every byte is modified.
+* **dropamount**  
+  .IX Item "dropamount"
+  A numeral string, whose value is related to how often packets will be dropped.
+  Therefore, values below or equal to 0 are forbidden, and the lower the more
+  frequent packets will be dropped, with 1 meaning every packet is dropped.
+
+The following example applies the modification to every byte but does not drop
+any packets.
+
+.Vb 1
+        ffmpeg -i INPUT -c copy -bsf noise[=1] output.mkv
+.Ve
+
+<a name="null"></a>
+
+### null
+
+.IX Subsection "null"
+This bitstream filter passes the packets through unchanged.
+
+<a name="remove_extra"></a>
+
+### remove_extra
+
+.IX Subsection "remove_extra"
+Remove extradata from packets.
+
+It accepts the following parameter:
+
+* **freq**  
+  .IX Item "freq"
+  Set which frame types to remove extradata from.
+    * **k**  
+      .IX Item "k"
+      Remove extradata from non-keyframes only.
+    * **keyframe**  
+      .IX Item "keyframe"
+      Remove extradata from keyframes only.
+    * **e, all**  
+      .IX Item "e, all"
+      Remove extradata from all frames.
+
+<a name="text2movsub"></a>
+
+### text2movsub
+
+.IX Subsection "text2movsub"
+Convert text subtitles to \s-1MOV\s0 subtitles (as used by the \f(CW`mov\_text\*(C'
+codec) with metadata headers.
+
+See also the **mov2textsub** filter.
+
+<a name="trace_headers"></a>
+
+### trace_headers
+
+.IX Subsection "trace_headers"
+Log trace output containing all syntax elements in the coded stream
+headers (everything above the level of individual coded blocks).
+This can be useful for debugging low-level stream issues.
+
+Supports H.264, H.265, \s-1MPEG-2\s0 and \s-1VP9.\s0
+
+<a name="vp9_metadata"></a>
+
+### vp9_metadata
+
+.IX Subsection "vp9_metadata"
+Modify metadata embedded in a \s-1VP9\s0 stream.
+
+* **color\_space**  
+  .IX Item "color_space"
+  Set the color space value in the frame header.
+    * **unknown**  
+      .IX Item "unknown"
+    * **bt601**  
+      .IX Item "bt601"
+    * **bt709**  
+      .IX Item "bt709"
+    * **smpte170**  
+      .IX Item "smpte170"
+    * **smpte240**  
+      .IX Item "smpte240"
+    * **bt2020**  
+      .IX Item "bt2020"
+    * **rgb**  
+      .IX Item "rgb"
+* **color\_range**  
+  .IX Item "color_range"
+  Set the color range value in the frame header.  Note that this cannot
+  be set in \s-1RGB\s0 streams.
+    * **tv**  
+      .IX Item "tv"
+    * **pc**  
+      .IX Item "pc"
+
+<a name="vp9_superframe"></a>
+
+### vp9_superframe
+
+.IX Subsection "vp9_superframe"
+Merge \s-1VP9\s0 invisible (alt-ref) frames back into \s-1VP9\s0 superframes. This
+fixes merging of split/segmented \s-1VP9\s0 streams where the alt-ref frame
+was split from its visible counterpart.
+
+<a name="vp9_superframe_split"></a>
+
+### vp9_superframe_split
+
+.IX Subsection "vp9_superframe_split"
+Split \s-1VP9\s0 superframes into single frames.
+
+<a name="vp9_raw_reorder"></a>
+
+### vp9_raw_reorder
+
+.IX Subsection "vp9_raw_reorder"
+Given a \s-1VP9\s0 stream with correct timestamps but possibly out of order,
+insert additional show-existing-frame packets to correct the ordering.
+
+<a name="see-also"></a>
+
+# See Also
+
+.IX Header "SEE ALSO"
+**ffmpeg**\|(1), **ffplay**\|(1), **ffprobe**\|(1), **libavcodec**\|(3)
+
+<a name="authors"></a>
+
+# Authors
+
+.IX Header "AUTHORS"
+The FFmpeg developers.
+
+For details about the authorship, see the Git history of the project
+(git://source.ffmpeg.org/ffmpeg), e.g. by typing the command
+**git log** in the FFmpeg source directory, or browsing the
+online repository at &lt;**http://source.ffmpeg.org**&gt;.
+
+Maintainers for the specific components are listed in the file
+_\s-1MAINTAINERS\s0_ in the source code tree.
