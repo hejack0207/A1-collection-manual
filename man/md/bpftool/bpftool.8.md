@@ -1,0 +1,108 @@
+# bpftool(8) - tool for inspection and simple manipulation of eBPF programs and maps
+
+"", ""
+
+.nr rst2man-indent-level 0
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+
+
+..
+
+<a name="synopsis"></a>
+
+# Synopsis
+
+```
+.INDENT 0.0 .INDENT 3.5 bpftool [OPTIONS] OBJECT { COMMAND | help } 
+ bpftool batch file FILE 
+ bpftool version 
+ OBJECT := { map | program | cgroup | perf | net | feature } 
+ OPTIONS := { { -V | --version } | { -h | --help } | { -j | --json } [{ -p | --pretty }] } 
+ MAP-COMMANDS := { show | list | create | dump | update | lookup | getnext | delete | pin | event_pipe | help } 
+ PROG-COMMANDS := { show | list | dump jited | dump xlated | pin | load | attach | detach | help } 
+ CGROUP-COMMANDS := { show | list | attach | detach | help } 
+ PERF-COMMANDS := { show | list | help } 
+ NET-COMMANDS := { show | list | help } 
+ FEATURE-COMMANDS := { probe | help } .UNINDENT .UNINDENT
+```
+
+<a name="description"></a>
+
+# Description
+
+.INDENT 0.0
+.INDENT 3.5
+_bpftool_ allows for inspection and simple modification of BPF objects
+on the system.
+
+Note that format of the output of all tools is not guaranteed to be
+stable and should not be depended upon.
+.UNINDENT
+.UNINDENT
+
+<a name="options"></a>
+
+# Options
+
+.INDENT 0.0
+.INDENT 3.5
+.INDENT 0.0
+
+* **-h, --help**  
+  Print short help message (similar to **bpftool help**).
+* **-V, --version**  
+  Print version number (similar to **bpftool version**), and optional
+  features that were included when bpftool was compiled. Optional
+  features include linking against libbfd to provide the disassembler
+  for JIT-ted programs (**bpftool prog dump jited**) and usage of BPF
+  skeletons (some features like **bpftool prog profile** or showing
+  pids associated to BPF objects may rely on it).
+* **-j, --json**  
+  Generate JSON output. For commands that cannot produce JSON, this
+  option has no effect.
+* **-p, --pretty**  
+  Generate human-readable JSON output. Implies **-j**.
+* **-d, --debug**  
+  Print all logs available, even debug-level information. This includes
+  logs from libbpf as well as from the verifier, when attempting to
+  load programs.
+* **-m, --mapcompat**  
+  Allow loading maps with unknown map definitions.
+* **-n, --nomount**  
+  Do not automatically attempt to mount any virtual file system
+  (such as tracefs or BPF virtual file system) when necessary.
+  .UNINDENT
+  .UNINDENT
+  .UNINDENT
+
+<a name="see-also"></a>
+
+# See Also
+
+.INDENT 0.0
+.INDENT 3.5
+**bpf**(2),
+**bpf-helpers**(7),
+**bpftool-btf**(8),
+**bpftool-cgroup**(8),
+**bpftool-feature**(8),
+**bpftool-gen**(8),
+**bpftool-iter**(8),
+**bpftool-link**(8),
+**bpftool-map**(8),
+**bpftool-net**(8),
+**bpftool-perf**(8),
+**bpftool-prog**(8),
+**bpftool-struct\_ops**(8)
+.UNINDENT
+.UNINDENT
+

@@ -1,0 +1,428 @@
+.\" Man page generated from reStructuredText.
+.
+.TH BPFTOOL-GEN 8 "" "" ""
+.SH NAME
+bpftool-gen \- tool for BPF code-generation
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+.INDENT 0.0
+.INDENT 3.5
+\fBbpftool\fP [\fIOPTIONS\fP] \fBgen\fP \fICOMMAND\fP
+.sp
+\fIOPTIONS\fP := { { \fB\-j\fP | \fB\-\-json\fP } [{ \fB\-p\fP | \fB\-\-pretty\fP }] }
+.sp
+\fICOMMAND\fP := { \fBobject\fP | \fBskeleton\fP | \fBhelp\fP }
+.UNINDENT
+.UNINDENT
+.SH GEN COMMANDS
+.nf
+\fBbpftool\fP \fBgen object\fP \fIOUTPUT_FILE\fP \fIINPUT_FILE\fP [\fIINPUT_FILE\fP\&...]
+\fBbpftool\fP \fBgen skeleton\fP \fIFILE\fP [\fBname\fP \fIOBJECT_NAME\fP]
+\fBbpftool\fP \fBgen help\fP
+.fi
+.sp
+.SH DESCRIPTION
+.INDENT 0.0
+.INDENT 3.5
+.INDENT 0.0
+.TP
+.B \fBbpftool gen object\fP \fIOUTPUT_FILE\fP \fIINPUT_FILE\fP [\fIINPUT_FILE\fP\&...]
+Statically link (combine) together one or more \fIINPUT_FILE\fP\(aqs
+into a single resulting \fIOUTPUT_FILE\fP\&. All the files involved
+are BPF ELF object files.
+.sp
+The rules of BPF static linking are mostly the same as for
+user\-space object files, but in addition to combining data
+and instruction sections, .BTF and .BTF.ext (if present in
+any of the input files) data are combined together. .BTF
+data is deduplicated, so all the common types across
+\fIINPUT_FILE\fP\(aqs will only be represented once in the resulting
+BTF information.
+.sp
+BPF static linking allows to partition BPF source code into
+individually compiled files that are then linked into
+a single resulting BPF object file, which can be used to
+generated BPF skeleton (with \fBgen skeleton\fP command) or
+passed directly into \fBlibbpf\fP (using \fBbpf_object__open()\fP
+family of APIs).
+.TP
+.B \fBbpftool gen skeleton\fP \fIFILE\fP
+Generate BPF skeleton C header file for a given \fIFILE\fP\&.
+.sp
+BPF skeleton is an alternative interface to existing libbpf
+APIs for working with BPF objects. Skeleton code is intended
+to significantly shorten and simplify code to load and work
+with BPF programs from userspace side. Generated code is
+tailored to specific input BPF object \fIFILE\fP, reflecting its
+structure by listing out available maps, program, variables,
+etc. Skeleton eliminates the need to lookup mentioned
+components by name. Instead, if skeleton instantiation
+succeeds, they are populated in skeleton structure as valid
+libbpf types (e.g., \fBstruct bpf_map\fP pointer) and can be
+passed to existing generic libbpf APIs.
+.sp
+In addition to simple and reliable access to maps and
+programs, skeleton provides a storage for BPF links (\fBstruct
+bpf_link\fP) for each BPF program within BPF object. When
+requested, supported BPF programs will be automatically
+attached and resulting BPF links stored for further use by
+user in pre\-allocated fields in skeleton struct. For BPF
+programs that can\(aqt be automatically attached by libbpf,
+user can attach them manually, but store resulting BPF link
+in per\-program link field. All such set up links will be
+automatically destroyed on BPF skeleton destruction. This
+eliminates the need for users to manage links manually and
+rely on libbpf support to detach programs and free up
+resources.
+.sp
+Another facility provided by BPF skeleton is an interface to
+global variables of all supported kinds: mutable, read\-only,
+as well as extern ones. This interface allows to pre\-setup
+initial values of variables before BPF object is loaded and
+verified by kernel. For non\-read\-only variables, the same
+interface can be used to fetch values of global variables on
+userspace side, even if they are modified by BPF code.
+.sp
+During skeleton generation, contents of source BPF object
+\fIFILE\fP is embedded within generated code and is thus not
+necessary to keep around. This ensures skeleton and BPF
+object file are matching 1\-to\-1 and always stay in sync.
+Generated code is dual\-licensed under LGPL\-2.1 and
+BSD\-2\-Clause licenses.
+.sp
+It is a design goal and guarantee that skeleton interfaces
+are interoperable with generic libbpf APIs. User should
+always be able to use skeleton API to create and load BPF
+object, and later use libbpf APIs to keep working with
+specific maps, programs, etc.
+.sp
+As part of skeleton, few custom functions are generated.
+Each of them is prefixed with object name. Object name can
+either be derived from object file name, i.e., if BPF object
+file name is \fBexample.o\fP, BPF object name will be
+\fBexample\fP\&. Object name can be also specified explicitly
+through \fBname\fP \fIOBJECT_NAME\fP parameter. The following
+custom functions are provided (assuming \fBexample\fP as
+the object name):
+.INDENT 7.0
+.IP \(bu 2
+\fBexample__open\fP and \fBexample__open_opts\fP\&.
+These functions are used to instantiate skeleton. It
+corresponds to libbpf\(aqs \fBbpf_object__open\fP() API.
+\fB_opts\fP variants accepts extra \fBbpf_object_open_opts\fP
+options.
+.IP \(bu 2
+\fBexample__load\fP\&.
+This function creates maps, loads and verifies BPF
+programs, initializes global data maps. It corresponds to
+libppf\(aqs \fBbpf_object__load\fP() API.
+.IP \(bu 2
+\fBexample__open_and_load\fP combines \fBexample__open\fP and
+\fBexample__load\fP invocations in one commonly used
+operation.
+.IP \(bu 2
+\fBexample__attach\fP and \fBexample__detach\fP
+This pair of functions allow to attach and detach,
+correspondingly, already loaded BPF object. Only BPF
+programs of types supported by libbpf for auto\-attachment
+will be auto\-attached and their corresponding BPF links
+instantiated. For other BPF programs, user can manually
+create a BPF link and assign it to corresponding fields in
+skeleton struct. \fBexample__detach\fP will detach both
+links created automatically, as well as those populated by
+user manually.
+.IP \(bu 2
+\fBexample__destroy\fP
+Detach and unload BPF programs, free up all the resources
+used by skeleton and BPF object.
+.UNINDENT
+.sp
+If BPF object has global variables, corresponding structs
+with memory layout corresponding to global data data section
+layout will be created. Currently supported ones are: \fI\&.data\fP,
+\fI\&.bss\fP, \fI\&.rodata\fP, and \fI\&.kconfig\fP structs/data sections.
+These data sections/structs can be used to set up initial
+values of variables, if set before \fBexample__load\fP\&.
+Afterwards, if target kernel supports memory\-mapped BPF
+arrays, same structs can be used to fetch and update
+(non\-read\-only) data from userspace, with same simplicity
+as for BPF side.
+.TP
+.B \fBbpftool gen help\fP
+Print short help message.
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.SH OPTIONS
+.INDENT 0.0
+.INDENT 3.5
+.INDENT 0.0
+.TP
+.B \-h\fP,\fB  \-\-help
+Print short help message (similar to \fBbpftool help\fP).
+.TP
+.B \-V\fP,\fB  \-\-version
+Print version number (similar to \fBbpftool version\fP), and optional
+features that were included when bpftool was compiled. Optional
+features include linking against libbfd to provide the disassembler
+for JIT\-ted programs (\fBbpftool prog dump jited\fP) and usage of BPF
+skeletons (some features like \fBbpftool prog profile\fP or showing
+pids associated to BPF objects may rely on it).
+.TP
+.B \-j\fP,\fB  \-\-json
+Generate JSON output. For commands that cannot produce JSON, this
+option has no effect.
+.TP
+.B \-p\fP,\fB  \-\-pretty
+Generate human\-readable JSON output. Implies \fB\-j\fP\&.
+.TP
+.B \-d\fP,\fB  \-\-debug
+Print all logs available, even debug\-level information. This includes
+logs from libbpf as well as from the verifier, when attempting to
+load programs.
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.SH EXAMPLES
+.sp
+\fB$ cat example1.bpf.c\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+#include <stdbool.h>
+#include <linux/ptrace.h>
+#include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
+
+const volatile int param1 = 42;
+bool global_flag = true;
+struct { int x; } data = {};
+
+SEC("raw_tp/sys_enter")
+int handle_sys_enter(struct pt_regs *ctx)
+{
+      static long my_static_var;
+      if (global_flag)
+              my_static_var++;
+      else
+              data.x += param1;
+      return 0;
+}
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fB$ cat example2.bpf.c\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+#include <linux/ptrace.h>
+#include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
+
+struct {
+      __uint(type, BPF_MAP_TYPE_HASH);
+      __uint(max_entries, 128);
+      __type(key, int);
+      __type(value, long);
+} my_map SEC(".maps");
+
+SEC("raw_tp/sys_exit")
+int handle_sys_exit(struct pt_regs *ctx)
+{
+      int zero = 0;
+      bpf_map_lookup_elem(&my_map, &zero);
+      return 0;
+}
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This is example BPF application with two BPF programs and a mix of BPF maps
+and global variables. Source code is split across two source code files.
+.sp
+\fB$ clang \-target bpf \-g example1.bpf.c \-o example1.bpf.o\fP
+\fB$ clang \-target bpf \-g example2.bpf.c \-o example2.bpf.o\fP
+\fB$ bpftool gen object example.bpf.o example1.bpf.o example2.bpf.o\fP
+.sp
+This set of commands compiles \fIexample1.bpf.c\fP and \fIexample2.bpf.c\fP
+individually and then statically links respective object files into the final
+BPF ELF object file \fIexample.bpf.o\fP\&.
+.sp
+\fB$ bpftool gen skeleton example.bpf.o name example | tee example.skel.h\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+/* SPDX\-License\-Identifier: (LGPL\-2.1 OR BSD\-2\-Clause) */
+
+/* THIS FILE IS AUTOGENERATED! */
+#ifndef __EXAMPLE_SKEL_H__
+#define __EXAMPLE_SKEL_H__
+
+#include <stdlib.h>
+#include <bpf/libbpf.h>
+
+struct example {
+      struct bpf_object_skeleton *skeleton;
+      struct bpf_object *obj;
+      struct {
+              struct bpf_map *rodata;
+              struct bpf_map *data;
+              struct bpf_map *bss;
+              struct bpf_map *my_map;
+      } maps;
+      struct {
+              struct bpf_program *handle_sys_enter;
+              struct bpf_program *handle_sys_exit;
+      } progs;
+      struct {
+              struct bpf_link *handle_sys_enter;
+              struct bpf_link *handle_sys_exit;
+      } links;
+      struct example__bss {
+              struct {
+                      int x;
+              } data;
+      } *bss;
+      struct example__data {
+              _Bool global_flag;
+              long int handle_sys_enter_my_static_var;
+      } *data;
+      struct example__rodata {
+              int param1;
+      } *rodata;
+};
+
+static void example__destroy(struct example *obj);
+static inline struct example *example__open_opts(
+              const struct bpf_object_open_opts *opts);
+static inline struct example *example__open();
+static inline int example__load(struct example *obj);
+static inline struct example *example__open_and_load();
+static inline int example__attach(struct example *obj);
+static inline void example__detach(struct example *obj);
+
+#endif /* __EXAMPLE_SKEL_H__ */
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fB$ cat example.c\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+#include "example.skel.h"
+
+int main()
+{
+      struct example *skel;
+      int err = 0;
+
+      skel = example__open();
+      if (!skel)
+              goto cleanup;
+
+      skel\->rodata\->param1 = 128;
+
+      err = example__load(skel);
+      if (err)
+              goto cleanup;
+
+      err = example__attach(skel);
+      if (err)
+              goto cleanup;
+
+      /* all libbpf APIs are usable */
+      printf("my_map name: %s\en", bpf_map__name(skel\->maps.my_map));
+      printf("sys_enter prog FD: %d\en",
+             bpf_program__fd(skel\->progs.handle_sys_enter));
+
+      /* detach and re\-attach sys_exit program */
+      bpf_link__destroy(skel\->links.handle_sys_exit);
+      skel\->links.handle_sys_exit =
+              bpf_program__attach(skel\->progs.handle_sys_exit);
+
+      printf("my_static_var: %ld\en",
+             skel\->bss\->handle_sys_enter_my_static_var);
+
+cleanup:
+      example__destroy(skel);
+      return err;
+}
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fB# ./example\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+my_map name: my_map
+sys_enter prog FD: 8
+my_static_var: 7
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This is a stripped\-out version of skeleton generated for above example code.
+.SH SEE ALSO
+.INDENT 0.0
+.INDENT 3.5
+\fBbpf\fP(2),
+\fBbpf\-helpers\fP(7),
+\fBbpftool\fP(8),
+\fBbpftool\-btf\fP(8),
+\fBbpftool\-cgroup\fP(8),
+\fBbpftool\-feature\fP(8),
+\fBbpftool\-iter\fP(8),
+\fBbpftool\-link\fP(8),
+\fBbpftool\-map\fP(8),
+\fBbpftool\-net\fP(8),
+\fBbpftool\-perf\fP(8),
+\fBbpftool\-prog\fP(8),
+\fBbpftool\-struct_ops\fP(8)
+.UNINDENT
+.UNINDENT
+.\" Generated by docutils manpage writer.
+.
