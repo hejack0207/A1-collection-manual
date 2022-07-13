@@ -1,0 +1,174 @@
+5.3 Some caveats on OS-specific issues
+======================================
+
+Here, we describe some caveats on several operating systems.
+
+* Menu:
+
+* GNU/Hurd::
+* GNU/Linux::
+* NetBSD::
+* DOS/Windows::
+
+File: grub.info,  Node: GNU/Hurd,  Next: GNU/Linux,  Up: OS-specific notes
+
+5.3.1 GNU/Hurd
+--------------
+
+Since GNU/Hurd is Multiboot-compliant, it is easy to boot it; there is
+nothing special about it.  But do not forget that you have to specify a
+root partition to the kernel.
+
+  1. Set GRUB's root device to the same drive as GNU/Hurd's.  The
+     command 'search --set=root --file /boot/gnumach.gz' or similar may
+     help you (*note search::).
+
+  2. Load the kernel and the modules, like this:
+
+          grub> multiboot /boot/gnumach.gz root=device:hd0s1
+          grub> module  /hurd/ext2fs.static ext2fs --readonly \
+                             --multiboot-command-line='${kernel-command-line}' \
+                             --host-priv-port='${host-port}' \
+                             --device-master-port='${device-port}' \
+                             --exec-server-task='${exec-task}' -T typed '${root}' \
+                             '$(task-create)' '$(task-resume)'
+          grub> module /lib/ld.so.1 exec /hurd/exec '$(exec-task=task-create)'
+
+  3. Finally, run the command 'boot' (*note boot::).
+
+File: grub.info,  Node: GNU/Linux,  Next: NetBSD,  Prev: GNU/Hurd,  Up: OS-specific notes
+
+5.3.2 GNU/Linux
+---------------
+
+It is relatively easy to boot GNU/Linux from GRUB, because it somewhat
+resembles to boot a Multiboot-compliant OS.
+
+  1. Set GRUB's root device to the same drive as GNU/Linux's.  The
+     command 'search --set=root --file /vmlinuz' or similar may help you
+     (*note search::).
+
+  2. Load the kernel using the command 'linux' (*note linux::):
+
+          grub> linux /vmlinuz root=/dev/sda1
+
+     If you need to specify some kernel parameters, just append them to
+     the command.  For example, to set 'acpi' to 'off', do this:
+
+          grub> linux /vmlinuz root=/dev/sda1 acpi=off
+
+     See the documentation in the Linux source tree for complete
+     information on the available options.
+
+     With 'linux' GRUB uses 32-bit protocol.  Some BIOS services like
+     APM or EDD aren't available with this protocol.  In this case you
+     need to use 'linux16'
+
+          grub> linux16 /vmlinuz root=/dev/sda1 acpi=off
+
+  3. If you use an initrd, execute the command 'initrd' (*note initrd::)
+     after 'linux':
+
+          grub> initrd /initrd
+
+     If you used 'linux16' you need to use 'initrd16':
+
+          grub> initrd16 /initrd
+
+  4. Finally, run the command 'boot' (*note boot::).
+
+   *Caution:* If you use an initrd and specify the 'mem=' option to the
+kernel to let it use less than actual memory size, you will also have to
+specify the same memory size to GRUB. To let GRUB know the size, run the
+command 'uppermem' _before_ loading the kernel.  *Note uppermem::, for
+more information.
+
+File: grub.info,  Node: NetBSD,  Next: DOS/Windows,  Prev: GNU/Linux,  Up: OS-specific notes
+
+5.3.3 NetBSD
+------------
+
+Booting a NetBSD kernel from GRUB is also relatively easy: first set
+GRUB's root device, then load the kernel and the modules, and finally
+run 'boot'.
+
+  1. Set GRUB's root device to the partition holding the NetBSD root
+     file system.  For a disk with a NetBSD disk label, this is usually
+     the first partition (a:).  In that case, and assuming that the
+     partition is on the first hard disk, set GRUB's root device as
+     follows:
+
+          grub> insmod part_bsd
+          grub> set root=(hd0,netbsd1)
+
+     For a disk with a GUID Partition Table (GPT), and assuming that the
+     NetBSD root partition is the third GPT partition, do this:
+
+          grub> insmod part_gpt
+          grub> set root=(hd0,gpt3)
+
+  2. Load the kernel using the command 'knetbsd':
+
+          grub> knetbsd /netbsd
+
+     Various options may be given to 'knetbsd'.  These options are, for
+     the most part, the same as in the NetBSD boot loader.  For
+     instance, to boot the system in single-user mode and with verbose
+     messages, do this:
+
+          grub> knetbsd /netbsd -s -v
+
+  3. If needed, load kernel modules with the command
+     'knetbsd_module_elf'.  A typical example is the module for the root
+     file system:
+
+          grub> knetbsd_module_elf /stand/amd64/6.0/modules/ffs/ffs.kmod
+
+  4. Finally, run the command 'boot' (*note boot::).
+
+File: grub.info,  Node: DOS/Windows,  Prev: NetBSD,  Up: OS-specific notes
+
+5.3.4 DOS/Windows
+-----------------
+
+GRUB cannot boot DOS or Windows directly, so you must chain-load them
+(*note Chain-loading::).  However, their boot loaders have some critical
+deficiencies, so it may not work to just chain-load them.  To overcome
+the problems, GRUB provides you with two helper functions.
+
+   If you have installed DOS (or Windows) on a non-first hard disk, you
+have to use the disk swapping technique, because that OS cannot boot
+from any disks but the first one.  The workaround used in GRUB is the
+command 'drivemap' (*note drivemap::), like this:
+
+     drivemap -s (hd0) (hd1)
+
+   This performs a "virtual" swap between your first and second hard
+drive.
+
+   *Caution:* This is effective only if DOS (or Windows) uses BIOS to
+access the swapped disks.  If that OS uses a special driver for the
+disks, this probably won't work.
+
+   Another problem arises if you installed more than one set of
+DOS/Windows onto one disk, because they could be confused if there are
+more than one primary partitions for DOS/Windows.  Certainly you should
+avoid doing this, but there is a solution if you do want to do so.  Use
+the partition hiding/unhiding technique.
+
+   If GRUB "hides" a DOS (or Windows) partition (*note parttool::), DOS
+(or Windows) will ignore the partition.  If GRUB "unhides" a DOS (or
+Windows) partition, DOS (or Windows) will detect the partition.  Thus,
+if you have installed DOS (or Windows) on the first and the second
+partition of the first hard disk, and you want to boot the copy on the
+first partition, do the following:
+
+     parttool (hd0,1) hidden-
+     parttool (hd0,2) hidden+
+     set root=(hd0,1)
+     chainloader +1
+     parttool ${root} boot+
+     boot
+
+File: grub.info,  Node: Configuration,  Next: Theme file format,  Prev: Booting,  Up: Top
+

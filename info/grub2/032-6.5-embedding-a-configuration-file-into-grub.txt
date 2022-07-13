@@ -1,0 +1,61 @@
+6.5 Embedding a configuration file into GRUB
+============================================
+
+GRUB supports embedding a configuration file directly into the core
+image, so that it is loaded before entering normal mode.  This is
+useful, for example, when it is not straightforward to find the real
+configuration file, or when you need to debug problems with loading that
+file.  'grub2-install' uses this feature when it is not using BIOS disk
+functions or when installing to a different disk from the one containing
+'/boot/grub', in which case it needs to use the 'search' command (*note
+search::) to find '/boot/grub'.
+
+   To embed a configuration file, use the '-c' option to
+'grub2-mkimage'.  The file is copied into the core image, so it may
+reside anywhere on the file system, and may be removed after running
+'grub2-mkimage'.
+
+   After the embedded configuration file (if any) is executed, GRUB will
+load the 'normal' module (*note normal::), which will then read the real
+configuration file from '$prefix/grub.cfg'.  By this point, the 'root'
+variable will also have been set to the root device name.  For example,
+'prefix' might be set to '(hd0,1)/boot/grub', and 'root' might be set to
+'hd0,1'.  Thus, in most cases, the embedded configuration file only
+needs to set the 'prefix' and 'root' variables, and then drop through to
+GRUB's normal processing.  A typical example of this might look like
+this:
+
+     search.fs_uuid 01234567-89ab-cdef-0123-456789abcdef root
+     set prefix=($root)/boot/grub
+
+   (The 'search_fs_uuid' module must be included in the core image for
+this example to work.)
+
+   In more complex cases, it may be useful to read other configuration
+files directly from the embedded configuration file.  This allows such
+things as reading files not called 'grub.cfg', or reading files from a
+directory other than that where GRUB's loadable modules are installed.
+To do this, include the 'configfile' and 'normal' modules in the core
+image, and embed a configuration file that uses the 'configfile' command
+to load another file.  The following example of this also requires the
+'echo', 'search_label', and 'test' modules to be included in the core
+image:
+
+     search.fs_label grub root
+     if [ -e /boot/grub2/example/test1.cfg ]; then
+         set prefix=($root)/boot/grub
+         configfile /boot/grub2/example/test1.cfg
+     else
+         if [ -e /boot/grub2/example/test2.cfg ]; then
+             set prefix=($root)/boot/grub
+             configfile /boot/grub2/example/test2.cfg
+         else
+             echo "Could not find an example configuration file!"
+         fi
+     fi
+
+   The embedded configuration file may not contain menu entries
+directly, but may only read them from elsewhere using 'configfile'.
+
+File: grub.info,  Node: Theme file format,  Next: Network,  Prev: Configuration,  Up: Top
+

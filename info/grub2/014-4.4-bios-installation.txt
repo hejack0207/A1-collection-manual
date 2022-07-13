@@ -1,0 +1,68 @@
+4.4 BIOS installation
+=====================
+
+MBR
+===
+
+The partition table format traditionally used on PC BIOS platforms is
+called the Master Boot Record (MBR) format; this is the format that
+allows up to four primary partitions and additional logical partitions.
+With this partition table format, there are two ways to install GRUB: it
+can be embedded in the area between the MBR and the first partition
+(called by various names, such as the "boot track", "MBR gap", or
+"embedding area", and which is usually at least 31 KiB), or the core
+image can be installed in a file system and a list of the blocks that
+make it up can be stored in the first sector of that partition.
+
+   Each of these has different problems.  There is no way to reserve
+space in the embedding area with complete safety, and some proprietary
+software is known to use it to make it difficult for users to work
+around licensing restrictions; and systems are sometimes partitioned
+without leaving enough space before the first partition.  On the other
+hand, installing to a filesystem means that GRUB is vulnerable to its
+blocks being moved around by filesystem features such as tail packing,
+or even by aggressive fsck implementations, so this approach is quite
+fragile; and this approach can only be used if the '/boot' filesystem is
+on the same disk that the BIOS boots from, so that GRUB does not have to
+rely on guessing BIOS drive numbers.
+
+   The GRUB development team generally recommends embedding GRUB before
+the first partition, unless you have special requirements.  You must
+ensure that the first partition starts at least 31 KiB (63 sectors) from
+the start of the disk; on modern disks, it is often a performance
+advantage to align partitions on larger boundaries anyway, so the first
+partition might start 1 MiB from the start of the disk.
+
+GPT
+===
+
+Some newer systems use the GUID Partition Table (GPT) format.  This was
+specified as part of the Extensible Firmware Interface (EFI), but it can
+also be used on BIOS platforms if system software supports it; for
+example, GRUB and GNU/Linux can be used in this configuration.  With
+this format, it is possible to reserve a whole partition for GRUB,
+called the BIOS Boot Partition.  GRUB can then be embedded into that
+partition without the risk of being overwritten by other software and
+without being contained in a filesystem which might move its blocks
+around.
+
+   When creating a BIOS Boot Partition on a GPT system, you should make
+sure that it is at least 31 KiB in size.  (GPT-formatted disks are not
+usually particularly small, so we recommend that you make it larger than
+the bare minimum, such as 1 MiB, to allow plenty of room for growth.)
+You must also make sure that it has the proper partition type.  Using
+GNU Parted, you can set this using a command such as the following:
+
+     # parted /dev/DISK set PARTITION-NUMBER bios_grub on
+
+   If you are using gdisk, set the partition type to '0xEF02'.  With
+partitioning programs that require setting the GUID directly, it should
+be '21686148-6449-6e6f-744e656564454649'.
+
+   *Caution:* Be very careful which partition you select!  When GRUB
+finds a BIOS Boot Partition during installation, it will automatically
+overwrite part of it.  Make sure that the partition does not contain any
+other data.
+
+File: grub.info,  Node: Booting,  Next: Configuration,  Prev: Installation,  Up: Top
+
