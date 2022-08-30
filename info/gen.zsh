@@ -1,18 +1,20 @@
 #!/usr/bin/zsh
 
 if [ $# -lt 1 ]; then
-	echo "usage: $0 txtfile"
+	echo "usage: $0 info-name"
 	exit 0
 fi
 
-txtfile=${1:-gdb/gdb.txt}
-name=${$(basename $txtfile)%.*}
+name=${1?:info name not specified}
+txtfile="$name/$name.txt"
 
 if test -d $name; then
 	rm -rf $name
 fi
 
 mkdir $name
+
+info --subnodes -o $txtfile $name
 csplit $txtfile -n4 -f "$name/$name-" -b "%03d.txt" '/^[*=]\{4,\}/-1' '{*}'
 
 for f in $name/$name-*.txt; do
@@ -23,3 +25,4 @@ for f in $name/$name-*.txt; do
 	mv $name/$name-$i.txt "$name/$i-$nn.txt"
 done
 # rm $name/000-*
+rm $txtfile
