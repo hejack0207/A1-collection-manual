@@ -24,5 +24,5 @@ for f in $name/$name-*.txt; do
 	nn=${nn%%--*}
 	mv $name/$name-$i.txt "$name/$i-$nn.txt"
 done
-# rm $name/000-*
+rm $name/000-*
 rm $txtfile
