@@ -1,0 +1,438 @@
+25.2 Parsing program options using ‘getopt’
+===========================================
+
+The ‘getopt’ and ‘getopt_long’ functions automate some of the chore
+involved in parsing typical unix command line options.
+
+* Menu:
+
+* Using Getopt::                Using the ‘getopt’ function.
+* Example of Getopt::           An example of parsing options with ‘getopt’.
+* Getopt Long Options::         GNU suggests utilities accept long-named
+                                 options; here is one way to do.
+* Getopt Long Option Example::  An example of using ‘getopt_long’.
+
+File: libc.info,  Node: Using Getopt,  Next: Example of Getopt,  Up: Getopt
+
+25.2.1 Using the ‘getopt’ function
+----------------------------------
+
+Here are the details about how to call the ‘getopt’ function.  To use
+this facility, your program must include the header file ‘unistd.h’.
+
+ -- Variable: int opterr
+
+     If the value of this variable is nonzero, then ‘getopt’ prints an
+     error message to the standard error stream if it encounters an
+     unknown option character or an option with a missing required
+     argument.  This is the default behavior.  If you set this variable
+     to zero, ‘getopt’ does not print any messages, but it still returns
+     the character ‘?’ to indicate an error.
+
+ -- Variable: int optopt
+
+     When ‘getopt’ encounters an unknown option character or an option
+     with a missing required argument, it stores that option character
+     in this variable.  You can use this for providing your own
+     diagnostic messages.
+
+ -- Variable: int optind
+
+     This variable is set by ‘getopt’ to the index of the next element
+     of the ARGV array to be processed.  Once ‘getopt’ has found all of
+     the option arguments, you can use this variable to determine where
+     the remaining non-option arguments begin.  The initial value of
+     this variable is ‘1’.
+
+ -- Variable: char * optarg
+
+     This variable is set by ‘getopt’ to point at the value of the
+     option argument, for those options that accept arguments.
+
+ -- Function: int getopt (int ARGC, char *const *ARGV, const char
+          *OPTIONS)
+
+     Preliminary: | MT-Unsafe race:getopt env | AS-Unsafe heap i18n lock
+     corrupt | AC-Unsafe mem lock corrupt | *Note POSIX Safety
+     Concepts::.
+
+     The ‘getopt’ function gets the next option argument from the
+     argument list specified by the ARGV and ARGC arguments.  Normally
+     these values come directly from the arguments received by ‘main’.
+
+     The OPTIONS argument is a string that specifies the option
+     characters that are valid for this program.  An option character in
+     this string can be followed by a colon (‘:’) to indicate that it
+     takes a required argument.  If an option character is followed by
+     two colons (‘::’), its argument is optional; this is a GNU
+     extension.
+
+     ‘getopt’ has three ways to deal with options that follow
+     non-options ARGV elements.  The special argument ‘--’ forces in all
+     cases the end of option scanning.
+
+        • The default is to permute the contents of ARGV while scanning
+          it so that eventually all the non-options are at the end.
+          This allows options to be given in any order, even with
+          programs that were not written to expect this.
+
+        • If the OPTIONS argument string begins with a hyphen (‘-’),
+          this is treated specially.  It permits arguments that are not
+          options to be returned as if they were associated with option
+          character ‘\1’.
+
+        • POSIX demands the following behavior: the first non-option
+          stops option processing.  This mode is selected by either
+          setting the environment variable ‘POSIXLY_CORRECT’ or
+          beginning the OPTIONS argument string with a plus sign (‘+’).
+
+     The ‘getopt’ function returns the option character for the next
+     command line option.  When no more option arguments are available,
+     it returns ‘-1’.  There may still be more non-option arguments; you
+     must compare the external variable ‘optind’ against the ARGC
+     parameter to check this.
+
+     If the option has an argument, ‘getopt’ returns the argument by
+     storing it in the variable OPTARG.  You don’t ordinarily need to
+     copy the ‘optarg’ string, since it is a pointer into the original
+     ARGV array, not into a static area that might be overwritten.
+
+     If ‘getopt’ finds an option character in ARGV that was not included
+     in OPTIONS, or a missing option argument, it returns ‘?’ and sets
+     the external variable ‘optopt’ to the actual option character.  If
+     the first character of OPTIONS is a colon (‘:’), then ‘getopt’
+     returns ‘:’ instead of ‘?’ to indicate a missing option argument.
+     In addition, if the external variable ‘opterr’ is nonzero (which is
+     the default), ‘getopt’ prints an error message.
+
+File: libc.info,  Node: Example of Getopt,  Next: Getopt Long Options,  Prev: Using Getopt,  Up: Getopt
+
+25.2.2 Example of Parsing Arguments with ‘getopt’
+-------------------------------------------------
+
+Here is an example showing how ‘getopt’ is typically used.  The key
+points to notice are:
+
+   • Normally, ‘getopt’ is called in a loop.  When ‘getopt’ returns
+     ‘-1’, indicating no more options are present, the loop terminates.
+
+   • A ‘switch’ statement is used to dispatch on the return value from
+     ‘getopt’.  In typical use, each case just sets a variable that is
+     used later in the program.
+
+   • A second loop is used to process the remaining non-option
+     arguments.
+
+
+     #include <ctype.h>
+     #include <stdio.h>
+     #include <stdlib.h>
+     #include <unistd.h>
+
+     int
+     main (int argc, char **argv)
+     {
+       int aflag = 0;
+       int bflag = 0;
+       char *cvalue = NULL;
+       int index;
+       int c;
+
+       opterr = 0;
+
+       while ((c = getopt (argc, argv, "abc:")) != -1)
+         switch (c)
+           {
+           case 'a':
+             aflag = 1;
+             break;
+           case 'b':
+             bflag = 1;
+             break;
+           case 'c':
+             cvalue = optarg;
+             break;
+           case '?':
+             if (optopt == 'c')
+               fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+             else if (isprint (optopt))
+               fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+             else
+               fprintf (stderr,
+                        "Unknown option character `\\x%x'.\n",
+                        optopt);
+             return 1;
+           default:
+             abort ();
+           }
+
+       printf ("aflag = %d, bflag = %d, cvalue = %s\n",
+               aflag, bflag, cvalue);
+
+       for (index = optind; index < argc; index++)
+         printf ("Non-option argument %s\n", argv[index]);
+       return 0;
+     }
+
+   Here are some examples showing what this program prints with
+different combinations of arguments:
+
+     % testopt
+     aflag = 0, bflag = 0, cvalue = (null)
+
+     % testopt -a -b
+     aflag = 1, bflag = 1, cvalue = (null)
+
+     % testopt -ab
+     aflag = 1, bflag = 1, cvalue = (null)
+
+     % testopt -c foo
+     aflag = 0, bflag = 0, cvalue = foo
+
+     % testopt -cfoo
+     aflag = 0, bflag = 0, cvalue = foo
+
+     % testopt arg1
+     aflag = 0, bflag = 0, cvalue = (null)
+     Non-option argument arg1
+
+     % testopt -a arg1
+     aflag = 1, bflag = 0, cvalue = (null)
+     Non-option argument arg1
+
+     % testopt -c foo arg1
+     aflag = 0, bflag = 0, cvalue = foo
+     Non-option argument arg1
+
+     % testopt -a -- -b
+     aflag = 1, bflag = 0, cvalue = (null)
+     Non-option argument -b
+
+     % testopt -a -
+     aflag = 1, bflag = 0, cvalue = (null)
+     Non-option argument -
+
+File: libc.info,  Node: Getopt Long Options,  Next: Getopt Long Option Example,  Prev: Example of Getopt,  Up: Getopt
+
+25.2.3 Parsing Long Options with ‘getopt_long’
+----------------------------------------------
+
+To accept GNU-style long options as well as single-character options,
+use ‘getopt_long’ instead of ‘getopt’.  This function is declared in
+‘getopt.h’, not ‘unistd.h’.  You should make every program accept long
+options if it uses any options, for this takes little extra work and
+helps beginners remember how to use the program.
+
+ -- Data Type: struct option
+
+     This structure describes a single long option name for the sake of
+     ‘getopt_long’.  The argument LONGOPTS must be an array of these
+     structures, one for each long option.  Terminate the array with an
+     element containing all zeros.
+
+     The ‘struct option’ structure has these fields:
+
+     ‘const char *name’
+          This field is the name of the option.  It is a string.
+
+     ‘int has_arg’
+          This field says whether the option takes an argument.  It is
+          an integer, and there are three legitimate values:
+          ‘no_argument’, ‘required_argument’ and ‘optional_argument’.
+
+     ‘int *flag’
+     ‘int val’
+          These fields control how to report or act on the option when
+          it occurs.
+
+          If ‘flag’ is a null pointer, then the ‘val’ is a value which
+          identifies this option.  Often these values are chosen to
+          uniquely identify particular long options.
+
+          If ‘flag’ is not a null pointer, it should be the address of
+          an ‘int’ variable which is the flag for this option.  The
+          value in ‘val’ is the value to store in the flag to indicate
+          that the option was seen.
+
+ -- Function: int getopt_long (int ARGC, char *const *ARGV, const char
+          *SHORTOPTS, const struct option *LONGOPTS, int *INDEXPTR)
+
+     Preliminary: | MT-Unsafe race:getopt env | AS-Unsafe heap i18n lock
+     corrupt | AC-Unsafe mem lock corrupt | *Note POSIX Safety
+     Concepts::.
+
+     Decode options from the vector ARGV (whose length is ARGC).  The
+     argument SHORTOPTS describes the short options to accept, just as
+     it does in ‘getopt’.  The argument LONGOPTS describes the long
+     options to accept (see above).
+
+     When ‘getopt_long’ encounters a short option, it does the same
+     thing that ‘getopt’ would do: it returns the character code for the
+     option, and stores the option’s argument (if it has one) in
+     ‘optarg’.
+
+     When ‘getopt_long’ encounters a long option, it takes actions based
+     on the ‘flag’ and ‘val’ fields of the definition of that option.
+
+     If ‘flag’ is a null pointer, then ‘getopt_long’ returns the
+     contents of ‘val’ to indicate which option it found.  You should
+     arrange distinct values in the ‘val’ field for options with
+     different meanings, so you can decode these values after
+     ‘getopt_long’ returns.  If the long option is equivalent to a short
+     option, you can use the short option’s character code in ‘val’.
+
+     If ‘flag’ is not a null pointer, that means this option should just
+     set a flag in the program.  The flag is a variable of type ‘int’
+     that you define.  Put the address of the flag in the ‘flag’ field.
+     Put in the ‘val’ field the value you would like this option to
+     store in the flag.  In this case, ‘getopt_long’ returns ‘0’.
+
+     For any long option, ‘getopt_long’ tells you the index in the array
+     LONGOPTS of the options definition, by storing it into ‘*INDEXPTR’.
+     You can get the name of the option with ‘LONGOPTS[*INDEXPTR].name’.
+     So you can distinguish among long options either by the values in
+     their ‘val’ fields or by their indices.  You can also distinguish
+     in this way among long options that set flags.
+
+     When a long option has an argument, ‘getopt_long’ puts the argument
+     value in the variable ‘optarg’ before returning.  When the option
+     has no argument, the value in ‘optarg’ is a null pointer.  This is
+     how you can tell whether an optional argument was supplied.
+
+     When ‘getopt_long’ has no more options to handle, it returns ‘-1’,
+     and leaves in the variable ‘optind’ the index in ARGV of the next
+     remaining argument.
+
+   Since long option names were used before ‘getopt_long’ was invented
+there are program interfaces which require programs to recognize options
+like ‘-option value’ instead of ‘--option value’.  To enable these
+programs to use the GNU getopt functionality there is one more function
+available.
+
+ -- Function: int getopt_long_only (int ARGC, char *const *ARGV, const
+          char *SHORTOPTS, const struct option *LONGOPTS, int *INDEXPTR)
+
+     Preliminary: | MT-Unsafe race:getopt env | AS-Unsafe heap i18n lock
+     corrupt | AC-Unsafe mem lock corrupt | *Note POSIX Safety
+     Concepts::.
+
+     The ‘getopt_long_only’ function is equivalent to the ‘getopt_long’
+     function but it allows the user of the application to pass long
+     options with only ‘-’ instead of ‘--’.  The ‘--’ prefix is still
+     recognized but instead of looking through the short options if a
+     ‘-’ is seen it is first tried whether this parameter names a long
+     option.  If not, it is parsed as a short option.
+
+     Assuming ‘getopt_long_only’ is used starting an application with
+
+            app -foo
+
+     the ‘getopt_long_only’ will first look for a long option named
+     ‘foo’.  If this is not found, the short options ‘f’, ‘o’, and again
+     ‘o’ are recognized.
+
+File: libc.info,  Node: Getopt Long Option Example,  Prev: Getopt Long Options,  Up: Getopt
+
+25.2.4 Example of Parsing Long Options with ‘getopt_long’
+---------------------------------------------------------
+
+
+     #include <stdio.h>
+     #include <stdlib.h>
+     #include <getopt.h>
+
+     /* Flag set by ‘--verbose’. */
+     static int verbose_flag;
+
+     int
+     main (int argc, char **argv)
+     {
+       int c;
+
+       while (1)
+         {
+           static struct option long_options[] =
+             {
+               /* These options set a flag. */
+               {"verbose", no_argument,       &verbose_flag, 1},
+               {"brief",   no_argument,       &verbose_flag, 0},
+               /* These options don’t set a flag.
+                  We distinguish them by their indices. */
+               {"add",     no_argument,       0, 'a'},
+               {"append",  no_argument,       0, 'b'},
+               {"delete",  required_argument, 0, 'd'},
+               {"create",  required_argument, 0, 'c'},
+               {"file",    required_argument, 0, 'f'},
+               {0, 0, 0, 0}
+             };
+           /* ‘getopt_long’ stores the option index here. */
+           int option_index = 0;
+
+           c = getopt_long (argc, argv, "abc:d:f:",
+                            long_options, &option_index);
+
+           /* Detect the end of the options. */
+           if (c == -1)
+             break;
+
+           switch (c)
+             {
+             case 0:
+               /* If this option set a flag, do nothing else now. */
+               if (long_options[option_index].flag != 0)
+                 break;
+               printf ("option %s", long_options[option_index].name);
+               if (optarg)
+                 printf (" with arg %s", optarg);
+               printf ("\n");
+               break;
+
+             case 'a':
+               puts ("option -a\n");
+               break;
+
+             case 'b':
+               puts ("option -b\n");
+               break;
+
+             case 'c':
+               printf ("option -c with value `%s'\n", optarg);
+               break;
+
+             case 'd':
+               printf ("option -d with value `%s'\n", optarg);
+               break;
+
+             case 'f':
+               printf ("option -f with value `%s'\n", optarg);
+               break;
+
+             case '?':
+               /* ‘getopt_long’ already printed an error message. */
+               break;
+
+             default:
+               abort ();
+             }
+         }
+
+       /* Instead of reporting ‘--verbose’
+          and ‘--brief’ as they are encountered,
+          we report the final status resulting from them. */
+       if (verbose_flag)
+         puts ("verbose flag is set");
+
+       /* Print any remaining command line arguments (not options). */
+       if (optind < argc)
+         {
+           printf ("non-option ARGV-elements: ");
+           while (optind < argc)
+             printf ("%s ", argv[optind++]);
+           putchar ('\n');
+         }
+
+       exit (0);
+     }
+
+File: libc.info,  Node: Argp,  Next: Suboptions,  Prev: Getopt,  Up: Parsing Program Arguments
+

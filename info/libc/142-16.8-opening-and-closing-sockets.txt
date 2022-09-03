@@ -1,0 +1,163 @@
+16.8 Opening and Closing Sockets
+================================
+
+This section describes the actual library functions for opening and
+closing sockets.  The same functions work for all namespaces and
+connection styles.
+
+* Menu:
+
+* Creating a Socket::           How to open a socket.
+* Closing a Socket::            How to close a socket.
+* Socket Pairs::                These are created like pipes.
+
+File: libc.info,  Node: Creating a Socket,  Next: Closing a Socket,  Up: Open/Close Sockets
+
+16.8.1 Creating a Socket
+------------------------
+
+The primitive for creating a socket is the ‘socket’ function, declared
+in ‘sys/socket.h’.
+
+ -- Function: int socket (int NAMESPACE, int STYLE, int PROTOCOL)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe fd | *Note POSIX Safety
+     Concepts::.
+
+     This function creates a socket and specifies communication style
+     STYLE, which should be one of the socket styles listed in *note
+     Communication Styles::.  The NAMESPACE argument specifies the
+     namespace; it must be ‘PF_LOCAL’ (*note Local Namespace::) or
+     ‘PF_INET’ (*note Internet Namespace::).  PROTOCOL designates the
+     specific protocol (*note Socket Concepts::); zero is usually right
+     for PROTOCOL.
+
+     The return value from ‘socket’ is the file descriptor for the new
+     socket, or ‘-1’ in case of error.  The following ‘errno’ error
+     conditions are defined for this function:
+
+     ‘EPROTONOSUPPORT’
+          The PROTOCOL or STYLE is not supported by the NAMESPACE
+          specified.
+
+     ‘EMFILE’
+          The process already has too many file descriptors open.
+
+     ‘ENFILE’
+          The system already has too many file descriptors open.
+
+     ‘EACCES’
+          The process does not have the privilege to create a socket of
+          the specified STYLE or PROTOCOL.
+
+     ‘ENOBUFS’
+          The system ran out of internal buffer space.
+
+     The file descriptor returned by the ‘socket’ function supports both
+     read and write operations.  However, like pipes, sockets do not
+     support file positioning operations.
+
+   For examples of how to call the ‘socket’ function, see *note Local
+Socket Example::, or *note Inet Example::.
+
+File: libc.info,  Node: Closing a Socket,  Next: Socket Pairs,  Prev: Creating a Socket,  Up: Open/Close Sockets
+
+16.8.2 Closing a Socket
+-----------------------
+
+When you have finished using a socket, you can simply close its file
+descriptor with ‘close’; see *note Opening and Closing Files::.  If
+there is still data waiting to be transmitted over the connection,
+normally ‘close’ tries to complete this transmission.  You can control
+this behavior using the ‘SO_LINGER’ socket option to specify a timeout
+period; see *note Socket Options::.
+
+   You can also shut down only reception or transmission on a connection
+by calling ‘shutdown’, which is declared in ‘sys/socket.h’.
+
+ -- Function: int shutdown (int SOCKET, int HOW)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘shutdown’ function shuts down the connection of socket SOCKET.
+     The argument HOW specifies what action to perform:
+
+     ‘0’
+          Stop receiving data for this socket.  If further data arrives,
+          reject it.
+
+     ‘1’
+          Stop trying to transmit data from this socket.  Discard any
+          data waiting to be sent.  Stop looking for acknowledgement of
+          data already sent; don’t retransmit it if it is lost.
+
+     ‘2’
+          Stop both reception and transmission.
+
+     The return value is ‘0’ on success and ‘-1’ on failure.  The
+     following ‘errno’ error conditions are defined for this function:
+
+     ‘EBADF’
+          SOCKET is not a valid file descriptor.
+
+     ‘ENOTSOCK’
+          SOCKET is not a socket.
+
+     ‘ENOTCONN’
+          SOCKET is not connected.
+
+File: libc.info,  Node: Socket Pairs,  Prev: Closing a Socket,  Up: Open/Close Sockets
+
+16.8.3 Socket Pairs
+-------------------
+
+A “socket pair” consists of a pair of connected (but unnamed) sockets.
+It is very similar to a pipe and is used in much the same way.  Socket
+pairs are created with the ‘socketpair’ function, declared in
+‘sys/socket.h’.  A socket pair is much like a pipe; the main difference
+is that the socket pair is bidirectional, whereas the pipe has one
+input-only end and one output-only end (*note Pipes and FIFOs::).
+
+ -- Function: int socketpair (int NAMESPACE, int STYLE, int PROTOCOL,
+          int FILEDES[2])
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe fd | *Note POSIX Safety
+     Concepts::.
+
+     This function creates a socket pair, returning the file descriptors
+     in ‘FILEDES[0]’ and ‘FILEDES[1]’.  The socket pair is a full-duplex
+     communications channel, so that both reading and writing may be
+     performed at either end.
+
+     The NAMESPACE, STYLE and PROTOCOL arguments are interpreted as for
+     the ‘socket’ function.  STYLE should be one of the communication
+     styles listed in *note Communication Styles::.  The NAMESPACE
+     argument specifies the namespace, which must be ‘AF_LOCAL’ (*note
+     Local Namespace::); PROTOCOL specifies the communications protocol,
+     but zero is the only meaningful value.
+
+     If STYLE specifies a connectionless communication style, then the
+     two sockets you get are not _connected_, strictly speaking, but
+     each of them knows the other as the default destination address, so
+     they can send packets to each other.
+
+     The ‘socketpair’ function returns ‘0’ on success and ‘-1’ on
+     failure.  The following ‘errno’ error conditions are defined for
+     this function:
+
+     ‘EMFILE’
+          The process has too many file descriptors open.
+
+     ‘EAFNOSUPPORT’
+          The specified namespace is not supported.
+
+     ‘EPROTONOSUPPORT’
+          The specified protocol is not supported.
+
+     ‘EOPNOTSUPP’
+          The specified protocol does not support the creation of socket
+          pairs.
+
+File: libc.info,  Node: Connections,  Next: Datagrams,  Prev: Open/Close Sockets,  Up: Sockets
+

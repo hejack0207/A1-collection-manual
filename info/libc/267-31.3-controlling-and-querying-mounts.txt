@@ -1,0 +1,707 @@
+31.3 Controlling and Querying Mounts
+====================================
+
+All files are in filesystems, and before you can access any file, its
+filesystem must be mounted.  Because of Unix’s concept of _Everything is
+a file_, mounting of filesystems is central to doing almost anything.
+This section explains how to find out what filesystems are currently
+mounted and what filesystems are available for mounting, and how to
+change what is mounted.
+
+   The classic filesystem is the contents of a disk drive.  The concept
+is considerably more abstract, though, and lots of things other than
+disk drives can be mounted.
+
+   Some block devices don’t correspond to traditional devices like disk
+drives.  For example, a loop device is a block device whose driver uses
+a regular file in another filesystem as its medium.  So if that regular
+file contains appropriate data for a filesystem, you can by mounting the
+loop device essentially mount a regular file.
+
+   Some filesystems aren’t based on a device of any kind.  The “proc”
+filesystem, for example, contains files whose data is made up by the
+filesystem driver on the fly whenever you ask for it.  And when you
+write to it, the data you write causes changes in the system.  No data
+gets stored.
+
+* Menu:
+
+* Mount Information::           What is or could be mounted?
+* Mount-Unmount-Remount::       Controlling what is mounted and how
+
+File: libc.info,  Node: Mount Information,  Next: Mount-Unmount-Remount,  Up: Filesystem Handling
+
+31.3.1 Mount Information
+------------------------
+
+For some programs it is desirable and necessary to access information
+about whether a certain filesystem is mounted and, if it is, where, or
+simply to get lists of all the available filesystems.  The GNU C Library
+provides some functions to retrieve this information portably.
+
+   Traditionally Unix systems have a file named ‘/etc/fstab’ which
+describes all possibly mounted filesystems.  The ‘mount’ program uses
+this file to mount at startup time of the system all the necessary
+filesystems.  The information about all the filesystems actually mounted
+is normally kept in a file named either ‘/var/run/mtab’ or ‘/etc/mtab’.
+Both files share the same syntax and it is crucial that this syntax is
+followed all the time.  Therefore it is best to never directly write to
+the files.  The functions described in this section can do this and they
+also provide the functionality to convert the external textual
+representation to the internal representation.
+
+   Note that the ‘fstab’ and ‘mtab’ files are maintained on a system by
+_convention_.  It is possible for the files not to exist or not to be
+consistent with what is really mounted or available to mount, if the
+system’s administration policy allows it.  But programs that mount and
+unmount filesystems typically maintain and use these files as described
+herein.
+
+   The filenames given above should never be used directly.  The
+portable way to handle these files is to use the macros ‘_PATH_FSTAB’,
+defined in ‘fstab.h’, or ‘_PATH_MNTTAB’, defined in ‘mntent.h’ and
+‘paths.h’, for ‘fstab’; and the macro ‘_PATH_MOUNTED’, also defined in
+‘mntent.h’ and ‘paths.h’, for ‘mtab’.  There are also two alternate
+macro names ‘FSTAB’, ‘MNTTAB’, and ‘MOUNTED’ defined but these names are
+deprecated and kept only for backward compatibility.  The names
+‘_PATH_MNTTAB’ and ‘_PATH_MOUNTED’ should always be used.
+
+* Menu:
+
+* fstab::                       The ‘fstab’ file
+* mtab::                        The ‘mtab’ file
+* Other Mount Information::     Other (non-libc) sources of mount information
+
+File: libc.info,  Node: fstab,  Next: mtab,  Up: Mount Information
+
+31.3.1.1 The ‘fstab’ file
+.........................
+
+The internal representation for entries of the file is ‘struct fstab’,
+defined in ‘fstab.h’.
+
+ -- Data Type: struct fstab
+
+     This structure is used with the ‘getfsent’, ‘getfsspec’, and
+     ‘getfsfile’ functions.
+
+     ‘char *fs_spec’
+          This element describes the device from which the filesystem is
+          mounted.  Normally this is the name of a special device, such
+          as a hard disk partition, but it could also be a more or less
+          generic string.  For “NFS” it would be a hostname and
+          directory name combination.
+
+          Even though the element is not declared ‘const’ it shouldn’t
+          be modified.  The missing ‘const’ has historic reasons, since
+          this function predates ISO C. The same is true for the other
+          string elements of this structure.
+
+     ‘char *fs_file’
+          This describes the mount point on the local system.  I.e.,
+          accessing any file in this filesystem has implicitly or
+          explicitly this string as a prefix.
+
+     ‘char *fs_vfstype’
+          This is the type of the filesystem.  Depending on what the
+          underlying kernel understands it can be any string.
+
+     ‘char *fs_mntops’
+          This is a string containing options passed to the kernel with
+          the ‘mount’ call.  Again, this can be almost anything.  There
+          can be more than one option, separated from the others by a
+          comma.  Each option consists of a name and an optional value
+          part, introduced by an ‘=’ character.
+
+          If the value of this element must be processed it should
+          ideally be done using the ‘getsubopt’ function; see *note
+          Suboptions::.
+
+     ‘const char *fs_type’
+          This name is poorly chosen.  This element points to a string
+          (possibly in the ‘fs_mntops’ string) which describes the modes
+          with which the filesystem is mounted.  ‘fstab’ defines five
+          macros to describe the possible values:
+
+          ‘FSTAB_RW’
+               The filesystem gets mounted with read and write enabled.
+          ‘FSTAB_RQ’
+               The filesystem gets mounted with read and write enabled.
+               Write access is restricted by quotas.
+          ‘FSTAB_RO’
+               The filesystem gets mounted read-only.
+          ‘FSTAB_SW’
+               This is not a real filesystem, it is a swap device.
+          ‘FSTAB_XX’
+               This entry from the ‘fstab’ file is totally ignored.
+
+          Testing for equality with these values must happen using
+          ‘strcmp’ since these are all strings.  Comparing the pointer
+          will probably always fail.
+
+     ‘int fs_freq’
+          This element describes the dump frequency in days.
+
+     ‘int fs_passno’
+          This element describes the pass number on parallel dumps.  It
+          is closely related to the ‘dump’ utility used on Unix systems.
+
+   To read the entire content of the of the ‘fstab’ file the GNU C
+Library contains a set of three functions which are designed in the
+usual way.
+
+ -- Function: int setfsent (void)
+
+     Preliminary: | MT-Unsafe race:fsent | AS-Unsafe heap corrupt lock |
+     AC-Unsafe corrupt lock mem fd | *Note POSIX Safety Concepts::.
+
+     This function makes sure that the internal read pointer for the
+     ‘fstab’ file is at the beginning of the file.  This is done by
+     either opening the file or resetting the read pointer.
+
+     Since the file handle is internal to the libc this function is not
+     thread-safe.
+
+     This function returns a non-zero value if the operation was
+     successful and the ‘getfs*’ functions can be used to read the
+     entries of the file.
+
+ -- Function: void endfsent (void)
+
+     Preliminary: | MT-Unsafe race:fsent | AS-Unsafe heap corrupt lock |
+     AC-Unsafe corrupt lock mem fd | *Note POSIX Safety Concepts::.
+
+     This function makes sure that all resources acquired by a prior
+     call to ‘setfsent’ (explicitly or implicitly by calling ‘getfsent’)
+     are freed.
+
+ -- Function: struct fstab * getfsent (void)
+
+     Preliminary: | MT-Unsafe race:fsent locale | AS-Unsafe corrupt heap
+     lock | AC-Unsafe corrupt lock mem | *Note POSIX Safety Concepts::.
+
+     This function returns the next entry of the ‘fstab’ file.  If this
+     is the first call to any of the functions handling ‘fstab’ since
+     program start or the last call of ‘endfsent’, the file will be
+     opened.
+
+     The function returns a pointer to a variable of type ‘struct
+     fstab’.  This variable is shared by all threads and therefore this
+     function is not thread-safe.  If an error occurred ‘getfsent’
+     returns a ‘NULL’ pointer.
+
+ -- Function: struct fstab * getfsspec (const char *NAME)
+
+     Preliminary: | MT-Unsafe race:fsent locale | AS-Unsafe corrupt heap
+     lock | AC-Unsafe corrupt lock mem | *Note POSIX Safety Concepts::.
+
+     This function returns the next entry of the ‘fstab’ file which has
+     a string equal to NAME pointed to by the ‘fs_spec’ element.  Since
+     there is normally exactly one entry for each special device it
+     makes no sense to call this function more than once for the same
+     argument.  If this is the first call to any of the functions
+     handling ‘fstab’ since program start or the last call of
+     ‘endfsent’, the file will be opened.
+
+     The function returns a pointer to a variable of type ‘struct
+     fstab’.  This variable is shared by all threads and therefore this
+     function is not thread-safe.  If an error occurred ‘getfsent’
+     returns a ‘NULL’ pointer.
+
+ -- Function: struct fstab * getfsfile (const char *NAME)
+
+     Preliminary: | MT-Unsafe race:fsent locale | AS-Unsafe corrupt heap
+     lock | AC-Unsafe corrupt lock mem | *Note POSIX Safety Concepts::.
+
+     This function returns the next entry of the ‘fstab’ file which has
+     a string equal to NAME pointed to by the ‘fs_file’ element.  Since
+     there is normally exactly one entry for each mount point it makes
+     no sense to call this function more than once for the same
+     argument.  If this is the first call to any of the functions
+     handling ‘fstab’ since program start or the last call of
+     ‘endfsent’, the file will be opened.
+
+     The function returns a pointer to a variable of type ‘struct
+     fstab’.  This variable is shared by all threads and therefore this
+     function is not thread-safe.  If an error occurred ‘getfsent’
+     returns a ‘NULL’ pointer.
+
+File: libc.info,  Node: mtab,  Next: Other Mount Information,  Prev: fstab,  Up: Mount Information
+
+31.3.1.2 The ‘mtab’ file
+........................
+
+The following functions and data structure access the ‘mtab’ file.
+
+ -- Data Type: struct mntent
+
+     This structure is used with the ‘getmntent’, ‘getmntent_r’,
+     ‘addmntent’, and ‘hasmntopt’ functions.
+
+     ‘char *mnt_fsname’
+          This element contains a pointer to a string describing the
+          name of the special device from which the filesystem is
+          mounted.  It corresponds to the ‘fs_spec’ element in ‘struct
+          fstab’.
+
+     ‘char *mnt_dir’
+          This element points to a string describing the mount point of
+          the filesystem.  It corresponds to the ‘fs_file’ element in
+          ‘struct fstab’.
+
+     ‘char *mnt_type’
+          ‘mnt_type’ describes the filesystem type and is therefore
+          equivalent to ‘fs_vfstype’ in ‘struct fstab’.  ‘mntent.h’
+          defines a few symbolic names for some of the values this
+          string can have.  But since the kernel can support arbitrary
+          filesystems it does not make much sense to give them symbolic
+          names.  If one knows the symbol name one also knows the
+          filesystem name.  Nevertheless here follows the list of the
+          symbols provided in ‘mntent.h’.
+
+          ‘MNTTYPE_IGNORE’
+               This symbol expands to ‘"ignore"’.  The value is
+               sometimes used in ‘fstab’ files to make sure entries are
+               not used without removing them.
+          ‘MNTTYPE_NFS’
+               Expands to ‘"nfs"’.  Using this macro sometimes could
+               make sense since it names the default NFS implementation,
+               in case both version 2 and 3 are supported.
+          ‘MNTTYPE_SWAP’
+               This symbol expands to ‘"swap"’.  It names the special
+               ‘fstab’ entry which names one of the possibly multiple
+               swap partitions.
+
+     ‘char *mnt_opts’
+          The element contains a string describing the options used
+          while mounting the filesystem.  As for the equivalent element
+          ‘fs_mntops’ of ‘struct fstab’ it is best to use the function
+          ‘getsubopt’ (*note Suboptions::) to access the parts of this
+          string.
+
+          The ‘mntent.h’ file defines a number of macros with string
+          values which correspond to some of the options understood by
+          the kernel.  There might be many more options which are
+          possible so it doesn’t make much sense to rely on these macros
+          but to be consistent here is the list:
+
+          ‘MNTOPT_DEFAULTS’
+               Expands to ‘"defaults"’.  This option should be used
+               alone since it indicates all values for the customizable
+               values are chosen to be the default.
+          ‘MNTOPT_RO’
+               Expands to ‘"ro"’.  See the ‘FSTAB_RO’ value, it means
+               the filesystem is mounted read-only.
+          ‘MNTOPT_RW’
+               Expands to ‘"rw"’.  See the ‘FSTAB_RW’ value, it means
+               the filesystem is mounted with read and write
+               permissions.
+          ‘MNTOPT_SUID’
+               Expands to ‘"suid"’.  This means that the SUID bit (*note
+               How Change Persona::) is respected when a program from
+               the filesystem is started.
+          ‘MNTOPT_NOSUID’
+               Expands to ‘"nosuid"’.  This is the opposite of
+               ‘MNTOPT_SUID’, the SUID bit for all files from the
+               filesystem is ignored.
+          ‘MNTOPT_NOAUTO’
+               Expands to ‘"noauto"’.  At startup time the ‘mount’
+               program will ignore this entry if it is started with the
+               ‘-a’ option to mount all filesystems mentioned in the
+               ‘fstab’ file.
+
+          As for the ‘FSTAB_*’ entries introduced above it is important
+          to use ‘strcmp’ to check for equality.
+
+     ‘mnt_freq’
+          This elements corresponds to ‘fs_freq’ and also specifies the
+          frequency in days in which dumps are made.
+
+     ‘mnt_passno’
+          This element is equivalent to ‘fs_passno’ with the same
+          meaning which is uninteresting for all programs beside ‘dump’.
+
+   For accessing the ‘mtab’ file there is again a set of three functions
+to access all entries in a row.  Unlike the functions to handle ‘fstab’
+these functions do not access a fixed file and there is even a thread
+safe variant of the get function.  Besides this the GNU C Library
+contains functions to alter the file and test for specific options.
+
+ -- Function: FILE * setmntent (const char *FILE, const char *MODE)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap lock | AC-Unsafe mem fd
+     lock | *Note POSIX Safety Concepts::.
+
+     The ‘setmntent’ function prepares the file named FILE which must be
+     in the format of a ‘fstab’ and ‘mtab’ file for the upcoming
+     processing through the other functions of the family.  The MODE
+     parameter can be chosen in the way the OPENTYPE parameter for
+     ‘fopen’ (*note Opening Streams::) can be chosen.  If the file is
+     opened for writing the file is also allowed to be empty.
+
+     If the file was successfully opened ‘setmntent’ returns a file
+     handle for future use.  Otherwise the return value is ‘NULL’ and
+     ‘errno’ is set accordingly.
+
+ -- Function: int endmntent (FILE *STREAM)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap lock | AC-Unsafe lock mem
+     fd | *Note POSIX Safety Concepts::.
+
+     This function takes for the STREAM parameter a file handle which
+     previously was returned from the ‘setmntent’ call.  ‘endmntent’
+     closes the stream and frees all resources.
+
+     The return value is 1 unless an error occurred in which case it is
+     0.
+
+ -- Function: struct mntent * getmntent (FILE *STREAM)
+
+     Preliminary: | MT-Unsafe race:mntentbuf locale | AS-Unsafe corrupt
+     heap init | AC-Unsafe init corrupt lock mem | *Note POSIX Safety
+     Concepts::.
+
+     The ‘getmntent’ function takes as the parameter a file handle
+     previously returned by a successful call to ‘setmntent’.  It
+     returns a pointer to a static variable of type ‘struct mntent’
+     which is filled with the information from the next entry from the
+     file currently read.
+
+     The file format used prescribes the use of spaces or tab characters
+     to separate the fields.  This makes it harder to use names
+     containing one of these characters (e.g., mount points using
+     spaces).  Therefore these characters are encoded in the files and
+     the ‘getmntent’ function takes care of the decoding while reading
+     the entries back in.  ‘'\040'’ is used to encode a space character,
+     ‘'\011'’ to encode a tab character, ‘'\012'’ to encode a newline
+     character, and ‘'\\'’ to encode a backslash.
+
+     If there was an error or the end of the file is reached the return
+     value is ‘NULL’.
+
+     This function is not thread-safe since all calls to this function
+     return a pointer to the same static variable.  ‘getmntent_r’ should
+     be used in situations where multiple threads access the file.
+
+ -- Function: struct mntent * getmntent_r (FILE *STREAM, struct mntent
+          *RESULT, char *BUFFER, int BUFSIZE)
+
+     Preliminary: | MT-Safe locale | AS-Unsafe corrupt heap | AC-Unsafe
+     corrupt lock mem | *Note POSIX Safety Concepts::.
+
+     The ‘getmntent_r’ function is the reentrant variant of ‘getmntent’.
+     It also returns the next entry from the file and returns a pointer.
+     The actual variable the values are stored in is not static, though.
+     Instead the function stores the values in the variable pointed to
+     by the RESULT parameter.  Additional information (e.g., the strings
+     pointed to by the elements of the result) are kept in the buffer of
+     size BUFSIZE pointed to by BUFFER.
+
+     Escaped characters (space, tab, backslash) are converted back in
+     the same way as it happens for ‘getmentent’.
+
+     The function returns a ‘NULL’ pointer in error cases.  Errors could
+     be:
+        • error while reading the file,
+        • end of file reached,
+        • BUFSIZE is too small for reading a complete new entry.
+
+ -- Function: int addmntent (FILE *STREAM, const struct mntent *MNT)
+
+     Preliminary: | MT-Safe race:stream locale | AS-Unsafe corrupt |
+     AC-Unsafe corrupt | *Note POSIX Safety Concepts::.
+
+     The ‘addmntent’ function allows adding a new entry to the file
+     previously opened with ‘setmntent’.  The new entries are always
+     appended.  I.e., even if the position of the file descriptor is not
+     at the end of the file this function does not overwrite an existing
+     entry following the current position.
+
+     The implication of this is that to remove an entry from a file one
+     has to create a new file while leaving out the entry to be removed
+     and after closing the file remove the old one and rename the new
+     file to the chosen name.
+
+     This function takes care of spaces and tab characters in the names
+     to be written to the file.  It converts them and the backslash
+     character into the format described in the ‘getmntent’ description
+     above.
+
+     This function returns 0 in case the operation was successful.
+     Otherwise the return value is 1 and ‘errno’ is set appropriately.
+
+ -- Function: char * hasmntopt (const struct mntent *MNT, const char
+          *OPT)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function can be used to check whether the string pointed to by
+     the ‘mnt_opts’ element of the variable pointed to by MNT contains
+     the option OPT.  If this is true a pointer to the beginning of the
+     option in the ‘mnt_opts’ element is returned.  If no such option
+     exists the function returns ‘NULL’.
+
+     This function is useful to test whether a specific option is
+     present but when all options have to be processed one is better off
+     with using the ‘getsubopt’ function to iterate over all options in
+     the string.
+
+File: libc.info,  Node: Other Mount Information,  Prev: mtab,  Up: Mount Information
+
+31.3.1.3 Other (Non-libc) Sources of Mount Information
+......................................................
+
+On a system with a Linux kernel and the ‘proc’ filesystem, you can get
+information on currently mounted filesystems from the file ‘mounts’ in
+the ‘proc’ filesystem.  Its format is similar to that of the ‘mtab’
+file, but represents what is truly mounted without relying on facilities
+outside the kernel to keep ‘mtab’ up to date.
+
+File: libc.info,  Node: Mount-Unmount-Remount,  Prev: Mount Information,  Up: Filesystem Handling
+
+31.3.2 Mount, Unmount, Remount
+------------------------------
+
+This section describes the functions for mounting, unmounting, and
+remounting filesystems.
+
+   Only the superuser can mount, unmount, or remount a filesystem.
+
+   These functions do not access the ‘fstab’ and ‘mtab’ files.  You
+should maintain and use these separately.  *Note Mount Information::.
+
+   The symbols in this section are declared in ‘sys/mount.h’.
+
+ -- Function: int mount (const char *SPECIAL_FILE, const char *DIR,
+          const char *FSTYPE, unsigned long int OPTIONS, const void
+          *DATA)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘mount’ mounts or remounts a filesystem.  The two operations are
+     quite different and are merged rather unnaturally into this one
+     function.  The ‘MS_REMOUNT’ option, explained below, determines
+     whether ‘mount’ mounts or remounts.
+
+     For a mount, the filesystem on the block device represented by the
+     device special file named SPECIAL_FILE gets mounted over the mount
+     point DIR.  This means that the directory DIR (along with any files
+     in it) is no longer visible; in its place (and still with the name
+     DIR) is the root directory of the filesystem on the device.
+
+     As an exception, if the filesystem type (see below) is one which is
+     not based on a device (e.g.  “proc”), ‘mount’ instantiates a
+     filesystem and mounts it over DIR and ignores SPECIAL_FILE.
+
+     For a remount, DIR specifies the mount point where the filesystem
+     to be remounted is (and remains) mounted and SPECIAL_FILE is
+     ignored.  Remounting a filesystem means changing the options that
+     control operations on the filesystem while it is mounted.  It does
+     not mean unmounting and mounting again.
+
+     For a mount, you must identify the type of the filesystem with
+     FSTYPE.  This type tells the kernel how to access the filesystem
+     and can be thought of as the name of a filesystem driver.  The
+     acceptable values are system dependent.  On a system with a Linux
+     kernel and the ‘proc’ filesystem, the list of possible values is in
+     the file ‘filesystems’ in the ‘proc’ filesystem (e.g.  type ‘cat
+     /proc/filesystems’ to see the list).  With a Linux kernel, the
+     types of filesystems that ‘mount’ can mount, and their type names,
+     depends on what filesystem drivers are configured into the kernel
+     or loaded as loadable kernel modules.  An example of a common value
+     for FSTYPE is ‘ext2’.
+
+     For a remount, ‘mount’ ignores FSTYPE.
+
+     OPTIONS specifies a variety of options that apply until the
+     filesystem is unmounted or remounted.  The precise meaning of an
+     option depends on the filesystem and with some filesystems, an
+     option may have no effect at all.  Furthermore, for some
+     filesystems, some of these options (but never ‘MS_RDONLY’) can be
+     overridden for individual file accesses via ‘ioctl’.
+
+     OPTIONS is a bit string with bit fields defined using the following
+     mask and masked value macros:
+
+     ‘MS_MGC_MASK’
+          This multibit field contains a magic number.  If it does not
+          have the value ‘MS_MGC_VAL’, ‘mount’ assumes all the following
+          bits are zero and the DATA argument is a null string,
+          regardless of their actual values.
+
+     ‘MS_REMOUNT’
+          This bit on means to remount the filesystem.  Off means to
+          mount it.
+
+     ‘MS_RDONLY’
+          This bit on specifies that no writing to the filesystem shall
+          be allowed while it is mounted.  This cannot be overridden by
+          ‘ioctl’.  This option is available on nearly all filesystems.
+
+     ‘MS_NOSUID’
+          This bit on specifies that Setuid and Setgid permissions on
+          files in the filesystem shall be ignored while it is mounted.
+
+     ‘MS_NOEXEC’
+          This bit on specifies that no files in the filesystem shall be
+          executed while the filesystem is mounted.
+
+     ‘MS_NODEV’
+          This bit on specifies that no device special files in the
+          filesystem shall be accessible while the filesystem is
+          mounted.
+
+     ‘MS_SYNCHRONOUS’
+          This bit on specifies that all writes to the filesystem while
+          it is mounted shall be synchronous; i.e., data shall be synced
+          before each write completes rather than held in the buffer
+          cache.
+
+     ‘MS_MANDLOCK’
+          This bit on specifies that mandatory locks on files shall be
+          permitted while the filesystem is mounted.
+
+     ‘MS_NOATIME’
+          This bit on specifies that access times of files shall not be
+          updated when the files are accessed while the filesystem is
+          mounted.
+
+     ‘MS_NODIRATIME’
+          This bit on specifies that access times of directories shall
+          not be updated when the directories are accessed while the
+          filesystem in mounted.
+
+     Any bits not covered by the above masks should be set off;
+     otherwise, results are undefined.
+
+     The meaning of DATA depends on the filesystem type and is
+     controlled entirely by the filesystem driver in the kernel.
+
+     Example:
+
+          #include <sys/mount.h>
+
+          mount("/dev/hdb", "/cdrom", MS_MGC_VAL | MS_RDONLY | MS_NOSUID, "");
+
+          mount("/dev/hda2", "/mnt", MS_MGC_VAL | MS_REMOUNT, "");
+
+
+     Appropriate arguments for ‘mount’ are conventionally recorded in
+     the ‘fstab’ table.  *Note Mount Information::.
+
+     The return value is zero if the mount or remount is successful.
+     Otherwise, it is ‘-1’ and ‘errno’ is set appropriately.  The values
+     of ‘errno’ are filesystem dependent, but here is a general list:
+
+     ‘EPERM’
+          The process is not superuser.
+     ‘ENODEV’
+          The file system type FSTYPE is not known to the kernel.
+     ‘ENOTBLK’
+          The file DEV is not a block device special file.
+     ‘EBUSY’
+
+             • The device is already mounted.
+
+             • The mount point is busy.  (E.g.  it is some process’
+               working directory or has a filesystem mounted on it
+               already).
+
+             • The request is to remount read-only, but there are files
+               open for writing.
+
+     ‘EINVAL’
+
+             • A remount was attempted, but there is no filesystem
+               mounted over the specified mount point.
+
+             • The supposed filesystem has an invalid superblock.
+
+     ‘EACCES’
+
+             • The filesystem is inherently read-only (possibly due to a
+               switch on the device) and the process attempted to mount
+               it read/write (by setting the ‘MS_RDONLY’ bit off).
+
+             • SPECIAL_FILE or DIR is not accessible due to file
+               permissions.
+
+             • SPECIAL_FILE is not accessible because it is in a
+               filesystem that is mounted with the ‘MS_NODEV’ option.
+
+     ‘EM_FILE’
+          The table of dummy devices is full.  ‘mount’ needs to create a
+          dummy device (aka “unnamed” device) if the filesystem being
+          mounted is not one that uses a device.
+
+ -- Function: int umount2 (const char *FILE, int FLAGS)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘umount2’ unmounts a filesystem.
+
+     You can identify the filesystem to unmount either by the device
+     special file that contains the filesystem or by the mount point.
+     The effect is the same.  Specify either as the string FILE.
+
+     FLAGS contains the one-bit field identified by the following mask
+     macro:
+
+     ‘MNT_FORCE’
+          This bit on means to force the unmounting even if the
+          filesystem is busy, by making it unbusy first.  If the bit is
+          off and the filesystem is busy, ‘umount2’ fails with ‘errno’ =
+          ‘EBUSY’.  Depending on the filesystem, this may override all,
+          some, or no busy conditions.
+
+     All other bits in FLAGS should be set to zero; otherwise, the
+     result is undefined.
+
+     Example:
+
+          #include <sys/mount.h>
+
+          umount2("/mnt", MNT_FORCE);
+
+          umount2("/dev/hdd1", 0);
+
+
+     After the filesystem is unmounted, the directory that was the mount
+     point is visible, as are any files in it.
+
+     As part of unmounting, ‘umount2’ syncs the filesystem.
+
+     If the unmounting is successful, the return value is zero.
+     Otherwise, it is ‘-1’ and ‘errno’ is set accordingly:
+
+     ‘EPERM’
+          The process is not superuser.
+     ‘EBUSY’
+          The filesystem cannot be unmounted because it is busy.  E.g.
+          it contains a directory that is some process’s working
+          directory or a file that some process has open.  With some
+          filesystems in some cases, you can avoid this failure with the
+          ‘MNT_FORCE’ option.
+
+     ‘EINVAL’
+          FILE validly refers to a file, but that file is neither a
+          mount point nor a device special file of a currently mounted
+          filesystem.
+
+     This function is not available on all systems.
+
+ -- Function: int umount (const char *FILE)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘umount’ does the same thing as ‘umount2’ with FLAGS set to zeroes.
+     It is more widely available than ‘umount2’ but since it lacks the
+     possibility to forcefully unmount a filesystem is deprecated when
+     ‘umount2’ is also available.
+
+File: libc.info,  Node: System Parameters,  Prev: Filesystem Handling,  Up: System Management
+

@@ -1,0 +1,200 @@
+29.3 NSS Module Internals
+=========================
+
+Now it is time to describe what the modules look like.  The functions
+contained in a module are identified by their names.  I.e., there is no
+jump table or the like.  How this is done is of no interest here; those
+interested in this topic should read about Dynamic Linking.
+
+* Menu:
+
+* NSS Module Names::            Construction of the interface function of
+                                the NSS modules.
+* NSS Modules Interface::       Programming interface in the NSS module
+                                functions.
+
+File: libc.info,  Node: NSS Module Names,  Next: NSS Modules Interface,  Prev: NSS Module Internals,  Up: NSS Module Internals
+
+29.3.1 The Naming Scheme of the NSS Modules
+-------------------------------------------
+
+The name of each function consists of various parts:
+
+     _nss_SERVICE_FUNCTION
+
+   SERVICE of course corresponds to the name of the module this function
+is found in.(1)  The FUNCTION part is derived from the interface
+function in the C library itself.  If the user calls the function
+‘gethostbyname’ and the service used is ‘files’ the function
+
+            _nss_files_gethostbyname_r
+
+in the module
+
+            libnss_files.so.2
+
+is used.  You see, what is explained above in not the whole truth.  In
+fact the NSS modules only contain reentrant versions of the lookup
+functions.  I.e., if the user would call the ‘gethostbyname_r’ function
+this also would end in the above function.  For all user interface
+functions the C library maps this call to a call to the reentrant
+function.  For reentrant functions this is trivial since the interface
+is (nearly) the same.  For the non-reentrant version the library keeps
+internal buffers which are used to replace the user supplied buffer.
+
+   I.e., the reentrant functions _can_ have counterparts.  No service
+module is forced to have functions for all databases and all kinds to
+access them.  If a function is not available it is simply treated as if
+the function would return ‘unavail’ (*note Actions in the NSS
+configuration::).
+
+   The file name ‘libnss_files.so.2’ would be on a Solaris 2 system
+‘nss_files.so.2’.  This is the difference mentioned above.  Sun’s NSS
+modules are usable as modules which get indirectly loaded only.
+
+   The NSS modules in the GNU C Library are prepared to be used as
+normal libraries themselves.  This is _not_ true at the moment, though.
+However, the organization of the name space in the modules does not make
+it impossible like it is for Solaris.  Now you can see why the modules
+are still libraries.(2)
+
+   ---------- Footnotes ----------
+
+   (1) Now you might ask why this information is duplicated.  The answer
+is that we want to make it possible to link directly with these shared
+objects.
+
+   (2) There is a second explanation: we were too lazy to change the
+Makefiles to allow the generation of shared objects not starting with
+‘lib’ but don’t tell this to anybody.
+
+File: libc.info,  Node: NSS Modules Interface,  Prev: NSS Module Names,  Up: NSS Module Internals
+
+29.3.2 The Interface of the Function in NSS Modules
+---------------------------------------------------
+
+Now we know about the functions contained in the modules.  It is now
+time to describe the types.  When we mentioned the reentrant versions of
+the functions above, this means there are some additional arguments
+(compared with the standard, non-reentrant versions).  The prototypes
+for the non-reentrant and reentrant versions of our function above are:
+
+     struct hostent *gethostbyname (const char *name)
+
+     int gethostbyname_r (const char *name, struct hostent *result_buf,
+                          char *buf, size_t buflen, struct hostent **result,
+                          int *h_errnop)
+
+The actual prototype of the function in the NSS modules in this case is
+
+     enum nss_status _nss_files_gethostbyname_r (const char *name,
+                                                 struct hostent *result_buf,
+                                                 char *buf, size_t buflen,
+                                                 int *errnop, int *h_errnop)
+
+   I.e., the interface function is in fact the reentrant function with
+the change of the return value, the omission of the RESULT parameter,
+and the addition of the ERRNOP parameter.  While the user-level function
+returns a pointer to the result the reentrant function return an ‘enum
+nss_status’ value:
+
+‘NSS_STATUS_TRYAGAIN’
+     numeric value ‘-2’
+
+‘NSS_STATUS_UNAVAIL’
+     numeric value ‘-1’
+
+‘NSS_STATUS_NOTFOUND’
+     numeric value ‘0’
+
+‘NSS_STATUS_SUCCESS’
+     numeric value ‘1’
+
+Now you see where the action items of the ‘/etc/nsswitch.conf’ file are
+used.
+
+   If you study the source code you will find there is a fifth value:
+‘NSS_STATUS_RETURN’.  This is an internal use only value, used by a few
+functions in places where none of the above value can be used.  If
+necessary the source code should be examined to learn about the details.
+
+   In case the interface function has to return an error it is important
+that the correct error code is stored in ‘*ERRNOP’.  Some return status
+values have only one associated error code, others have more.
+
+‘NSS_STATUS_TRYAGAIN’  ‘EAGAIN’       One of the functions used ran
+                                      temporarily out of resources or a
+                                      service is currently not
+                                      available.
+                       ‘ERANGE’       The provided buffer is not large
+                                      enough.  The function should be
+                                      called again with a larger buffer.
+‘NSS_STATUS_UNAVAIL’   ‘ENOENT’       A necessary input file cannot be
+                                      found.
+‘NSS_STATUS_NOTFOUND’  ‘ENOENT’       The requested entry is not
+                                      available.
+                                      
+‘NSS_STATUS_NOTFOUND’  ‘SUCCESS’      There are no entries.  Use this to
+                                      avoid returning errors for
+                                      inactive services which may be
+                                      enabled at a later time.  This is
+                                      not the same as the service being
+                                      temporarily unavailable.
+
+   These are proposed values.  There can be other error codes and the
+described error codes can have different meaning.  *With one exception:*
+when returning ‘NSS_STATUS_TRYAGAIN’ the error code ‘ERANGE’ _must_ mean
+that the user provided buffer is too small.  Everything else is
+non-critical.
+
+   In statically linked programs, the main application and NSS modules
+do not share the same thread-local variable ‘errno’, which is the reason
+why there is an explicit ERRNOP function argument.
+
+   The above function has something special which is missing for almost
+all the other module functions.  There is an argument H_ERRNOP.  This
+points to a variable which will be filled with the error code in case
+the execution of the function fails for some reason.  (In statically
+linked programs, the thread-local variable ‘h_errno’ is not shared with
+the main application.)
+
+   The ‘getXXXbyYYY’ functions are the most important functions in the
+NSS modules.  But there are others which implement the other ways to
+access system databases (say for the user database, there are
+‘setpwent’, ‘getpwent’, and ‘endpwent’).  These will be described in
+more detail later.  Here we give a general way to determine the
+signature of the module function:
+
+   • the return value is ‘enum nss_status’;
+   • the name (*note NSS Module Names::);
+   • the first arguments are identical to the arguments of the
+     non-reentrant function;
+   • the next four arguments are:
+
+     ‘STRUCT_TYPE *result_buf’
+          pointer to buffer where the result is stored.  ‘STRUCT_TYPE’
+          is normally a struct which corresponds to the database.
+     ‘char *buffer’
+          pointer to a buffer where the function can store additional
+          data for the result etc.
+     ‘size_t buflen’
+          length of the buffer pointed to by BUFFER.
+     ‘int *errnop’
+          the low-level error code to return to the application.  If the
+          return value is not ‘NSS_STATUS_SUCCESS’, ‘*ERRNOP’ needs to
+          be set to a non-zero value.  An NSS module should never set
+          ‘*ERRNOP’ to zero.  The value ‘ERANGE’ is special, as
+          described above.
+
+   • possibly a last argument H_ERRNOP, for the host name and network
+     name lookup functions.  If the return value is not
+     ‘NSS_STATUS_SUCCESS’, ‘*H_ERRNOP’ needs to be set to a non-zero
+     value.  A generic error code is ‘NETDB_INTERNAL’, which instructs
+     the caller to examine ‘*ERRNOP’ for further details.  (This
+     includes the ‘ERANGE’ special case.)
+
+This table is correct for all functions but the ‘set...ent’ and
+‘end...ent’ functions.
+
+File: libc.info,  Node: Extending NSS,  Prev: NSS Module Internals,  Up: Name Service Switch
+

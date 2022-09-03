@@ -1,0 +1,644 @@
+24.4 Defining Signal Handlers
+=============================
+
+This section describes how to write a signal handler function that can
+be established with the ‘signal’ or ‘sigaction’ functions.
+
+   A signal handler is just a function that you compile together with
+the rest of the program.  Instead of directly invoking the function, you
+use ‘signal’ or ‘sigaction’ to tell the operating system to call it when
+a signal arrives.  This is known as “establishing” the handler.  *Note
+Signal Actions::.
+
+   There are two basic strategies you can use in signal handler
+functions:
+
+   • You can have the handler function note that the signal arrived by
+     tweaking some global data structures, and then return normally.
+
+   • You can have the handler function terminate the program or transfer
+     control to a point where it can recover from the situation that
+     caused the signal.
+
+   You need to take special care in writing handler functions because
+they can be called asynchronously.  That is, a handler might be called
+at any point in the program, unpredictably.  If two signals arrive
+during a very short interval, one handler can run within another.  This
+section describes what your handler should do, and what you should
+avoid.
+
+* Menu:
+
+* Handler Returns::             Handlers that return normally, and what
+                                 this means.
+* Termination in Handler::      How handler functions terminate a program.
+* Longjmp in Handler::          Nonlocal transfer of control out of a
+                                 signal handler.
+* Signals in Handler::          What happens when signals arrive while
+                                 the handler is already occupied.
+* Merged Signals::		When a second signal arrives before the
+				 first is handled.
+* Nonreentrancy::               Do not call any functions unless you know they
+                                 are reentrant with respect to signals.
+* Atomic Data Access::          A single handler can run in the middle of
+                                 reading or writing a single object.
+
+File: libc.info,  Node: Handler Returns,  Next: Termination in Handler,  Up: Defining Handlers
+
+24.4.1 Signal Handlers that Return
+----------------------------------
+
+Handlers which return normally are usually used for signals such as
+‘SIGALRM’ and the I/O and interprocess communication signals.  But a
+handler for ‘SIGINT’ might also return normally after setting a flag
+that tells the program to exit at a convenient time.
+
+   It is not safe to return normally from the handler for a program
+error signal, because the behavior of the program when the handler
+function returns is not defined after a program error.  *Note Program
+Error Signals::.
+
+   Handlers that return normally must modify some global variable in
+order to have any effect.  Typically, the variable is one that is
+examined periodically by the program during normal operation.  Its data
+type should be ‘sig_atomic_t’ for reasons described in *note Atomic Data
+Access::.
+
+   Here is a simple example of such a program.  It executes the body of
+the loop until it has noticed that a ‘SIGALRM’ signal has arrived.  This
+technique is useful because it allows the iteration in progress when the
+signal arrives to complete before the loop exits.
+
+
+     #include <signal.h>
+     #include <stdio.h>
+     #include <stdlib.h>
+
+     /* This flag controls termination of the main loop. */
+     volatile sig_atomic_t keep_going = 1;
+
+     /* The signal handler just clears the flag and re-enables itself. */
+     void
+     catch_alarm (int sig)
+     {
+       keep_going = 0;
+       signal (sig, catch_alarm);
+     }
+
+     void
+     do_stuff (void)
+     {
+       puts ("Doing stuff while waiting for alarm....");
+     }
+
+     int
+     main (void)
+     {
+       /* Establish a handler for SIGALRM signals. */
+       signal (SIGALRM, catch_alarm);
+
+       /* Set an alarm to go off in a little while. */
+       alarm (2);
+
+       /* Check the flag once in a while to see when to quit. */
+       while (keep_going)
+         do_stuff ();
+
+       return EXIT_SUCCESS;
+     }
+
+File: libc.info,  Node: Termination in Handler,  Next: Longjmp in Handler,  Prev: Handler Returns,  Up: Defining Handlers
+
+24.4.2 Handlers That Terminate the Process
+------------------------------------------
+
+Handler functions that terminate the program are typically used to cause
+orderly cleanup or recovery from program error signals and interactive
+interrupts.
+
+   The cleanest way for a handler to terminate the process is to raise
+the same signal that ran the handler in the first place.  Here is how to
+do this:
+
+     volatile sig_atomic_t fatal_error_in_progress = 0;
+
+     void
+     fatal_error_signal (int sig)
+     {
+       /* Since this handler is established for more than one kind of signal,
+          it might still get invoked recursively by delivery of some other kind
+          of signal.  Use a static variable to keep track of that. */
+       if (fatal_error_in_progress)
+         raise (sig);
+       fatal_error_in_progress = 1;
+
+       /* Now do the clean up actions:
+          - reset terminal modes
+          - kill child processes
+          - remove lock files */
+       ...
+
+       /* Now reraise the signal.  We reactivate the signal’s
+          default handling, which is to terminate the process.
+          We could just call ‘exit’ or ‘abort’,
+          but reraising the signal sets the return status
+          from the process correctly. */
+       signal (sig, SIG_DFL);
+       raise (sig);
+     }
+
+File: libc.info,  Node: Longjmp in Handler,  Next: Signals in Handler,  Prev: Termination in Handler,  Up: Defining Handlers
+
+24.4.3 Nonlocal Control Transfer in Handlers
+--------------------------------------------
+
+You can do a nonlocal transfer of control out of a signal handler using
+the ‘setjmp’ and ‘longjmp’ facilities (*note Non-Local Exits::).
+
+   When the handler does a nonlocal control transfer, the part of the
+program that was running will not continue.  If this part of the program
+was in the middle of updating an important data structure, the data
+structure will remain inconsistent.  Since the program does not
+terminate, the inconsistency is likely to be noticed later on.
+
+   There are two ways to avoid this problem.  One is to block the signal
+for the parts of the program that update important data structures.
+Blocking the signal delays its delivery until it is unblocked, once the
+critical updating is finished.  *Note Blocking Signals::.
+
+   The other way is to re-initialize the crucial data structures in the
+signal handler, or to make their values consistent.
+
+   Here is a rather schematic example showing the reinitialization of
+one global variable.
+
+     #include <signal.h>
+     #include <setjmp.h>
+
+     jmp_buf return_to_top_level;
+
+     volatile sig_atomic_t waiting_for_input;
+
+     void
+     handle_sigint (int signum)
+     {
+       /* We may have been waiting for input when the signal arrived,
+          but we are no longer waiting once we transfer control. */
+       waiting_for_input = 0;
+       longjmp (return_to_top_level, 1);
+     }
+
+     int
+     main (void)
+     {
+       ...
+       signal (SIGINT, sigint_handler);
+       ...
+       while (1) {
+         prepare_for_command ();
+         if (setjmp (return_to_top_level) == 0)
+           read_and_execute_command ();
+       }
+     }
+
+     /* Imagine this is a subroutine used by various commands. */
+     char *
+     read_data ()
+     {
+       if (input_from_terminal) {
+         waiting_for_input = 1;
+         ...
+         waiting_for_input = 0;
+       } else {
+         ...
+       }
+     }
+
+File: libc.info,  Node: Signals in Handler,  Next: Merged Signals,  Prev: Longjmp in Handler,  Up: Defining Handlers
+
+24.4.4 Signals Arriving While a Handler Runs
+--------------------------------------------
+
+What happens if another signal arrives while your signal handler
+function is running?
+
+   When the handler for a particular signal is invoked, that signal is
+automatically blocked until the handler returns.  That means that if two
+signals of the same kind arrive close together, the second one will be
+held until the first has been handled.  (The handler can explicitly
+unblock the signal using ‘sigprocmask’, if you want to allow more
+signals of this type to arrive; see *note Process Signal Mask::.)
+
+   However, your handler can still be interrupted by delivery of another
+kind of signal.  To avoid this, you can use the ‘sa_mask’ member of the
+action structure passed to ‘sigaction’ to explicitly specify which
+signals should be blocked while the signal handler runs.  These signals
+are in addition to the signal for which the handler was invoked, and any
+other signals that are normally blocked by the process.  *Note Blocking
+for Handler::.
+
+   When the handler returns, the set of blocked signals is restored to
+the value it had before the handler ran.  So using ‘sigprocmask’ inside
+the handler only affects what signals can arrive during the execution of
+the handler itself, not what signals can arrive once the handler
+returns.
+
+   *Portability Note:* Always use ‘sigaction’ to establish a handler for
+a signal that you expect to receive asynchronously, if you want your
+program to work properly on System V Unix.  On this system, the handling
+of a signal whose handler was established with ‘signal’ automatically
+sets the signal’s action back to ‘SIG_DFL’, and the handler must
+re-establish itself each time it runs.  This practice, while
+inconvenient, does work when signals cannot arrive in succession.
+However, if another signal can arrive right away, it may arrive before
+the handler can re-establish itself.  Then the second signal would
+receive the default handling, which could terminate the process.
+
+File: libc.info,  Node: Merged Signals,  Next: Nonreentrancy,  Prev: Signals in Handler,  Up: Defining Handlers
+
+24.4.5 Signals Close Together Merge into One
+--------------------------------------------
+
+If multiple signals of the same type are delivered to your process
+before your signal handler has a chance to be invoked at all, the
+handler may only be invoked once, as if only a single signal had
+arrived.  In effect, the signals merge into one.  This situation can
+arise when the signal is blocked, or in a multiprocessing environment
+where the system is busy running some other processes while the signals
+are delivered.  This means, for example, that you cannot reliably use a
+signal handler to count signals.  The only distinction you can reliably
+make is whether at least one signal has arrived since a given time in
+the past.
+
+   Here is an example of a handler for ‘SIGCHLD’ that compensates for
+the fact that the number of signals received may not equal the number of
+child processes that generate them.  It assumes that the program keeps
+track of all the child processes with a chain of structures as follows:
+
+     struct process
+     {
+       struct process *next;
+       /* The process ID of this child.  */
+       int pid;
+       /* The descriptor of the pipe or pseudo terminal
+          on which output comes from this child.  */
+       int input_descriptor;
+       /* Nonzero if this process has stopped or terminated.  */
+       sig_atomic_t have_status;
+       /* The status of this child; 0 if running,
+          otherwise a status value from ‘waitpid’.  */
+       int status;
+     };
+
+     struct process *process_list;
+
+   This example also uses a flag to indicate whether signals have
+arrived since some time in the past—whenever the program last cleared it
+to zero.
+
+     /* Nonzero means some child’s status has changed
+        so look at ‘process_list’ for the details.  */
+     int process_status_change;
+
+   Here is the handler itself:
+
+     void
+     sigchld_handler (int signo)
+     {
+       int old_errno = errno;
+
+       while (1) {
+         register int pid;
+         int w;
+         struct process *p;
+
+         /* Keep asking for a status until we get a definitive result.  */
+         do
+           {
+             errno = 0;
+             pid = waitpid (WAIT_ANY, &w, WNOHANG | WUNTRACED);
+           }
+         while (pid <= 0 && errno == EINTR);
+
+         if (pid <= 0) {
+           /* A real failure means there are no more
+              stopped or terminated child processes, so return.  */
+           errno = old_errno;
+           return;
+         }
+
+         /* Find the process that signaled us, and record its status.  */
+
+         for (p = process_list; p; p = p->next)
+           if (p->pid == pid) {
+             p->status = w;
+             /* Indicate that the ‘status’ field
+                has data to look at.  We do this only after storing it.  */
+             p->have_status = 1;
+
+             /* If process has terminated, stop waiting for its output.  */
+             if (WIFSIGNALED (w) || WIFEXITED (w))
+               if (p->input_descriptor)
+                 FD_CLR (p->input_descriptor, &input_wait_mask);
+
+             /* The program should check this flag from time to time
+                to see if there is any news in ‘process_list’.  */
+             ++process_status_change;
+           }
+
+         /* Loop around to handle all the processes
+            that have something to tell us.  */
+       }
+     }
+
+   Here is the proper way to check the flag ‘process_status_change’:
+
+     if (process_status_change) {
+       struct process *p;
+       process_status_change = 0;
+       for (p = process_list; p; p = p->next)
+         if (p->have_status) {
+           ... Examine ‘p->status’ ...
+         }
+     }
+
+It is vital to clear the flag before examining the list; otherwise, if a
+signal were delivered just before the clearing of the flag, and after
+the appropriate element of the process list had been checked, the status
+change would go unnoticed until the next signal arrived to set the flag
+again.  You could, of course, avoid this problem by blocking the signal
+while scanning the list, but it is much more elegant to guarantee
+correctness by doing things in the right order.
+
+   The loop which checks process status avoids examining ‘p->status’
+until it sees that status has been validly stored.  This is to make sure
+that the status cannot change in the middle of accessing it.  Once
+‘p->have_status’ is set, it means that the child process is stopped or
+terminated, and in either case, it cannot stop or terminate again until
+the program has taken notice.  *Note Atomic Usage::, for more
+information about coping with interruptions during accesses of a
+variable.
+
+   Here is another way you can test whether the handler has run since
+the last time you checked.  This technique uses a counter which is never
+changed outside the handler.  Instead of clearing the count, the program
+remembers the previous value and sees whether it has changed since the
+previous check.  The advantage of this method is that different parts of
+the program can check independently, each part checking whether there
+has been a signal since that part last checked.
+
+     sig_atomic_t process_status_change;
+
+     sig_atomic_t last_process_status_change;
+
+     ...
+     {
+       sig_atomic_t prev = last_process_status_change;
+       last_process_status_change = process_status_change;
+       if (last_process_status_change != prev) {
+         struct process *p;
+         for (p = process_list; p; p = p->next)
+           if (p->have_status) {
+             ... Examine ‘p->status’ ...
+           }
+       }
+     }
+
+File: libc.info,  Node: Nonreentrancy,  Next: Atomic Data Access,  Prev: Merged Signals,  Up: Defining Handlers
+
+24.4.6 Signal Handling and Nonreentrant Functions
+-------------------------------------------------
+
+Handler functions usually don’t do very much.  The best practice is to
+write a handler that does nothing but set an external variable that the
+program checks regularly, and leave all serious work to the program.
+This is best because the handler can be called asynchronously, at
+unpredictable times—perhaps in the middle of a primitive function, or
+even between the beginning and the end of a C operator that requires
+multiple instructions.  The data structures being manipulated might
+therefore be in an inconsistent state when the handler function is
+invoked.  Even copying one ‘int’ variable into another can take two
+instructions on most machines.
+
+   This means you have to be very careful about what you do in a signal
+handler.
+
+   • If your handler needs to access any global variables from your
+     program, declare those variables ‘volatile’.  This tells the
+     compiler that the value of the variable might change
+     asynchronously, and inhibits certain optimizations that would be
+     invalidated by such modifications.
+
+   • If you call a function in the handler, make sure it is “reentrant”
+     with respect to signals, or else make sure that the signal cannot
+     interrupt a call to a related function.
+
+   A function can be non-reentrant if it uses memory that is not on the
+stack.
+
+   • If a function uses a static variable or a global variable, or a
+     dynamically-allocated object that it finds for itself, then it is
+     non-reentrant and any two calls to the function can interfere.
+
+     For example, suppose that the signal handler uses ‘gethostbyname’.
+     This function returns its value in a static object, reusing the
+     same object each time.  If the signal happens to arrive during a
+     call to ‘gethostbyname’, or even after one (while the program is
+     still using the value), it will clobber the value that the program
+     asked for.
+
+     However, if the program does not use ‘gethostbyname’ or any other
+     function that returns information in the same object, or if it
+     always blocks signals around each use, then you are safe.
+
+     There are a large number of library functions that return values in
+     a fixed object, always reusing the same object in this fashion, and
+     all of them cause the same problem.  Function descriptions in this
+     manual always mention this behavior.
+
+   • If a function uses and modifies an object that you supply, then it
+     is potentially non-reentrant; two calls can interfere if they use
+     the same object.
+
+     This case arises when you do I/O using streams.  Suppose that the
+     signal handler prints a message with ‘fprintf’.  Suppose that the
+     program was in the middle of an ‘fprintf’ call using the same
+     stream when the signal was delivered.  Both the signal handler’s
+     message and the program’s data could be corrupted, because both
+     calls operate on the same data structure—the stream itself.
+
+     However, if you know that the stream that the handler uses cannot
+     possibly be used by the program at a time when signals can arrive,
+     then you are safe.  It is no problem if the program uses some other
+     stream.
+
+   • On most systems, ‘malloc’ and ‘free’ are not reentrant, because
+     they use a static data structure which records what memory blocks
+     are free.  As a result, no library functions that allocate or free
+     memory are reentrant.  This includes functions that allocate space
+     to store a result.
+
+     The best way to avoid the need to allocate memory in a handler is
+     to allocate in advance space for signal handlers to use.
+
+     The best way to avoid freeing memory in a handler is to flag or
+     record the objects to be freed, and have the program check from
+     time to time whether anything is waiting to be freed.  But this
+     must be done with care, because placing an object on a chain is not
+     atomic, and if it is interrupted by another signal handler that
+     does the same thing, you could “lose” one of the objects.
+
+   • Any function that modifies ‘errno’ is non-reentrant, but you can
+     correct for this: in the handler, save the original value of
+     ‘errno’ and restore it before returning normally.  This prevents
+     errors that occur within the signal handler from being confused
+     with errors from system calls at the point the program is
+     interrupted to run the handler.
+
+     This technique is generally applicable; if you want to call in a
+     handler a function that modifies a particular object in memory, you
+     can make this safe by saving and restoring that object.
+
+   • Merely reading from a memory object is safe provided that you can
+     deal with any of the values that might appear in the object at a
+     time when the signal can be delivered.  Keep in mind that
+     assignment to some data types requires more than one instruction,
+     which means that the handler could run “in the middle of” an
+     assignment to the variable if its type is not atomic.  *Note Atomic
+     Data Access::.
+
+   • Merely writing into a memory object is safe as long as a sudden
+     change in the value, at any time when the handler might run, will
+     not disturb anything.
+
+File: libc.info,  Node: Atomic Data Access,  Prev: Nonreentrancy,  Up: Defining Handlers
+
+24.4.7 Atomic Data Access and Signal Handling
+---------------------------------------------
+
+Whether the data in your application concerns atoms, or mere text, you
+have to be careful about the fact that access to a single datum is not
+necessarily “atomic”.  This means that it can take more than one
+instruction to read or write a single object.  In such cases, a signal
+handler might be invoked in the middle of reading or writing the object.
+
+   There are three ways you can cope with this problem.  You can use
+data types that are always accessed atomically; you can carefully
+arrange that nothing untoward happens if an access is interrupted, or
+you can block all signals around any access that had better not be
+interrupted (*note Blocking Signals::).
+
+* Menu:
+
+* Non-atomic Example::		A program illustrating interrupted access.
+* Types: Atomic Types.		Data types that guarantee no interruption.
+* Usage: Atomic Usage.		Proving that interruption is harmless.
+
+File: libc.info,  Node: Non-atomic Example,  Next: Atomic Types,  Up: Atomic Data Access
+
+24.4.7.1 Problems with Non-Atomic Access
+........................................
+
+Here is an example which shows what can happen if a signal handler runs
+in the middle of modifying a variable.  (Interrupting the reading of a
+variable can also lead to paradoxical results, but here we only show
+writing.)
+
+     #include <signal.h>
+     #include <stdio.h>
+
+     volatile struct two_words { int a, b; } memory;
+
+     void
+     handler(int signum)
+     {
+        printf ("%d,%d\n", memory.a, memory.b);
+        alarm (1);
+     }
+
+     int
+     main (void)
+     {
+        static struct two_words zeros = { 0, 0 }, ones = { 1, 1 };
+        signal (SIGALRM, handler);
+        memory = zeros;
+        alarm (1);
+        while (1)
+          {
+            memory = zeros;
+            memory = ones;
+          }
+     }
+
+   This program fills ‘memory’ with zeros, ones, zeros, ones,
+alternating forever; meanwhile, once per second, the alarm signal
+handler prints the current contents.  (Calling ‘printf’ in the handler
+is safe in this program because it is certainly not being called outside
+the handler when the signal happens.)
+
+   Clearly, this program can print a pair of zeros or a pair of ones.
+But that’s not all it can do!  On most machines, it takes several
+instructions to store a new value in ‘memory’, and the value is stored
+one word at a time.  If the signal is delivered in between these
+instructions, the handler might find that ‘memory.a’ is zero and
+‘memory.b’ is one (or vice versa).
+
+   On some machines it may be possible to store a new value in ‘memory’
+with just one instruction that cannot be interrupted.  On these
+machines, the handler will always print two zeros or two ones.
+
+File: libc.info,  Node: Atomic Types,  Next: Atomic Usage,  Prev: Non-atomic Example,  Up: Atomic Data Access
+
+24.4.7.2 Atomic Types
+.....................
+
+To avoid uncertainty about interrupting access to a variable, you can
+use a particular data type for which access is always atomic:
+‘sig_atomic_t’.  Reading and writing this data type is guaranteed to
+happen in a single instruction, so there’s no way for a handler to run
+“in the middle” of an access.
+
+   The type ‘sig_atomic_t’ is always an integer data type, but which one
+it is, and how many bits it contains, may vary from machine to machine.
+
+ -- Data Type: sig_atomic_t
+
+     This is an integer data type.  Objects of this type are always
+     accessed atomically.
+
+   In practice, you can assume that ‘int’ is atomic.  You can also
+assume that pointer types are atomic; that is very convenient.  Both of
+these assumptions are true on all of the machines that the GNU C Library
+supports and on all POSIX systems we know of.
+
+File: libc.info,  Node: Atomic Usage,  Prev: Atomic Types,  Up: Atomic Data Access
+
+24.4.7.3 Atomic Usage Patterns
+..............................
+
+Certain patterns of access avoid any problem even if an access is
+interrupted.  For example, a flag which is set by the handler, and
+tested and cleared by the main program from time to time, is always safe
+even if access actually requires two instructions.  To show that this is
+so, we must consider each access that could be interrupted, and show
+that there is no problem if it is interrupted.
+
+   An interrupt in the middle of testing the flag is safe because either
+it’s recognized to be nonzero, in which case the precise value doesn’t
+matter, or it will be seen to be nonzero the next time it’s tested.
+
+   An interrupt in the middle of clearing the flag is no problem because
+either the value ends up zero, which is what happens if a signal comes
+in just before the flag is cleared, or the value ends up nonzero, and
+subsequent events occur as if the signal had come in just after the flag
+was cleared.  As long as the code handles both of these cases properly,
+it can also handle a signal in the middle of clearing the flag.  (This
+is an example of the sort of reasoning you need to do to figure out
+whether non-atomic usage is safe.)
+
+   Sometimes you can ensure uninterrupted access to one object by
+protecting its use with another object, perhaps one whose type
+guarantees atomicity.  *Note Merged Signals::, for an example.
+
+File: libc.info,  Node: Interrupted Primitives,  Next: Generating Signals,  Prev: Defining Handlers,  Up: Signal Handling
+

@@ -1,0 +1,173 @@
+24.8 Waiting for a Signal
+=========================
+
+If your program is driven by external events, or uses signals for
+synchronization, then when it has nothing to do it should probably wait
+until a signal arrives.
+
+* Menu:
+
+* Using Pause::                 The simple way, using ‘pause’.
+* Pause Problems::              Why the simple way is often not very good.
+* Sigsuspend::                  Reliably waiting for a specific signal.
+
+File: libc.info,  Node: Using Pause,  Next: Pause Problems,  Up: Waiting for a Signal
+
+24.8.1 Using ‘pause’
+--------------------
+
+The simple way to wait until a signal arrives is to call ‘pause’.
+Please read about its disadvantages, in the following section, before
+you use it.
+
+ -- Function: int pause (void)
+
+     Preliminary: | MT-Unsafe race:sigprocmask/!bsd!linux | AS-Unsafe
+     lock/hurd | AC-Unsafe lock/hurd | *Note POSIX Safety Concepts::.
+
+     The ‘pause’ function suspends program execution until a signal
+     arrives whose action is either to execute a handler function, or to
+     terminate the process.
+
+     If the signal causes a handler function to be executed, then
+     ‘pause’ returns.  This is considered an unsuccessful return (since
+     “successful” behavior would be to suspend the program forever), so
+     the return value is ‘-1’.  Even if you specify that other
+     primitives should resume when a system handler returns (*note
+     Interrupted Primitives::), this has no effect on ‘pause’; it always
+     fails when a signal is handled.
+
+     The following ‘errno’ error conditions are defined for this
+     function:
+
+     ‘EINTR’
+          The function was interrupted by delivery of a signal.
+
+     If the signal causes program termination, ‘pause’ doesn’t return
+     (obviously).
+
+     This function is a cancellation point in multithreaded programs.
+     This is a problem if the thread allocates some resources (like
+     memory, file descriptors, semaphores or whatever) at the time
+     ‘pause’ is called.  If the thread gets cancelled these resources
+     stay allocated until the program ends.  To avoid this calls to
+     ‘pause’ should be protected using cancellation handlers.
+
+     The ‘pause’ function is declared in ‘unistd.h’.
+
+File: libc.info,  Node: Pause Problems,  Next: Sigsuspend,  Prev: Using Pause,  Up: Waiting for a Signal
+
+24.8.2 Problems with ‘pause’
+----------------------------
+
+The simplicity of ‘pause’ can conceal serious timing errors that can
+make a program hang mysteriously.
+
+   It is safe to use ‘pause’ if the real work of your program is done by
+the signal handlers themselves, and the “main program” does nothing but
+call ‘pause’.  Each time a signal is delivered, the handler will do the
+next batch of work that is to be done, and then return, so that the main
+loop of the program can call ‘pause’ again.
+
+   You can’t safely use ‘pause’ to wait until one more signal arrives,
+and then resume real work.  Even if you arrange for the signal handler
+to cooperate by setting a flag, you still can’t use ‘pause’ reliably.
+Here is an example of this problem:
+
+     /* ‘usr_interrupt’ is set by the signal handler.  */
+     if (!usr_interrupt)
+       pause ();
+
+     /* Do work once the signal arrives.  */
+     ...
+
+This has a bug: the signal could arrive after the variable
+‘usr_interrupt’ is checked, but before the call to ‘pause’.  If no
+further signals arrive, the process would never wake up again.
+
+   You can put an upper limit on the excess waiting by using ‘sleep’ in
+a loop, instead of using ‘pause’.  (*Note Sleeping::, for more about
+‘sleep’.)  Here is what this looks like:
+
+     /* ‘usr_interrupt’ is set by the signal handler.
+     while (!usr_interrupt)
+       sleep (1);
+
+     /* Do work once the signal arrives.  */
+     ...
+
+   For some purposes, that is good enough.  But with a little more
+complexity, you can wait reliably until a particular signal handler is
+run, using ‘sigsuspend’.  *Note Sigsuspend::.
+
+File: libc.info,  Node: Sigsuspend,  Prev: Pause Problems,  Up: Waiting for a Signal
+
+24.8.3 Using ‘sigsuspend’
+-------------------------
+
+The clean and reliable way to wait for a signal to arrive is to block it
+and then use ‘sigsuspend’.  By using ‘sigsuspend’ in a loop, you can
+wait for certain kinds of signals, while letting other kinds of signals
+be handled by their handlers.
+
+ -- Function: int sigsuspend (const sigset_t *SET)
+
+     Preliminary: | MT-Unsafe race:sigprocmask/!bsd!linux | AS-Unsafe
+     lock/hurd | AC-Unsafe lock/hurd | *Note POSIX Safety Concepts::.
+
+     This function replaces the process’s signal mask with SET and then
+     suspends the process until a signal is delivered whose action is
+     either to terminate the process or invoke a signal handling
+     function.  In other words, the program is effectively suspended
+     until one of the signals that is not a member of SET arrives.
+
+     If the process is woken up by delivery of a signal that invokes a
+     handler function, and the handler function returns, then
+     ‘sigsuspend’ also returns.
+
+     The mask remains SET only as long as ‘sigsuspend’ is waiting.  The
+     function ‘sigsuspend’ always restores the previous signal mask when
+     it returns.
+
+     The return value and error conditions are the same as for ‘pause’.
+
+   With ‘sigsuspend’, you can replace the ‘pause’ or ‘sleep’ loop in the
+previous section with something completely reliable:
+
+     sigset_t mask, oldmask;
+
+     ...
+
+     /* Set up the mask of signals to temporarily block. */
+     sigemptyset (&mask);
+     sigaddset (&mask, SIGUSR1);
+
+     ...
+
+     /* Wait for a signal to arrive. */
+     sigprocmask (SIG_BLOCK, &mask, &oldmask);
+     while (!usr_interrupt)
+       sigsuspend (&oldmask);
+     sigprocmask (SIG_UNBLOCK, &mask, NULL);
+
+   This last piece of code is a little tricky.  The key point to
+remember here is that when ‘sigsuspend’ returns, it resets the process’s
+signal mask to the original value, the value from before the call to
+‘sigsuspend’—in this case, the ‘SIGUSR1’ signal is once again blocked.
+The second call to ‘sigprocmask’ is necessary to explicitly unblock this
+signal.
+
+   One other point: you may be wondering why the ‘while’ loop is
+necessary at all, since the program is apparently only waiting for one
+‘SIGUSR1’ signal.  The answer is that the mask passed to ‘sigsuspend’
+permits the process to be woken up by the delivery of other kinds of
+signals, as well—for example, job control signals.  If the process is
+woken up by a signal that doesn’t set ‘usr_interrupt’, it just suspends
+itself again until the “right” kind of signal eventually arrives.
+
+   This technique takes a few more lines of preparation, but that is
+needed just once for each kind of wait criterion you want to use.  The
+code that actually waits is just four lines.
+
+File: libc.info,  Node: Signal Stack,  Next: BSD Signal Handling,  Prev: Waiting for a Signal,  Up: Signal Handling
+

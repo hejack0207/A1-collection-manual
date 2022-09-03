@@ -1,0 +1,380 @@
+13.15 File Status Flags
+=======================
+
+“File status flags” are used to specify attributes of the opening of a
+file.  Unlike the file descriptor flags discussed in *note Descriptor
+Flags::, the file status flags are shared by duplicated file descriptors
+resulting from a single opening of the file.  The file status flags are
+specified with the FLAGS argument to ‘open’; *note Opening and Closing
+Files::.
+
+   File status flags fall into three categories, which are described in
+the following sections.
+
+   • *note Access Modes::, specify what type of access is allowed to the
+     file: reading, writing, or both.  They are set by ‘open’ and are
+     returned by ‘fcntl’, but cannot be changed.
+
+   • *note Open-time Flags::, control details of what ‘open’ will do.
+     These flags are not preserved after the ‘open’ call.
+
+   • *note Operating Modes::, affect how operations such as ‘read’ and
+     ‘write’ are done.  They are set by ‘open’, and can be fetched or
+     changed with ‘fcntl’.
+
+   The symbols in this section are defined in the header file ‘fcntl.h’.
+
+* Menu:
+
+* Access Modes::                Whether the descriptor can read or write.
+* Open-time Flags::             Details of ‘open’.
+* Operating Modes::             Special modes to control I/O operations.
+* Getting File Status Flags::   Fetching and changing these flags.
+
+File: libc.info,  Node: Access Modes,  Next: Open-time Flags,  Up: File Status Flags
+
+13.15.1 File Access Modes
+-------------------------
+
+The file access modes allow a file descriptor to be used for reading,
+writing, or both.  (On GNU/Hurd systems, they can also allow none of
+these, and allow execution of the file as a program.)  The access modes
+are chosen when the file is opened, and never change.
+
+ -- Macro: int O_RDONLY
+
+     Open the file for read access.
+
+ -- Macro: int O_WRONLY
+
+     Open the file for write access.
+
+ -- Macro: int O_RDWR
+
+     Open the file for both reading and writing.
+
+   On GNU/Hurd systems (and not on other systems), ‘O_RDONLY’ and
+‘O_WRONLY’ are independent bits that can be bitwise-ORed together, and
+it is valid for either bit to be set or clear.  This means that ‘O_RDWR’
+is the same as ‘O_RDONLY|O_WRONLY’.  A file access mode of zero is
+permissible; it allows no operations that do input or output to the
+file, but does allow other operations such as ‘fchmod’.  On GNU/Hurd
+systems, since “read-only” or “write-only” is a misnomer, ‘fcntl.h’
+defines additional names for the file access modes.  These names are
+preferred when writing GNU-specific code.  But most programs will want
+to be portable to other POSIX.1 systems and should use the POSIX.1 names
+above instead.
+
+ -- Macro: int O_READ
+
+     Open the file for reading.  Same as ‘O_RDONLY’; only defined on
+     GNU.
+
+ -- Macro: int O_WRITE
+
+     Open the file for writing.  Same as ‘O_WRONLY’; only defined on
+     GNU.
+
+ -- Macro: int O_EXEC
+
+     Open the file for executing.  Only defined on GNU.
+
+   To determine the file access mode with ‘fcntl’, you must extract the
+access mode bits from the retrieved file status flags.  On GNU/Hurd
+systems, you can just test the ‘O_READ’ and ‘O_WRITE’ bits in the flags
+word.  But in other POSIX.1 systems, reading and writing access modes
+are not stored as distinct bit flags.  The portable way to extract the
+file access mode bits is with ‘O_ACCMODE’.
+
+ -- Macro: int O_ACCMODE
+
+     This macro stands for a mask that can be bitwise-ANDed with the
+     file status flag value to produce a value representing the file
+     access mode.  The mode will be ‘O_RDONLY’, ‘O_WRONLY’, or ‘O_RDWR’.
+     (On GNU/Hurd systems it could also be zero, and it never includes
+     the ‘O_EXEC’ bit.)
+
+File: libc.info,  Node: Open-time Flags,  Next: Operating Modes,  Prev: Access Modes,  Up: File Status Flags
+
+13.15.2 Open-time Flags
+-----------------------
+
+The open-time flags specify options affecting how ‘open’ will behave.
+These options are not preserved once the file is open.  The exception to
+this is ‘O_NONBLOCK’, which is also an I/O operating mode and so it _is_
+saved.  *Note Opening and Closing Files::, for how to call ‘open’.
+
+   There are two sorts of options specified by open-time flags.
+
+   • “File name translation flags” affect how ‘open’ looks up the file
+     name to locate the file, and whether the file can be created.
+
+   • “Open-time action flags” specify extra operations that ‘open’ will
+     perform on the file once it is open.
+
+   Here are the file name translation flags.
+
+ -- Macro: int O_CREAT
+
+     If set, the file will be created if it doesn’t already exist.
+
+ -- Macro: int O_EXCL
+
+     If both ‘O_CREAT’ and ‘O_EXCL’ are set, then ‘open’ fails if the
+     specified file already exists.  This is guaranteed to never clobber
+     an existing file.
+
+     The ‘O_EXCL’ flag has a special meaning in combination with
+     ‘O_TMPFILE’; see below.
+
+ -- Macro: int O_TMPFILE
+
+     If this flag is specified, functions in the ‘open’ family create an
+     unnamed temporary file.  In this case, the pathname argument to the
+     ‘open’ family of functions (*note Opening and Closing Files::) is
+     interpreted as the directory in which the temporary file is created
+     (thus determining the file system which provides the storage for
+     the file).  The ‘O_TMPFILE’ flag must be combined with ‘O_WRONLY’
+     or ‘O_RDWR’, and the MODE argument is required.
+
+     The temporary file can later be given a name using ‘linkat’,
+     turning it into a regular file.  This allows the atomic creation of
+     a file with the specific file attributes (mode and extended
+     attributes) and file contents.  If, for security reasons, it is not
+     desirable that a name can be given to the file, the ‘O_EXCL’ flag
+     can be specified along with ‘O_TMPFILE’.
+
+     Not all kernels support this open flag.  If this flag is
+     unsupported, an attempt to create an unnamed temporary file fails
+     with an error of ‘EINVAL’.  If the underlying file system does not
+     support the ‘O_TMPFILE’ flag, an ‘EOPNOTSUPP’ error is the result.
+
+     The ‘O_TMPFILE’ flag is a GNU extension.
+
+ -- Macro: int O_NONBLOCK
+
+     This prevents ‘open’ from blocking for a “long time” to open the
+     file.  This is only meaningful for some kinds of files, usually
+     devices such as serial ports; when it is not meaningful, it is
+     harmless and ignored.  Often, opening a port to a modem blocks
+     until the modem reports carrier detection; if ‘O_NONBLOCK’ is
+     specified, ‘open’ will return immediately without a carrier.
+
+     Note that the ‘O_NONBLOCK’ flag is overloaded as both an I/O
+     operating mode and a file name translation flag.  This means that
+     specifying ‘O_NONBLOCK’ in ‘open’ also sets nonblocking I/O mode;
+     *note Operating Modes::.  To open the file without blocking but do
+     normal I/O that blocks, you must call ‘open’ with ‘O_NONBLOCK’ set
+     and then call ‘fcntl’ to turn the bit off.
+
+ -- Macro: int O_NOCTTY
+
+     If the named file is a terminal device, don’t make it the
+     controlling terminal for the process.  *Note Job Control::, for
+     information about what it means to be the controlling terminal.
+
+     On GNU/Hurd systems and 4.4 BSD, opening a file never makes it the
+     controlling terminal and ‘O_NOCTTY’ is zero.  However, GNU/Linux
+     systems and some other systems use a nonzero value for ‘O_NOCTTY’
+     and set the controlling terminal when you open a file that is a
+     terminal device; so to be portable, use ‘O_NOCTTY’ when it is
+     important to avoid this.
+
+   The following three file name translation flags exist only on
+GNU/Hurd systems.
+
+ -- Macro: int O_IGNORE_CTTY
+
+     Do not recognize the named file as the controlling terminal, even
+     if it refers to the process’s existing controlling terminal device.
+     Operations on the new file descriptor will never induce job control
+     signals.  *Note Job Control::.
+
+ -- Macro: int O_NOLINK
+
+     If the named file is a symbolic link, open the link itself instead
+     of the file it refers to.  (‘fstat’ on the new file descriptor will
+     return the information returned by ‘lstat’ on the link’s name.)
+
+ -- Macro: int O_NOTRANS
+
+     If the named file is specially translated, do not invoke the
+     translator.  Open the bare file the translator itself sees.
+
+   The open-time action flags tell ‘open’ to do additional operations
+which are not really related to opening the file.  The reason to do them
+as part of ‘open’ instead of in separate calls is that ‘open’ can do
+them atomically.
+
+ -- Macro: int O_TRUNC
+
+     Truncate the file to zero length.  This option is only useful for
+     regular files, not special files such as directories or FIFOs.
+     POSIX.1 requires that you open the file for writing to use
+     ‘O_TRUNC’.  In BSD and GNU you must have permission to write the
+     file to truncate it, but you need not open for write access.
+
+     This is the only open-time action flag specified by POSIX.1.  There
+     is no good reason for truncation to be done by ‘open’, instead of
+     by calling ‘ftruncate’ afterwards.  The ‘O_TRUNC’ flag existed in
+     Unix before ‘ftruncate’ was invented, and is retained for backward
+     compatibility.
+
+   The remaining operating modes are BSD extensions.  They exist only on
+some systems.  On other systems, these macros are not defined.
+
+ -- Macro: int O_SHLOCK
+
+     Acquire a shared lock on the file, as with ‘flock’.  *Note File
+     Locks::.
+
+     If ‘O_CREAT’ is specified, the locking is done atomically when
+     creating the file.  You are guaranteed that no other process will
+     get the lock on the new file first.
+
+ -- Macro: int O_EXLOCK
+
+     Acquire an exclusive lock on the file, as with ‘flock’.  *Note File
+     Locks::.  This is atomic like ‘O_SHLOCK’.
+
+File: libc.info,  Node: Operating Modes,  Next: Getting File Status Flags,  Prev: Open-time Flags,  Up: File Status Flags
+
+13.15.3 I/O Operating Modes
+---------------------------
+
+The operating modes affect how input and output operations using a file
+descriptor work.  These flags are set by ‘open’ and can be fetched and
+changed with ‘fcntl’.
+
+ -- Macro: int O_APPEND
+
+     The bit that enables append mode for the file.  If set, then all
+     ‘write’ operations write the data at the end of the file, extending
+     it, regardless of the current file position.  This is the only
+     reliable way to append to a file.  In append mode, you are
+     guaranteed that the data you write will always go to the current
+     end of the file, regardless of other processes writing to the file.
+     Conversely, if you simply set the file position to the end of file
+     and write, then another process can extend the file after you set
+     the file position but before you write, resulting in your data
+     appearing someplace before the real end of file.
+
+ -- Macro: int O_NONBLOCK
+
+     The bit that enables nonblocking mode for the file.  If this bit is
+     set, ‘read’ requests on the file can return immediately with a
+     failure status if there is no input immediately available, instead
+     of blocking.  Likewise, ‘write’ requests can also return
+     immediately with a failure status if the output can’t be written
+     immediately.
+
+     Note that the ‘O_NONBLOCK’ flag is overloaded as both an I/O
+     operating mode and a file name translation flag; *note Open-time
+     Flags::.
+
+ -- Macro: int O_NDELAY
+
+     This is an obsolete name for ‘O_NONBLOCK’, provided for
+     compatibility with BSD. It is not defined by the POSIX.1 standard.
+
+   The remaining operating modes are BSD and GNU extensions.  They exist
+only on some systems.  On other systems, these macros are not defined.
+
+ -- Macro: int O_ASYNC
+
+     The bit that enables asynchronous input mode.  If set, then ‘SIGIO’
+     signals will be generated when input is available.  *Note Interrupt
+     Input::.
+
+     Asynchronous input mode is a BSD feature.
+
+ -- Macro: int O_FSYNC
+
+     The bit that enables synchronous writing for the file.  If set,
+     each ‘write’ call will make sure the data is reliably stored on
+     disk before returning.
+
+     Synchronous writing is a BSD feature.
+
+ -- Macro: int O_SYNC
+
+     This is another name for ‘O_FSYNC’.  They have the same value.
+
+ -- Macro: int O_NOATIME
+
+     If this bit is set, ‘read’ will not update the access time of the
+     file.  *Note File Times::.  This is used by programs that do
+     backups, so that backing a file up does not count as reading it.
+     Only the owner of the file or the superuser may use this bit.
+
+     This is a GNU extension.
+
+File: libc.info,  Node: Getting File Status Flags,  Prev: Operating Modes,  Up: File Status Flags
+
+13.15.4 Getting and Setting File Status Flags
+---------------------------------------------
+
+The ‘fcntl’ function can fetch or change file status flags.
+
+ -- Macro: int F_GETFL
+
+     This macro is used as the COMMAND argument to ‘fcntl’, to read the
+     file status flags for the open file with descriptor FILEDES.
+
+     The normal return value from ‘fcntl’ with this command is a
+     nonnegative number which can be interpreted as the bitwise OR of
+     the individual flags.  Since the file access modes are not
+     single-bit values, you can mask off other bits in the returned
+     flags with ‘O_ACCMODE’ to compare them.
+
+     In case of an error, ‘fcntl’ returns -1.  The following ‘errno’
+     error conditions are defined for this command:
+
+     ‘EBADF’
+          The FILEDES argument is invalid.
+
+ -- Macro: int F_SETFL
+
+     This macro is used as the COMMAND argument to ‘fcntl’, to set the
+     file status flags for the open file corresponding to the FILEDES
+     argument.  This command requires a third ‘int’ argument to specify
+     the new flags, so the call looks like this:
+
+          fcntl (FILEDES, F_SETFL, NEW-FLAGS)
+
+     You can’t change the access mode for the file in this way; that is,
+     whether the file descriptor was opened for reading or writing.
+
+     The normal return value from ‘fcntl’ with this command is an
+     unspecified value other than -1, which indicates an error.  The
+     error conditions are the same as for the ‘F_GETFL’ command.
+
+   If you want to modify the file status flags, you should get the
+current flags with ‘F_GETFL’ and modify the value.  Don’t assume that
+the flags listed here are the only ones that are implemented; your
+program may be run years from now and more flags may exist then.  For
+example, here is a function to set or clear the flag ‘O_NONBLOCK’
+without altering any other flags:
+
+     /* Set the ‘O_NONBLOCK’ flag of DESC if VALUE is nonzero,
+        or clear the flag if VALUE is 0.
+        Return 0 on success, or -1 on error with ‘errno’ set. */
+
+     int
+     set_nonblock_flag (int desc, int value)
+     {
+       int oldflags = fcntl (desc, F_GETFL, 0);
+       /* If reading the flags failed, return error indication now. */
+       if (oldflags == -1)
+         return -1;
+       /* Set just the flag we want to set. */
+       if (value != 0)
+         oldflags |= O_NONBLOCK;
+       else
+         oldflags &= ~O_NONBLOCK;
+       /* Store modified flag word in the descriptor. */
+       return fcntl (desc, F_SETFL, oldflags);
+     }
+
+File: libc.info,  Node: File Locks,  Next: Open File Description Locks,  Prev: File Status Flags,  Up: Low-Level I/O
+

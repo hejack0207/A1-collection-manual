@@ -1,0 +1,164 @@
+29.4 Extending NSS
+==================
+
+One of the advantages of NSS mentioned above is that it can be extended
+quite easily.  There are two ways in which the extension can happen:
+adding another database or adding another service.  The former is
+normally done only by the C library developers.  It is here only
+important to remember that adding another database is independent from
+adding another service because a service need not support all databases
+or lookup functions.
+
+   A designer/implementer of a new service is therefore free to choose
+the databases s/he is interested in and leave the rest for later (or
+completely aside).
+
+* Menu:
+
+* Adding another Service to NSS::  What is to do to add a new service.
+* NSS Module Function Internals::  Guidelines for writing new NSS
+                                        service functions.
+
+File: libc.info,  Node: Adding another Service to NSS,  Next: NSS Module Function Internals,  Prev: Extending NSS,  Up: Extending NSS
+
+29.4.1 Adding another Service to NSS
+------------------------------------
+
+The sources for a new service need not (and should not) be part of the
+GNU C Library itself.  The developer retains complete control over the
+sources and its development.  The links between the C library and the
+new service module consists solely of the interface functions.
+
+   Each module is designed following a specific interface specification.
+For now the version is 2 (the interface in version 1 was not adequate)
+and this manifests in the version number of the shared library object of
+the NSS modules: they have the extension ‘.2’.  If the interface changes
+again in an incompatible way, this number will be increased.  Modules
+using the old interface will still be usable.
+
+   Developers of a new service will have to make sure that their module
+is created using the correct interface number.  This means the file
+itself must have the correct name and on ELF systems the “soname”
+(Shared Object Name) must also have this number.  Building a module from
+a bunch of object files on an ELF system using GNU CC could be done like
+this:
+
+     gcc -shared -o libnss_NAME.so.2 -Wl,-soname,libnss_NAME.so.2 OBJECTS
+
+*note Options for Linking: (gcc)Link Options, to learn more about this
+command line.
+
+   To use the new module the library must be able to find it.  This can
+be achieved by using options for the dynamic linker so that it will
+search the directory where the binary is placed.  For an ELF system this
+could be done by adding the wanted directory to the value of
+‘LD_LIBRARY_PATH’.
+
+   But this is not always possible since some programs (those which run
+under IDs which do not belong to the user) ignore this variable.
+Therefore the stable version of the module should be placed into a
+directory which is searched by the dynamic linker.  Normally this should
+be the directory ‘$prefix/lib’, where ‘$prefix’ corresponds to the value
+given to configure using the ‘--prefix’ option.  But be careful: this
+should only be done if it is clear the module does not cause any harm.
+System administrators should be careful.
+
+File: libc.info,  Node: NSS Module Function Internals,  Prev: Adding another Service to NSS,  Up: Extending NSS
+
+29.4.2 Internals of the NSS Module Functions
+--------------------------------------------
+
+Until now we only provided the syntactic interface for the functions in
+the NSS module.  In fact there is not much more we can say since the
+implementation obviously is different for each function.  But a few
+general rules must be followed by all functions.
+
+   In fact there are four kinds of different functions which may appear
+in the interface.  All derive from the traditional ones for system
+databases.  DB in the following table is normally an abbreviation for
+the database (e.g., it is ‘pw’ for the user database).
+
+‘enum nss_status _nss_DATABASE_setDBent (void)’
+     This function prepares the service for following operations.  For a
+     simple file based lookup this means files could be opened, for
+     other services this function simply is a noop.
+
+     One special case for this function is that it takes an additional
+     argument for some DATABASEs (i.e., the interface is ‘int setDBent
+     (int)’).  *note Host Names::, which describes the ‘sethostent’
+     function.
+
+     The return value should be NSS_STATUS_SUCCESS or according to the
+     table above in case of an error (*note NSS Modules Interface::).
+
+‘enum nss_status _nss_DATABASE_endDBent (void)’
+     This function simply closes all files which are still open or
+     removes buffer caches.  If there are no files or buffers to remove
+     this is again a simple noop.
+
+     There normally is no return value other than NSS_STATUS_SUCCESS.
+
+‘enum nss_status _nss_DATABASE_getDBent_r (STRUCTURE *result, char *buffer, size_t buflen, int *errnop)’
+     Since this function will be called several times in a row to
+     retrieve one entry after the other it must keep some kind of state.
+     But this also means the functions are not really reentrant.  They
+     are reentrant only in that simultaneous calls to this function will
+     not try to write the retrieved data in the same place (as it would
+     be the case for the non-reentrant functions); instead, it writes to
+     the structure pointed to by the RESULT parameter.  But the calls
+     share a common state and in the case of a file access this means
+     they return neighboring entries in the file.
+
+     The buffer of length BUFLEN pointed to by BUFFER can be used for
+     storing some additional data for the result.  It is _not_
+     guaranteed that the same buffer will be passed for the next call of
+     this function.  Therefore one must not misuse this buffer to save
+     some state information from one call to another.
+
+     Before the function returns with a failure code, the implementation
+     should store the value of the local ‘errno’ variable in the
+     variable pointed to be ERRNOP.  This is important to guarantee the
+     module working in statically linked programs.  The stored value
+     must not be zero.
+
+     As explained above this function could also have an additional last
+     argument.  This depends on the database used; it happens only for
+     ‘host’ and ‘networks’.
+
+     The function shall return ‘NSS_STATUS_SUCCESS’ as long as there are
+     more entries.  When the last entry was read it should return
+     ‘NSS_STATUS_NOTFOUND’.  When the buffer given as an argument is too
+     small for the data to be returned ‘NSS_STATUS_TRYAGAIN’ should be
+     returned.  When the service was not formerly initialized by a call
+     to ‘_nss_DATABASE_setDBent’ all return values allowed for this
+     function can also be returned here.
+
+‘enum nss_status _nss_DATABASE_getDBbyXX_r (PARAMS, STRUCTURE *result, char *buffer, size_t buflen, int *errnop)’
+     This function shall return the entry from the database which is
+     addressed by the PARAMS.  The type and number of these arguments
+     vary.  It must be individually determined by looking to the
+     user-level interface functions.  All arguments given to the
+     non-reentrant version are here described by PARAMS.
+
+     The result must be stored in the structure pointed to by RESULT.
+     If there are additional data to return (say strings, where the
+     RESULT structure only contains pointers) the function must use the
+     BUFFER of length BUFLEN.  There must not be any references to
+     non-constant global data.
+
+     The implementation of this function should honor the STAYOPEN flag
+     set by the ‘setDBent’ function whenever this makes sense.
+
+     Before the function returns, the implementation should store the
+     value of the local ‘errno’ variable in the variable pointed to by
+     ERRNOP.  This is important to guarantee the module works in
+     statically linked programs.
+
+     Again, this function takes an additional last argument for the
+     ‘host’ and ‘networks’ database.
+
+     The return value should as always follow the rules given above
+     (*note NSS Modules Interface::).
+
+File: libc.info,  Node: Users and Groups,  Next: System Management,  Prev: Name Service Switch,  Up: Top
+

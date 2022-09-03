@@ -1,0 +1,293 @@
+24.6 Generating Signals
+=======================
+
+Besides signals that are generated as a result of a hardware trap or
+interrupt, your program can explicitly send signals to itself or to
+another process.
+
+* Menu:
+
+* Signaling Yourself::          A process can send a signal to itself.
+* Signaling Another Process::   Send a signal to another process.
+* Permission for kill::         Permission for using ‘kill’.
+* Kill Example::                Using ‘kill’ for Communication.
+
+File: libc.info,  Node: Signaling Yourself,  Next: Signaling Another Process,  Up: Generating Signals
+
+24.6.1 Signaling Yourself
+-------------------------
+
+A process can send itself a signal with the ‘raise’ function.  This
+function is declared in ‘signal.h’.
+
+ -- Function: int raise (int SIGNUM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘raise’ function sends the signal SIGNUM to the calling
+     process.  It returns zero if successful and a nonzero value if it
+     fails.  About the only reason for failure would be if the value of
+     SIGNUM is invalid.
+
+ -- Function: int gsignal (int SIGNUM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘gsignal’ function does the same thing as ‘raise’; it is
+     provided only for compatibility with SVID.
+
+   One convenient use for ‘raise’ is to reproduce the default behavior
+of a signal that you have trapped.  For instance, suppose a user of your
+program types the SUSP character (usually ‘C-z’; *note Special
+Characters::) to send it an interactive stop signal (‘SIGTSTP’), and you
+want to clean up some internal data buffers before stopping.  You might
+set this up like this:
+
+     #include <signal.h>
+
+     /* When a stop signal arrives, set the action back to the default
+        and then resend the signal after doing cleanup actions. */
+
+     void
+     tstp_handler (int sig)
+     {
+       signal (SIGTSTP, SIG_DFL);
+       /* Do cleanup actions here. */
+       ...
+       raise (SIGTSTP);
+     }
+
+     /* When the process is continued again, restore the signal handler. */
+
+     void
+     cont_handler (int sig)
+     {
+       signal (SIGCONT, cont_handler);
+       signal (SIGTSTP, tstp_handler);
+     }
+
+     /* Enable both handlers during program initialization. */
+
+     int
+     main (void)
+     {
+       signal (SIGCONT, cont_handler);
+       signal (SIGTSTP, tstp_handler);
+       ...
+     }
+
+   *Portability note:* ‘raise’ was invented by the ISO C committee.
+Older systems may not support it, so using ‘kill’ may be more portable.
+*Note Signaling Another Process::.
+
+File: libc.info,  Node: Signaling Another Process,  Next: Permission for kill,  Prev: Signaling Yourself,  Up: Generating Signals
+
+24.6.2 Signaling Another Process
+--------------------------------
+
+The ‘kill’ function can be used to send a signal to another process.  In
+spite of its name, it can be used for a lot of things other than causing
+a process to terminate.  Some examples of situations where you might
+want to send signals between processes are:
+
+   • A parent process starts a child to perform a task—perhaps having
+     the child running an infinite loop—and then terminates the child
+     when the task is no longer needed.
+
+   • A process executes as part of a group, and needs to terminate or
+     notify the other processes in the group when an error or other
+     event occurs.
+
+   • Two processes need to synchronize while working together.
+
+   This section assumes that you know a little bit about how processes
+work.  For more information on this subject, see *note Processes::.
+
+   The ‘kill’ function is declared in ‘signal.h’.
+
+ -- Function: int kill (pid_t PID, int SIGNUM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘kill’ function sends the signal SIGNUM to the process or
+     process group specified by PID.  Besides the signals listed in
+     *note Standard Signals::, SIGNUM can also have a value of zero to
+     check the validity of the PID.
+
+     The PID specifies the process or process group to receive the
+     signal:
+
+     ‘PID > 0’
+          The process whose identifier is PID.  (On Linux, the signal is
+          sent to the entire process even if PID is a thread ID distinct
+          from the process ID.)
+
+     ‘PID == 0’
+          All processes in the same process group as the sender.
+
+     ‘PID < -1’
+          The process group whose identifier is −PID.
+
+     ‘PID == -1’
+          If the process is privileged, send the signal to all processes
+          except for some special system processes.  Otherwise, send the
+          signal to all processes with the same effective user ID.
+
+     A process can send a signal to itself with a call like
+     ‘kill (getpid(), SIGNUM)’.  If ‘kill’ is used by a process to send
+     a signal to itself, and the signal is not blocked, then ‘kill’
+     delivers at least one signal (which might be some other pending
+     unblocked signal instead of the signal SIGNUM) to that process
+     before it returns.
+
+     The return value from ‘kill’ is zero if the signal can be sent
+     successfully.  Otherwise, no signal is sent, and a value of ‘-1’ is
+     returned.  If PID specifies sending a signal to several processes,
+     ‘kill’ succeeds if it can send the signal to at least one of them.
+     There’s no way you can tell which of the processes got the signal
+     or whether all of them did.
+
+     The following ‘errno’ error conditions are defined for this
+     function:
+
+     ‘EINVAL’
+          The SIGNUM argument is an invalid or unsupported number.
+
+     ‘EPERM’
+          You do not have the privilege to send a signal to the process
+          or any of the processes in the process group named by PID.
+
+     ‘ESRCH’
+          The PID argument does not refer to an existing process or
+          group.
+
+ -- Function: int killpg (int PGID, int SIGNUM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This is similar to ‘kill’, but sends signal SIGNUM to the process
+     group PGID.  This function is provided for compatibility with BSD;
+     using ‘kill’ to do this is more portable.
+
+   As a simple example of ‘kill’, the call ‘kill (getpid (), SIG)’ has
+the same effect as ‘raise (SIG)’.
+
+File: libc.info,  Node: Permission for kill,  Next: Kill Example,  Prev: Signaling Another Process,  Up: Generating Signals
+
+24.6.3 Permission for using ‘kill’
+----------------------------------
+
+There are restrictions that prevent you from using ‘kill’ to send
+signals to any random process.  These are intended to prevent antisocial
+behavior such as arbitrarily killing off processes belonging to another
+user.  In typical use, ‘kill’ is used to pass signals between parent,
+child, and sibling processes, and in these situations you normally do
+have permission to send signals.  The only common exception is when you
+run a setuid program in a child process; if the program changes its real
+UID as well as its effective UID, you may not have permission to send a
+signal.  The ‘su’ program does this.
+
+   Whether a process has permission to send a signal to another process
+is determined by the user IDs of the two processes.  This concept is
+discussed in detail in *note Process Persona::.
+
+   Generally, for a process to be able to send a signal to another
+process, either the sending process must belong to a privileged user
+(like ‘root’), or the real or effective user ID of the sending process
+must match the real or effective user ID of the receiving process.  If
+the receiving process has changed its effective user ID from the
+set-user-ID mode bit on its process image file, then the owner of the
+process image file is used in place of its current effective user ID. In
+some implementations, a parent process might be able to send signals to
+a child process even if the user ID’s don’t match, and other
+implementations might enforce other restrictions.
+
+   The ‘SIGCONT’ signal is a special case.  It can be sent if the sender
+is part of the same session as the receiver, regardless of user IDs.
+
+File: libc.info,  Node: Kill Example,  Prev: Permission for kill,  Up: Generating Signals
+
+24.6.4 Using ‘kill’ for Communication
+-------------------------------------
+
+Here is a longer example showing how signals can be used for
+interprocess communication.  This is what the ‘SIGUSR1’ and ‘SIGUSR2’
+signals are provided for.  Since these signals are fatal by default, the
+process that is supposed to receive them must trap them through ‘signal’
+or ‘sigaction’.
+
+   In this example, a parent process forks a child process and then
+waits for the child to complete its initialization.  The child process
+tells the parent when it is ready by sending it a ‘SIGUSR1’ signal,
+using the ‘kill’ function.
+
+
+     #include <signal.h>
+     #include <stdio.h>
+     #include <sys/types.h>
+     #include <unistd.h>
+
+     /* When a ‘SIGUSR1’ signal arrives, set this variable. */
+     volatile sig_atomic_t usr_interrupt = 0;
+
+     void
+     synch_signal (int sig)
+     {
+       usr_interrupt = 1;
+     }
+
+     /* The child process executes this function. */
+     void
+     child_function (void)
+     {
+       /* Perform initialization. */
+       printf ("I'm here!!!  My pid is %d.\n", (int) getpid ());
+
+       /* Let parent know you’re done. */
+       kill (getppid (), SIGUSR1);
+
+       /* Continue with execution. */
+       puts ("Bye, now....");
+       exit (0);
+     }
+
+     int
+     main (void)
+     {
+       struct sigaction usr_action;
+       sigset_t block_mask;
+       pid_t child_id;
+
+       /* Establish the signal handler. */
+       sigfillset (&block_mask);
+       usr_action.sa_handler = synch_signal;
+       usr_action.sa_mask = block_mask;
+       usr_action.sa_flags = 0;
+       sigaction (SIGUSR1, &usr_action, NULL);
+
+       /* Create the child process. */
+       child_id = fork ();
+       if (child_id == 0)
+         child_function ();          /* Does not return. */
+
+       /* Busy wait for the child to send a signal. */
+       while (!usr_interrupt)
+         ;
+
+       /* Now continue execution. */
+       puts ("That's all, folks!");
+
+       return 0;
+     }
+
+   This example uses a busy wait, which is bad, because it wastes CPU
+cycles that other programs could otherwise use.  It is better to ask the
+system to wait until the signal arrives.  See the example in *note
+Waiting for a Signal::.
+
+File: libc.info,  Node: Blocking Signals,  Next: Waiting for a Signal,  Prev: Generating Signals,  Up: Signal Handling
+

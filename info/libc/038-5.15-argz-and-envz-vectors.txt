@@ -1,0 +1,291 @@
+5.15 Argz and Envz Vectors
+==========================
+
+“argz vectors” are vectors of strings in a contiguous block of memory,
+each element separated from its neighbors by null bytes (‘'\0'’).
+
+   “Envz vectors” are an extension of argz vectors where each element is
+a name-value pair, separated by a ‘'='’ byte (as in a Unix environment).
+
+* Menu:
+
+* Argz Functions::              Operations on argz vectors.
+* Envz Functions::              Additional operations on environment vectors.
+
+File: libc.info,  Node: Argz Functions,  Next: Envz Functions,  Up: Argz and Envz Vectors
+
+5.15.1 Argz Functions
+---------------------
+
+Each argz vector is represented by a pointer to the first element, of
+type ‘char *’, and a size, of type ‘size_t’, both of which can be
+initialized to ‘0’ to represent an empty argz vector.  All argz
+functions accept either a pointer and a size argument, or pointers to
+them, if they will be modified.
+
+   The argz functions use ‘malloc’/‘realloc’ to allocate/grow argz
+vectors, and so any argz vector created using these functions may be
+freed by using ‘free’; conversely, any argz function that may grow a
+string expects that string to have been allocated using ‘malloc’ (those
+argz functions that only examine their arguments or modify them in place
+will work on any sort of memory).  *Note Unconstrained Allocation::.
+
+   All argz functions that do memory allocation have a return type of
+‘error_t’, and return ‘0’ for success, and ‘ENOMEM’ if an allocation
+error occurs.
+
+   These functions are declared in the standard include file ‘argz.h’.
+
+ -- Function: error_t argz_create (char *const ARGV[], char **ARGZ,
+          size_t *ARGZ_LEN)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘argz_create’ function converts the Unix-style argument vector
+     ARGV (a vector of pointers to normal C strings, terminated by
+     ‘(char *)0’; *note Program Arguments::) into an argz vector with
+     the same elements, which is returned in ARGZ and ARGZ_LEN.
+
+ -- Function: error_t argz_create_sep (const char *STRING, int SEP, char
+          **ARGZ, size_t *ARGZ_LEN)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘argz_create_sep’ function converts the string STRING into an
+     argz vector (returned in ARGZ and ARGZ_LEN) by splitting it into
+     elements at every occurrence of the byte SEP.
+
+ -- Function: size_t argz_count (const char *ARGZ, size_t ARGZ_LEN)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     Returns the number of elements in the argz vector ARGZ and
+     ARGZ_LEN.
+
+ -- Function: void argz_extract (const char *ARGZ, size_t ARGZ_LEN, char
+          **ARGV)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘argz_extract’ function converts the argz vector ARGZ and
+     ARGZ_LEN into a Unix-style argument vector stored in ARGV, by
+     putting pointers to every element in ARGZ into successive positions
+     in ARGV, followed by a terminator of ‘0’.  ARGV must be
+     pre-allocated with enough space to hold all the elements in ARGZ
+     plus the terminating ‘(char *)0’ (‘(argz_count (ARGZ, ARGZ_LEN) +
+     1) * sizeof (char *)’ bytes should be enough).  Note that the
+     string pointers stored into ARGV point into ARGZ—they are not
+     copies—and so ARGZ must be copied if it will be changed while ARGV
+     is still active.  This function is useful for passing the elements
+     in ARGZ to an exec function (*note Executing a File::).
+
+ -- Function: void argz_stringify (char *ARGZ, size_t LEN, int SEP)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘argz_stringify’ converts ARGZ into a normal string with the
+     elements separated by the byte SEP, by replacing each ‘'\0'’ inside
+     ARGZ (except the last one, which terminates the string) with SEP.
+     This is handy for printing ARGZ in a readable manner.
+
+ -- Function: error_t argz_add (char **ARGZ, size_t *ARGZ_LEN, const
+          char *STR)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘argz_add’ function adds the string STR to the end of the argz
+     vector ‘*ARGZ’, and updates ‘*ARGZ’ and ‘*ARGZ_LEN’ accordingly.
+
+ -- Function: error_t argz_add_sep (char **ARGZ, size_t *ARGZ_LEN, const
+          char *STR, int DELIM)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘argz_add_sep’ function is similar to ‘argz_add’, but STR is
+     split into separate elements in the result at occurrences of the
+     byte DELIM.  This is useful, for instance, for adding the
+     components of a Unix search path to an argz vector, by using a
+     value of ‘':'’ for DELIM.
+
+ -- Function: error_t argz_append (char **ARGZ, size_t *ARGZ_LEN, const
+          char *BUF, size_t BUF_LEN)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘argz_append’ function appends BUF_LEN bytes starting at BUF to
+     the argz vector ‘*ARGZ’, reallocating ‘*ARGZ’ to accommodate it,
+     and adding BUF_LEN to ‘*ARGZ_LEN’.
+
+ -- Function: void argz_delete (char **ARGZ, size_t *ARGZ_LEN, char
+          *ENTRY)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     If ENTRY points to the beginning of one of the elements in the argz
+     vector ‘*ARGZ’, the ‘argz_delete’ function will remove this entry
+     and reallocate ‘*ARGZ’, modifying ‘*ARGZ’ and ‘*ARGZ_LEN’
+     accordingly.  Note that as destructive argz functions usually
+     reallocate their argz argument, pointers into argz vectors such as
+     ENTRY will then become invalid.
+
+ -- Function: error_t argz_insert (char **ARGZ, size_t *ARGZ_LEN, char
+          *BEFORE, const char *ENTRY)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘argz_insert’ function inserts the string ENTRY into the argz
+     vector ‘*ARGZ’ at a point just before the existing element pointed
+     to by BEFORE, reallocating ‘*ARGZ’ and updating ‘*ARGZ’ and
+     ‘*ARGZ_LEN’.  If BEFORE is ‘0’, ENTRY is added to the end instead
+     (as if by ‘argz_add’).  Since the first element is in fact the same
+     as ‘*ARGZ’, passing in ‘*ARGZ’ as the value of BEFORE will result
+     in ENTRY being inserted at the beginning.
+
+ -- Function: char * argz_next (const char *ARGZ, size_t ARGZ_LEN, const
+          char *ENTRY)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘argz_next’ function provides a convenient way of iterating
+     over the elements in the argz vector ARGZ.  It returns a pointer to
+     the next element in ARGZ after the element ENTRY, or ‘0’ if there
+     are no elements following ENTRY.  If ENTRY is ‘0’, the first
+     element of ARGZ is returned.
+
+     This behavior suggests two styles of iteration:
+
+              char *entry = 0;
+              while ((entry = argz_next (ARGZ, ARGZ_LEN, entry)))
+                ACTION;
+
+     (the double parentheses are necessary to make some C compilers shut
+     up about what they consider a questionable ‘while’-test) and:
+
+              char *entry;
+              for (entry = ARGZ;
+                   entry;
+                   entry = argz_next (ARGZ, ARGZ_LEN, entry))
+                ACTION;
+
+     Note that the latter depends on ARGZ having a value of ‘0’ if it is
+     empty (rather than a pointer to an empty block of memory); this
+     invariant is maintained for argz vectors created by the functions
+     here.
+
+ -- Function: error_t argz_replace (char **ARGZ, size_t *ARGZ_LEN,
+          const char *STR, const char *WITH, unsigned *REPLACE_COUNT)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     Replace any occurrences of the string STR in ARGZ with WITH,
+     reallocating ARGZ as necessary.  If REPLACE_COUNT is non-zero,
+     ‘*REPLACE_COUNT’ will be incremented by the number of replacements
+     performed.
+
+File: libc.info,  Node: Envz Functions,  Prev: Argz Functions,  Up: Argz and Envz Vectors
+
+5.15.2 Envz Functions
+---------------------
+
+Envz vectors are just argz vectors with additional constraints on the
+form of each element; as such, argz functions can also be used on them,
+where it makes sense.
+
+   Each element in an envz vector is a name-value pair, separated by a
+‘'='’ byte; if multiple ‘'='’ bytes are present in an element, those
+after the first are considered part of the value, and treated like all
+other non-‘'\0'’ bytes.
+
+   If _no_ ‘'='’ bytes are present in an element, that element is
+considered the name of a “null” entry, as distinct from an entry with an
+empty value: ‘envz_get’ will return ‘0’ if given the name of null entry,
+whereas an entry with an empty value would result in a value of ‘""’;
+‘envz_entry’ will still find such entries, however.  Null entries can be
+removed with the ‘envz_strip’ function.
+
+   As with argz functions, envz functions that may allocate memory (and
+thus fail) have a return type of ‘error_t’, and return either ‘0’ or
+‘ENOMEM’.
+
+   These functions are declared in the standard include file ‘envz.h’.
+
+ -- Function: char * envz_entry (const char *ENVZ, size_t ENVZ_LEN,
+          const char *NAME)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘envz_entry’ function finds the entry in ENVZ with the name
+     NAME, and returns a pointer to the whole entry—that is, the argz
+     element which begins with NAME followed by a ‘'='’ byte.  If there
+     is no entry with that name, ‘0’ is returned.
+
+ -- Function: char * envz_get (const char *ENVZ, size_t ENVZ_LEN, const
+          char *NAME)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘envz_get’ function finds the entry in ENVZ with the name NAME
+     (like ‘envz_entry’), and returns a pointer to the value portion of
+     that entry (following the ‘'='’).  If there is no entry with that
+     name (or only a null entry), ‘0’ is returned.
+
+ -- Function: error_t envz_add (char **ENVZ, size_t *ENVZ_LEN, const
+          char *NAME, const char *VALUE)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘envz_add’ function adds an entry to ‘*ENVZ’ (updating ‘*ENVZ’
+     and ‘*ENVZ_LEN’) with the name NAME, and value VALUE.  If an entry
+     with the same name already exists in ENVZ, it is removed first.  If
+     VALUE is ‘0’, then the new entry will be the special null type of
+     entry (mentioned above).
+
+ -- Function: error_t envz_merge (char **ENVZ, size_t *ENVZ_LEN, const
+          char *ENVZ2, size_t ENVZ2_LEN, int OVERRIDE)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘envz_merge’ function adds each entry in ENVZ2 to ENVZ, as if
+     with ‘envz_add’, updating ‘*ENVZ’ and ‘*ENVZ_LEN’.  If OVERRIDE is
+     true, then values in ENVZ2 will supersede those with the same name
+     in ENVZ, otherwise not.
+
+     Null entries are treated just like other entries in this respect,
+     so a null entry in ENVZ can prevent an entry of the same name in
+     ENVZ2 from being added to ENVZ, if OVERRIDE is false.
+
+ -- Function: void envz_strip (char **ENVZ, size_t *ENVZ_LEN)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘envz_strip’ function removes any null entries from ENVZ,
+     updating ‘*ENVZ’ and ‘*ENVZ_LEN’.
+
+ -- Function: void envz_remove (char **ENVZ, size_t *ENVZ_LEN, const
+          char *NAME)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘envz_remove’ function removes an entry named NAME from ENVZ,
+     updating ‘*ENVZ’ and ‘*ENVZ_LEN’.
+
+File: libc.info,  Node: Character Set Handling,  Next: Locales,  Prev: String and Array Utilities,  Up: Top
+

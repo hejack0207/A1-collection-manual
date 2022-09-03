@@ -1,0 +1,1022 @@
+20.8 Arithmetic Functions
+=========================
+
+The C library provides functions to do basic operations on
+floating-point numbers.  These include absolute value, maximum and
+minimum, normalization, bit twiddling, rounding, and a few others.
+
+* Menu:
+
+* Absolute Value::              Absolute values of integers and floats.
+* Normalization Functions::     Extracting exponents and putting them back.
+* Rounding Functions::          Rounding floats to integers.
+* Remainder Functions::         Remainders on division, precisely defined.
+* FP Bit Twiddling::            Sign bit adjustment.  Adding epsilon.
+* FP Comparison Functions::     Comparisons without risk of exceptions.
+* Misc FP Arithmetic::          Max, min, positive difference, multiply-add.
+
+File: libc.info,  Node: Absolute Value,  Next: Normalization Functions,  Up: Arithmetic Functions
+
+20.8.1 Absolute Value
+---------------------
+
+These functions are provided for obtaining the “absolute value” (or
+“magnitude”) of a number.  The absolute value of a real number X is X if
+X is positive, −X if X is negative.  For a complex number Z, whose real
+part is X and whose imaginary part is Y, the absolute value is
+‘sqrt (X*X + Y*Y)’.
+
+   Prototypes for ‘abs’, ‘labs’ and ‘llabs’ are in ‘stdlib.h’; ‘imaxabs’
+is declared in ‘inttypes.h’; the ‘fabs’ functions are declared in
+‘math.h’; the ‘cabs’ functions are declared in ‘complex.h’.
+
+ -- Function: int abs (int NUMBER)
+ -- Function: long int labs (long int NUMBER)
+ -- Function: long long int llabs (long long int NUMBER)
+ -- Function: intmax_t imaxabs (intmax_t NUMBER)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions return the absolute value of NUMBER.
+
+     Most computers use a two’s complement integer representation, in
+     which the absolute value of ‘INT_MIN’ (the smallest possible ‘int’)
+     cannot be represented; thus, ‘abs (INT_MIN)’ is not defined.
+
+     ‘llabs’ and ‘imaxdiv’ are new to ISO C99.
+
+     See *note Integers:: for a description of the ‘intmax_t’ type.
+
+ -- Function: double fabs (double NUMBER)
+ -- Function: float fabsf (float NUMBER)
+ -- Function: long double fabsl (long double NUMBER)
+ -- Function: _FloatN fabsfN (_FloatN NUMBER)
+ -- Function: _FloatNx fabsfNx (_FloatNx NUMBER)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function returns the absolute value of the floating-point
+     number NUMBER.
+
+ -- Function: double cabs (complex double Z)
+ -- Function: float cabsf (complex float Z)
+ -- Function: long double cabsl (complex long double Z)
+ -- Function: _FloatN cabsfN (complex _FloatN Z)
+ -- Function: _FloatNx cabsfNx (complex _FloatNx Z)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions return the absolute value of the complex number Z
+     (*note Complex Numbers::).  The absolute value of a complex number
+     is:
+
+          sqrt (creal (Z) * creal (Z) + cimag (Z) * cimag (Z))
+
+     This function should always be used instead of the direct formula
+     because it takes special care to avoid losing precision.  It may
+     also take advantage of hardware support for this operation.  See
+     ‘hypot’ in *note Exponents and Logarithms::.
+
+File: libc.info,  Node: Normalization Functions,  Next: Rounding Functions,  Prev: Absolute Value,  Up: Arithmetic Functions
+
+20.8.2 Normalization Functions
+------------------------------
+
+The functions described in this section are primarily provided as a way
+to efficiently perform certain low-level manipulations on floating point
+numbers that are represented internally using a binary radix; see *note
+Floating Point Concepts::.  These functions are required to have
+equivalent behavior even if the representation does not use a radix of
+2, but of course they are unlikely to be particularly efficient in those
+cases.
+
+   All these functions are declared in ‘math.h’.
+
+ -- Function: double frexp (double VALUE, int *EXPONENT)
+ -- Function: float frexpf (float VALUE, int *EXPONENT)
+ -- Function: long double frexpl (long double VALUE, int *EXPONENT)
+ -- Function: _FloatN frexpfN (_FloatN VALUE, int *EXPONENT)
+ -- Function: _FloatNx frexpfNx (_FloatNx VALUE, int *EXPONENT)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are used to split the number VALUE into a
+     normalized fraction and an exponent.
+
+     If the argument VALUE is not zero, the return value is VALUE times
+     a power of two, and its magnitude is always in the range 1/2
+     (inclusive) to 1 (exclusive).  The corresponding exponent is stored
+     in ‘*EXPONENT’; the return value multiplied by 2 raised to this
+     exponent equals the original number VALUE.
+
+     For example, ‘frexp (12.8, &exponent)’ returns ‘0.8’ and stores ‘4’
+     in ‘exponent’.
+
+     If VALUE is zero, then the return value is zero and zero is stored
+     in ‘*EXPONENT’.
+
+ -- Function: double ldexp (double VALUE, int EXPONENT)
+ -- Function: float ldexpf (float VALUE, int EXPONENT)
+ -- Function: long double ldexpl (long double VALUE, int EXPONENT)
+ -- Function: _FloatN ldexpfN (_FloatN VALUE, int EXPONENT)
+ -- Function: _FloatNx ldexpfNx (_FloatNx VALUE, int EXPONENT)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions return the result of multiplying the floating-point
+     number VALUE by 2 raised to the power EXPONENT.  (It can be used to
+     reassemble floating-point numbers that were taken apart by
+     ‘frexp’.)
+
+     For example, ‘ldexp (0.8, 4)’ returns ‘12.8’.
+
+   The following functions, which come from BSD, provide facilities
+equivalent to those of ‘ldexp’ and ‘frexp’.  See also the ISO C function
+‘logb’ which originally also appeared in BSD. The ‘_FloatN’ and
+‘_FloatN’ variants of the following functions come from TS 18661-3:2015.
+
+ -- Function: double scalb (double VALUE, double EXPONENT)
+ -- Function: float scalbf (float VALUE, float EXPONENT)
+ -- Function: long double scalbl (long double VALUE, long double
+          EXPONENT)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘scalb’ function is the BSD name for ‘ldexp’.
+
+ -- Function: double scalbn (double X, int N)
+ -- Function: float scalbnf (float X, int N)
+ -- Function: long double scalbnl (long double X, int N)
+ -- Function: _FloatN scalbnfN (_FloatN X, int N)
+ -- Function: _FloatNx scalbnfNx (_FloatNx X, int N)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘scalbn’ is identical to ‘scalb’, except that the exponent N is an
+     ‘int’ instead of a floating-point number.
+
+ -- Function: double scalbln (double X, long int N)
+ -- Function: float scalblnf (float X, long int N)
+ -- Function: long double scalblnl (long double X, long int N)
+ -- Function: _FloatN scalblnfN (_FloatN X, long int N)
+ -- Function: _FloatNx scalblnfNx (_FloatNx X, long int N)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘scalbln’ is identical to ‘scalb’, except that the exponent N is a
+     ‘long int’ instead of a floating-point number.
+
+ -- Function: double significand (double X)
+ -- Function: float significandf (float X)
+ -- Function: long double significandl (long double X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘significand’ returns the mantissa of X scaled to the range [1, 2).
+     It is equivalent to ‘scalb (X, (double) -ilogb (X))’.
+
+     This function exists mainly for use in certain standardized tests
+     of IEEE 754 conformance.
+
+File: libc.info,  Node: Rounding Functions,  Next: Remainder Functions,  Prev: Normalization Functions,  Up: Arithmetic Functions
+
+20.8.3 Rounding Functions
+-------------------------
+
+The functions listed here perform operations such as rounding and
+truncation of floating-point values.  Some of these functions convert
+floating point numbers to integer values.  They are all declared in
+‘math.h’.
+
+   You can also convert floating-point numbers to integers simply by
+casting them to ‘int’.  This discards the fractional part, effectively
+rounding towards zero.  However, this only works if the result can
+actually be represented as an ‘int’—for very large numbers, this is
+impossible.  The functions listed here return the result as a ‘double’
+instead to get around this problem.
+
+   The ‘fromfp’ functions use the following macros, from TS
+18661-1:2014, to specify the direction of rounding.  These correspond to
+the rounding directions defined in IEEE 754-2008.
+
+‘FP_INT_UPWARD’
+
+     Round toward +oo.
+
+‘FP_INT_DOWNWARD’
+
+     Round toward -oo.
+
+‘FP_INT_TOWARDZERO’
+
+     Round toward zero.
+
+‘FP_INT_TONEARESTFROMZERO’
+
+     Round to nearest, ties round away from zero.
+
+‘FP_INT_TONEAREST’
+
+     Round to nearest, ties round to even.
+
+ -- Function: double ceil (double X)
+ -- Function: float ceilf (float X)
+ -- Function: long double ceill (long double X)
+ -- Function: _FloatN ceilfN (_FloatN X)
+ -- Function: _FloatNx ceilfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions round X upwards to the nearest integer, returning
+     that value as a ‘double’.  Thus, ‘ceil (1.5)’ is ‘2.0’.
+
+ -- Function: double floor (double X)
+ -- Function: float floorf (float X)
+ -- Function: long double floorl (long double X)
+ -- Function: _FloatN floorfN (_FloatN X)
+ -- Function: _FloatNx floorfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions round X downwards to the nearest integer, returning
+     that value as a ‘double’.  Thus, ‘floor (1.5)’ is ‘1.0’ and ‘floor
+     (-1.5)’ is ‘-2.0’.
+
+ -- Function: double trunc (double X)
+ -- Function: float truncf (float X)
+ -- Function: long double truncl (long double X)
+ -- Function: _FloatN truncfN (_FloatN X)
+ -- Function: _FloatNx truncfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘trunc’ functions round X towards zero to the nearest integer
+     (returned in floating-point format).  Thus, ‘trunc (1.5)’ is ‘1.0’
+     and ‘trunc (-1.5)’ is ‘-1.0’.
+
+ -- Function: double rint (double X)
+ -- Function: float rintf (float X)
+ -- Function: long double rintl (long double X)
+ -- Function: _FloatN rintfN (_FloatN X)
+ -- Function: _FloatNx rintfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions round X to an integer value according to the
+     current rounding mode.  *Note Floating Point Parameters::, for
+     information about the various rounding modes.  The default rounding
+     mode is to round to the nearest integer; some machines support
+     other modes, but round-to-nearest is always used unless you
+     explicitly select another.
+
+     If X was not initially an integer, these functions raise the
+     inexact exception.
+
+ -- Function: double nearbyint (double X)
+ -- Function: float nearbyintf (float X)
+ -- Function: long double nearbyintl (long double X)
+ -- Function: _FloatN nearbyintfN (_FloatN X)
+ -- Function: _FloatNx nearbyintfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions return the same value as the ‘rint’ functions, but
+     do not raise the inexact exception if X is not an integer.
+
+ -- Function: double round (double X)
+ -- Function: float roundf (float X)
+ -- Function: long double roundl (long double X)
+ -- Function: _FloatN roundfN (_FloatN X)
+ -- Function: _FloatNx roundfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are similar to ‘rint’, but they round halfway cases
+     away from zero instead of to the nearest integer (or other current
+     rounding mode).
+
+ -- Function: double roundeven (double X)
+ -- Function: float roundevenf (float X)
+ -- Function: long double roundevenl (long double X)
+ -- Function: _FloatN roundevenfN (_FloatN X)
+ -- Function: _FloatNx roundevenfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014 and TS 18661-3:2015, are
+     similar to ‘round’, but they round halfway cases to even instead of
+     away from zero.
+
+ -- Function: long int lrint (double X)
+ -- Function: long int lrintf (float X)
+ -- Function: long int lrintl (long double X)
+ -- Function: long int lrintfN (_FloatN X)
+ -- Function: long int lrintfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are just like ‘rint’, but they return a ‘long int’
+     instead of a floating-point number.
+
+ -- Function: long long int llrint (double X)
+ -- Function: long long int llrintf (float X)
+ -- Function: long long int llrintl (long double X)
+ -- Function: long long int llrintfN (_FloatN X)
+ -- Function: long long int llrintfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are just like ‘rint’, but they return a ‘long long
+     int’ instead of a floating-point number.
+
+ -- Function: long int lround (double X)
+ -- Function: long int lroundf (float X)
+ -- Function: long int lroundl (long double X)
+ -- Function: long int lroundfN (_FloatN X)
+ -- Function: long int lroundfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are just like ‘round’, but they return a ‘long int’
+     instead of a floating-point number.
+
+ -- Function: long long int llround (double X)
+ -- Function: long long int llroundf (float X)
+ -- Function: long long int llroundl (long double X)
+ -- Function: long long int llroundfN (_FloatN X)
+ -- Function: long long int llroundfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are just like ‘round’, but they return a ‘long long
+     int’ instead of a floating-point number.
+
+ -- Function: intmax_t fromfp (double X, int ROUND, unsigned int WIDTH)
+ -- Function: intmax_t fromfpf (float X, int ROUND, unsigned int WIDTH)
+ -- Function: intmax_t fromfpl (long double X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: intmax_t fromfpfN (_FloatN X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: intmax_t fromfpfNx (_FloatNx X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfp (double X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpf (float X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpl (long double X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpfN (_FloatN X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpfNx (_FloatNx X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: intmax_t fromfpx (double X, int ROUND, unsigned int WIDTH)
+ -- Function: intmax_t fromfpxf (float X, int ROUND, unsigned int WIDTH)
+ -- Function: intmax_t fromfpxl (long double X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: intmax_t fromfpxfN (_FloatN X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: intmax_t fromfpxfNx (_FloatNx X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpx (double X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpxf (float X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpxl (long double X, int ROUND, unsigned
+          int WIDTH)
+ -- Function: uintmax_t ufromfpxfN (_FloatN X, int ROUND, unsigned int
+          WIDTH)
+ -- Function: uintmax_t ufromfpxfNx (_FloatNx X, int ROUND, unsigned int
+          WIDTH)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014 and TS 18661-3:2015, convert
+     a floating-point number to an integer according to the rounding
+     direction ROUND (one of the ‘FP_INT_*’ macros).  If the integer is
+     outside the range of a signed or unsigned (depending on the return
+     type of the function) type of width WIDTH bits (or outside the
+     range of the return type, if WIDTH is larger), or if X is infinite
+     or NaN, or if WIDTH is zero, a domain error occurs and an
+     unspecified value is returned.  The functions with an ‘x’ in their
+     names raise the inexact exception when a domain error does not
+     occur and the argument is not an integer; the other functions do
+     not raise the inexact exception.
+
+ -- Function: double modf (double VALUE, double *INTEGER-PART)
+ -- Function: float modff (float VALUE, float *INTEGER-PART)
+ -- Function: long double modfl (long double VALUE, long double
+          *INTEGER-PART)
+ -- Function: _FloatN modffN (_FloatN VALUE, _FloatN *INTEGER-PART)
+ -- Function: _FloatNx modffNx (_FloatNx VALUE, _FloatNx *INTEGER-PART)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions break the argument VALUE into an integer part and a
+     fractional part (between ‘-1’ and ‘1’, exclusive).  Their sum
+     equals VALUE.  Each of the parts has the same sign as VALUE, and
+     the integer part is always rounded toward zero.
+
+     ‘modf’ stores the integer part in ‘*INTEGER-PART’, and returns the
+     fractional part.  For example, ‘modf (2.5, &intpart)’ returns ‘0.5’
+     and stores ‘2.0’ into ‘intpart’.
+
+File: libc.info,  Node: Remainder Functions,  Next: FP Bit Twiddling,  Prev: Rounding Functions,  Up: Arithmetic Functions
+
+20.8.4 Remainder Functions
+--------------------------
+
+The functions in this section compute the remainder on division of two
+floating-point numbers.  Each is a little different; pick the one that
+suits your problem.
+
+ -- Function: double fmod (double NUMERATOR, double DENOMINATOR)
+ -- Function: float fmodf (float NUMERATOR, float DENOMINATOR)
+ -- Function: long double fmodl (long double NUMERATOR, long double
+          DENOMINATOR)
+ -- Function: _FloatN fmodfN (_FloatN NUMERATOR, _FloatN DENOMINATOR)
+ -- Function: _FloatNx fmodfNx (_FloatNx NUMERATOR, _FloatNx
+          DENOMINATOR)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions compute the remainder from the division of
+     NUMERATOR by DENOMINATOR.  Specifically, the return value is
+     ‘NUMERATOR - N * DENOMINATOR’, where N is the quotient of NUMERATOR
+     divided by DENOMINATOR, rounded towards zero to an integer.  Thus,
+     ‘fmod (6.5, 2.3)’ returns ‘1.9’, which is ‘6.5’ minus ‘4.6’.
+
+     The result has the same sign as the NUMERATOR and has magnitude
+     less than the magnitude of the DENOMINATOR.
+
+     If DENOMINATOR is zero, ‘fmod’ signals a domain error.
+
+ -- Function: double remainder (double NUMERATOR, double DENOMINATOR)
+ -- Function: float remainderf (float NUMERATOR, float DENOMINATOR)
+ -- Function: long double remainderl (long double NUMERATOR, long double
+          DENOMINATOR)
+ -- Function: _FloatN remainderfN (_FloatN NUMERATOR, _FloatN
+          DENOMINATOR)
+ -- Function: _FloatNx remainderfNx (_FloatNx NUMERATOR, _FloatNx
+          DENOMINATOR)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are like ‘fmod’ except that they round the internal
+     quotient N to the nearest integer instead of towards zero to an
+     integer.  For example, ‘remainder (6.5, 2.3)’ returns ‘-0.4’, which
+     is ‘6.5’ minus ‘6.9’.
+
+     The absolute value of the result is less than or equal to half the
+     absolute value of the DENOMINATOR.  The difference between ‘fmod
+     (NUMERATOR, DENOMINATOR)’ and ‘remainder (NUMERATOR, DENOMINATOR)’
+     is always either DENOMINATOR, minus DENOMINATOR, or zero.
+
+     If DENOMINATOR is zero, ‘remainder’ signals a domain error.
+
+ -- Function: double drem (double NUMERATOR, double DENOMINATOR)
+ -- Function: float dremf (float NUMERATOR, float DENOMINATOR)
+ -- Function: long double dreml (long double NUMERATOR, long double
+          DENOMINATOR)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function is another name for ‘remainder’.
+
+File: libc.info,  Node: FP Bit Twiddling,  Next: FP Comparison Functions,  Prev: Remainder Functions,  Up: Arithmetic Functions
+
+20.8.5 Setting and modifying single bits of FP values
+-----------------------------------------------------
+
+There are some operations that are too complicated or expensive to
+perform by hand on floating-point numbers.  ISO C99 defines functions to
+do these operations, which mostly involve changing single bits.
+
+ -- Function: double copysign (double X, double Y)
+ -- Function: float copysignf (float X, float Y)
+ -- Function: long double copysignl (long double X, long double Y)
+ -- Function: _FloatN copysignfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatNx copysignfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions return X but with the sign of Y.  They work even if
+     X or Y are NaN or zero.  Both of these can carry a sign (although
+     not all implementations support it) and this is one of the few
+     operations that can tell the difference.
+
+     ‘copysign’ never raises an exception.
+
+     This function is defined in IEC 559 (and the appendix with
+     recommended functions in IEEE 754/IEEE 854).
+
+ -- Function: int signbit (_float-type_ X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘signbit’ is a generic macro which can work on all floating-point
+     types.  It returns a nonzero value if the value of X has its sign
+     bit set.
+
+     This is not the same as ‘x < 0.0’, because IEEE 754 floating point
+     allows zero to be signed.  The comparison ‘-0.0 < 0.0’ is false,
+     but ‘signbit (-0.0)’ will return a nonzero value.
+
+ -- Function: double nextafter (double X, double Y)
+ -- Function: float nextafterf (float X, float Y)
+ -- Function: long double nextafterl (long double X, long double Y)
+ -- Function: _FloatN nextafterfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatNx nextafterfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘nextafter’ function returns the next representable neighbor of
+     X in the direction towards Y.  The size of the step between X and
+     the result depends on the type of the result.  If X = Y the
+     function simply returns Y.  If either value is ‘NaN’, ‘NaN’ is
+     returned.  Otherwise a value corresponding to the value of the
+     least significant bit in the mantissa is added or subtracted,
+     depending on the direction.  ‘nextafter’ will signal overflow or
+     underflow if the result goes outside of the range of normalized
+     numbers.
+
+     This function is defined in IEC 559 (and the appendix with
+     recommended functions in IEEE 754/IEEE 854).
+
+ -- Function: double nexttoward (double X, long double Y)
+ -- Function: float nexttowardf (float X, long double Y)
+ -- Function: long double nexttowardl (long double X, long double Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions are identical to the corresponding versions of
+     ‘nextafter’ except that their second argument is a ‘long double’.
+
+ -- Function: double nextup (double X)
+ -- Function: float nextupf (float X)
+ -- Function: long double nextupl (long double X)
+ -- Function: _FloatN nextupfN (_FloatN X)
+ -- Function: _FloatNx nextupfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘nextup’ function returns the next representable neighbor of X
+     in the direction of positive infinity.  If X is the smallest
+     negative subnormal number in the type of X the function returns
+     ‘-0’.  If X = ‘0’ the function returns the smallest positive
+     subnormal number in the type of X.  If X is NaN, NaN is returned.
+     If X is +oo, +oo is returned.  ‘nextup’ is from TS 18661-1:2014 and
+     TS 18661-3:2015.  ‘nextup’ never raises an exception except for
+     signaling NaNs.
+
+ -- Function: double nextdown (double X)
+ -- Function: float nextdownf (float X)
+ -- Function: long double nextdownl (long double X)
+ -- Function: _FloatN nextdownfN (_FloatN X)
+ -- Function: _FloatNx nextdownfNx (_FloatNx X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘nextdown’ function returns the next representable neighbor of
+     X in the direction of negative infinity.  If X is the smallest
+     positive subnormal number in the type of X the function returns
+     ‘+0’.  If X = ‘0’ the function returns the smallest negative
+     subnormal number in the type of X.  If X is NaN, NaN is returned.
+     If X is -oo, -oo is returned.  ‘nextdown’ is from TS 18661-1:2014
+     and TS 18661-3:2015.  ‘nextdown’ never raises an exception except
+     for signaling NaNs.
+
+ -- Function: double nan (const char *TAGP)
+ -- Function: float nanf (const char *TAGP)
+ -- Function: long double nanl (const char *TAGP)
+ -- Function: _FloatN nanfN (const char *TAGP)
+ -- Function: _FloatNx nanfNx (const char *TAGP)
+
+     Preliminary: | MT-Safe locale | AS-Safe | AC-Safe | *Note POSIX
+     Safety Concepts::.
+
+     The ‘nan’ function returns a representation of NaN, provided that
+     NaN is supported by the target platform.  ‘nan ("N-CHAR-SEQUENCE")’
+     is equivalent to ‘strtod ("NAN(N-CHAR-SEQUENCE)")’.
+
+     The argument TAGP is used in an unspecified manner.  On IEEE 754
+     systems, there are many representations of NaN, and TAGP selects
+     one.  On other systems it may do nothing.
+
+ -- Function: int canonicalize (double *CX, const double *X)
+ -- Function: int canonicalizef (float *CX, const float *X)
+ -- Function: int canonicalizel (long double *CX, const long double *X)
+ -- Function: int canonicalizefN (_FloatN *CX, const _FloatN *X)
+ -- Function: int canonicalizefNx (_FloatNx *CX, const _FloatNx *X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     In some floating-point formats, some values have canonical
+     (preferred) and noncanonical encodings (for IEEE interchange binary
+     formats, all encodings are canonical).  These functions, defined by
+     TS 18661-1:2014 and TS 18661-3:2015, attempt to produce a canonical
+     version of the floating-point value pointed to by X; if that value
+     is a signaling NaN, they raise the invalid exception and produce a
+     quiet NaN. If a canonical value is produced, it is stored in the
+     object pointed to by CX, and these functions return zero.
+     Otherwise (if a canonical value could not be produced because the
+     object pointed to by X is not a valid representation of any
+     floating-point value), the object pointed to by CX is unchanged and
+     a nonzero value is returned.
+
+     Note that some formats have multiple encodings of a value which are
+     all equally canonical; when such an encoding is used as an input to
+     this function, any such encoding of the same value (or of the
+     corresponding quiet NaN, if that value is a signaling NaN) may be
+     produced as output.
+
+ -- Function: double getpayload (const double *X)
+ -- Function: float getpayloadf (const float *X)
+ -- Function: long double getpayloadl (const long double *X)
+ -- Function: _FloatN getpayloadfN (const _FloatN *X)
+ -- Function: _FloatNx getpayloadfNx (const _FloatNx *X)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     IEEE 754 defines the “payload” of a NaN to be an integer value
+     encoded in the representation of the NaN. Payloads are typically
+     propagated from NaN inputs to the result of a floating-point
+     operation.  These functions, defined by TS 18661-1:2014 and TS
+     18661-3:2015, return the payload of the NaN pointed to by X
+     (returned as a positive integer, or positive zero, represented as a
+     floating-point number); if X is not a NaN, they return an
+     unspecified value.  They raise no floating-point exceptions even
+     for signaling NaNs.
+
+ -- Function: int setpayload (double *X, double PAYLOAD)
+ -- Function: int setpayloadf (float *X, float PAYLOAD)
+ -- Function: int setpayloadl (long double *X, long double PAYLOAD)
+ -- Function: int setpayloadfN (_FloatN *X, _FloatN PAYLOAD)
+ -- Function: int setpayloadfNx (_FloatNx *X, _FloatNx PAYLOAD)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, defined by TS 18661-1:2014 and TS 18661-3:2015,
+     set the object pointed to by X to a quiet NaN with payload PAYLOAD
+     and a zero sign bit and return zero.  If PAYLOAD is not a
+     positive-signed integer that is a valid payload for a quiet NaN of
+     the given type, the object pointed to by X is set to positive zero
+     and a nonzero value is returned.  They raise no floating-point
+     exceptions.
+
+ -- Function: int setpayloadsig (double *X, double PAYLOAD)
+ -- Function: int setpayloadsigf (float *X, float PAYLOAD)
+ -- Function: int setpayloadsigl (long double *X, long double PAYLOAD)
+ -- Function: int setpayloadsigfN (_FloatN *X, _FloatN PAYLOAD)
+ -- Function: int setpayloadsigfNx (_FloatNx *X, _FloatNx PAYLOAD)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, defined by TS 18661-1:2014 and TS 18661-3:2015,
+     set the object pointed to by X to a signaling NaN with payload
+     PAYLOAD and a zero sign bit and return zero.  If PAYLOAD is not a
+     positive-signed integer that is a valid payload for a signaling NaN
+     of the given type, the object pointed to by X is set to positive
+     zero and a nonzero value is returned.  They raise no floating-point
+     exceptions.
+
+File: libc.info,  Node: FP Comparison Functions,  Next: Misc FP Arithmetic,  Prev: FP Bit Twiddling,  Up: Arithmetic Functions
+
+20.8.6 Floating-Point Comparison Functions
+------------------------------------------
+
+The standard C comparison operators provoke exceptions when one or other
+of the operands is NaN. For example,
+
+     int v = a < 1.0;
+
+will raise an exception if A is NaN. (This does _not_ happen with ‘==’
+and ‘!=’; those merely return false and true, respectively, when NaN is
+examined.)  Frequently this exception is undesirable.  ISO C99 therefore
+defines comparison functions that do not raise exceptions when NaN is
+examined.  All of the functions are implemented as macros which allow
+their arguments to be of any floating-point type.  The macros are
+guaranteed to evaluate their arguments only once.  TS 18661-1:2014 adds
+such a macro for an equality comparison that _does_ raise an exception
+for a NaN argument; it also adds functions that provide a total ordering
+on all floating-point values, including NaNs, without raising any
+exceptions even for signaling NaNs.
+
+ -- Macro: int isgreater (_real-floating_ X, _real-floating_ Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro determines whether the argument X is greater than Y.  It
+     is equivalent to ‘(X) > (Y)’, but no exception is raised if X or Y
+     are NaN.
+
+ -- Macro: int isgreaterequal (_real-floating_ X, _real-floating_ Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro determines whether the argument X is greater than or
+     equal to Y.  It is equivalent to ‘(X) >= (Y)’, but no exception is
+     raised if X or Y are NaN.
+
+ -- Macro: int isless (_real-floating_ X, _real-floating_ Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro determines whether the argument X is less than Y.  It is
+     equivalent to ‘(X) < (Y)’, but no exception is raised if X or Y are
+     NaN.
+
+ -- Macro: int islessequal (_real-floating_ X, _real-floating_ Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro determines whether the argument X is less than or equal
+     to Y.  It is equivalent to ‘(X) <= (Y)’, but no exception is raised
+     if X or Y are NaN.
+
+ -- Macro: int islessgreater (_real-floating_ X, _real-floating_ Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro determines whether the argument X is less or greater
+     than Y.  It is equivalent to ‘(X) < (Y) || (X) > (Y)’ (although it
+     only evaluates X and Y once), but no exception is raised if X or Y
+     are NaN.
+
+     This macro is not equivalent to ‘X != Y’, because that expression
+     is true if X or Y are NaN.
+
+ -- Macro: int isunordered (_real-floating_ X, _real-floating_ Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro determines whether its arguments are unordered.  In
+     other words, it is true if X or Y are NaN, and false otherwise.
+
+ -- Macro: int iseqsig (_real-floating_ X, _real-floating_ Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro determines whether its arguments are equal.  It is
+     equivalent to ‘(X) == (Y)’, but it raises the invalid exception and
+     sets ‘errno’ to ‘EDOM’ if either argument is a NaN.
+
+ -- Function: int totalorder (double X, double Y)
+ -- Function: int totalorderf (float X, float Y)
+ -- Function: int totalorderl (long double X, long double Y)
+ -- Function: int totalorderfN (_FloatN X, _FloatN Y)
+ -- Function: int totalorderfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions determine whether the total order relationship,
+     defined in IEEE 754-2008, is true for X and Y, returning nonzero if
+     it is true and zero if it is false.  No exceptions are raised even
+     for signaling NaNs.  The relationship is true if they are the same
+     floating-point value (including sign for zero and NaNs, and payload
+     for NaNs), or if X comes before Y in the following order: negative
+     quiet NaNs, in order of decreasing payload; negative signaling
+     NaNs, in order of decreasing payload; negative infinity; finite
+     numbers, in ascending order, with negative zero before positive
+     zero; positive infinity; positive signaling NaNs, in order of
+     increasing payload; positive quiet NaNs, in order of increasing
+     payload.
+
+ -- Function: int totalordermag (double X, double Y)
+ -- Function: int totalordermagf (float X, float Y)
+ -- Function: int totalordermagl (long double X, long double Y)
+ -- Function: int totalordermagfN (_FloatN X, _FloatN Y)
+ -- Function: int totalordermagfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions determine whether the total order relationship,
+     defined in IEEE 754-2008, is true for the absolute values of X and
+     Y, returning nonzero if it is true and zero if it is false.  No
+     exceptions are raised even for signaling NaNs.
+
+   Not all machines provide hardware support for these operations.  On
+machines that don’t, the macros can be very slow.  Therefore, you should
+not use these functions when NaN is not a concern.
+
+   *NB:* There are no macros ‘isequal’ or ‘isunequal’.  They are
+unnecessary, because the ‘==’ and ‘!=’ operators do _not_ throw an
+exception if one or both of the operands are NaN.
+
+File: libc.info,  Node: Misc FP Arithmetic,  Prev: FP Comparison Functions,  Up: Arithmetic Functions
+
+20.8.7 Miscellaneous FP arithmetic functions
+--------------------------------------------
+
+The functions in this section perform miscellaneous but common
+operations that are awkward to express with C operators.  On some
+processors these functions can use special machine instructions to
+perform these operations faster than the equivalent C code.
+
+ -- Function: double fmin (double X, double Y)
+ -- Function: float fminf (float X, float Y)
+ -- Function: long double fminl (long double X, long double Y)
+ -- Function: _FloatN fminfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatNx fminfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘fmin’ function returns the lesser of the two values X and Y.
+     It is similar to the expression
+          ((x) < (y) ? (x) : (y))
+     except that X and Y are only evaluated once.
+
+     If an argument is NaN, the other argument is returned.  If both
+     arguments are NaN, NaN is returned.
+
+ -- Function: double fmax (double X, double Y)
+ -- Function: float fmaxf (float X, float Y)
+ -- Function: long double fmaxl (long double X, long double Y)
+ -- Function: _FloatN fmaxfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatNx fmaxfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘fmax’ function returns the greater of the two values X and Y.
+
+     If an argument is NaN, the other argument is returned.  If both
+     arguments are NaN, NaN is returned.
+
+ -- Function: double fminmag (double X, double Y)
+ -- Function: float fminmagf (float X, float Y)
+ -- Function: long double fminmagl (long double X, long double Y)
+ -- Function: _FloatN fminmagfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatNx fminmagfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014 and TS 18661-3:2015, return
+     whichever of the two values X and Y has the smaller absolute value.
+     If both have the same absolute value, or either is NaN, they behave
+     the same as the ‘fmin’ functions.
+
+ -- Function: double fmaxmag (double X, double Y)
+ -- Function: float fmaxmagf (float X, float Y)
+ -- Function: long double fmaxmagl (long double X, long double Y)
+ -- Function: _FloatN fmaxmagfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatNx fmaxmagfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014, return whichever of the two
+     values X and Y has the greater absolute value.  If both have the
+     same absolute value, or either is NaN, they behave the same as the
+     ‘fmax’ functions.
+
+ -- Function: double fdim (double X, double Y)
+ -- Function: float fdimf (float X, float Y)
+ -- Function: long double fdiml (long double X, long double Y)
+ -- Function: _FloatN fdimfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatNx fdimfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘fdim’ function returns the positive difference between X and
+     Y.  The positive difference is X - Y if X is greater than Y, and 0
+     otherwise.
+
+     If X, Y, or both are NaN, NaN is returned.
+
+ -- Function: double fma (double X, double Y, double Z)
+ -- Function: float fmaf (float X, float Y, float Z)
+ -- Function: long double fmal (long double X, long double Y, long
+          double Z)
+ -- Function: _FloatN fmafN (_FloatN X, _FloatN Y, _FloatN Z)
+ -- Function: _FloatNx fmafNx (_FloatNx X, _FloatNx Y, _FloatNx Z)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘fma’ function performs floating-point multiply-add.  This is
+     the operation (X * Y) + Z, but the intermediate result is not
+     rounded to the destination type.  This can sometimes improve the
+     precision of a calculation.
+
+     This function was introduced because some processors have a special
+     instruction to perform multiply-add.  The C compiler cannot use it
+     directly, because the expression ‘x*y + z’ is defined to round the
+     intermediate result.  ‘fma’ lets you choose when you want to round
+     only once.
+
+     On processors which do not implement multiply-add in hardware,
+     ‘fma’ can be very slow since it must avoid intermediate rounding.
+     ‘math.h’ defines the symbols ‘FP_FAST_FMA’, ‘FP_FAST_FMAF’, and
+     ‘FP_FAST_FMAL’ when the corresponding version of ‘fma’ is no slower
+     than the expression ‘x*y + z’.  In the GNU C Library, this always
+     means the operation is implemented in hardware.
+
+ -- Function: float fadd (double X, double Y)
+ -- Function: float faddl (long double X, long double Y)
+ -- Function: double daddl (long double X, long double Y)
+ -- Function: _FloatM fMaddfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatM fMaddfNx (_FloatNx X, _FloatNx Y)
+ -- Function: _FloatMx fMxaddfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatMx fMxaddfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014 and TS 18661-3:2015, return X
+     + Y, rounded once to the return type of the function without any
+     intermediate rounding to the type of the arguments.
+
+ -- Function: float fsub (double X, double Y)
+ -- Function: float fsubl (long double X, long double Y)
+ -- Function: double dsubl (long double X, long double Y)
+ -- Function: _FloatM fMsubfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatM fMsubfNx (_FloatNx X, _FloatNx Y)
+ -- Function: _FloatMx fMxsubfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatMx fMxsubfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014 and TS 18661-3:2015, return X
+     - Y, rounded once to the return type of the function without any
+     intermediate rounding to the type of the arguments.
+
+ -- Function: float fmul (double X, double Y)
+ -- Function: float fmull (long double X, long double Y)
+ -- Function: double dmull (long double X, long double Y)
+ -- Function: _FloatM fMmulfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatM fMmulfNx (_FloatNx X, _FloatNx Y)
+ -- Function: _FloatMx fMxmulfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatMx fMxmulfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014 and TS 18661-3:2015, return X
+     * Y, rounded once to the return type of the function without any
+     intermediate rounding to the type of the arguments.
+
+ -- Function: float fdiv (double X, double Y)
+ -- Function: float fdivl (long double X, long double Y)
+ -- Function: double ddivl (long double X, long double Y)
+ -- Function: _FloatM fMdivfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatM fMdivfNx (_FloatNx X, _FloatNx Y)
+ -- Function: _FloatMx fMxdivfN (_FloatN X, _FloatN Y)
+ -- Function: _FloatMx fMxdivfNx (_FloatNx X, _FloatNx Y)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     These functions, from TS 18661-1:2014 and TS 18661-3:2015, return X
+     / Y, rounded once to the return type of the function without any
+     intermediate rounding to the type of the arguments.
+
+File: libc.info,  Node: Complex Numbers,  Next: Operations on Complex,  Prev: Arithmetic Functions,  Up: Arithmetic
+

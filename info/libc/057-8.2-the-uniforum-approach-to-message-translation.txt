@@ -1,0 +1,1002 @@
+8.2 The Uniforum approach to Message Translation
+================================================
+
+Sun Microsystems tried to standardize a different approach to message
+translation in the Uniforum group.  There never was a real standard
+defined but still the interface was used in Sun’s operating systems.
+Since this approach fits better in the development process of free
+software it is also used throughout the GNU project and the GNU
+‘gettext’ package provides support for this outside the GNU C Library.
+
+   The code of the ‘libintl’ from GNU ‘gettext’ is the same as the code
+in the GNU C Library.  So the documentation in the GNU ‘gettext’ manual
+is also valid for the functionality here.  The following text will
+describe the library functions in detail.  But the numerous helper
+programs are not described in this manual.  Instead people should read
+the GNU ‘gettext’ manual (*note GNU gettext utilities: (gettext)Top.).
+We will only give a short overview.
+
+   Though the ‘catgets’ functions are available by default on more
+systems the ‘gettext’ interface is at least as portable as the former.
+The GNU ‘gettext’ package can be used wherever the functions are not
+available.
+
+* Menu:
+
+* Message catalogs with gettext::  The ‘gettext’ family of functions.
+* Helper programs for gettext::    Programs to handle message catalogs
+                                    for ‘gettext’.
+
+File: libc.info,  Node: Message catalogs with gettext,  Next: Helper programs for gettext,  Up: The Uniforum approach
+
+8.2.1 The ‘gettext’ family of functions
+---------------------------------------
+
+The paradigms underlying the ‘gettext’ approach to message translations
+is different from that of the ‘catgets’ functions the basic functionally
+is equivalent.  There are functions of the following categories:
+
+* Menu:
+
+* Translation with gettext::       What has to be done to translate a message.
+* Locating gettext catalog::       How to determine which catalog to be used.
+* Advanced gettext functions::     Additional functions for more complicated
+                                    situations.
+* Charset conversion in gettext::  How to specify the output character set
+                                    ‘gettext’ uses.
+* GUI program problems::           How to use ‘gettext’ in GUI programs.
+* Using gettextized software::     The possibilities of the user to influence
+                                    the way ‘gettext’ works.
+
+File: libc.info,  Node: Translation with gettext,  Next: Locating gettext catalog,  Up: Message catalogs with gettext
+
+8.2.1.1 What has to be done to translate a message?
+...................................................
+
+The ‘gettext’ functions have a very simple interface.  The most basic
+function just takes the string which shall be translated as the argument
+and it returns the translation.  This is fundamentally different from
+the ‘catgets’ approach where an extra key is necessary and the original
+string is only used for the error case.
+
+   If the string which has to be translated is the only argument this of
+course means the string itself is the key.  I.e., the translation will
+be selected based on the original string.  The message catalogs must
+therefore contain the original strings plus one translation for any such
+string.  The task of the ‘gettext’ function is to compare the argument
+string with the available strings in the catalog and return the
+appropriate translation.  Of course this process is optimized so that
+this process is not more expensive than an access using an atomic key
+like in ‘catgets’.
+
+   The ‘gettext’ approach has some advantages but also some
+disadvantages.  Please see the GNU ‘gettext’ manual for a detailed
+discussion of the pros and cons.
+
+   All the definitions and declarations for ‘gettext’ can be found in
+the ‘libintl.h’ header file.  On systems where these functions are not
+part of the C library they can be found in a separate library named
+‘libintl.a’ (or accordingly different for shared libraries).
+
+ -- Function: char * gettext (const char *MSGID)
+
+     Preliminary: | MT-Safe env | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     The ‘gettext’ function searches the currently selected message
+     catalogs for a string which is equal to MSGID.  If there is such a
+     string available it is returned.  Otherwise the argument string
+     MSGID is returned.
+
+     Please note that although the return value is ‘char *’ the returned
+     string must not be changed.  This broken type results from the
+     history of the function and does not reflect the way the function
+     should be used.
+
+     Please note that above we wrote “message catalogs” (plural).  This
+     is a specialty of the GNU implementation of these functions and we
+     will say more about this when we talk about the ways message
+     catalogs are selected (*note Locating gettext catalog::).
+
+     The ‘gettext’ function does not modify the value of the global
+     ‘errno’ variable.  This is necessary to make it possible to write
+     something like
+
+            printf (gettext ("Operation failed: %m\n"));
+
+     Here the ‘errno’ value is used in the ‘printf’ function while
+     processing the ‘%m’ format element and if the ‘gettext’ function
+     would change this value (it is called before ‘printf’ is called) we
+     would get a wrong message.
+
+     So there is no easy way to detect a missing message catalog besides
+     comparing the argument string with the result.  But it is normally
+     the task of the user to react on missing catalogs.  The program
+     cannot guess when a message catalog is really necessary since for a
+     user who speaks the language the program was developed in, the
+     message does not need any translation.
+
+   The remaining two functions to access the message catalog add some
+functionality to select a message catalog which is not the default one.
+This is important if parts of the program are developed independently.
+Every part can have its own message catalog and all of them can be used
+at the same time.  The C library itself is an example: internally it
+uses the ‘gettext’ functions but since it must not depend on a currently
+selected default message catalog it must specify all ambiguous
+information.
+
+ -- Function: char * dgettext (const char *DOMAINNAME, const char
+          *MSGID)
+
+     Preliminary: | MT-Safe env | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     The ‘dgettext’ function acts just like the ‘gettext’ function.  It
+     only takes an additional first argument DOMAINNAME which guides the
+     selection of the message catalogs which are searched for the
+     translation.  If the DOMAINNAME parameter is the null pointer the
+     ‘dgettext’ function is exactly equivalent to ‘gettext’ since the
+     default value for the domain name is used.
+
+     As for ‘gettext’ the return value type is ‘char *’ which is an
+     anachronism.  The returned string must never be modified.
+
+ -- Function: char * dcgettext (const char *DOMAINNAME, const char
+          *MSGID, int CATEGORY)
+
+     Preliminary: | MT-Safe env | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     The ‘dcgettext’ adds another argument to those which ‘dgettext’
+     takes.  This argument CATEGORY specifies the last piece of
+     information needed to localize the message catalog.  I.e., the
+     domain name and the locale category exactly specify which message
+     catalog has to be used (relative to a given directory, see below).
+
+     The ‘dgettext’ function can be expressed in terms of ‘dcgettext’ by
+     using
+
+          dcgettext (domain, string, LC_MESSAGES)
+
+     instead of
+
+          dgettext (domain, string)
+
+     This also shows which values are expected for the third parameter.
+     One has to use the available selectors for the categories available
+     in ‘locale.h’.  Normally the available values are ‘LC_CTYPE’,
+     ‘LC_COLLATE’, ‘LC_MESSAGES’, ‘LC_MONETARY’, ‘LC_NUMERIC’, and
+     ‘LC_TIME’.  Please note that ‘LC_ALL’ must not be used and even
+     though the names might suggest this, there is no relation to the
+     environment variable of this name.
+
+     The ‘dcgettext’ function is only implemented for compatibility with
+     other systems which have ‘gettext’ functions.  There is not really
+     any situation where it is necessary (or useful) to use a different
+     value than ‘LC_MESSAGES’ for the CATEGORY parameter.  We are
+     dealing with messages here and any other choice can only be
+     irritating.
+
+     As for ‘gettext’ the return value type is ‘char *’ which is an
+     anachronism.  The returned string must never be modified.
+
+   When using the three functions above in a program it is a frequent
+case that the MSGID argument is a constant string.  So it is worthwhile
+to optimize this case.  Thinking shortly about this one will realize
+that as long as no new message catalog is loaded the translation of a
+message will not change.  This optimization is actually implemented by
+the ‘gettext’, ‘dgettext’ and ‘dcgettext’ functions.
+
+File: libc.info,  Node: Locating gettext catalog,  Next: Advanced gettext functions,  Prev: Translation with gettext,  Up: Message catalogs with gettext
+
+8.2.1.2 How to determine which catalog to be used
+.................................................
+
+The functions to retrieve the translations for a given message have a
+remarkable simple interface.  But to provide the user of the program
+still the opportunity to select exactly the translation s/he wants and
+also to provide the programmer the possibility to influence the way to
+locate the search for catalogs files there is a quite complicated
+underlying mechanism which controls all this.  The code is complicated
+the use is easy.
+
+   Basically we have two different tasks to perform which can also be
+performed by the ‘catgets’ functions:
+
+  1. Locate the set of message catalogs.  There are a number of files
+     for different languages which all belong to the package.  Usually
+     they are all stored in the filesystem below a certain directory.
+
+     There can be arbitrarily many packages installed and they can
+     follow different guidelines for the placement of their files.
+
+  2. Relative to the location specified by the package the actual
+     translation files must be searched, based on the wishes of the
+     user.  I.e., for each language the user selects the program should
+     be able to locate the appropriate file.
+
+   This is the functionality required by the specifications for
+‘gettext’ and this is also what the ‘catgets’ functions are able to do.
+But there are some problems unresolved:
+
+   • The language to be used can be specified in several different ways.
+     There is no generally accepted standard for this and the user
+     always expects the program to understand what s/he means.  E.g., to
+     select the German translation one could write ‘de’, ‘german’, or
+     ‘deutsch’ and the program should always react the same.
+
+   • Sometimes the specification of the user is too detailed.  If s/he,
+     e.g., specifies ‘de_DE.ISO-8859-1’ which means German, spoken in
+     Germany, coded using the ISO 8859-1 character set there is the
+     possibility that a message catalog matching this exactly is not
+     available.  But there could be a catalog matching ‘de’ and if the
+     character set used on the machine is always ISO 8859-1 there is no
+     reason why this later message catalog should not be used.  (We call
+     this “message inheritance”.)
+
+   • If a catalog for a wanted language is not available it is not
+     always the second best choice to fall back on the language of the
+     developer and simply not translate any message.  Instead a user
+     might be better able to read the messages in another language and
+     so the user of the program should be able to define a precedence
+     order of languages.
+
+   We can divide the configuration actions in two parts: the one is
+performed by the programmer, the other by the user.  We will start with
+the functions the programmer can use since the user configuration will
+be based on this.
+
+   As the functions described in the last sections already mention
+separate sets of messages can be selected by a “domain name”.  This is a
+simple string which should be unique for each program part that uses a
+separate domain.  It is possible to use in one program arbitrarily many
+domains at the same time.  E.g., the GNU C Library itself uses a domain
+named ‘libc’ while the program using the C Library could use a domain
+named ‘foo’.  The important point is that at any time exactly one domain
+is active.  This is controlled with the following function.
+
+ -- Function: char * textdomain (const char *DOMAINNAME)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock heap | AC-Unsafe lock mem |
+     *Note POSIX Safety Concepts::.
+
+     The ‘textdomain’ function sets the default domain, which is used in
+     all future ‘gettext’ calls, to DOMAINNAME.  Please note that
+     ‘dgettext’ and ‘dcgettext’ calls are not influenced if the
+     DOMAINNAME parameter of these functions is not the null pointer.
+
+     Before the first call to ‘textdomain’ the default domain is
+     ‘messages’.  This is the name specified in the specification of the
+     ‘gettext’ API. This name is as good as any other name.  No program
+     should ever really use a domain with this name since this can only
+     lead to problems.
+
+     The function returns the value which is from now on taken as the
+     default domain.  If the system went out of memory the returned
+     value is ‘NULL’ and the global variable ‘errno’ is set to ‘ENOMEM’.
+     Despite the return value type being ‘char *’ the return string must
+     not be changed.  It is allocated internally by the ‘textdomain’
+     function.
+
+     If the DOMAINNAME parameter is the null pointer no new default
+     domain is set.  Instead the currently selected default domain is
+     returned.
+
+     If the DOMAINNAME parameter is the empty string the default domain
+     is reset to its initial value, the domain with the name ‘messages’.
+     This possibility is questionable to use since the domain ‘messages’
+     really never should be used.
+
+ -- Function: char * bindtextdomain (const char *DOMAINNAME, const char
+          *DIRNAME)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘bindtextdomain’ function can be used to specify the directory
+     which contains the message catalogs for domain DOMAINNAME for the
+     different languages.  To be correct, this is the directory where
+     the hierarchy of directories is expected.  Details are explained
+     below.
+
+     For the programmer it is important to note that the translations
+     which come with the program have to be placed in a directory
+     hierarchy starting at, say, ‘/foo/bar’.  Then the program should
+     make a ‘bindtextdomain’ call to bind the domain for the current
+     program to this directory.  So it is made sure the catalogs are
+     found.  A correctly running program does not depend on the user
+     setting an environment variable.
+
+     The ‘bindtextdomain’ function can be used several times and if the
+     DOMAINNAME argument is different the previously bound domains will
+     not be overwritten.
+
+     If the program which wish to use ‘bindtextdomain’ at some point of
+     time use the ‘chdir’ function to change the current working
+     directory it is important that the DIRNAME strings ought to be an
+     absolute pathname.  Otherwise the addressed directory might vary
+     with the time.
+
+     If the DIRNAME parameter is the null pointer ‘bindtextdomain’
+     returns the currently selected directory for the domain with the
+     name DOMAINNAME.
+
+     The ‘bindtextdomain’ function returns a pointer to a string
+     containing the name of the selected directory name.  The string is
+     allocated internally in the function and must not be changed by the
+     user.  If the system went out of core during the execution of
+     ‘bindtextdomain’ the return value is ‘NULL’ and the global variable
+     ‘errno’ is set accordingly.
+
+File: libc.info,  Node: Advanced gettext functions,  Next: Charset conversion in gettext,  Prev: Locating gettext catalog,  Up: Message catalogs with gettext
+
+8.2.1.3 Additional functions for more complicated situations
+............................................................
+
+The functions of the ‘gettext’ family described so far (and all the
+‘catgets’ functions as well) have one problem in the real world which
+has been neglected completely in all existing approaches.  What is meant
+here is the handling of plural forms.
+
+   Looking through Unix source code before the time anybody thought
+about internationalization (and, sadly, even afterwards) one can often
+find code similar to the following:
+
+        printf ("%d file%s deleted", n, n == 1 ? "" : "s");
+
+After the first complaints from people internationalizing the code
+people either completely avoided formulations like this or used strings
+like ‘"file(s)"’.  Both look unnatural and should be avoided.  First
+tries to solve the problem correctly looked like this:
+
+        if (n == 1)
+          printf ("%d file deleted", n);
+        else
+          printf ("%d files deleted", n);
+
+   But this does not solve the problem.  It helps languages where the
+plural form of a noun is not simply constructed by adding an ‘s’ but
+that is all.  Once again people fell into the trap of believing the
+rules their language uses are universal.  But the handling of plural
+forms differs widely between the language families.  There are two
+things we can differ between (and even inside language families);
+
+   • The form how plural forms are build differs.  This is a problem
+     with language which have many irregularities.  German, for
+     instance, is a drastic case.  Though English and German are part of
+     the same language family (Germanic), the almost regular forming of
+     plural noun forms (appending an ‘s’) is hardly found in German.
+
+   • The number of plural forms differ.  This is somewhat surprising for
+     those who only have experiences with Romanic and Germanic languages
+     since here the number is the same (there are two).
+
+     But other language families have only one form or many forms.  More
+     information on this in an extra section.
+
+   The consequence of this is that application writers should not try to
+solve the problem in their code.  This would be localization since it is
+only usable for certain, hardcoded language environments.  Instead the
+extended ‘gettext’ interface should be used.
+
+   These extra functions are taking instead of the one key string two
+strings and a numerical argument.  The idea behind this is that using
+the numerical argument and the first string as a key, the implementation
+can select using rules specified by the translator the right plural
+form.  The two string arguments then will be used to provide a return
+value in case no message catalog is found (similar to the normal
+‘gettext’ behavior).  In this case the rules for Germanic language are
+used and it is assumed that the first string argument is the singular
+form, the second the plural form.
+
+   This has the consequence that programs without language catalogs can
+display the correct strings only if the program itself is written using
+a Germanic language.  This is a limitation but since the GNU C Library
+(as well as the GNU ‘gettext’ package) is written as part of the GNU
+package and the coding standards for the GNU project require programs to
+be written in English, this solution nevertheless fulfills its purpose.
+
+ -- Function: char * ngettext (const char *MSGID1, const char *MSGID2,
+          unsigned long int N)
+
+     Preliminary: | MT-Safe env | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     The ‘ngettext’ function is similar to the ‘gettext’ function as it
+     finds the message catalogs in the same way.  But it takes two extra
+     arguments.  The MSGID1 parameter must contain the singular form of
+     the string to be converted.  It is also used as the key for the
+     search in the catalog.  The MSGID2 parameter is the plural form.
+     The parameter N is used to determine the plural form.  If no
+     message catalog is found MSGID1 is returned if ‘n == 1’, otherwise
+     ‘msgid2’.
+
+     An example for the use of this function is:
+
+            printf (ngettext ("%d file removed", "%d files removed", n), n);
+
+     Please note that the numeric value N has to be passed to the
+     ‘printf’ function as well.  It is not sufficient to pass it only to
+     ‘ngettext’.
+
+ -- Function: char * dngettext (const char *DOMAIN, const char *MSGID1,
+          const char *MSGID2, unsigned long int N)
+
+     Preliminary: | MT-Safe env | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     The ‘dngettext’ is similar to the ‘dgettext’ function in the way
+     the message catalog is selected.  The difference is that it takes
+     two extra parameters to provide the correct plural form.  These two
+     parameters are handled in the same way ‘ngettext’ handles them.
+
+ -- Function: char * dcngettext (const char *DOMAIN, const char *MSGID1,
+          const char *MSGID2, unsigned long int N, int CATEGORY)
+
+     Preliminary: | MT-Safe env | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     The ‘dcngettext’ is similar to the ‘dcgettext’ function in the way
+     the message catalog is selected.  The difference is that it takes
+     two extra parameters to provide the correct plural form.  These two
+     parameters are handled in the same way ‘ngettext’ handles them.
+
+The problem of plural forms
+...........................
+
+A description of the problem can be found at the beginning of the last
+section.  Now there is the question how to solve it.  Without the input
+of linguists (which was not available) it was not possible to determine
+whether there are only a few different forms in which plural forms are
+formed or whether the number can increase with every new supported
+language.
+
+   Therefore the solution implemented is to allow the translator to
+specify the rules of how to select the plural form.  Since the formula
+varies with every language this is the only viable solution except for
+hardcoding the information in the code (which still would require the
+possibility of extensions to not prevent the use of new languages).  The
+details are explained in the GNU ‘gettext’ manual.  Here only a bit of
+information is provided.
+
+   The information about the plural form selection has to be stored in
+the header entry (the one with the empty ‘msgid’ string).  It looks like
+this:
+
+     Plural-Forms: nplurals=2; plural=n == 1 ? 0 : 1;
+
+   The ‘nplurals’ value must be a decimal number which specifies how
+many different plural forms exist for this language.  The string
+following ‘plural’ is an expression using the C language syntax.
+Exceptions are that no negative numbers are allowed, numbers must be
+decimal, and the only variable allowed is ‘n’.  This expression will be
+evaluated whenever one of the functions ‘ngettext’, ‘dngettext’, or
+‘dcngettext’ is called.  The numeric value passed to these functions is
+then substituted for all uses of the variable ‘n’ in the expression.
+The resulting value then must be greater or equal to zero and smaller
+than the value given as the value of ‘nplurals’.
+
+The following rules are known at this point.  The language with families
+are listed.  But this does not necessarily mean the information can be
+generalized for the whole family (as can be easily seen in the table
+below).(1)
+
+Only one form:
+     Some languages only require one single form.  There is no
+     distinction between the singular and plural form.  An appropriate
+     header entry would look like this:
+
+          Plural-Forms: nplurals=1; plural=0;
+
+     Languages with this property include:
+
+     Finno-Ugric family
+          Hungarian
+     Asian family
+          Japanese, Korean
+     Turkic/Altaic family
+          Turkish
+
+Two forms, singular used for one only
+     This is the form used in most existing programs since it is what
+     English uses.  A header entry would look like this:
+
+          Plural-Forms: nplurals=2; plural=n != 1;
+
+     (Note: this uses the feature of C expressions that boolean
+     expressions have to value zero or one.)
+
+     Languages with this property include:
+
+     Germanic family
+          Danish, Dutch, English, German, Norwegian, Swedish
+     Finno-Ugric family
+          Estonian, Finnish
+     Latin/Greek family
+          Greek
+     Semitic family
+          Hebrew
+     Romance family
+          Italian, Portuguese, Spanish
+     Artificial
+          Esperanto
+
+Two forms, singular used for zero and one
+     Exceptional case in the language family.  The header entry would
+     be:
+
+          Plural-Forms: nplurals=2; plural=n>1;
+
+     Languages with this property include:
+
+     Romanic family
+          French, Brazilian Portuguese
+
+Three forms, special case for zero
+     The header entry would be:
+
+          Plural-Forms: nplurals=3; plural=n%10==1 && n%100!=11 ? 0 : n != 0 ? 1 : 2;
+
+     Languages with this property include:
+
+     Baltic family
+          Latvian
+
+Three forms, special cases for one and two
+     The header entry would be:
+
+          Plural-Forms: nplurals=3; plural=n==1 ? 0 : n==2 ? 1 : 2;
+
+     Languages with this property include:
+
+     Celtic
+          Gaeilge (Irish)
+
+Three forms, special case for numbers ending in 1[2-9]
+     The header entry would look like this:
+
+          Plural-Forms: nplurals=3; \
+              plural=n%10==1 && n%100!=11 ? 0 : \
+                     n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2;
+
+     Languages with this property include:
+
+     Baltic family
+          Lithuanian
+
+Three forms, special cases for numbers ending in 1 and 2, 3, 4, except those ending in 1[1-4]
+     The header entry would look like this:
+
+          Plural-Forms: nplurals=3; \
+              plural=n%100/10==1 ? 2 : n%10==1 ? 0 : (n+9)%10>3 ? 2 : 1;
+
+     Languages with this property include:
+
+     Slavic family
+          Croatian, Czech, Russian, Ukrainian
+
+Three forms, special cases for 1 and 2, 3, 4
+     The header entry would look like this:
+
+          Plural-Forms: nplurals=3; \
+              plural=(n==1) ? 1 : (n>=2 && n<=4) ? 2 : 0;
+
+     Languages with this property include:
+
+     Slavic family
+          Slovak
+
+Three forms, special case for one and some numbers ending in 2, 3, or 4
+     The header entry would look like this:
+
+          Plural-Forms: nplurals=3; \
+              plural=n==1 ? 0 : \
+                     n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2;
+
+     Languages with this property include:
+
+     Slavic family
+          Polish
+
+Four forms, special case for one and all numbers ending in 02, 03, or 04
+     The header entry would look like this:
+
+          Plural-Forms: nplurals=4; \
+              plural=n%100==1 ? 0 : n%100==2 ? 1 : n%100==3 || n%100==4 ? 2 : 3;
+
+     Languages with this property include:
+
+     Slavic family
+          Slovenian
+
+   ---------- Footnotes ----------
+
+   (1) Additions are welcome.  Send appropriate information to
+<bug-glibc-manual@gnu.org>.
+
+File: libc.info,  Node: Charset conversion in gettext,  Next: GUI program problems,  Prev: Advanced gettext functions,  Up: Message catalogs with gettext
+
+8.2.1.4 How to specify the output character set ‘gettext’ uses
+..............................................................
+
+‘gettext’ not only looks up a translation in a message catalog, it also
+converts the translation on the fly to the desired output character set.
+This is useful if the user is working in a different character set than
+the translator who created the message catalog, because it avoids
+distributing variants of message catalogs which differ only in the
+character set.
+
+   The output character set is, by default, the value of ‘nl_langinfo
+(CODESET)’, which depends on the ‘LC_CTYPE’ part of the current locale.
+But programs which store strings in a locale independent way (e.g.
+UTF-8) can request that ‘gettext’ and related functions return the
+translations in that encoding, by use of the ‘bind_textdomain_codeset’
+function.
+
+   Note that the MSGID argument to ‘gettext’ is not subject to character
+set conversion.  Also, when ‘gettext’ does not find a translation for
+MSGID, it returns MSGID unchanged – independently of the current output
+character set.  It is therefore recommended that all MSGIDs be US-ASCII
+strings.
+
+ -- Function: char * bind_textdomain_codeset (const char *DOMAINNAME,
+          const char *CODESET)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem | *Note
+     POSIX Safety Concepts::.
+
+     The ‘bind_textdomain_codeset’ function can be used to specify the
+     output character set for message catalogs for domain DOMAINNAME.
+     The CODESET argument must be a valid codeset name which can be used
+     for the ‘iconv_open’ function, or a null pointer.
+
+     If the CODESET parameter is the null pointer,
+     ‘bind_textdomain_codeset’ returns the currently selected codeset
+     for the domain with the name DOMAINNAME.  It returns ‘NULL’ if no
+     codeset has yet been selected.
+
+     The ‘bind_textdomain_codeset’ function can be used several times.
+     If used multiple times with the same DOMAINNAME argument, the later
+     call overrides the settings made by the earlier one.
+
+     The ‘bind_textdomain_codeset’ function returns a pointer to a
+     string containing the name of the selected codeset.  The string is
+     allocated internally in the function and must not be changed by the
+     user.  If the system went out of core during the execution of
+     ‘bind_textdomain_codeset’, the return value is ‘NULL’ and the
+     global variable ‘errno’ is set accordingly.
+
+File: libc.info,  Node: GUI program problems,  Next: Using gettextized software,  Prev: Charset conversion in gettext,  Up: Message catalogs with gettext
+
+8.2.1.5 How to use ‘gettext’ in GUI programs
+............................................
+
+One place where the ‘gettext’ functions, if used normally, have big
+problems is within programs with graphical user interfaces (GUIs).  The
+problem is that many of the strings which have to be translated are very
+short.  They have to appear in pull-down menus which restricts the
+length.  But strings which are not containing entire sentences or at
+least large fragments of a sentence may appear in more than one
+situation in the program but might have different translations.  This is
+especially true for the one-word strings which are frequently used in
+GUI programs.
+
+   As a consequence many people say that the ‘gettext’ approach is wrong
+and instead ‘catgets’ should be used which indeed does not have this
+problem.  But there is a very simple and powerful method to handle these
+kind of problems with the ‘gettext’ functions.
+
+As an example consider the following fictional situation.  A GUI program
+has a menu bar with the following entries:
+
+     +------------+------------+--------------------------------------+
+     | File       | Printer    |                                      |
+     +------------+------------+--------------------------------------+
+     | Open     | | Select   |
+     | New      | | Open     |
+     +----------+ | Connect  |
+                  +----------+
+
+   To have the strings ‘File’, ‘Printer’, ‘Open’, ‘New’, ‘Select’, and
+‘Connect’ translated there has to be at some point in the code a call to
+a function of the ‘gettext’ family.  But in two places the string passed
+into the function would be ‘Open’.  The translations might not be the
+same and therefore we are in the dilemma described above.
+
+   One solution to this problem is to artificially extend the strings to
+make them unambiguous.  But what would the program do if no translation
+is available?  The extended string is not what should be printed.  So we
+should use a slightly modified version of the functions.
+
+   To extend the strings a uniform method should be used.  E.g., in the
+example above, the strings could be chosen as
+
+     Menu|File
+     Menu|Printer
+     Menu|File|Open
+     Menu|File|New
+     Menu|Printer|Select
+     Menu|Printer|Open
+     Menu|Printer|Connect
+
+   Now all the strings are different and if now instead of ‘gettext’ the
+following little wrapper function is used, everything works just fine:
+
+       char *
+       sgettext (const char *msgid)
+       {
+         char *msgval = gettext (msgid);
+         if (msgval == msgid)
+           msgval = strrchr (msgid, '|') + 1;
+         return msgval;
+       }
+
+   What this little function does is to recognize the case when no
+translation is available.  This can be done very efficiently by a
+pointer comparison since the return value is the input value.  If there
+is no translation we know that the input string is in the format we used
+for the Menu entries and therefore contains a ‘|’ character.  We simply
+search for the last occurrence of this character and return a pointer to
+the character following it.  That’s it!
+
+   If one now consistently uses the extended string form and replaces
+the ‘gettext’ calls with calls to ‘sgettext’ (this is normally limited
+to very few places in the GUI implementation) then it is possible to
+produce a program which can be internationalized.
+
+   With advanced compilers (such as GNU C) one can write the ‘sgettext’
+functions as an inline function or as a macro like this:
+
+     #define sgettext(msgid) \
+       ({ const char *__msgid = (msgid);            \
+          char *__msgstr = gettext (__msgid);       \
+          if (__msgval == __msgid)                  \
+            __msgval = strrchr (__msgid, '|') + 1;  \
+          __msgval; })
+
+   The other ‘gettext’ functions (‘dgettext’, ‘dcgettext’ and the
+‘ngettext’ equivalents) can and should have corresponding functions as
+well which look almost identical, except for the parameters and the call
+to the underlying function.
+
+   Now there is of course the question why such functions do not exist
+in the GNU C Library?  There are two parts of the answer to this
+question.
+
+   • They are easy to write and therefore can be provided by the project
+     they are used in.  This is not an answer by itself and must be seen
+     together with the second part which is:
+
+   • There is no way the C library can contain a version which can work
+     everywhere.  The problem is the selection of the character to
+     separate the prefix from the actual string in the extended string.
+     The examples above used ‘|’ which is a quite good choice because it
+     resembles a notation frequently used in this context and it also is
+     a character not often used in message strings.
+
+     But what if the character is used in message strings.  Or if the
+     chose character is not available in the character set on the
+     machine one compiles (e.g., ‘|’ is not required to exist for ISO C;
+     this is why the ‘iso646.h’ file exists in ISO C programming
+     environments).
+
+   There is only one more comment to make left.  The wrapper function
+above requires that the translations strings are not extended
+themselves.  This is only logical.  There is no need to disambiguate the
+strings (since they are never used as keys for a search) and one also
+saves quite some memory and disk space by doing this.
+
+File: libc.info,  Node: Using gettextized software,  Prev: GUI program problems,  Up: Message catalogs with gettext
+
+8.2.1.6 User influence on ‘gettext’
+...................................
+
+The last sections described what the programmer can do to
+internationalize the messages of the program.  But it is finally up to
+the user to select the message s/he wants to see.  S/He must understand
+them.
+
+   The POSIX locale model uses the environment variables ‘LC_COLLATE’,
+‘LC_CTYPE’, ‘LC_MESSAGES’, ‘LC_MONETARY’, ‘LC_NUMERIC’, and ‘LC_TIME’ to
+select the locale which is to be used.  This way the user can influence
+lots of functions.  As we mentioned above, the ‘gettext’ functions also
+take advantage of this.
+
+   To understand how this happens it is necessary to take a look at the
+various components of the filename which gets computed to locate a
+message catalog.  It is composed as follows:
+
+     DIR_NAME/LOCALE/LC_CATEGORY/DOMAIN_NAME.mo
+
+   The default value for DIR_NAME is system specific.  It is computed
+from the value given as the prefix while configuring the C library.
+This value normally is ‘/usr’ or ‘/’.  For the former the complete
+DIR_NAME is:
+
+     /usr/share/locale
+
+   We can use ‘/usr/share’ since the ‘.mo’ files containing the message
+catalogs are system independent, so all systems can use the same files.
+If the program executed the ‘bindtextdomain’ function for the message
+domain that is currently handled, the ‘dir_name’ component is exactly
+the value which was given to the function as the second parameter.
+I.e., ‘bindtextdomain’ allows overwriting the only system dependent and
+fixed value to make it possible to address files anywhere in the
+filesystem.
+
+   The CATEGORY is the name of the locale category which was selected in
+the program code.  For ‘gettext’ and ‘dgettext’ this is always
+‘LC_MESSAGES’, for ‘dcgettext’ this is selected by the value of the
+third parameter.  As said above it should be avoided to ever use a
+category other than ‘LC_MESSAGES’.
+
+   The LOCALE component is computed based on the category used.  Just
+like for the ‘setlocale’ function here comes the user selection into the
+play.  Some environment variables are examined in a fixed order and the
+first environment variable set determines the return value of the lookup
+process.  In detail, for the category ‘LC_xxx’ the following variables
+in this order are examined:
+
+‘LANGUAGE’
+‘LC_ALL’
+‘LC_xxx’
+‘LANG’
+
+   This looks very familiar.  With the exception of the ‘LANGUAGE’
+environment variable this is exactly the lookup order the ‘setlocale’
+function uses.  But why introduce the ‘LANGUAGE’ variable?
+
+   The reason is that the syntax of the values these variables can have
+is different to what is expected by the ‘setlocale’ function.  If we
+would set ‘LC_ALL’ to a value following the extended syntax that would
+mean the ‘setlocale’ function will never be able to use the value of
+this variable as well.  An additional variable removes this problem plus
+we can select the language independently of the locale setting which
+sometimes is useful.
+
+   While for the ‘LC_xxx’ variables the value should consist of exactly
+one specification of a locale the ‘LANGUAGE’ variable’s value can
+consist of a colon separated list of locale names.  The attentive reader
+will realize that this is the way we manage to implement one of our
+additional demands above: we want to be able to specify an ordered list
+of languages.
+
+   Back to the constructed filename we have only one component missing.
+The DOMAIN_NAME part is the name which was either registered using the
+‘textdomain’ function or which was given to ‘dgettext’ or ‘dcgettext’ as
+the first parameter.  Now it becomes obvious that a good choice for the
+domain name in the program code is a string which is closely related to
+the program/package name.  E.g., for the GNU C Library the domain name
+is ‘libc’.
+
+A limited piece of example code should show how the program is supposed
+to work:
+
+     {
+       setlocale (LC_ALL, "");
+       textdomain ("test-package");
+       bindtextdomain ("test-package", "/usr/local/share/locale");
+       puts (gettext ("Hello, world!"));
+     }
+
+   At the program start the default domain is ‘messages’, and the
+default locale is "C". The ‘setlocale’ call sets the locale according to
+the user’s environment variables; remember that correct functioning of
+‘gettext’ relies on the correct setting of the ‘LC_MESSAGES’ locale (for
+looking up the message catalog) and of the ‘LC_CTYPE’ locale (for the
+character set conversion).  The ‘textdomain’ call changes the default
+domain to ‘test-package’.  The ‘bindtextdomain’ call specifies that the
+message catalogs for the domain ‘test-package’ can be found below the
+directory ‘/usr/local/share/locale’.
+
+   If the user sets in her/his environment the variable ‘LANGUAGE’ to
+‘de’ the ‘gettext’ function will try to use the translations from the
+file
+
+     /usr/local/share/locale/de/LC_MESSAGES/test-package.mo
+
+   From the above descriptions it should be clear which component of
+this filename is determined by which source.
+
+   In the above example we assumed the ‘LANGUAGE’ environment variable
+to be ‘de’.  This might be an appropriate selection but what happens if
+the user wants to use ‘LC_ALL’ because of the wider usability and here
+the required value is ‘de_DE.ISO-8859-1’?  We already mentioned above
+that a situation like this is not infrequent.  E.g., a person might
+prefer reading a dialect and if this is not available fall back on the
+standard language.
+
+   The ‘gettext’ functions know about situations like this and can
+handle them gracefully.  The functions recognize the format of the value
+of the environment variable.  It can split the value is different pieces
+and by leaving out the only or the other part it can construct new
+values.  This happens of course in a predictable way.  To understand
+this one must know the format of the environment variable value.  There
+is one more or less standardized form, originally from the X/Open
+specification:
+
+   ‘language[_territory[.codeset]][@modifier]’
+
+   Less specific locale names will be stripped in the order of the
+following list:
+
+  1. ‘codeset’
+  2. ‘normalized codeset’
+  3. ‘territory’
+  4. ‘modifier’
+
+   The ‘language’ field will never be dropped for obvious reasons.
+
+   The only new thing is the ‘normalized codeset’ entry.  This is
+another goodie which is introduced to help reduce the chaos which
+derives from the inability of people to standardize the names of
+character sets.  Instead of ISO-8859-1 one can often see 8859-1, 88591,
+iso8859-1, or iso_8859-1.  The ‘normalized codeset’ value is generated
+from the user-provided character set name by applying the following
+rules:
+
+  1. Remove all characters besides numbers and letters.
+  2. Fold letters to lowercase.
+  3. If the same only contains digits prepend the string ‘"iso"’.
+
+So all of the above names will be normalized to ‘iso88591’.  This allows
+the program user much more freedom in choosing the locale name.
+
+   Even this extended functionality still does not help to solve the
+problem that completely different names can be used to denote the same
+locale (e.g., ‘de’ and ‘german’).  To be of help in this situation the
+locale implementation and also the ‘gettext’ functions know about
+aliases.
+
+   The file ‘/usr/share/locale/locale.alias’ (replace ‘/usr’ with
+whatever prefix you used for configuring the C library) contains a
+mapping of alternative names to more regular names.  The system manager
+is free to add new entries to fill her/his own needs.  The selected
+locale from the environment is compared with the entries in the first
+column of this file ignoring the case.  If they match, the value of the
+second column is used instead for the further handling.
+
+   In the description of the format of the environment variables we
+already mentioned the character set as a factor in the selection of the
+message catalog.  In fact, only catalogs which contain text written
+using the character set of the system/program can be used (directly;
+there will come a solution for this some day).  This means for the user
+that s/he will always have to take care of this.  If in the collection
+of the message catalogs there are files for the same language but coded
+using different character sets the user has to be careful.
+
+File: libc.info,  Node: Helper programs for gettext,  Prev: Message catalogs with gettext,  Up: The Uniforum approach
+
+8.2.2 Programs to handle message catalogs for ‘gettext’
+-------------------------------------------------------
+
+The GNU C Library does not contain the source code for the programs to
+handle message catalogs for the ‘gettext’ functions.  As part of the GNU
+project the GNU gettext package contains everything the developer needs.
+The functionality provided by the tools in this package by far exceeds
+the abilities of the ‘gencat’ program described above for the ‘catgets’
+functions.
+
+   There is a program ‘msgfmt’ which is the equivalent program to the
+‘gencat’ program.  It generates from the human-readable and -editable
+form of the message catalog a binary file which can be used by the
+‘gettext’ functions.  But there are several more programs available.
+
+   The ‘xgettext’ program can be used to automatically extract the
+translatable messages from a source file.  I.e., the programmer need not
+take care of the translations and the list of messages which have to be
+translated.  S/He will simply wrap the translatable string in calls to
+‘gettext’ et.al and the rest will be done by ‘xgettext’.  This program
+has a lot of options which help to customize the output or help to
+understand the input better.
+
+   Other programs help to manage the development cycle when new messages
+appear in the source files or when a new translation of the messages
+appears.  Here it should only be noted that using all the tools in GNU
+gettext it is possible to _completely_ automate the handling of message
+catalogs.  Besides marking the translatable strings in the source code
+and generating the translations the developers do not have anything to
+do themselves.
+
+File: libc.info,  Node: Searching and Sorting,  Next: Pattern Matching,  Prev: Message Translation,  Up: Top
+

@@ -1,0 +1,405 @@
+12.13 Customizing ‘printf’
+==========================
+
+The GNU C Library lets you define your own custom conversion specifiers
+for ‘printf’ template strings, to teach ‘printf’ clever ways to print
+the important data structures of your program.
+
+   The way you do this is by registering the conversion with the
+function ‘register_printf_function’; see *note Registering New
+Conversions::.  One of the arguments you pass to this function is a
+pointer to a handler function that produces the actual output; see *note
+Defining the Output Handler::, for information on how to write this
+function.
+
+   You can also install a function that just returns information about
+the number and type of arguments expected by the conversion specifier.
+*Note Parsing a Template String::, for information about this.
+
+   The facilities of this section are declared in the header file
+‘printf.h’.
+
+* Menu:
+
+* Registering New Conversions::         Using ‘register_printf_function’
+					 to register a new output conversion.
+* Conversion Specifier Options::        The handler must be able to get
+					 the options specified in the
+					 template when it is called.
+* Defining the Output Handler::         Defining the handler and arginfo
+					 functions that are passed as arguments
+					 to ‘register_printf_function’.
+* Printf Extension Example::            How to define a ‘printf’
+					 handler function.
+* Predefined Printf Handlers::          Predefined ‘printf’ handlers.
+
+   *Portability Note:* The ability to extend the syntax of ‘printf’
+template strings is a GNU extension.  ISO standard C has nothing
+similar.  When using the GNU C compiler or any other compiler that
+interprets calls to standard I/O functions according to the rules of the
+language standard it is necessary to disable such handling by the
+appropriate compiler option.  Otherwise the behavior of a program that
+relies on the extension is undefined.
+
+File: libc.info,  Node: Registering New Conversions,  Next: Conversion Specifier Options,  Up: Customizing Printf
+
+12.13.1 Registering New Conversions
+-----------------------------------
+
+The function to register a new output conversion is
+‘register_printf_function’, declared in ‘printf.h’.
+
+ -- Function: int register_printf_function (int SPEC, printf_function
+          HANDLER-FUNCTION, printf_arginfo_function ARGINFO-FUNCTION)
+
+     Preliminary: | MT-Unsafe const:printfext | AS-Unsafe heap lock |
+     AC-Unsafe mem lock | *Note POSIX Safety Concepts::.
+
+     This function defines the conversion specifier character SPEC.
+     Thus, if SPEC is ‘'Y'’, it defines the conversion ‘%Y’.  You can
+     redefine the built-in conversions like ‘%s’, but flag characters
+     like ‘#’ and type modifiers like ‘l’ can never be used as
+     conversions; calling ‘register_printf_function’ for those
+     characters has no effect.  It is advisable not to use lowercase
+     letters, since the ISO C standard warns that additional lowercase
+     letters may be standardized in future editions of the standard.
+
+     The HANDLER-FUNCTION is the function called by ‘printf’ and friends
+     when this conversion appears in a template string.  *Note Defining
+     the Output Handler::, for information about how to define a
+     function to pass as this argument.  If you specify a null pointer,
+     any existing handler function for SPEC is removed.
+
+     The ARGINFO-FUNCTION is the function called by
+     ‘parse_printf_format’ when this conversion appears in a template
+     string.  *Note Parsing a Template String::, for information about
+     this.
+
+     *Attention:* In the GNU C Library versions before 2.0 the
+     ARGINFO-FUNCTION function did not need to be installed unless the
+     user used the ‘parse_printf_format’ function.  This has changed.
+     Now a call to any of the ‘printf’ functions will call this function
+     when this format specifier appears in the format string.
+
+     The return value is ‘0’ on success, and ‘-1’ on failure (which
+     occurs if SPEC is out of range).
+
+     *Portability Note:* It is possible to redefine the standard output
+     conversions but doing so is strongly discouraged because it may
+     interfere with the behavior of programs and compiler
+     implementations that assume the effects of the conversions conform
+     to the relevant language standards.  In addition, conforming
+     compilers need not guarantee that the function registered for a
+     standard conversion will be called for each such conversion in
+     every format string in a program.
+
+File: libc.info,  Node: Conversion Specifier Options,  Next: Defining the Output Handler,  Prev: Registering New Conversions,  Up: Customizing Printf
+
+12.13.2 Conversion Specifier Options
+------------------------------------
+
+If you define a meaning for ‘%A’, what if the template contains ‘%+23A’
+or ‘%-#A’?  To implement a sensible meaning for these, the handler when
+called needs to be able to get the options specified in the template.
+
+   Both the HANDLER-FUNCTION and ARGINFO-FUNCTION accept an argument
+that points to a ‘struct printf_info’, which contains information about
+the options appearing in an instance of the conversion specifier.  This
+data type is declared in the header file ‘printf.h’.
+
+ -- Type: struct printf_info
+
+     This structure is used to pass information about the options
+     appearing in an instance of a conversion specifier in a ‘printf’
+     template string to the handler and arginfo functions for that
+     specifier.  It contains the following members:
+
+     ‘int prec’
+          This is the precision specified.  The value is ‘-1’ if no
+          precision was specified.  If the precision was given as ‘*’,
+          the ‘printf_info’ structure passed to the handler function
+          contains the actual value retrieved from the argument list.
+          But the structure passed to the arginfo function contains a
+          value of ‘INT_MIN’, since the actual value is not known.
+
+     ‘int width’
+          This is the minimum field width specified.  The value is ‘0’
+          if no width was specified.  If the field width was given as
+          ‘*’, the ‘printf_info’ structure passed to the handler
+          function contains the actual value retrieved from the argument
+          list.  But the structure passed to the arginfo function
+          contains a value of ‘INT_MIN’, since the actual value is not
+          known.
+
+     ‘wchar_t spec’
+          This is the conversion specifier character specified.  It’s
+          stored in the structure so that you can register the same
+          handler function for multiple characters, but still have a way
+          to tell them apart when the handler function is called.
+
+     ‘unsigned int is_long_double’
+          This is a boolean that is true if the ‘L’, ‘ll’, or ‘q’ type
+          modifier was specified.  For integer conversions, this
+          indicates ‘long long int’, as opposed to ‘long double’ for
+          floating point conversions.
+
+     ‘unsigned int is_char’
+          This is a boolean that is true if the ‘hh’ type modifier was
+          specified.
+
+     ‘unsigned int is_short’
+          This is a boolean that is true if the ‘h’ type modifier was
+          specified.
+
+     ‘unsigned int is_long’
+          This is a boolean that is true if the ‘l’ type modifier was
+          specified.
+
+     ‘unsigned int alt’
+          This is a boolean that is true if the ‘#’ flag was specified.
+
+     ‘unsigned int space’
+          This is a boolean that is true if the ‘ ’ flag was specified.
+
+     ‘unsigned int left’
+          This is a boolean that is true if the ‘-’ flag was specified.
+
+     ‘unsigned int showsign’
+          This is a boolean that is true if the ‘+’ flag was specified.
+
+     ‘unsigned int group’
+          This is a boolean that is true if the ‘'’ flag was specified.
+
+     ‘unsigned int extra’
+          This flag has a special meaning depending on the context.  It
+          could be used freely by the user-defined handlers but when
+          called from the ‘printf’ function this variable always
+          contains the value ‘0’.
+
+     ‘unsigned int wide’
+          This flag is set if the stream is wide oriented.
+
+     ‘wchar_t pad’
+          This is the character to use for padding the output to the
+          minimum field width.  The value is ‘'0'’ if the ‘0’ flag was
+          specified, and ‘' '’ otherwise.
+
+File: libc.info,  Node: Defining the Output Handler,  Next: Printf Extension Example,  Prev: Conversion Specifier Options,  Up: Customizing Printf
+
+12.13.3 Defining the Output Handler
+-----------------------------------
+
+Now let’s look at how to define the handler and arginfo functions which
+are passed as arguments to ‘register_printf_function’.
+
+   *Compatibility Note:* The interface changed in the GNU C Library
+version 2.0.  Previously the third argument was of type ‘va_list *’.
+
+   You should define your handler functions with a prototype like:
+
+     int FUNCTION (FILE *stream, const struct printf_info *info,
+     		    const void *const *args)
+
+   The STREAM argument passed to the handler function is the stream to
+which it should write output.
+
+   The INFO argument is a pointer to a structure that contains
+information about the various options that were included with the
+conversion in the template string.  You should not modify this structure
+inside your handler function.  *Note Conversion Specifier Options::, for
+a description of this data structure.
+
+   The ARGS is a vector of pointers to the arguments data.  The number
+of arguments was determined by calling the argument information function
+provided by the user.
+
+   Your handler function should return a value just like ‘printf’ does:
+it should return the number of characters it has written, or a negative
+value to indicate an error.
+
+ -- Data Type: printf_function
+
+     This is the data type that a handler function should have.
+
+   If you are going to use ‘parse_printf_format’ in your application,
+you must also define a function to pass as the ARGINFO-FUNCTION argument
+for each new conversion you install with ‘register_printf_function’.
+
+   You have to define these functions with a prototype like:
+
+     int FUNCTION (const struct printf_info *info,
+     		    size_t n, int *argtypes)
+
+   The return value from the function should be the number of arguments
+the conversion expects.  The function should also fill in no more than N
+elements of the ARGTYPES array with information about the types of each
+of these arguments.  This information is encoded using the various ‘PA_’
+macros.  (You will notice that this is the same calling convention
+‘parse_printf_format’ itself uses.)
+
+ -- Data Type: printf_arginfo_function
+
+     This type is used to describe functions that return information
+     about the number and type of arguments used by a conversion
+     specifier.
+
+File: libc.info,  Node: Printf Extension Example,  Next: Predefined Printf Handlers,  Prev: Defining the Output Handler,  Up: Customizing Printf
+
+12.13.4 ‘printf’ Extension Example
+----------------------------------
+
+Here is an example showing how to define a ‘printf’ handler function.
+This program defines a data structure called a ‘Widget’ and defines the
+‘%W’ conversion to print information about ‘Widget *’ arguments,
+including the pointer value and the name stored in the data structure.
+The ‘%W’ conversion supports the minimum field width and
+left-justification options, but ignores everything else.
+
+
+     #include <stdio.h>
+     #include <stdlib.h>
+     #include <printf.h>
+
+     typedef struct
+     {
+       char *name;
+     }
+     Widget;
+
+     int
+     print_widget (FILE *stream,
+                   const struct printf_info *info,
+                   const void *const *args)
+     {
+       const Widget *w;
+       char *buffer;
+       int len;
+
+       /* Format the output into a string. */
+       w = *((const Widget **) (args[0]));
+       len = asprintf (&buffer, "<Widget %p: %s>", w, w->name);
+       if (len == -1)
+         return -1;
+
+       /* Pad to the minimum field width and print to the stream. */
+       len = fprintf (stream, "%*s",
+                      (info->left ? -info->width : info->width),
+                      buffer);
+
+       /* Clean up and return. */
+       free (buffer);
+       return len;
+     }
+
+
+     int
+     print_widget_arginfo (const struct printf_info *info, size_t n,
+                           int *argtypes)
+     {
+       /* We always take exactly one argument and this is a pointer to the
+          structure.. */
+       if (n > 0)
+         argtypes[0] = PA_POINTER;
+       return 1;
+     }
+
+
+     int
+     main (void)
+     {
+       /* Make a widget to print. */
+       Widget mywidget;
+       mywidget.name = "mywidget";
+
+       /* Register the print function for widgets. */
+       register_printf_function ('W', print_widget, print_widget_arginfo);
+
+       /* Now print the widget. */
+       printf ("|%W|\n", &mywidget);
+       printf ("|%35W|\n", &mywidget);
+       printf ("|%-35W|\n", &mywidget);
+
+       return 0;
+     }
+
+   The output produced by this program looks like:
+
+     |<Widget 0xffeffb7c: mywidget>|
+     |      <Widget 0xffeffb7c: mywidget>|
+     |<Widget 0xffeffb7c: mywidget>      |
+
+File: libc.info,  Node: Predefined Printf Handlers,  Prev: Printf Extension Example,  Up: Customizing Printf
+
+12.13.5 Predefined ‘printf’ Handlers
+------------------------------------
+
+The GNU C Library also contains a concrete and useful application of the
+‘printf’ handler extension.  There are two functions available which
+implement a special way to print floating-point numbers.
+
+ -- Function: int printf_size (FILE *FP, const struct printf_info *INFO,
+          const void *const *ARGS)
+
+     Preliminary: | MT-Safe race:fp locale | AS-Unsafe corrupt heap |
+     AC-Unsafe mem corrupt | *Note POSIX Safety Concepts::.
+
+     Print a given floating point number as for the format ‘%f’ except
+     that there is a postfix character indicating the divisor for the
+     number to make this less than 1000.  There are two possible
+     divisors: powers of 1024 or powers of 1000.  Which one is used
+     depends on the format character specified while registered this
+     handler.  If the character is of lower case, 1024 is used.  For
+     upper case characters, 1000 is used.
+
+     The postfix tag corresponds to bytes, kilobytes, megabytes,
+     gigabytes, etc.  The full table is:
+
+     low   Multiplier    From    Upper   Multiplier
+     ’ ’   1                     ’ ’     1
+     k     2^10 (1024)   kilo    K       10^3 (1000)
+     m     2^20          mega    M       10^6
+     g     2^30          giga    G       10^9
+     t     2^40          tera    T       10^12
+     p     2^50          peta    P       10^15
+     e     2^60          exa     E       10^18
+     z     2^70          zetta   Z       10^21
+     y     2^80          yotta   Y       10^24
+
+     The default precision is 3, i.e., 1024 is printed with a lower-case
+     format character as if it were ‘%.3fk’ and will yield ‘1.000k’.
+
+   Due to the requirements of ‘register_printf_function’ we must also
+provide the function which returns information about the arguments.
+
+ -- Function: int printf_size_info (const struct printf_info *INFO,
+          size_t N, int *ARGTYPES)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function will return in ARGTYPES the information about the
+     used parameters in the way the ‘vfprintf’ implementation expects
+     it.  The format always takes one argument.
+
+   To use these functions both functions must be registered with a call
+like
+
+     register_printf_function ('B', printf_size, printf_size_info);
+
+   Here we register the functions to print numbers as powers of 1000
+since the format character ‘'B'’ is an upper-case character.  If we
+would additionally use ‘'b'’ in a line like
+
+     register_printf_function ('b', printf_size, printf_size_info);
+
+we could also print using a power of 1024.  Please note that all that is
+different in these two lines is the format specifier.  The ‘printf_size’
+function knows about the difference between lower and upper case format
+specifiers.
+
+   The use of ‘'B'’ and ‘'b'’ is no coincidence.  Rather it is the
+preferred way to use this functionality since it is available on some
+other systems which also use format specifiers.
+
+File: libc.info,  Node: Formatted Input,  Next: EOF and Errors,  Prev: Customizing Printf,  Up: I/O on Streams
+

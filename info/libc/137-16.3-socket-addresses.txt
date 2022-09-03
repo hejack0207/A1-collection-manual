@@ -1,0 +1,223 @@
+16.3 Socket Addresses
+=====================
+
+The name of a socket is normally called an “address”.  The functions and
+symbols for dealing with socket addresses were named inconsistently,
+sometimes using the term “name” and sometimes using “address”.  You can
+regard these terms as synonymous where sockets are concerned.
+
+   A socket newly created with the ‘socket’ function has no address.
+Other processes can find it for communication only if you give it an
+address.  We call this “binding” the address to the socket, and the way
+to do it is with the ‘bind’ function.
+
+   You need only be concerned with the address of a socket if other
+processes are to find it and start communicating with it.  You can
+specify an address for other sockets, but this is usually pointless; the
+first time you send data from a socket, or use it to initiate a
+connection, the system assigns an address automatically if you have not
+specified one.
+
+   Occasionally a client needs to specify an address because the server
+discriminates based on address; for example, the rsh and rlogin
+protocols look at the client’s socket address and only bypass passphrase
+checking if it is less than ‘IPPORT_RESERVED’ (*note Ports::).
+
+   The details of socket addresses vary depending on what namespace you
+are using.  *Note Local Namespace::, or *note Internet Namespace::, for
+specific information.
+
+   Regardless of the namespace, you use the same functions ‘bind’ and
+‘getsockname’ to set and examine a socket’s address.  These functions
+use a phony data type, ‘struct sockaddr *’, to accept the address.  In
+practice, the address lives in a structure of some other data type
+appropriate to the address format you are using, but you cast its
+address to ‘struct sockaddr *’ when you pass it to ‘bind’.
+
+* Menu:
+
+* Address Formats::		About ‘struct sockaddr’.
+* Setting Address::		Binding an address to a socket.
+* Reading Address::		Reading the address of a socket.
+
+File: libc.info,  Node: Address Formats,  Next: Setting Address,  Up: Socket Addresses
+
+16.3.1 Address Formats
+----------------------
+
+The functions ‘bind’ and ‘getsockname’ use the generic data type ‘struct
+sockaddr *’ to represent a pointer to a socket address.  You can’t use
+this data type effectively to interpret an address or construct one; for
+that, you must use the proper data type for the socket’s namespace.
+
+   Thus, the usual practice is to construct an address of the proper
+namespace-specific type, then cast a pointer to ‘struct sockaddr *’ when
+you call ‘bind’ or ‘getsockname’.
+
+   The one piece of information that you can get from the ‘struct
+sockaddr’ data type is the “address format designator”.  This tells you
+which data type to use to understand the address fully.
+
+   The symbols in this section are defined in the header file
+‘sys/socket.h’.
+
+ -- Data Type: struct sockaddr
+
+     The ‘struct sockaddr’ type itself has the following members:
+
+     ‘short int sa_family’
+          This is the code for the address format of this address.  It
+          identifies the format of the data which follows.
+
+     ‘char sa_data[14]’
+          This is the actual socket address data, which is
+          format-dependent.  Its length also depends on the format, and
+          may well be more than 14.  The length 14 of ‘sa_data’ is
+          essentially arbitrary.
+
+   Each address format has a symbolic name which starts with ‘AF_’.
+Each of them corresponds to a ‘PF_’ symbol which designates the
+corresponding namespace.  Here is a list of address format names:
+
+‘AF_LOCAL’
+
+     This designates the address format that goes with the local
+     namespace.  (‘PF_LOCAL’ is the name of that namespace.)  *Note
+     Local Namespace Details::, for information about this address
+     format.
+
+‘AF_UNIX’
+
+     This is a synonym for ‘AF_LOCAL’.  Although ‘AF_LOCAL’ is mandated
+     by POSIX.1g, ‘AF_UNIX’ is portable to more systems.  ‘AF_UNIX’ was
+     the traditional name stemming from BSD, so even most POSIX systems
+     support it.  It is also the name of choice in the Unix98
+     specification.  (The same is true for ‘PF_UNIX’ vs.  ‘PF_LOCAL’).
+
+‘AF_FILE’
+
+     This is another synonym for ‘AF_LOCAL’, for compatibility.
+     (‘PF_FILE’ is likewise a synonym for ‘PF_LOCAL’.)
+
+‘AF_INET’
+
+     This designates the address format that goes with the Internet
+     namespace.  (‘PF_INET’ is the name of that namespace.)  *Note
+     Internet Address Formats::.
+
+‘AF_INET6’
+
+     This is similar to ‘AF_INET’, but refers to the IPv6 protocol.
+     (‘PF_INET6’ is the name of the corresponding namespace.)
+
+‘AF_UNSPEC’
+
+     This designates no particular address format.  It is used only in
+     rare cases, such as to clear out the default destination address of
+     a “connected” datagram socket.  *Note Sending Datagrams::.
+
+     The corresponding namespace designator symbol ‘PF_UNSPEC’ exists
+     for completeness, but there is no reason to use it in a program.
+
+   ‘sys/socket.h’ defines symbols starting with ‘AF_’ for many different
+kinds of networks, most or all of which are not actually implemented.
+We will document those that really work as we receive information about
+how to use them.
+
+File: libc.info,  Node: Setting Address,  Next: Reading Address,  Prev: Address Formats,  Up: Socket Addresses
+
+16.3.2 Setting the Address of a Socket
+--------------------------------------
+
+Use the ‘bind’ function to assign an address to a socket.  The prototype
+for ‘bind’ is in the header file ‘sys/socket.h’.  For examples of use,
+see *note Local Socket Example::, or see *note Inet Example::.
+
+ -- Function: int bind (int SOCKET, struct sockaddr *ADDR, socklen_t
+          LENGTH)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘bind’ function assigns an address to the socket SOCKET.  The
+     ADDR and LENGTH arguments specify the address; the detailed format
+     of the address depends on the namespace.  The first part of the
+     address is always the format designator, which specifies a
+     namespace, and says that the address is in the format of that
+     namespace.
+
+     The return value is ‘0’ on success and ‘-1’ on failure.  The
+     following ‘errno’ error conditions are defined for this function:
+
+     ‘EBADF’
+          The SOCKET argument is not a valid file descriptor.
+
+     ‘ENOTSOCK’
+          The descriptor SOCKET is not a socket.
+
+     ‘EADDRNOTAVAIL’
+          The specified address is not available on this machine.
+
+     ‘EADDRINUSE’
+          Some other socket is already using the specified address.
+
+     ‘EINVAL’
+          The socket SOCKET already has an address.
+
+     ‘EACCES’
+          You do not have permission to access the requested address.
+          (In the Internet domain, only the super-user is allowed to
+          specify a port number in the range 0 through ‘IPPORT_RESERVED’
+          minus one; see *note Ports::.)
+
+     Additional conditions may be possible depending on the particular
+     namespace of the socket.
+
+File: libc.info,  Node: Reading Address,  Prev: Setting Address,  Up: Socket Addresses
+
+16.3.3 Reading the Address of a Socket
+--------------------------------------
+
+Use the function ‘getsockname’ to examine the address of an Internet
+socket.  The prototype for this function is in the header file
+‘sys/socket.h’.
+
+ -- Function: int getsockname (int SOCKET, struct sockaddr *ADDR,
+          socklen_t *LENGTH-PTR)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe mem/hurd | *Note POSIX
+     Safety Concepts::.
+
+     The ‘getsockname’ function returns information about the address of
+     the socket SOCKET in the locations specified by the ADDR and
+     LENGTH-PTR arguments.  Note that the LENGTH-PTR is a pointer; you
+     should initialize it to be the allocation size of ADDR, and on
+     return it contains the actual size of the address data.
+
+     The format of the address data depends on the socket namespace.
+     The length of the information is usually fixed for a given
+     namespace, so normally you can know exactly how much space is
+     needed and can provide that much.  The usual practice is to
+     allocate a place for the value using the proper data type for the
+     socket’s namespace, then cast its address to ‘struct sockaddr *’ to
+     pass it to ‘getsockname’.
+
+     The return value is ‘0’ on success and ‘-1’ on error.  The
+     following ‘errno’ error conditions are defined for this function:
+
+     ‘EBADF’
+          The SOCKET argument is not a valid file descriptor.
+
+     ‘ENOTSOCK’
+          The descriptor SOCKET is not a socket.
+
+     ‘ENOBUFS’
+          There are not enough internal buffers available for the
+          operation.
+
+   You can’t read the address of a socket in the file namespace.  This
+is consistent with the rest of the system; in general, there’s no way to
+find a file’s name from a descriptor for that file.
+
+File: libc.info,  Node: Interface Naming,  Next: Local Namespace,  Prev: Socket Addresses,  Up: Sockets
+

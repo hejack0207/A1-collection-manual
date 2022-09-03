@@ -1,0 +1,638 @@
+14.2 Accessing Directories
+==========================
+
+The facilities described in this section let you read the contents of a
+directory file.  This is useful if you want your program to list all the
+files in a directory, perhaps as part of a menu.
+
+   The ‘opendir’ function opens a “directory stream” whose elements are
+directory entries.  Alternatively ‘fdopendir’ can be used which can have
+advantages if the program needs to have more control over the way the
+directory is opened for reading.  This allows, for instance, to pass the
+‘O_NOATIME’ flag to ‘open’.
+
+   You use the ‘readdir’ function on the directory stream to retrieve
+these entries, represented as ‘struct dirent’ objects.  The name of the
+file for each entry is stored in the ‘d_name’ member of this structure.
+There are obvious parallels here to the stream facilities for ordinary
+files, described in *note I/O on Streams::.
+
+* Menu:
+
+* Directory Entries::           Format of one directory entry.
+* Opening a Directory::         How to open a directory stream.
+* Reading/Closing Directory::   How to read directory entries from the stream.
+* Simple Directory Lister::     A very simple directory listing program.
+* Random Access Directory::     Rereading part of the directory
+                                 already read with the same stream.
+* Scanning Directory Content::  Get entries for user selected subset of
+                                 contents in given directory.
+* Simple Directory Lister Mark II::  Revised version of the program.
+
+File: libc.info,  Node: Directory Entries,  Next: Opening a Directory,  Up: Accessing Directories
+
+14.2.1 Format of a Directory Entry
+----------------------------------
+
+This section describes what you find in a single directory entry, as you
+might obtain it from a directory stream.  All the symbols are declared
+in the header file ‘dirent.h’.
+
+ -- Data Type: struct dirent
+
+     This is a structure type used to return information about directory
+     entries.  It contains the following fields:
+
+     ‘char d_name[]’
+          This is the null-terminated file name component.  This is the
+          only field you can count on in all POSIX systems.
+
+     ‘ino_t d_fileno’
+          This is the file serial number.  For BSD compatibility, you
+          can also refer to this member as ‘d_ino’.  On GNU/Linux and
+          GNU/Hurd systems and most POSIX systems, for most files this
+          the same as the ‘st_ino’ member that ‘stat’ will return for
+          the file.  *Note File Attributes::.
+
+     ‘unsigned char d_namlen’
+          This is the length of the file name, not including the
+          terminating null character.  Its type is ‘unsigned char’
+          because that is the integer type of the appropriate size.
+          This member is a BSD extension.  The symbol
+          ‘_DIRENT_HAVE_D_NAMLEN’ is defined if this member is
+          available.
+
+     ‘unsigned char d_type’
+          This is the type of the file, possibly unknown.  The following
+          constants are defined for its value:
+
+          ‘DT_UNKNOWN’
+               The type is unknown.  Only some filesystems have full
+               support to return the type of the file, others might
+               always return this value.
+
+          ‘DT_REG’
+               A regular file.
+
+          ‘DT_DIR’
+               A directory.
+
+          ‘DT_FIFO’
+               A named pipe, or FIFO. *Note FIFO Special Files::.
+
+          ‘DT_SOCK’
+               A local-domain socket.
+
+          ‘DT_CHR’
+               A character device.
+
+          ‘DT_BLK’
+               A block device.
+
+          ‘DT_LNK’
+               A symbolic link.
+
+          This member is a BSD extension.  The symbol
+          ‘_DIRENT_HAVE_D_TYPE’ is defined if this member is available.
+          On systems where it is used, it corresponds to the file type
+          bits in the ‘st_mode’ member of ‘struct stat’.  If the value
+          cannot be determined the member value is DT_UNKNOWN. These two
+          macros convert between ‘d_type’ values and ‘st_mode’ values:
+
+           -- Function: int IFTODT (mode_t MODE)
+
+               Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX
+               Safety Concepts::.
+
+               This returns the ‘d_type’ value corresponding to MODE.
+
+           -- Function: mode_t DTTOIF (int DTYPE)
+
+               Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX
+               Safety Concepts::.
+
+               This returns the ‘st_mode’ value corresponding to DTYPE.
+
+     This structure may contain additional members in the future.  Their
+     availability is always announced in the compilation environment by
+     a macro named ‘_DIRENT_HAVE_D_XXX’ where XXX is replaced by the
+     name of the new member.  For instance, the member ‘d_reclen’
+     available on some systems is announced through the macro
+     ‘_DIRENT_HAVE_D_RECLEN’.
+
+     When a file has multiple names, each name has its own directory
+     entry.  The only way you can tell that the directory entries belong
+     to a single file is that they have the same value for the
+     ‘d_fileno’ field.
+
+     File attributes such as size, modification times etc., are part of
+     the file itself, not of any particular directory entry.  *Note File
+     Attributes::.
+
+File: libc.info,  Node: Opening a Directory,  Next: Reading/Closing Directory,  Prev: Directory Entries,  Up: Accessing Directories
+
+14.2.2 Opening a Directory Stream
+---------------------------------
+
+This section describes how to open a directory stream.  All the symbols
+are declared in the header file ‘dirent.h’.
+
+ -- Data Type: DIR
+
+     The ‘DIR’ data type represents a directory stream.
+
+   You shouldn’t ever allocate objects of the ‘struct dirent’ or ‘DIR’
+data types, since the directory access functions do that for you.
+Instead, you refer to these objects using the pointers returned by the
+following functions.
+
+ -- Function: DIR * opendir (const char *DIRNAME)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem fd | *Note
+     POSIX Safety Concepts::.
+
+     The ‘opendir’ function opens and returns a directory stream for
+     reading the directory whose file name is DIRNAME.  The stream has
+     type ‘DIR *’.
+
+     If unsuccessful, ‘opendir’ returns a null pointer.  In addition to
+     the usual file name errors (*note File Name Errors::), the
+     following ‘errno’ error conditions are defined for this function:
+
+     ‘EACCES’
+          Read permission is denied for the directory named by
+          ‘dirname’.
+
+     ‘EMFILE’
+          The process has too many files open.
+
+     ‘ENFILE’
+          The entire system, or perhaps the file system which contains
+          the directory, cannot support any additional open files at the
+          moment.  (This problem cannot happen on GNU/Hurd systems.)
+
+     ‘ENOMEM’
+          Not enough memory available.
+
+     The ‘DIR’ type is typically implemented using a file descriptor,
+     and the ‘opendir’ function in terms of the ‘open’ function.  *Note
+     Low-Level I/O::.  Directory streams and the underlying file
+     descriptors are closed on ‘exec’ (*note Executing a File::).
+
+   The directory which is opened for reading by ‘opendir’ is identified
+by the name.  In some situations this is not sufficient.  Or the way
+‘opendir’ implicitly creates a file descriptor for the directory is not
+the way a program might want it.  In these cases an alternative
+interface can be used.
+
+ -- Function: DIR * fdopendir (int FD)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem fd | *Note
+     POSIX Safety Concepts::.
+
+     The ‘fdopendir’ function works just like ‘opendir’ but instead of
+     taking a file name and opening a file descriptor for the directory
+     the caller is required to provide a file descriptor.  This file
+     descriptor is then used in subsequent uses of the returned
+     directory stream object.
+
+     The caller must make sure the file descriptor is associated with a
+     directory and it allows reading.
+
+     If the ‘fdopendir’ call returns successfully the file descriptor is
+     now under the control of the system.  It can be used in the same
+     way the descriptor implicitly created by ‘opendir’ can be used but
+     the program must not close the descriptor.
+
+     In case the function is unsuccessful it returns a null pointer and
+     the file descriptor remains to be usable by the program.  The
+     following ‘errno’ error conditions are defined for this function:
+
+     ‘EBADF’
+          The file descriptor is not valid.
+
+     ‘ENOTDIR’
+          The file descriptor is not associated with a directory.
+
+     ‘EINVAL’
+          The descriptor does not allow reading the directory content.
+
+     ‘ENOMEM’
+          Not enough memory available.
+
+   In some situations it can be desirable to get hold of the file
+descriptor which is created by the ‘opendir’ call.  For instance, to
+switch the current working directory to the directory just read the
+‘fchdir’ function could be used.  Historically the ‘DIR’ type was
+exposed and programs could access the fields.  This does not happen in
+the GNU C Library.  Instead a separate function is provided to allow
+access.
+
+ -- Function: int dirfd (DIR *DIRSTREAM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The function ‘dirfd’ returns the file descriptor associated with
+     the directory stream DIRSTREAM.  This descriptor can be used until
+     the directory is closed with ‘closedir’.  If the directory stream
+     implementation is not using file descriptors the return value is
+     ‘-1’.
+
+File: libc.info,  Node: Reading/Closing Directory,  Next: Simple Directory Lister,  Prev: Opening a Directory,  Up: Accessing Directories
+
+14.2.3 Reading and Closing a Directory Stream
+---------------------------------------------
+
+This section describes how to read directory entries from a directory
+stream, and how to close the stream when you are done with it.  All the
+symbols are declared in the header file ‘dirent.h’.
+
+ -- Function: struct dirent * readdir (DIR *DIRSTREAM)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     This function reads the next entry from the directory.  It normally
+     returns a pointer to a structure containing information about the
+     file.  This structure is associated with the DIRSTREAM handle and
+     can be rewritten by a subsequent call.
+
+     *Portability Note:* On some systems ‘readdir’ may not return
+     entries for ‘.’ and ‘..’, even though these are always valid file
+     names in any directory.  *Note File Name Resolution::.
+
+     If there are no more entries in the directory or an error is
+     detected, ‘readdir’ returns a null pointer.  The following ‘errno’
+     error conditions are defined for this function:
+
+     ‘EBADF’
+          The DIRSTREAM argument is not valid.
+
+     To distinguish between an end-of-directory condition or an error,
+     you must set ‘errno’ to zero before calling ‘readdir’.  To avoid
+     entering an infinite loop, you should stop reading from the
+     directory after the first error.
+
+     *Caution:* The pointer returned by ‘readdir’ points to a buffer
+     within the ‘DIR’ object.  The data in that buffer will be
+     overwritten by the next call to ‘readdir’.  You must take care, for
+     instance, to copy the ‘d_name’ string if you need it later.
+
+     Because of this, it is not safe to share a ‘DIR’ object among
+     multiple threads, unless you use your own locking to ensure that no
+     thread calls ‘readdir’ while another thread is still using the data
+     from the previous call.  In the GNU C Library, it is safe to call
+     ‘readdir’ from multiple threads as long as each thread uses its own
+     ‘DIR’ object.  POSIX.1-2008 does not require this to be safe, but
+     we are not aware of any operating systems where it does not work.
+
+     ‘readdir_r’ allows you to provide your own buffer for the ‘struct
+     dirent’, but it is less portable than ‘readdir’, and has problems
+     with very long filenames (see below).  We recommend you use
+     ‘readdir’, but do not share ‘DIR’ objects.
+
+ -- Function: int readdir_r (DIR *DIRSTREAM, struct dirent *ENTRY,
+          struct dirent **RESULT)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     This function is a version of ‘readdir’ which performs internal
+     locking.  Like ‘readdir’ it returns the next entry from the
+     directory.  To prevent conflicts between simultaneously running
+     threads the result is stored inside the ENTRY object.
+
+     *Portability Note:* ‘readdir_r’ is deprecated.  It is recommended
+     to use ‘readdir’ instead of ‘readdir_r’ for the following reasons:
+
+        • On systems which do not define ‘NAME_MAX’, it may not be
+          possible to use ‘readdir_r’ safely because the caller does not
+          specify the length of the buffer for the directory entry.
+
+        • On some systems, ‘readdir_r’ cannot read directory entries
+          with very long names.  If such a name is encountered, the GNU
+          C Library implementation of ‘readdir_r’ returns with an error
+          code of ‘ENAMETOOLONG’ after the final directory entry has
+          been read.  On other systems, ‘readdir_r’ may return
+          successfully, but the ‘d_name’ member may not be
+          NUL-terminated or may be truncated.
+
+        • POSIX-1.2008 does not guarantee that ‘readdir’ is thread-safe,
+          even when access to the same DIRSTREAM is serialized.  But in
+          current implementations (including the GNU C Library), it is
+          safe to call ‘readdir’ concurrently on different DIRSTREAMs,
+          so there is no need to use ‘readdir_r’ in most multi-threaded
+          programs.  In the rare case that multiple threads need to read
+          from the same DIRSTREAM, it is still better to use ‘readdir’
+          and external synchronization.
+
+        • It is expected that future versions of POSIX will obsolete
+          ‘readdir_r’ and mandate the level of thread safety for
+          ‘readdir’ which is provided by the GNU C Library and other
+          implementations today.
+
+     Normally ‘readdir_r’ returns zero and sets ‘*RESULT’ to ENTRY.  If
+     there are no more entries in the directory or an error is detected,
+     ‘readdir_r’ sets ‘*RESULT’ to a null pointer and returns a nonzero
+     error code, also stored in ‘errno’, as described for ‘readdir’.
+
+     It is also important to look at the definition of the ‘struct
+     dirent’ type.  Simply passing a pointer to an object of this type
+     for the second parameter of ‘readdir_r’ might not be enough.  Some
+     systems don’t define the ‘d_name’ element sufficiently long.  In
+     this case the user has to provide additional space.  There must be
+     room for at least ‘NAME_MAX + 1’ characters in the ‘d_name’ array.
+     Code to call ‘readdir_r’ could look like this:
+
+            union
+            {
+              struct dirent d;
+              char b[offsetof (struct dirent, d_name) + NAME_MAX + 1];
+            } u;
+
+            if (readdir_r (dir, &u.d, &res) == 0)
+              ...
+
+   To support large filesystems on 32-bit machines there are LFS
+variants of the last two functions.
+
+ -- Function: struct dirent64 * readdir64 (DIR *DIRSTREAM)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     The ‘readdir64’ function is just like the ‘readdir’ function except
+     that it returns a pointer to a record of type ‘struct dirent64’.
+     Some of the members of this data type (notably ‘d_ino’) might have
+     a different size to allow large filesystems.
+
+     In all other aspects this function is equivalent to ‘readdir’.
+
+ -- Function: int readdir64_r (DIR *DIRSTREAM, struct dirent64 *ENTRY,
+          struct dirent64 **RESULT)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     The deprecated ‘readdir64_r’ function is equivalent to the
+     ‘readdir_r’ function except that it takes parameters of base type
+     ‘struct dirent64’ instead of ‘struct dirent’ in the second and
+     third position.  The same precautions mentioned in the
+     documentation of ‘readdir_r’ also apply here.
+
+ -- Function: int closedir (DIR *DIRSTREAM)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap lock/hurd | AC-Unsafe mem
+     fd lock/hurd | *Note POSIX Safety Concepts::.
+
+     This function closes the directory stream DIRSTREAM.  It returns
+     ‘0’ on success and ‘-1’ on failure.
+
+     The following ‘errno’ error conditions are defined for this
+     function:
+
+     ‘EBADF’
+          The DIRSTREAM argument is not valid.
+
+File: libc.info,  Node: Simple Directory Lister,  Next: Random Access Directory,  Prev: Reading/Closing Directory,  Up: Accessing Directories
+
+14.2.4 Simple Program to List a Directory
+-----------------------------------------
+
+Here’s a simple program that prints the names of the files in the
+current working directory:
+
+
+     #include <stdio.h>
+     #include <sys/types.h>
+     #include <dirent.h>
+
+     int
+     main (void)
+     {
+       DIR *dp;
+       struct dirent *ep;
+
+       dp = opendir ("./");
+       if (dp != NULL)
+         {
+           while (ep = readdir (dp))
+             puts (ep->d_name);
+           (void) closedir (dp);
+         }
+       else
+         perror ("Couldn't open the directory");
+
+       return 0;
+     }
+
+   The order in which files appear in a directory tends to be fairly
+random.  A more useful program would sort the entries (perhaps by
+alphabetizing them) before printing them; see *note Scanning Directory
+Content::, and *note Array Sort Function::.
+
+File: libc.info,  Node: Random Access Directory,  Next: Scanning Directory Content,  Prev: Simple Directory Lister,  Up: Accessing Directories
+
+14.2.5 Random Access in a Directory Stream
+------------------------------------------
+
+This section describes how to reread parts of a directory that you have
+already read from an open directory stream.  All the symbols are
+declared in the header file ‘dirent.h’.
+
+ -- Function: void rewinddir (DIR *DIRSTREAM)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     The ‘rewinddir’ function is used to reinitialize the directory
+     stream DIRSTREAM, so that if you call ‘readdir’ it returns
+     information about the first entry in the directory again.  This
+     function also notices if files have been added or removed to the
+     directory since it was opened with ‘opendir’.  (Entries for these
+     files might or might not be returned by ‘readdir’ if they were
+     added or removed since you last called ‘opendir’ or ‘rewinddir’.)
+
+ -- Function: long int telldir (DIR *DIRSTREAM)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap/bsd lock/bsd | AC-Unsafe
+     mem/bsd lock/bsd | *Note POSIX Safety Concepts::.
+
+     The ‘telldir’ function returns the file position of the directory
+     stream DIRSTREAM.  You can use this value with ‘seekdir’ to restore
+     the directory stream to that position.
+
+ -- Function: void seekdir (DIR *DIRSTREAM, long int POS)
+
+     Preliminary: | MT-Safe | AS-Unsafe heap/bsd lock/bsd | AC-Unsafe
+     mem/bsd lock/bsd | *Note POSIX Safety Concepts::.
+
+     The ‘seekdir’ function sets the file position of the directory
+     stream DIRSTREAM to POS.  The value POS must be the result of a
+     previous call to ‘telldir’ on this particular stream; closing and
+     reopening the directory can invalidate values returned by
+     ‘telldir’.
+
+File: libc.info,  Node: Scanning Directory Content,  Next: Simple Directory Lister Mark II,  Prev: Random Access Directory,  Up: Accessing Directories
+
+14.2.6 Scanning the Content of a Directory
+------------------------------------------
+
+A higher-level interface to the directory handling functions is the
+‘scandir’ function.  With its help one can select a subset of the
+entries in a directory, possibly sort them and get a list of names as
+the result.
+
+ -- Function: int scandir (const char *DIR, struct dirent ***NAMELIST,
+          int (*SELECTOR) (const struct dirent *), int (*CMP) (const
+          struct dirent **, const struct dirent **))
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem fd | *Note
+     POSIX Safety Concepts::.
+
+     The ‘scandir’ function scans the contents of the directory selected
+     by DIR.  The result in *NAMELIST is an array of pointers to
+     structures of type ‘struct dirent’ which describe all selected
+     directory entries and which is allocated using ‘malloc’.  Instead
+     of always getting all directory entries returned, the user supplied
+     function SELECTOR can be used to decide which entries are in the
+     result.  Only the entries for which SELECTOR returns a non-zero
+     value are selected.
+
+     Finally the entries in *NAMELIST are sorted using the user-supplied
+     function CMP.  The arguments passed to the CMP function are of type
+     ‘struct dirent **’, therefore one cannot directly use the ‘strcmp’
+     or ‘strcoll’ functions; instead see the functions ‘alphasort’ and
+     ‘versionsort’ below.
+
+     The return value of the function is the number of entries placed in
+     *NAMELIST.  If it is ‘-1’ an error occurred (either the directory
+     could not be opened for reading or the malloc call failed) and the
+     global variable ‘errno’ contains more information on the error.
+
+   As described above, the fourth argument to the ‘scandir’ function
+must be a pointer to a sorting function.  For the convenience of the
+programmer the GNU C Library contains implementations of functions which
+are very helpful for this purpose.
+
+ -- Function: int alphasort (const struct dirent **A, const struct
+          dirent **B)
+
+     Preliminary: | MT-Safe locale | AS-Unsafe heap | AC-Unsafe mem |
+     *Note POSIX Safety Concepts::.
+
+     The ‘alphasort’ function behaves like the ‘strcoll’ function (*note
+     String/Array Comparison::).  The difference is that the arguments
+     are not string pointers but instead they are of type ‘struct dirent
+     **’.
+
+     The return value of ‘alphasort’ is less than, equal to, or greater
+     than zero depending on the order of the two entries A and B.
+
+ -- Function: int versionsort (const struct dirent **A, const struct
+          dirent **B)
+
+     Preliminary: | MT-Safe locale | AS-Safe | AC-Safe | *Note POSIX
+     Safety Concepts::.
+
+     The ‘versionsort’ function is like ‘alphasort’ except that it uses
+     the ‘strverscmp’ function internally.
+
+   If the filesystem supports large files we cannot use the ‘scandir’
+anymore since the ‘dirent’ structure might not able to contain all the
+information.  The LFS provides the new type ‘struct dirent64’.  To use
+this we need a new function.
+
+ -- Function: int scandir64 (const char *DIR, struct dirent64
+          ***NAMELIST, int (*SELECTOR) (const struct dirent64 *), int
+          (*CMP) (const struct dirent64 **, const struct dirent64 **))
+
+     Preliminary: | MT-Safe | AS-Unsafe heap | AC-Unsafe mem fd | *Note
+     POSIX Safety Concepts::.
+
+     The ‘scandir64’ function works like the ‘scandir’ function except
+     that the directory entries it returns are described by elements of
+     type ‘struct dirent64’.  The function pointed to by SELECTOR is
+     again used to select the desired entries, except that SELECTOR now
+     must point to a function which takes a ‘struct dirent64 *’
+     parameter.
+
+     Similarly the CMP function should expect its two arguments to be of
+     type ‘struct dirent64 **’.
+
+   As CMP is now a function of a different type, the functions
+‘alphasort’ and ‘versionsort’ cannot be supplied for that argument.
+Instead we provide the two replacement functions below.
+
+ -- Function: int alphasort64 (const struct dirent64 **A, const struct
+          dirent **B)
+
+     Preliminary: | MT-Safe locale | AS-Unsafe heap | AC-Unsafe mem |
+     *Note POSIX Safety Concepts::.
+
+     The ‘alphasort64’ function behaves like the ‘strcoll’ function
+     (*note String/Array Comparison::).  The difference is that the
+     arguments are not string pointers but instead they are of type
+     ‘struct dirent64 **’.
+
+     Return value of ‘alphasort64’ is less than, equal to, or greater
+     than zero depending on the order of the two entries A and B.
+
+ -- Function: int versionsort64 (const struct dirent64 **A, const struct
+          dirent64 **B)
+
+     Preliminary: | MT-Safe locale | AS-Safe | AC-Safe | *Note POSIX
+     Safety Concepts::.
+
+     The ‘versionsort64’ function is like ‘alphasort64’, excepted that
+     it uses the ‘strverscmp’ function internally.
+
+   It is important not to mix the use of ‘scandir’ and the 64-bit
+comparison functions or vice versa.  There are systems on which this
+works but on others it will fail miserably.
+
+File: libc.info,  Node: Simple Directory Lister Mark II,  Prev: Scanning Directory Content,  Up: Accessing Directories
+
+14.2.7 Simple Program to List a Directory, Mark II
+--------------------------------------------------
+
+Here is a revised version of the directory lister found above (*note
+Simple Directory Lister::).  Using the ‘scandir’ function we can avoid
+the functions which work directly with the directory contents.  After
+the call the returned entries are available for direct use.
+
+
+     #include <stdio.h>
+     #include <dirent.h>
+
+     static int
+     one (const struct dirent *unused)
+     {
+       return 1;
+     }
+
+     int
+     main (void)
+     {
+       struct dirent **eps;
+       int n;
+
+       n = scandir ("./", &eps, one, alphasort);
+       if (n >= 0)
+         {
+           int cnt;
+           for (cnt = 0; cnt < n; ++cnt)
+             puts (eps[cnt]->d_name);
+         }
+       else
+         perror ("Couldn't open the directory");
+
+       return 0;
+     }
+
+   Note the simple selector function in this example.  Since we want to
+see all directory entries we always return ‘1’.
+
+File: libc.info,  Node: Working with Directory Trees,  Next: Hard Links,  Prev: Accessing Directories,  Up: File System Interface
+

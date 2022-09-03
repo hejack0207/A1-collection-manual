@@ -1,0 +1,281 @@
+6.4 Non-reentrant Conversion Function
+=====================================
+
+The functions described in the previous chapter are defined in
+Amendment 1 to ISO C90, but the original ISO C90 standard also contained
+functions for character set conversion.  The reason that these original
+functions are not described first is that they are almost entirely
+useless.
+
+   The problem is that all the conversion functions described in the
+original ISO C90 use a local state.  Using a local state implies that
+multiple conversions at the same time (not only when using threads)
+cannot be done, and that you cannot first convert single characters and
+then strings since you cannot tell the conversion functions which state
+to use.
+
+   These original functions are therefore usable only in a very limited
+set of situations.  One must complete converting the entire string
+before starting a new one, and each string/text must be converted with
+the same function (there is no problem with the library itself; it is
+guaranteed that no library function changes the state of any of these
+functions).  *For the above reasons it is highly requested that the
+functions described in the previous section be used in place of
+non-reentrant conversion functions.*
+
+* Menu:
+
+* Non-reentrant Character Conversion::  Non-reentrant Conversion of Single
+                                         Characters.
+* Non-reentrant String Conversion::     Non-reentrant Conversion of Strings.
+* Shift State::                         States in Non-reentrant Functions.
+
+File: libc.info,  Node: Non-reentrant Character Conversion,  Next: Non-reentrant String Conversion,  Up: Non-reentrant Conversion
+
+6.4.1 Non-reentrant Conversion of Single Characters
+---------------------------------------------------
+
+ -- Function: int mbtowc (wchar_t *restrict RESULT, const char *restrict
+          STRING, size_t SIZE)
+
+     Preliminary: | MT-Unsafe race | AS-Unsafe corrupt heap lock dlopen
+     | AC-Unsafe corrupt lock mem fd | *Note POSIX Safety Concepts::.
+
+     The ‘mbtowc’ (“multibyte to wide character”) function when called
+     with non-null STRING converts the first multibyte character
+     beginning at STRING to its corresponding wide character code.  It
+     stores the result in ‘*RESULT’.
+
+     ‘mbtowc’ never examines more than SIZE bytes.  (The idea is to
+     supply for SIZE the number of bytes of data you have in hand.)
+
+     ‘mbtowc’ with non-null STRING distinguishes three possibilities:
+     the first SIZE bytes at STRING start with valid multibyte
+     characters, they start with an invalid byte sequence or just part
+     of a character, or STRING points to an empty string (a null
+     character).
+
+     For a valid multibyte character, ‘mbtowc’ converts it to a wide
+     character and stores that in ‘*RESULT’, and returns the number of
+     bytes in that character (always at least 1 and never more than
+     SIZE).
+
+     For an invalid byte sequence, ‘mbtowc’ returns -1.  For an empty
+     string, it returns 0, also storing ‘'\0'’ in ‘*RESULT’.
+
+     If the multibyte character code uses shift characters, then
+     ‘mbtowc’ maintains and updates a shift state as it scans.  If you
+     call ‘mbtowc’ with a null pointer for STRING, that initializes the
+     shift state to its standard initial value.  It also returns nonzero
+     if the multibyte character code in use actually has a shift state.
+     *Note Shift State::.
+
+ -- Function: int wctomb (char *STRING, wchar_t WCHAR)
+
+     Preliminary: | MT-Unsafe race | AS-Unsafe corrupt heap lock dlopen
+     | AC-Unsafe corrupt lock mem fd | *Note POSIX Safety Concepts::.
+
+     The ‘wctomb’ (“wide character to multibyte”) function converts the
+     wide character code WCHAR to its corresponding multibyte character
+     sequence, and stores the result in bytes starting at STRING.  At
+     most ‘MB_CUR_MAX’ characters are stored.
+
+     ‘wctomb’ with non-null STRING distinguishes three possibilities for
+     WCHAR: a valid wide character code (one that can be translated to a
+     multibyte character), an invalid code, and ‘L'\0'’.
+
+     Given a valid code, ‘wctomb’ converts it to a multibyte character,
+     storing the bytes starting at STRING.  Then it returns the number
+     of bytes in that character (always at least 1 and never more than
+     ‘MB_CUR_MAX’).
+
+     If WCHAR is an invalid wide character code, ‘wctomb’ returns -1.
+     If WCHAR is ‘L'\0'’, it returns ‘0’, also storing ‘'\0'’ in
+     ‘*STRING’.
+
+     If the multibyte character code uses shift characters, then
+     ‘wctomb’ maintains and updates a shift state as it scans.  If you
+     call ‘wctomb’ with a null pointer for STRING, that initializes the
+     shift state to its standard initial value.  It also returns nonzero
+     if the multibyte character code in use actually has a shift state.
+     *Note Shift State::.
+
+     Calling this function with a WCHAR argument of zero when STRING is
+     not null has the side-effect of reinitializing the stored shift
+     state _as well as_ storing the multibyte character ‘'\0'’ and
+     returning 0.
+
+   Similar to ‘mbrlen’ there is also a non-reentrant function that
+computes the length of a multibyte character.  It can be defined in
+terms of ‘mbtowc’.
+
+ -- Function: int mblen (const char *STRING, size_t SIZE)
+
+     Preliminary: | MT-Unsafe race | AS-Unsafe corrupt heap lock dlopen
+     | AC-Unsafe corrupt lock mem fd | *Note POSIX Safety Concepts::.
+
+     The ‘mblen’ function with a non-null STRING argument returns the
+     number of bytes that make up the multibyte character beginning at
+     STRING, never examining more than SIZE bytes.  (The idea is to
+     supply for SIZE the number of bytes of data you have in hand.)
+
+     The return value of ‘mblen’ distinguishes three possibilities: the
+     first SIZE bytes at STRING start with valid multibyte characters,
+     they start with an invalid byte sequence or just part of a
+     character, or STRING points to an empty string (a null character).
+
+     For a valid multibyte character, ‘mblen’ returns the number of
+     bytes in that character (always at least ‘1’ and never more than
+     SIZE).  For an invalid byte sequence, ‘mblen’ returns -1.  For an
+     empty string, it returns 0.
+
+     If the multibyte character code uses shift characters, then ‘mblen’
+     maintains and updates a shift state as it scans.  If you call
+     ‘mblen’ with a null pointer for STRING, that initializes the shift
+     state to its standard initial value.  It also returns a nonzero
+     value if the multibyte character code in use actually has a shift
+     state.  *Note Shift State::.
+
+     The function ‘mblen’ is declared in ‘stdlib.h’.
+
+File: libc.info,  Node: Non-reentrant String Conversion,  Next: Shift State,  Prev: Non-reentrant Character Conversion,  Up: Non-reentrant Conversion
+
+6.4.2 Non-reentrant Conversion of Strings
+-----------------------------------------
+
+For convenience the ISO C90 standard also defines functions to convert
+entire strings instead of single characters.  These functions suffer
+from the same problems as their reentrant counterparts from Amendment 1
+to ISO C90; see *note Converting Strings::.
+
+ -- Function: size_t mbstowcs (wchar_t *WSTRING, const char *STRING,
+          size_t SIZE)
+
+     Preliminary: | MT-Safe | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock mem fd | *Note POSIX Safety Concepts::.
+
+     The ‘mbstowcs’ (“multibyte string to wide character string”)
+     function converts the null-terminated string of multibyte
+     characters STRING to an array of wide character codes, storing not
+     more than SIZE wide characters into the array beginning at WSTRING.
+     The terminating null character counts towards the size, so if SIZE
+     is less than the actual number of wide characters resulting from
+     STRING, no terminating null character is stored.
+
+     The conversion of characters from STRING begins in the initial
+     shift state.
+
+     If an invalid multibyte character sequence is found, the ‘mbstowcs’
+     function returns a value of -1.  Otherwise, it returns the number
+     of wide characters stored in the array WSTRING.  This number does
+     not include the terminating null character, which is present if the
+     number is less than SIZE.
+
+     Here is an example showing how to convert a string of multibyte
+     characters, allocating enough space for the result.
+
+          wchar_t *
+          mbstowcs_alloc (const char *string)
+          {
+            size_t size = strlen (string) + 1;
+            wchar_t *buf = xmalloc (size * sizeof (wchar_t));
+
+            size = mbstowcs (buf, string, size);
+            if (size == (size_t) -1)
+              return NULL;
+            buf = xrealloc (buf, (size + 1) * sizeof (wchar_t));
+            return buf;
+          }
+
+ -- Function: size_t wcstombs (char *STRING, const wchar_t *WSTRING,
+          size_t SIZE)
+
+     Preliminary: | MT-Safe | AS-Unsafe corrupt heap lock dlopen |
+     AC-Unsafe corrupt lock mem fd | *Note POSIX Safety Concepts::.
+
+     The ‘wcstombs’ (“wide character string to multibyte string”)
+     function converts the null-terminated wide character array WSTRING
+     into a string containing multibyte characters, storing not more
+     than SIZE bytes starting at STRING, followed by a terminating null
+     character if there is room.  The conversion of characters begins in
+     the initial shift state.
+
+     The terminating null character counts towards the size, so if SIZE
+     is less than or equal to the number of bytes needed in WSTRING, no
+     terminating null character is stored.
+
+     If a code that does not correspond to a valid multibyte character
+     is found, the ‘wcstombs’ function returns a value of -1.
+     Otherwise, the return value is the number of bytes stored in the
+     array STRING.  This number does not include the terminating null
+     character, which is present if the number is less than SIZE.
+
+File: libc.info,  Node: Shift State,  Prev: Non-reentrant String Conversion,  Up: Non-reentrant Conversion
+
+6.4.3 States in Non-reentrant Functions
+---------------------------------------
+
+In some multibyte character codes, the _meaning_ of any particular byte
+sequence is not fixed; it depends on what other sequences have come
+earlier in the same string.  Typically there are just a few sequences
+that can change the meaning of other sequences; these few are called
+“shift sequences” and we say that they set the “shift state” for other
+sequences that follow.
+
+   To illustrate shift state and shift sequences, suppose we decide that
+the sequence ‘0200’ (just one byte) enters Japanese mode, in which pairs
+of bytes in the range from ‘0240’ to ‘0377’ are single characters, while
+‘0201’ enters Latin-1 mode, in which single bytes in the range from
+‘0240’ to ‘0377’ are characters, and interpreted according to the ISO
+Latin-1 character set.  This is a multibyte code that has two
+alternative shift states (“Japanese mode” and “Latin-1 mode”), and two
+shift sequences that specify particular shift states.
+
+   When the multibyte character code in use has shift states, then
+‘mblen’, ‘mbtowc’, and ‘wctomb’ must maintain and update the current
+shift state as they scan the string.  To make this work properly, you
+must follow these rules:
+
+   • Before starting to scan a string, call the function with a null
+     pointer for the multibyte character address—for example, ‘mblen
+     (NULL, 0)’.  This initializes the shift state to its standard
+     initial value.
+
+   • Scan the string one character at a time, in order.  Do not “back
+     up” and rescan characters already scanned, and do not intersperse
+     the processing of different strings.
+
+   Here is an example of using ‘mblen’ following these rules:
+
+     void
+     scan_string (char *s)
+     {
+       int length = strlen (s);
+
+       /* Initialize shift state.  */
+       mblen (NULL, 0);
+
+       while (1)
+         {
+           int thischar = mblen (s, length);
+           /* Deal with end of string and invalid characters.  */
+           if (thischar == 0)
+             break;
+           if (thischar == -1)
+             {
+               error ("invalid multibyte character");
+               break;
+             }
+           /* Advance past this character.  */
+           s += thischar;
+           length -= thischar;
+         }
+     }
+
+   The functions ‘mblen’, ‘mbtowc’ and ‘wctomb’ are not reentrant when
+using a multibyte code that uses a shift state.  However, no other
+library functions call these functions, so you don’t have to worry that
+the shift state will be changed mysteriously.
+
+File: libc.info,  Node: Generic Charset Conversion,  Prev: Non-reentrant Conversion,  Up: Character Set Handling
+

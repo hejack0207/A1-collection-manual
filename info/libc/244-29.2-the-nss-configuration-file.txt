@@ -1,0 +1,230 @@
+29.2 The NSS Configuration File
+===============================
+
+Somehow the NSS code must be told about the wishes of the user.  For
+this reason there is the file ‘/etc/nsswitch.conf’.  For each database,
+this file contains a specification of how the lookup process should
+work.  The file could look like this:
+
+     # /etc/nsswitch.conf
+     #
+     # Name Service Switch configuration file.
+     #
+
+     passwd:     db files nis
+     shadow:     files
+     group:      db files nis
+
+     hosts:      files nisplus nis dns
+     networks:   nisplus [NOTFOUND=return] files
+
+     ethers:     nisplus [NOTFOUND=return] db files
+     protocols:  nisplus [NOTFOUND=return] db files
+     rpc:        nisplus [NOTFOUND=return] db files
+     services:   nisplus [NOTFOUND=return] db files
+
+   The first column is the database as you can guess from the table
+above.  The rest of the line specifies how the lookup process works.
+Please note that you specify the way it works for each database
+individually.  This cannot be done with the old way of a monolithic
+implementation.
+
+   The configuration specification for each database can contain two
+different items:
+
+   • the service specification like ‘files’, ‘db’, or ‘nis’.
+   • the reaction on lookup result like ‘[NOTFOUND=return]’.
+
+* Menu:
+
+* Services in the NSS configuration::  Service names in the NSS configuration.
+* Actions in the NSS configuration::  React appropriately to the lookup result.
+* Notes on NSS Configuration File::  Things to take care about while
+                                     configuring NSS.
+
+File: libc.info,  Node: Services in the NSS configuration,  Next: Actions in the NSS configuration,  Prev: NSS Configuration File,  Up: NSS Configuration File
+
+29.2.1 Services in the NSS configuration File
+---------------------------------------------
+
+The above example file mentions five different services: ‘files’, ‘db’,
+‘dns’, ‘nis’, and ‘nisplus’.  This does not mean these services are
+available on all sites and neither does it mean these are all the
+services which will ever be available.
+
+   In fact, these names are simply strings which the NSS code uses to
+find the implicitly addressed functions.  The internal interface will be
+described later.  Visible to the user are the modules which implement an
+individual service.
+
+   Assume the service NAME shall be used for a lookup.  The code for
+this service is implemented in a module called ‘libnss_NAME’.  On a
+system supporting shared libraries this is in fact a shared library with
+the name (for example) ‘libnss_NAME.so.2’.  The number at the end is the
+currently used version of the interface which will not change
+frequently.  Normally the user should not have to be cognizant of these
+files since they should be placed in a directory where they are found
+automatically.  Only the names of all available services are important.
+
+File: libc.info,  Node: Actions in the NSS configuration,  Next: Notes on NSS Configuration File,  Prev: Services in the NSS configuration,  Up: NSS Configuration File
+
+29.2.2 Actions in the NSS configuration
+---------------------------------------
+
+The second item in the specification gives the user much finer control
+on the lookup process.  Action items are placed between two service
+names and are written within brackets.  The general form is
+
+     ‘[’ ( ‘!’? STATUS ‘=’ ACTION )+ ‘]’
+
+where
+
+     STATUS ⇒ success | notfound | unavail | tryagain
+     ACTION ⇒ return | continue
+
+   The case of the keywords is insignificant.  The STATUS values are the
+results of a call to a lookup function of a specific service.  They
+mean:
+
+‘success’
+     No error occurred and the wanted entry is returned.  The default
+     action for this is ‘return’.
+
+‘notfound’
+     The lookup process works ok but the needed value was not found.
+     The default action is ‘continue’.
+
+‘unavail’
+     The service is permanently unavailable.  This can either mean the
+     needed file is not available, or, for DNS, the server is not
+     available or does not allow queries.  The default action is
+     ‘continue’.
+
+‘tryagain’
+     The service is temporarily unavailable.  This could mean a file is
+     locked or a server currently cannot accept more connections.  The
+     default action is ‘continue’.
+
+The ACTION values mean:
+
+‘return’
+
+     If the status matches, stop the lookup process at this service
+     specification.  If an entry is available, provide it to the
+     application.  If an error occurred, report it to the application.
+     In case of a prior ‘merge’ action, the data is combined with
+     previous lookup results, as explained below.
+
+‘continue’
+
+     If the status matches, proceed with the lookup process at the next
+     entry, discarding the result of the current lookup (and any merged
+     data).  An exception is the ‘initgroups’ database and the ‘success’
+     status, where ‘continue’ acts like ‘merge’ below.
+
+‘merge’
+
+     Proceed with the lookup process, retaining the current lookup
+     result.  This action is useful only with the ‘success’ status.  If
+     a subsequent service lookup succeeds and has a matching ‘return’
+     specification, the results are merged, the lookup process ends, and
+     the merged results are returned to the application.  If the
+     following service has a matching ‘merge’ action, the lookup process
+     continues, retaining the combined data from this and any previous
+     lookups.
+
+     After a ‘merge’ action, errors from subsequent lookups are ignored,
+     and the data gathered so far will be returned.
+
+     The ‘merge’ only applies to the ‘success’ status.  It is currently
+     implemented for the ‘group’ database and its group members field,
+     ‘gr_mem’.  If specified for other databases, it causes the lookup
+     to fail (if the STATUS matches).
+
+     When processing ‘merge’ for ‘group’ membership, the group GID and
+     name must be identical for both entries.  If only one or the other
+     is a match, the behavior is undefined.
+
+If we have a line like
+
+     ethers: nisplus [NOTFOUND=return] db files
+
+this is equivalent to
+
+     ethers: nisplus [SUCCESS=return NOTFOUND=return UNAVAIL=continue
+                      TRYAGAIN=continue]
+             db      [SUCCESS=return NOTFOUND=continue UNAVAIL=continue
+                      TRYAGAIN=continue]
+             files
+
+(except that it would have to be written on one line).  The default
+value for the actions are normally what you want, and only need to be
+changed in exceptional cases.
+
+   If the optional ‘!’ is placed before the STATUS this means the
+following action is used for all statuses but STATUS itself.  I.e., ‘!’
+is negation as in the C language (and others).
+
+   Before we explain the exception which makes this action item
+necessary one more remark: obviously it makes no sense to add another
+action item after the ‘files’ service.  Since there is no other service
+following the action _always_ is ‘return’.
+
+   Now, why is this ‘[NOTFOUND=return]’ action useful?  To understand
+this we should know that the ‘nisplus’ service is often complete; i.e.,
+if an entry is not available in the NIS+ tables it is not available
+anywhere else.  This is what is expressed by this action item: it is
+useless to examine further services since they will not give us a
+result.
+
+   The situation would be different if the NIS+ service is not available
+because the machine is booting.  In this case the return value of the
+lookup function is not ‘notfound’ but instead ‘unavail’.  And as you can
+see in the complete form above: in this situation the ‘db’ and ‘files’
+services are used.  Neat, isn’t it?  The system administrator need not
+pay special care for the time the system is not completely ready to work
+(while booting or shutdown or network problems).
+
+File: libc.info,  Node: Notes on NSS Configuration File,  Prev: Actions in the NSS configuration,  Up: NSS Configuration File
+
+29.2.3 Notes on the NSS Configuration File
+------------------------------------------
+
+Finally a few more hints.  The NSS implementation is not completely
+helpless if ‘/etc/nsswitch.conf’ does not exist.  For all supported
+databases there is a default value so it should normally be possible to
+get the system running even if the file is corrupted or missing.
+
+   For the ‘hosts’ and ‘networks’ databases the default value is ‘dns
+[!UNAVAIL=return] files’.  I.e., the system is prepared for the DNS
+service not to be available but if it is available the answer it returns
+is definitive.
+
+   The ‘passwd’, ‘group’, and ‘shadow’ databases are traditionally
+handled in a special way.  The appropriate files in the ‘/etc’ directory
+are read but if an entry with a name starting with a ‘+’ character is
+found NIS is used.  This kind of lookup remains possible if the GNU C
+Library was configured with the ‘--enable-obsolete-nsl’ option and the
+special lookup service ‘compat’ is used.  If the GNU C Library was
+configured with the ‘--enable-obsolete-nsl’ option the default value for
+the three databases above is ‘compat [NOTFOUND=return] files’.  If the
+‘--enable-obsolete-nsl’ option was not used the default value for the
+services is ‘files’.
+
+   For all other databases the default value is ‘files’ unless the GNU C
+Library was configured with ‘--enable-obsolete-rpc’ option, in which
+case it the default value is ‘nis [NOTFOUND=return] files’.
+
+   A second point is that the user should try to optimize the lookup
+process.  The different service have different response times.  A simple
+file look up on a local file could be fast, but if the file is long and
+the needed entry is near the end of the file this may take quite some
+time.  In this case it might be better to use the ‘db’ service which
+allows fast local access to large data sets.
+
+   Often the situation is that some global information like NIS must be
+used.  So it is unavoidable to use service entries like ‘nis’ etc.  But
+one should avoid slow services like this if possible.
+
+File: libc.info,  Node: NSS Module Internals,  Next: Extending NSS,  Prev: NSS Configuration File,  Up: Name Service Switch
+

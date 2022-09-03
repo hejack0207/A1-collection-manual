@@ -1,0 +1,437 @@
+24.3 Specifying Signal Actions
+==============================
+
+The simplest way to change the action for a signal is to use the
+‘signal’ function.  You can specify a built-in action (such as to ignore
+the signal), or you can “establish a handler”.
+
+   The GNU C Library also implements the more versatile ‘sigaction’
+facility.  This section describes both facilities and gives suggestions
+on which to use when.
+
+* Menu:
+
+* Basic Signal Handling::       The simple ‘signal’ function.
+* Advanced Signal Handling::    The more powerful ‘sigaction’ function.
+* Signal and Sigaction::        How those two functions interact.
+* Sigaction Function Example::  An example of using the sigaction function.
+* Flags for Sigaction::         Specifying options for signal handling.
+* Initial Signal Actions::      How programs inherit signal actions.
+
+File: libc.info,  Node: Basic Signal Handling,  Next: Advanced Signal Handling,  Up: Signal Actions
+
+24.3.1 Basic Signal Handling
+----------------------------
+
+The ‘signal’ function provides a simple interface for establishing an
+action for a particular signal.  The function and associated macros are
+declared in the header file ‘signal.h’.
+
+ -- Data Type: sighandler_t
+
+     This is the type of signal handler functions.  Signal handlers take
+     one integer argument specifying the signal number, and have return
+     type ‘void’.  So, you should define handler functions like this:
+
+          void HANDLER (int signum) { ... }
+
+     The name ‘sighandler_t’ for this data type is a GNU extension.
+
+ -- Function: sighandler_t signal (int SIGNUM, sighandler_t ACTION)
+
+     Preliminary: | MT-Safe sigintr | AS-Safe | AC-Safe | *Note POSIX
+     Safety Concepts::.
+
+     The ‘signal’ function establishes ACTION as the action for the
+     signal SIGNUM.
+
+     The first argument, SIGNUM, identifies the signal whose behavior
+     you want to control, and should be a signal number.  The proper way
+     to specify a signal number is with one of the symbolic signal names
+     (*note Standard Signals::)—don’t use an explicit number, because
+     the numerical code for a given kind of signal may vary from
+     operating system to operating system.
+
+     The second argument, ACTION, specifies the action to use for the
+     signal SIGNUM.  This can be one of the following:
+
+     ‘SIG_DFL’
+          ‘SIG_DFL’ specifies the default action for the particular
+          signal.  The default actions for various kinds of signals are
+          stated in *note Standard Signals::.
+
+     ‘SIG_IGN’
+          ‘SIG_IGN’ specifies that the signal should be ignored.
+
+          Your program generally should not ignore signals that
+          represent serious events or that are normally used to request
+          termination.  You cannot ignore the ‘SIGKILL’ or ‘SIGSTOP’
+          signals at all.  You can ignore program error signals like
+          ‘SIGSEGV’, but ignoring the error won’t enable the program to
+          continue executing meaningfully.  Ignoring user requests such
+          as ‘SIGINT’, ‘SIGQUIT’, and ‘SIGTSTP’ is unfriendly.
+
+          When you do not wish signals to be delivered during a certain
+          part of the program, the thing to do is to block them, not
+          ignore them.  *Note Blocking Signals::.
+
+     ‘HANDLER’
+          Supply the address of a handler function in your program, to
+          specify running this handler as the way to deliver the signal.
+
+          For more information about defining signal handler functions,
+          see *note Defining Handlers::.
+
+     If you set the action for a signal to ‘SIG_IGN’, or if you set it
+     to ‘SIG_DFL’ and the default action is to ignore that signal, then
+     any pending signals of that type are discarded (even if they are
+     blocked).  Discarding the pending signals means that they will
+     never be delivered, not even if you subsequently specify another
+     action and unblock this kind of signal.
+
+     The ‘signal’ function returns the action that was previously in
+     effect for the specified SIGNUM.  You can save this value and
+     restore it later by calling ‘signal’ again.
+
+     If ‘signal’ can’t honor the request, it returns ‘SIG_ERR’ instead.
+     The following ‘errno’ error conditions are defined for this
+     function:
+
+     ‘EINVAL’
+          You specified an invalid SIGNUM; or you tried to ignore or
+          provide a handler for ‘SIGKILL’ or ‘SIGSTOP’.
+
+   *Compatibility Note:* A problem encountered when working with the
+‘signal’ function is that it has different semantics on BSD and SVID
+systems.  The difference is that on SVID systems the signal handler is
+deinstalled after signal delivery.  On BSD systems the handler must be
+explicitly deinstalled.  In the GNU C Library we use the BSD version by
+default.  To use the SVID version you can either use the function
+‘sysv_signal’ (see below) or use the ‘_XOPEN_SOURCE’ feature select
+macro (*note Feature Test Macros::).  In general, use of these functions
+should be avoided because of compatibility problems.  It is better to
+use ‘sigaction’ if it is available since the results are much more
+reliable.
+
+   Here is a simple example of setting up a handler to delete temporary
+files when certain fatal signals happen:
+
+     #include <signal.h>
+
+     void
+     termination_handler (int signum)
+     {
+       struct temp_file *p;
+
+       for (p = temp_file_list; p; p = p->next)
+         unlink (p->name);
+     }
+
+     int
+     main (void)
+     {
+       ...
+       if (signal (SIGINT, termination_handler) == SIG_IGN)
+         signal (SIGINT, SIG_IGN);
+       if (signal (SIGHUP, termination_handler) == SIG_IGN)
+         signal (SIGHUP, SIG_IGN);
+       if (signal (SIGTERM, termination_handler) == SIG_IGN)
+         signal (SIGTERM, SIG_IGN);
+       ...
+     }
+
+Note that if a given signal was previously set to be ignored, this code
+avoids altering that setting.  This is because non-job-control shells
+often ignore certain signals when starting children, and it is important
+for the children to respect this.
+
+   We do not handle ‘SIGQUIT’ or the program error signals in this
+example because these are designed to provide information for debugging
+(a core dump), and the temporary files may give useful information.
+
+ -- Function: sighandler_t sysv_signal (int SIGNUM, sighandler_t ACTION)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘sysv_signal’ implements the behavior of the standard ‘signal’
+     function as found on SVID systems.  The difference to BSD systems
+     is that the handler is deinstalled after a delivery of a signal.
+
+     *Compatibility Note:* As said above for ‘signal’, this function
+     should be avoided when possible.  ‘sigaction’ is the preferred
+     method.
+
+ -- Function: sighandler_t ssignal (int SIGNUM, sighandler_t ACTION)
+
+     Preliminary: | MT-Safe sigintr | AS-Safe | AC-Safe | *Note POSIX
+     Safety Concepts::.
+
+     The ‘ssignal’ function does the same thing as ‘signal’; it is
+     provided only for compatibility with SVID.
+
+ -- Macro: sighandler_t SIG_ERR
+
+     The value of this macro is used as the return value from ‘signal’
+     to indicate an error.
+
+File: libc.info,  Node: Advanced Signal Handling,  Next: Signal and Sigaction,  Prev: Basic Signal Handling,  Up: Signal Actions
+
+24.3.2 Advanced Signal Handling
+-------------------------------
+
+The ‘sigaction’ function has the same basic effect as ‘signal’: to
+specify how a signal should be handled by the process.  However,
+‘sigaction’ offers more control, at the expense of more complexity.  In
+particular, ‘sigaction’ allows you to specify additional flags to
+control when the signal is generated and how the handler is invoked.
+
+   The ‘sigaction’ function is declared in ‘signal.h’.
+
+ -- Data Type: struct sigaction
+
+     Structures of type ‘struct sigaction’ are used in the ‘sigaction’
+     function to specify all the information about how to handle a
+     particular signal.  This structure contains at least the following
+     members:
+
+     ‘sighandler_t sa_handler’
+          This is used in the same way as the ACTION argument to the
+          ‘signal’ function.  The value can be ‘SIG_DFL’, ‘SIG_IGN’, or
+          a function pointer.  *Note Basic Signal Handling::.
+
+     ‘sigset_t sa_mask’
+          This specifies a set of signals to be blocked while the
+          handler runs.  Blocking is explained in *note Blocking for
+          Handler::.  Note that the signal that was delivered is
+          automatically blocked by default before its handler is
+          started; this is true regardless of the value in ‘sa_mask’.
+          If you want that signal not to be blocked within its handler,
+          you must write code in the handler to unblock it.
+
+     ‘int sa_flags’
+          This specifies various flags which can affect the behavior of
+          the signal.  These are described in more detail in *note Flags
+          for Sigaction::.
+
+ -- Function: int sigaction (int SIGNUM, const struct sigaction
+          *restrict ACTION, struct sigaction *restrict OLD-ACTION)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ACTION argument is used to set up a new action for the signal
+     SIGNUM, while the OLD-ACTION argument is used to return information
+     about the action previously associated with this signal.  (In other
+     words, OLD-ACTION has the same purpose as the ‘signal’ function’s
+     return value—you can check to see what the old action in effect for
+     the signal was, and restore it later if you want.)
+
+     Either ACTION or OLD-ACTION can be a null pointer.  If OLD-ACTION
+     is a null pointer, this simply suppresses the return of information
+     about the old action.  If ACTION is a null pointer, the action
+     associated with the signal SIGNUM is unchanged; this allows you to
+     inquire about how a signal is being handled without changing that
+     handling.
+
+     The return value from ‘sigaction’ is zero if it succeeds, and ‘-1’
+     on failure.  The following ‘errno’ error conditions are defined for
+     this function:
+
+     ‘EINVAL’
+          The SIGNUM argument is not valid, or you are trying to trap or
+          ignore ‘SIGKILL’ or ‘SIGSTOP’.
+
+File: libc.info,  Node: Signal and Sigaction,  Next: Sigaction Function Example,  Prev: Advanced Signal Handling,  Up: Signal Actions
+
+24.3.3 Interaction of ‘signal’ and ‘sigaction’
+----------------------------------------------
+
+It’s possible to use both the ‘signal’ and ‘sigaction’ functions within
+a single program, but you have to be careful because they can interact
+in slightly strange ways.
+
+   The ‘sigaction’ function specifies more information than the ‘signal’
+function, so the return value from ‘signal’ cannot express the full
+range of ‘sigaction’ possibilities.  Therefore, if you use ‘signal’ to
+save and later reestablish an action, it may not be able to reestablish
+properly a handler that was established with ‘sigaction’.
+
+   To avoid having problems as a result, always use ‘sigaction’ to save
+and restore a handler if your program uses ‘sigaction’ at all.  Since
+‘sigaction’ is more general, it can properly save and reestablish any
+action, regardless of whether it was established originally with
+‘signal’ or ‘sigaction’.
+
+   On some systems if you establish an action with ‘signal’ and then
+examine it with ‘sigaction’, the handler address that you get may not be
+the same as what you specified with ‘signal’.  It may not even be
+suitable for use as an action argument with ‘signal’.  But you can rely
+on using it as an argument to ‘sigaction’.  This problem never happens
+on GNU systems.
+
+   So, you’re better off using one or the other of the mechanisms
+consistently within a single program.
+
+   *Portability Note:* The basic ‘signal’ function is a feature of
+ISO C, while ‘sigaction’ is part of the POSIX.1 standard.  If you are
+concerned about portability to non-POSIX systems, then you should use
+the ‘signal’ function instead.
+
+File: libc.info,  Node: Sigaction Function Example,  Next: Flags for Sigaction,  Prev: Signal and Sigaction,  Up: Signal Actions
+
+24.3.4 ‘sigaction’ Function Example
+-----------------------------------
+
+In *note Basic Signal Handling::, we gave an example of establishing a
+simple handler for termination signals using ‘signal’.  Here is an
+equivalent example using ‘sigaction’:
+
+     #include <signal.h>
+
+     void
+     termination_handler (int signum)
+     {
+       struct temp_file *p;
+
+       for (p = temp_file_list; p; p = p->next)
+         unlink (p->name);
+     }
+
+     int
+     main (void)
+     {
+       ...
+       struct sigaction new_action, old_action;
+
+       /* Set up the structure to specify the new action. */
+       new_action.sa_handler = termination_handler;
+       sigemptyset (&new_action.sa_mask);
+       new_action.sa_flags = 0;
+
+       sigaction (SIGINT, NULL, &old_action);
+       if (old_action.sa_handler != SIG_IGN)
+         sigaction (SIGINT, &new_action, NULL);
+       sigaction (SIGHUP, NULL, &old_action);
+       if (old_action.sa_handler != SIG_IGN)
+         sigaction (SIGHUP, &new_action, NULL);
+       sigaction (SIGTERM, NULL, &old_action);
+       if (old_action.sa_handler != SIG_IGN)
+         sigaction (SIGTERM, &new_action, NULL);
+       ...
+     }
+
+   The program just loads the ‘new_action’ structure with the desired
+parameters and passes it in the ‘sigaction’ call.  The usage of
+‘sigemptyset’ is described later; see *note Blocking Signals::.
+
+   As in the example using ‘signal’, we avoid handling signals
+previously set to be ignored.  Here we can avoid altering the signal
+handler even momentarily, by using the feature of ‘sigaction’ that lets
+us examine the current action without specifying a new one.
+
+   Here is another example.  It retrieves information about the current
+action for ‘SIGINT’ without changing that action.
+
+     struct sigaction query_action;
+
+     if (sigaction (SIGINT, NULL, &query_action) < 0)
+       /* ‘sigaction’ returns -1 in case of error. */
+     else if (query_action.sa_handler == SIG_DFL)
+       /* ‘SIGINT’ is handled in the default, fatal manner. */
+     else if (query_action.sa_handler == SIG_IGN)
+       /* ‘SIGINT’ is ignored. */
+     else
+       /* A programmer-defined signal handler is in effect. */
+
+File: libc.info,  Node: Flags for Sigaction,  Next: Initial Signal Actions,  Prev: Sigaction Function Example,  Up: Signal Actions
+
+24.3.5 Flags for ‘sigaction’
+----------------------------
+
+The ‘sa_flags’ member of the ‘sigaction’ structure is a catch-all for
+special features.  Most of the time, ‘SA_RESTART’ is a good value to use
+for this field.
+
+   The value of ‘sa_flags’ is interpreted as a bit mask.  Thus, you
+should choose the flags you want to set, OR those flags together, and
+store the result in the ‘sa_flags’ member of your ‘sigaction’ structure.
+
+   Each signal number has its own set of flags.  Each call to
+‘sigaction’ affects one particular signal number, and the flags that you
+specify apply only to that particular signal.
+
+   In the GNU C Library, establishing a handler with ‘signal’ sets all
+the flags to zero except for ‘SA_RESTART’, whose value depends on the
+settings you have made with ‘siginterrupt’.  *Note Interrupted
+Primitives::, to see what this is about.
+
+   These macros are defined in the header file ‘signal.h’.
+
+ -- Macro: int SA_NOCLDSTOP
+
+     This flag is meaningful only for the ‘SIGCHLD’ signal.  When the
+     flag is set, the system delivers the signal for a terminated child
+     process but not for one that is stopped.  By default, ‘SIGCHLD’ is
+     delivered for both terminated children and stopped children.
+
+     Setting this flag for a signal other than ‘SIGCHLD’ has no effect.
+
+ -- Macro: int SA_ONSTACK
+
+     If this flag is set for a particular signal number, the system uses
+     the signal stack when delivering that kind of signal.  *Note Signal
+     Stack::.  If a signal with this flag arrives and you have not set a
+     signal stack, the system terminates the program with ‘SIGILL’.
+
+ -- Macro: int SA_RESTART
+
+     This flag controls what happens when a signal is delivered during
+     certain primitives (such as ‘open’, ‘read’ or ‘write’), and the
+     signal handler returns normally.  There are two alternatives: the
+     library function can resume, or it can return failure with error
+     code ‘EINTR’.
+
+     The choice is controlled by the ‘SA_RESTART’ flag for the
+     particular kind of signal that was delivered.  If the flag is set,
+     returning from a handler resumes the library function.  If the flag
+     is clear, returning from a handler makes the function fail.  *Note
+     Interrupted Primitives::.
+
+File: libc.info,  Node: Initial Signal Actions,  Prev: Flags for Sigaction,  Up: Signal Actions
+
+24.3.6 Initial Signal Actions
+-----------------------------
+
+When a new process is created (*note Creating a Process::), it inherits
+handling of signals from its parent process.  However, when you load a
+new process image using the ‘exec’ function (*note Executing a File::),
+any signals that you’ve defined your own handlers for revert to their
+‘SIG_DFL’ handling.  (If you think about it a little, this makes sense;
+the handler functions from the old program are specific to that program,
+and aren’t even present in the address space of the new program image.)
+Of course, the new program can establish its own handlers.
+
+   When a program is run by a shell, the shell normally sets the initial
+actions for the child process to ‘SIG_DFL’ or ‘SIG_IGN’, as appropriate.
+It’s a good idea to check to make sure that the shell has not set up an
+initial action of ‘SIG_IGN’ before you establish your own signal
+handlers.
+
+   Here is an example of how to establish a handler for ‘SIGHUP’, but
+not if ‘SIGHUP’ is currently ignored:
+
+     ...
+     struct sigaction temp;
+
+     sigaction (SIGHUP, NULL, &temp);
+
+     if (temp.sa_handler != SIG_IGN)
+       {
+         temp.sa_handler = handle_sighup;
+         sigemptyset (&temp.sa_mask);
+         sigaction (SIGHUP, &temp, NULL);
+       }
+
+File: libc.info,  Node: Defining Handlers,  Next: Interrupted Primitives,  Prev: Signal Actions,  Up: Signal Handling
+

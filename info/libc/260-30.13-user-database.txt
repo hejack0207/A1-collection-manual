@@ -1,0 +1,263 @@
+30.13 User Database
+===================
+
+This section describes how to search and scan the database of registered
+users.  The database itself is kept in the file ‘/etc/passwd’ on most
+systems, but on some systems a special network server gives access to
+it.
+
+   Historically, this database included one-way hashes of user
+passphrases (*note Passphrase Storage::) as well as public information
+about each user (such as their user ID and full name).  Many of the
+functions and data structures associated with this database, and the
+filename ‘/etc/passwd’ itself, reflect this history.  However, the
+information in this database is available to all users, and it is no
+longer considered safe to make passphrase hashes available to all users,
+so they have been moved to a “shadow” database that can only be accessed
+with special privileges.
+
+* Menu:
+
+* User Data Structure::         What each user record contains.
+* Lookup User::                 How to look for a particular user.
+* Scanning All Users::          Scanning the list of all users, one by one.
+* Writing a User Entry::        How a program can rewrite a user’s record.
+
+File: libc.info,  Node: User Data Structure,  Next: Lookup User,  Up: User Database
+
+30.13.1 The Data Structure that Describes a User
+------------------------------------------------
+
+The functions and data structures for accessing the system user database
+are declared in the header file ‘pwd.h’.
+
+ -- Data Type: struct passwd
+
+     The ‘passwd’ data structure is used to hold information about
+     entries in the system user data base.  It has at least the
+     following members:
+
+     ‘char *pw_name’
+          The user’s login name.
+
+     ‘char *pw_passwd’
+          Historically, this field would hold the one-way hash of the
+          user’s passphrase.  Nowadays, it will almost always be the
+          single character ‘x’, indicating that the hash is in the
+          shadow database.
+
+     ‘uid_t pw_uid’
+          The user ID number.
+
+     ‘gid_t pw_gid’
+          The user’s default group ID number.
+
+     ‘char *pw_gecos’
+          A string typically containing the user’s real name, and
+          possibly other information such as a phone number.
+
+     ‘char *pw_dir’
+          The user’s home directory, or initial working directory.  This
+          might be a null pointer, in which case the interpretation is
+          system-dependent.
+
+     ‘char *pw_shell’
+          The user’s default shell, or the initial program run when the
+          user logs in.  This might be a null pointer, indicating that
+          the system default should be used.
+
+File: libc.info,  Node: Lookup User,  Next: Scanning All Users,  Prev: User Data Structure,  Up: User Database
+
+30.13.2 Looking Up One User
+---------------------------
+
+You can search the system user database for information about a specific
+user using ‘getpwuid’ or ‘getpwnam’.  These functions are declared in
+‘pwd.h’.
+
+ -- Function: struct passwd * getpwuid (uid_t UID)
+
+     Preliminary: | MT-Unsafe race:pwuid locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     This function returns a pointer to a statically-allocated structure
+     containing information about the user whose user ID is UID.  This
+     structure may be overwritten on subsequent calls to ‘getpwuid’.
+
+     A null pointer value indicates there is no user in the data base
+     with user ID UID.
+
+ -- Function: int getpwuid_r (uid_t UID, struct passwd *RESULT_BUF, char
+          *BUFFER, size_t BUFLEN, struct passwd **RESULT)
+
+     Preliminary: | MT-Safe locale | AS-Unsafe dlopen plugin heap lock |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     This function is similar to ‘getpwuid’ in that it returns
+     information about the user whose user ID is UID.  However, it fills
+     the user supplied structure pointed to by RESULT_BUF with the
+     information instead of using a static buffer.  The first BUFLEN
+     bytes of the additional buffer pointed to by BUFFER are used to
+     contain additional information, normally strings which are pointed
+     to by the elements of the result structure.
+
+     If a user with ID UID is found, the pointer returned in RESULT
+     points to the record which contains the wanted data (i.e., RESULT
+     contains the value RESULT_BUF).  If no user is found or if an error
+     occurred, the pointer returned in RESULT is a null pointer.  The
+     function returns zero or an error code.  If the buffer BUFFER is
+     too small to contain all the needed information, the error code
+     ‘ERANGE’ is returned and ‘errno’ is set to ‘ERANGE’.
+
+ -- Function: struct passwd * getpwnam (const char *NAME)
+
+     Preliminary: | MT-Unsafe race:pwnam locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     This function returns a pointer to a statically-allocated structure
+     containing information about the user whose user name is NAME.
+     This structure may be overwritten on subsequent calls to
+     ‘getpwnam’.
+
+     A null pointer return indicates there is no user named NAME.
+
+ -- Function: int getpwnam_r (const char *NAME, struct passwd
+          *RESULT_BUF, char *BUFFER, size_t BUFLEN, struct passwd
+          **RESULT)
+
+     Preliminary: | MT-Safe locale | AS-Unsafe dlopen plugin heap lock |
+     AC-Unsafe corrupt lock fd mem | *Note POSIX Safety Concepts::.
+
+     This function is similar to ‘getpwnam’ in that it returns
+     information about the user whose user name is NAME.  However, like
+     ‘getpwuid_r’, it fills the user supplied buffers in RESULT_BUF and
+     BUFFER with the information instead of using a static buffer.
+
+     The return values are the same as for ‘getpwuid_r’.
+
+File: libc.info,  Node: Scanning All Users,  Next: Writing a User Entry,  Prev: Lookup User,  Up: User Database
+
+30.13.3 Scanning the List of All Users
+--------------------------------------
+
+This section explains how a program can read the list of all users in
+the system, one user at a time.  The functions described here are
+declared in ‘pwd.h’.
+
+   You can use the ‘fgetpwent’ function to read user entries from a
+particular file.
+
+ -- Function: struct passwd * fgetpwent (FILE *STREAM)
+
+     Preliminary: | MT-Unsafe race:fpwent | AS-Unsafe corrupt lock |
+     AC-Unsafe corrupt lock | *Note POSIX Safety Concepts::.
+
+     This function reads the next user entry from STREAM and returns a
+     pointer to the entry.  The structure is statically allocated and is
+     rewritten on subsequent calls to ‘fgetpwent’.  You must copy the
+     contents of the structure if you wish to save the information.
+
+     The stream must correspond to a file in the same format as the
+     standard user database file.
+
+ -- Function: int fgetpwent_r (FILE *STREAM, struct passwd *RESULT_BUF,
+          char *BUFFER, size_t BUFLEN, struct passwd **RESULT)
+
+     Preliminary: | MT-Safe | AS-Unsafe corrupt | AC-Unsafe corrupt lock
+     | *Note POSIX Safety Concepts::.
+
+     This function is similar to ‘fgetpwent’ in that it reads the next
+     user entry from STREAM.  But the result is returned in the
+     structure pointed to by RESULT_BUF.  The first BUFLEN bytes of the
+     additional buffer pointed to by BUFFER are used to contain
+     additional information, normally strings which are pointed to by
+     the elements of the result structure.
+
+     The stream must correspond to a file in the same format as the
+     standard user database file.
+
+     If the function returns zero RESULT points to the structure with
+     the wanted data (normally this is in RESULT_BUF).  If errors
+     occurred the return value is nonzero and RESULT contains a null
+     pointer.
+
+   The way to scan all the entries in the user database is with
+‘setpwent’, ‘getpwent’, and ‘endpwent’.
+
+ -- Function: void setpwent (void)
+
+     Preliminary: | MT-Unsafe race:pwent locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     This function initializes a stream which ‘getpwent’ and
+     ‘getpwent_r’ use to read the user database.
+
+ -- Function: struct passwd * getpwent (void)
+
+     Preliminary: | MT-Unsafe race:pwent race:pwentbuf locale |
+     AS-Unsafe dlopen plugin heap lock | AC-Unsafe corrupt lock fd mem |
+     *Note POSIX Safety Concepts::.
+
+     The ‘getpwent’ function reads the next entry from the stream
+     initialized by ‘setpwent’.  It returns a pointer to the entry.  The
+     structure is statically allocated and is rewritten on subsequent
+     calls to ‘getpwent’.  You must copy the contents of the structure
+     if you wish to save the information.
+
+     A null pointer is returned when no more entries are available.
+
+ -- Function: int getpwent_r (struct passwd *RESULT_BUF, char *BUFFER,
+          size_t BUFLEN, struct passwd **RESULT)
+
+     Preliminary: | MT-Unsafe race:pwent locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     This function is similar to ‘getpwent’ in that it returns the next
+     entry from the stream initialized by ‘setpwent’.  Like
+     ‘fgetpwent_r’, it uses the user-supplied buffers in RESULT_BUF and
+     BUFFER to return the information requested.
+
+     The return values are the same as for ‘fgetpwent_r’.
+
+ -- Function: void endpwent (void)
+
+     Preliminary: | MT-Unsafe race:pwent locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     This function closes the internal stream used by ‘getpwent’ or
+     ‘getpwent_r’.
+
+File: libc.info,  Node: Writing a User Entry,  Prev: Scanning All Users,  Up: User Database
+
+30.13.4 Writing a User Entry
+----------------------------
+
+ -- Function: int putpwent (const struct passwd *P, FILE *STREAM)
+
+     Preliminary: | MT-Safe locale | AS-Unsafe corrupt | AC-Unsafe lock
+     corrupt | *Note POSIX Safety Concepts::.
+
+     This function writes the user entry ‘*P’ to the stream STREAM, in
+     the format used for the standard user database file.  The return
+     value is zero on success and nonzero on failure.
+
+     This function exists for compatibility with SVID. We recommend that
+     you avoid using it, because it makes sense only on the assumption
+     that the ‘struct passwd’ structure has no members except the
+     standard ones; on a system which merges the traditional Unix data
+     base with other extended information about users, adding an entry
+     using this function would inevitably leave out much of the
+     important information.
+
+     The group and user ID fields are left empty if the group or user
+     name starts with a - or +.
+
+     The function ‘putpwent’ is declared in ‘pwd.h’.
+
+File: libc.info,  Node: Group Database,  Next: Database Example,  Prev: User Database,  Up: Users and Groups
+

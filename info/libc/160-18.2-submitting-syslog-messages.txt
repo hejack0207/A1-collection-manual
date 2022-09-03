@@ -1,0 +1,379 @@
+18.2 Submitting Syslog Messages
+===============================
+
+The GNU C Library provides functions to submit messages to the Syslog
+facility:
+
+* Menu:
+
+* openlog::                      Open connection to Syslog
+* syslog; vsyslog::              Submit message to Syslog
+* closelog::                     Close connection to Syslog
+* setlogmask::                   Cause certain messages to be ignored
+* Syslog Example::               Example of all of the above
+
+   These functions only work to submit messages to the Syslog facility
+on the same system.  To submit a message to the Syslog facility on
+another system, use the socket I/O functions to write a UDP datagram to
+the ‘syslog’ UDP port on that system.  *Note Sockets::.
+
+File: libc.info,  Node: openlog,  Next: syslog; vsyslog,  Up: Submitting Syslog Messages
+
+18.2.1 openlog
+--------------
+
+The symbols referred to in this section are declared in the file
+‘syslog.h’.
+
+ -- Function: void openlog (const char *IDENT, int OPTION, int FACILITY)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock fd | *Note
+     POSIX Safety Concepts::.
+
+     ‘openlog’ opens or reopens a connection to Syslog in preparation
+     for submitting messages.
+
+     IDENT is an arbitrary identification string which future ‘syslog’
+     invocations will prefix to each message.  This is intended to
+     identify the source of the message, and people conventionally set
+     it to the name of the program that will submit the messages.
+
+     If IDENT is NULL, or if ‘openlog’ is not called, the default
+     identification string used in Syslog messages will be the program
+     name, taken from argv[0].
+
+     Please note that the string pointer IDENT will be retained
+     internally by the Syslog routines.  You must not free the memory
+     that IDENT points to.  It is also dangerous to pass a reference to
+     an automatic variable since leaving the scope would mean ending the
+     lifetime of the variable.  If you want to change the IDENT string,
+     you must call ‘openlog’ again; overwriting the string pointed to by
+     IDENT is not thread-safe.
+
+     You can cause the Syslog routines to drop the reference to IDENT
+     and go back to the default string (the program name taken from
+     argv[0]), by calling ‘closelog’: *Note closelog::.
+
+     In particular, if you are writing code for a shared library that
+     might get loaded and then unloaded (e.g.  a PAM module), and you
+     use ‘openlog’, you must call ‘closelog’ before any point where your
+     library might get unloaded, as in this example:
+
+          #include <syslog.h>
+
+          void
+          shared_library_function (void)
+          {
+            openlog ("mylibrary", option, priority);
+
+            syslog (LOG_INFO, "shared library has been invoked");
+
+            closelog ();
+          }
+
+     Without the call to ‘closelog’, future invocations of ‘syslog’ by
+     the program using the shared library may crash, if the library gets
+     unloaded and the memory containing the string ‘"mylibrary"’ becomes
+     unmapped.  This is a limitation of the BSD syslog interface.
+
+     ‘openlog’ may or may not open the ‘/dev/log’ socket, depending on
+     OPTION.  If it does, it tries to open it and connect it as a stream
+     socket.  If that doesn’t work, it tries to open it and connect it
+     as a datagram socket.  The socket has the “Close on Exec”
+     attribute, so the kernel will close it if the process performs an
+     exec.
+
+     You don’t have to use ‘openlog’.  If you call ‘syslog’ without
+     having called ‘openlog’, ‘syslog’ just opens the connection
+     implicitly and uses defaults for the information in IDENT and
+     OPTIONS.
+
+     OPTIONS is a bit string, with the bits as defined by the following
+     single bit masks:
+
+     ‘LOG_PERROR’
+          If on, ‘openlog’ sets up the connection so that any ‘syslog’
+          on this connection writes its message to the calling process’
+          Standard Error stream in addition to submitting it to Syslog.
+          If off, ‘syslog’ does not write the message to Standard Error.
+
+     ‘LOG_CONS’
+          If on, ‘openlog’ sets up the connection so that a ‘syslog’ on
+          this connection that fails to submit a message to Syslog
+          writes the message instead to system console.  If off,
+          ‘syslog’ does not write to the system console (but of course
+          Syslog may write messages it receives to the console).
+
+     ‘LOG_PID’
+          When on, ‘openlog’ sets up the connection so that a ‘syslog’
+          on this connection inserts the calling process’ Process ID
+          (PID) into the message.  When off, ‘openlog’ does not insert
+          the PID.
+
+     ‘LOG_NDELAY’
+          When on, ‘openlog’ opens and connects the ‘/dev/log’ socket.
+          When off, a future ‘syslog’ call must open and connect the
+          socket.
+
+          *Portability note:* In early systems, the sense of this bit
+          was exactly the opposite.
+
+     ‘LOG_ODELAY’
+          This bit does nothing.  It exists for backward compatibility.
+
+     If any other bit in OPTIONS is on, the result is undefined.
+
+     FACILITY is the default facility code for this connection.  A
+     ‘syslog’ on this connection that specifies default facility causes
+     this facility to be associated with the message.  See ‘syslog’ for
+     possible values.  A value of zero means the default, which is
+     ‘LOG_USER’.
+
+     If a Syslog connection is already open when you call ‘openlog’,
+     ‘openlog’ “reopens” the connection.  Reopening is like opening
+     except that if you specify zero for the default facility code, the
+     default facility code simply remains unchanged and if you specify
+     LOG_NDELAY and the socket is already open and connected, ‘openlog’
+     just leaves it that way.
+
+File: libc.info,  Node: syslog; vsyslog,  Next: closelog,  Prev: openlog,  Up: Submitting Syslog Messages
+
+18.2.2 syslog, vsyslog
+----------------------
+
+The symbols referred to in this section are declared in the file
+‘syslog.h’.
+
+ -- Function: void syslog (int FACILITY_PRIORITY, const char *FORMAT,
+          ...)
+
+     Preliminary: | MT-Safe env locale | AS-Unsafe corrupt heap lock
+     dlopen | AC-Unsafe corrupt lock mem fd | *Note POSIX Safety
+     Concepts::.
+
+     ‘syslog’ submits a message to the Syslog facility.  It does this by
+     writing to the Unix domain socket ‘/dev/log’.
+
+     ‘syslog’ submits the message with the facility and priority
+     indicated by FACILITY_PRIORITY.  The macro ‘LOG_MAKEPRI’ generates
+     a facility/priority from a facility and a priority, as in the
+     following example:
+
+          LOG_MAKEPRI(LOG_USER, LOG_WARNING)
+
+     The possible values for the facility code are (macros):
+
+     ‘LOG_USER’
+          A miscellaneous user process
+     ‘LOG_MAIL’
+          Mail
+     ‘LOG_DAEMON’
+          A miscellaneous system daemon
+     ‘LOG_AUTH’
+          Security (authorization)
+     ‘LOG_SYSLOG’
+          Syslog
+     ‘LOG_LPR’
+          Central printer
+     ‘LOG_NEWS’
+          Network news (e.g.  Usenet)
+     ‘LOG_UUCP’
+          UUCP
+     ‘LOG_CRON’
+          Cron and At
+     ‘LOG_AUTHPRIV’
+          Private security (authorization)
+     ‘LOG_FTP’
+          Ftp server
+     ‘LOG_LOCAL0’
+          Locally defined
+     ‘LOG_LOCAL1’
+          Locally defined
+     ‘LOG_LOCAL2’
+          Locally defined
+     ‘LOG_LOCAL3’
+          Locally defined
+     ‘LOG_LOCAL4’
+          Locally defined
+     ‘LOG_LOCAL5’
+          Locally defined
+     ‘LOG_LOCAL6’
+          Locally defined
+     ‘LOG_LOCAL7’
+          Locally defined
+
+     Results are undefined if the facility code is anything else.
+
+     *NB:* ‘syslog’ recognizes one other facility code: that of the
+     kernel.  But you can’t specify that facility code with these
+     functions.  If you try, it looks the same to ‘syslog’ as if you are
+     requesting the default facility.  But you wouldn’t want to anyway,
+     because any program that uses the GNU C Library is not the kernel.
+
+     You can use just a priority code as FACILITY_PRIORITY.  In that
+     case, ‘syslog’ assumes the default facility established when the
+     Syslog connection was opened.  *Note Syslog Example::.
+
+     The possible values for the priority code are (macros):
+
+     ‘LOG_EMERG’
+          The message says the system is unusable.
+     ‘LOG_ALERT’
+          Action on the message must be taken immediately.
+     ‘LOG_CRIT’
+          The message states a critical condition.
+     ‘LOG_ERR’
+          The message describes an error.
+     ‘LOG_WARNING’
+          The message is a warning.
+     ‘LOG_NOTICE’
+          The message describes a normal but important event.
+     ‘LOG_INFO’
+          The message is purely informational.
+     ‘LOG_DEBUG’
+          The message is only for debugging purposes.
+
+     Results are undefined if the priority code is anything else.
+
+     If the process does not presently have a Syslog connection open
+     (i.e., it did not call ‘openlog’), ‘syslog’ implicitly opens the
+     connection the same as ‘openlog’ would, with the following defaults
+     for information that would otherwise be included in an ‘openlog’
+     call: The default identification string is the program name.  The
+     default default facility is ‘LOG_USER’.  The default for all the
+     connection options in OPTIONS is as if those bits were off.
+     ‘syslog’ leaves the Syslog connection open.
+
+     If the ‘/dev/log’ socket is not open and connected, ‘syslog’ opens
+     and connects it, the same as ‘openlog’ with the ‘LOG_NDELAY’ option
+     would.
+
+     ‘syslog’ leaves ‘/dev/log’ open and connected unless its attempt to
+     send the message failed, in which case ‘syslog’ closes it (with the
+     hope that a future implicit open will restore the Syslog connection
+     to a usable state).
+
+     Example:
+
+
+          #include <syslog.h>
+          syslog (LOG_MAKEPRI(LOG_LOCAL1, LOG_ERROR),
+                  "Unable to make network connection to %s.  Error=%m", host);
+
+
+ -- Function: void vsyslog (int FACILITY_PRIORITY, const char *FORMAT,
+          va_list ARGLIST)
+
+     Preliminary: | MT-Safe env locale | AS-Unsafe corrupt heap lock
+     dlopen | AC-Unsafe corrupt lock mem fd | *Note POSIX Safety
+     Concepts::.
+
+     This is functionally identical to ‘syslog’, with the BSD style
+     variable length argument.
+
+File: libc.info,  Node: closelog,  Next: setlogmask,  Prev: syslog; vsyslog,  Up: Submitting Syslog Messages
+
+18.2.3 closelog
+---------------
+
+The symbols referred to in this section are declared in the file
+‘syslog.h’.
+
+ -- Function: void closelog (void)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock fd | *Note
+     POSIX Safety Concepts::.
+
+     ‘closelog’ closes the current Syslog connection, if there is one.
+     This includes closing the ‘/dev/log’ socket, if it is open.
+     ‘closelog’ also sets the identification string for Syslog messages
+     back to the default, if ‘openlog’ was called with a non-NULL
+     argument to IDENT.  The default identification string is the
+     program name taken from argv[0].
+
+     If you are writing shared library code that uses ‘openlog’ to
+     generate custom syslog output, you should use ‘closelog’ to drop
+     the GNU C Library’s internal reference to the IDENT pointer when
+     you are done.  Please read the section on ‘openlog’ for more
+     information: *Note openlog::.
+
+     ‘closelog’ does not flush any buffers.  You do not have to call
+     ‘closelog’ before re-opening a Syslog connection with ‘openlog’.
+     Syslog connections are automatically closed on exec or exit.
+
+File: libc.info,  Node: setlogmask,  Next: Syslog Example,  Prev: closelog,  Up: Submitting Syslog Messages
+
+18.2.4 setlogmask
+-----------------
+
+The symbols referred to in this section are declared in the file
+‘syslog.h’.
+
+ -- Function: int setlogmask (int MASK)
+
+     Preliminary: | MT-Unsafe race:LogMask | AS-Unsafe | AC-Safe | *Note
+     POSIX Safety Concepts::.
+
+     ‘setlogmask’ sets a mask (the “logmask”) that determines which
+     future ‘syslog’ calls shall be ignored.  If a program has not
+     called ‘setlogmask’, ‘syslog’ doesn’t ignore any calls.  You can
+     use ‘setlogmask’ to specify that messages of particular priorities
+     shall be ignored in the future.
+
+     A ‘setlogmask’ call overrides any previous ‘setlogmask’ call.
+
+     Note that the logmask exists entirely independently of opening and
+     closing of Syslog connections.
+
+     Setting the logmask has a similar effect to, but is not the same
+     as, configuring Syslog.  The Syslog configuration may cause Syslog
+     to discard certain messages it receives, but the logmask causes
+     certain messages never to get submitted to Syslog in the first
+     place.
+
+     MASK is a bit string with one bit corresponding to each of the
+     possible message priorities.  If the bit is on, ‘syslog’ handles
+     messages of that priority normally.  If it is off, ‘syslog’
+     discards messages of that priority.  Use the message priority
+     macros described in *note syslog; vsyslog:: and the ‘LOG_MASK’ to
+     construct an appropriate MASK value, as in this example:
+
+          LOG_MASK(LOG_EMERG) | LOG_MASK(LOG_ERROR)
+
+     or
+
+          ~(LOG_MASK(LOG_INFO))
+
+     There is also a ‘LOG_UPTO’ macro, which generates a mask with the
+     bits on for a certain priority and all priorities above it:
+
+          LOG_UPTO(LOG_ERROR)
+
+     The unfortunate naming of the macro is due to the fact that
+     internally, higher numbers are used for lower message priorities.
+
+File: libc.info,  Node: Syslog Example,  Prev: setlogmask,  Up: Submitting Syslog Messages
+
+18.2.5 Syslog Example
+---------------------
+
+Here is an example of ‘openlog’, ‘syslog’, and ‘closelog’:
+
+   This example sets the logmask so that debug and informational
+messages get discarded without ever reaching Syslog.  So the second
+‘syslog’ in the example does nothing.
+
+     #include <syslog.h>
+
+     setlogmask (LOG_UPTO (LOG_NOTICE));
+
+     openlog ("exampleprog", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
+
+     syslog (LOG_NOTICE, "Program started by User %d", getuid ());
+     syslog (LOG_INFO, "A tree falls in a forest");
+
+     closelog ();
+
+
+File: libc.info,  Node: Mathematics,  Next: Arithmetic,  Prev: Syslog,  Up: Top
+

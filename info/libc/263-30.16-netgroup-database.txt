@@ -1,0 +1,166 @@
+30.16 Netgroup Database
+=======================
+
+* Menu:
+
+* Netgroup Data::                  Data in the Netgroup database and where
+                                   it comes from.
+* Lookup Netgroup::                How to look for a particular netgroup.
+* Netgroup Membership::            How to test for netgroup membership.
+
+File: libc.info,  Node: Netgroup Data,  Next: Lookup Netgroup,  Up: Netgroup Database
+
+30.16.1 Netgroup Data
+---------------------
+
+Sometimes it is useful to group users according to other criteria (*note
+Group Database::).  E.g., it is useful to associate a certain group of
+users with a certain machine.  On the other hand grouping of host names
+is not supported so far.
+
+   In Sun Microsystems’ SunOS appeared a new kind of database, the
+netgroup database.  It allows grouping hosts, users, and domains freely,
+giving them individual names.  To be more concrete, a netgroup is a list
+of triples consisting of a host name, a user name, and a domain name
+where any of the entries can be a wildcard entry matching all inputs.  A
+last possibility is that names of other netgroups can also be given in
+the list specifying a netgroup.  So one can construct arbitrary
+hierarchies without loops.
+
+   Sun’s implementation allows netgroups only for the ‘nis’ or ‘nisplus’
+service, *note Services in the NSS configuration::.  The implementation
+in the GNU C Library has no such restriction.  An entry in either of the
+input services must have the following form:
+
+     GROUPNAME ( GROUPNAME | (HOSTNAME,USERNAME,domainname) )+
+
+   Any of the fields in the triple can be empty which means anything
+matches.  While describing the functions we will see that the opposite
+case is useful as well.  I.e., there may be entries which will not match
+any input.  For entries like this, a name consisting of the single
+character ‘-’ shall be used.
+
+File: libc.info,  Node: Lookup Netgroup,  Next: Netgroup Membership,  Prev: Netgroup Data,  Up: Netgroup Database
+
+30.16.2 Looking up one Netgroup
+-------------------------------
+
+The lookup functions for netgroups are a bit different than all other
+system database handling functions.  Since a single netgroup can contain
+many entries a two-step process is needed.  First a single netgroup is
+selected and then one can iterate over all entries in this netgroup.
+These functions are declared in ‘netdb.h’.
+
+ -- Function: int setnetgrent (const char *NETGROUP)
+
+     Preliminary: | MT-Unsafe race:netgrent locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     A call to this function initializes the internal state of the
+     library to allow following calls of ‘getnetgrent’ to iterate over
+     all entries in the netgroup with name NETGROUP.
+
+     When the call is successful (i.e., when a netgroup with this name
+     exists) the return value is ‘1’.  When the return value is ‘0’ no
+     netgroup of this name is known or some other error occurred.
+
+   It is important to remember that there is only one single state for
+iterating the netgroups.  Even if the programmer uses the
+‘getnetgrent_r’ function the result is not really reentrant since always
+only one single netgroup at a time can be processed.  If the program
+needs to process more than one netgroup simultaneously she must protect
+this by using external locking.  This problem was introduced in the
+original netgroups implementation in SunOS and since we must stay
+compatible it is not possible to change this.
+
+   Some other functions also use the netgroups state.  Currently these
+are the ‘innetgr’ function and parts of the implementation of the
+‘compat’ service part of the NSS implementation.
+
+ -- Function: int getnetgrent (char **HOSTP, char **USERP, char
+          **DOMAINP)
+
+     Preliminary: | MT-Unsafe race:netgrent race:netgrentbuf locale |
+     AS-Unsafe dlopen plugin heap lock | AC-Unsafe corrupt lock fd mem |
+     *Note POSIX Safety Concepts::.
+
+     This function returns the next unprocessed entry of the currently
+     selected netgroup.  The string pointers, in which addresses are
+     passed in the arguments HOSTP, USERP, and DOMAINP, will contain
+     after a successful call pointers to appropriate strings.  If the
+     string in the next entry is empty the pointer has the value ‘NULL’.
+     The returned string pointers are only valid if none of the netgroup
+     related functions are called.
+
+     The return value is ‘1’ if the next entry was successfully read.  A
+     value of ‘0’ means no further entries exist or internal errors
+     occurred.
+
+ -- Function: int getnetgrent_r (char **HOSTP, char **USERP, char
+          **DOMAINP, char *BUFFER, size_t BUFLEN)
+
+     Preliminary: | MT-Unsafe race:netgrent locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     This function is similar to ‘getnetgrent’ with only one exception:
+     the strings the three string pointers HOSTP, USERP, and DOMAINP
+     point to, are placed in the buffer of BUFLEN bytes starting at
+     BUFFER.  This means the returned values are valid even after other
+     netgroup related functions are called.
+
+     The return value is ‘1’ if the next entry was successfully read and
+     the buffer contains enough room to place the strings in it.  ‘0’ is
+     returned in case no more entries are found, the buffer is too
+     small, or internal errors occurred.
+
+     This function is a GNU extension.  The original implementation in
+     the SunOS libc does not provide this function.
+
+ -- Function: void endnetgrent (void)
+
+     Preliminary: | MT-Unsafe race:netgrent | AS-Unsafe dlopen plugin
+     heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX Safety
+     Concepts::.
+
+     This function frees all buffers which were allocated to process the
+     last selected netgroup.  As a result all string pointers returned
+     by calls to ‘getnetgrent’ are invalid afterwards.
+
+File: libc.info,  Node: Netgroup Membership,  Prev: Lookup Netgroup,  Up: Netgroup Database
+
+30.16.3 Testing for Netgroup Membership
+---------------------------------------
+
+It is often not necessary to scan the whole netgroup since often the
+only interesting question is whether a given entry is part of the
+selected netgroup.
+
+ -- Function: int innetgr (const char *NETGROUP, const char *HOST, const
+          char *USER, const char *DOMAIN)
+
+     Preliminary: | MT-Unsafe race:netgrent locale | AS-Unsafe dlopen
+     plugin heap lock | AC-Unsafe corrupt lock fd mem | *Note POSIX
+     Safety Concepts::.
+
+     This function tests whether the triple specified by the parameters
+     HOST, USER, and DOMAIN is part of the netgroup NETGROUP.  Using
+     this function has the advantage that
+
+       1. no other netgroup function can use the global netgroup state
+          since internal locking is used and
+       2. the function is implemented more efficiently than successive
+          calls to the other ‘set’/‘get’/‘endnetgrent’ functions.
+
+     Any of the pointers HOST, USER, or DOMAIN can be ‘NULL’ which means
+     any value is accepted in this position.  This is also true for the
+     name ‘-’ which should not match any other string otherwise.
+
+     The return value is ‘1’ if an entry matching the given triple is
+     found in the netgroup.  The return value is ‘0’ if the netgroup
+     itself is not found, the netgroup does not contain the triple or
+     internal errors occurred.
+
+File: libc.info,  Node: System Management,  Next: System Configuration,  Prev: Users and Groups,  Up: Top
+

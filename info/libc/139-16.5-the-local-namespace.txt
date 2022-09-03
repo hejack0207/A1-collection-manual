@@ -1,0 +1,161 @@
+16.5 The Local Namespace
+========================
+
+This section describes the details of the local namespace, whose
+symbolic name (required when you create a socket) is ‘PF_LOCAL’.  The
+local namespace is also known as “Unix domain sockets”.  Another name is
+file namespace since socket addresses are normally implemented as file
+names.
+
+* Menu:
+
+* Concepts: Local Namespace Concepts. What you need to understand.
+* Details: Local Namespace Details.   Address format, symbolic names, etc.
+* Example: Local Socket Example.      Example of creating a socket.
+
+File: libc.info,  Node: Local Namespace Concepts,  Next: Local Namespace Details,  Up: Local Namespace
+
+16.5.1 Local Namespace Concepts
+-------------------------------
+
+In the local namespace socket addresses are file names.  You can specify
+any file name you want as the address of the socket, but you must have
+write permission on the directory containing it.  It’s common to put
+these files in the ‘/tmp’ directory.
+
+   One peculiarity of the local namespace is that the name is only used
+when opening the connection; once open the address is not meaningful and
+may not exist.
+
+   Another peculiarity is that you cannot connect to such a socket from
+another machine–not even if the other machine shares the file system
+which contains the name of the socket.  You can see the socket in a
+directory listing, but connecting to it never succeeds.  Some programs
+take advantage of this, such as by asking the client to send its own
+process ID, and using the process IDs to distinguish between clients.
+However, we recommend you not use this method in protocols you design,
+as we might someday permit connections from other machines that mount
+the same file systems.  Instead, send each new client an identifying
+number if you want it to have one.
+
+   After you close a socket in the local namespace, you should delete
+the file name from the file system.  Use ‘unlink’ or ‘remove’ to do
+this; see *note Deleting Files::.
+
+   The local namespace supports just one protocol for any communication
+style; it is protocol number ‘0’.
+
+File: libc.info,  Node: Local Namespace Details,  Next: Local Socket Example,  Prev: Local Namespace Concepts,  Up: Local Namespace
+
+16.5.2 Details of Local Namespace
+---------------------------------
+
+To create a socket in the local namespace, use the constant ‘PF_LOCAL’
+as the NAMESPACE argument to ‘socket’ or ‘socketpair’.  This constant is
+defined in ‘sys/socket.h’.
+
+ -- Macro: int PF_LOCAL
+
+     This designates the local namespace, in which socket addresses are
+     local names, and its associated family of protocols.  ‘PF_LOCAL’ is
+     the macro used by POSIX.1g.
+
+ -- Macro: int PF_UNIX
+
+     This is a synonym for ‘PF_LOCAL’, for compatibility’s sake.
+
+ -- Macro: int PF_FILE
+
+     This is a synonym for ‘PF_LOCAL’, for compatibility’s sake.
+
+   The structure for specifying socket names in the local namespace is
+defined in the header file ‘sys/un.h’:
+
+ -- Data Type: struct sockaddr_un
+
+     This structure is used to specify local namespace socket addresses.
+     It has the following members:
+
+     ‘short int sun_family’
+          This identifies the address family or format of the socket
+          address.  You should store the value ‘AF_LOCAL’ to designate
+          the local namespace.  *Note Socket Addresses::.
+
+     ‘char sun_path[108]’
+          This is the file name to use.
+
+          *Incomplete:* Why is 108 a magic number?  RMS suggests making
+          this a zero-length array and tweaking the following example to
+          use ‘alloca’ to allocate an appropriate amount of storage
+          based on the length of the filename.
+
+   You should compute the LENGTH parameter for a socket address in the
+local namespace as the sum of the size of the ‘sun_family’ component and
+the string length (_not_ the allocation size!)  of the file name string.
+This can be done using the macro ‘SUN_LEN’:
+
+ -- Macro: int SUN_LEN (_struct sockaddr_un *_ PTR)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This macro computes the length of the socket address in the local
+     namespace.
+
+File: libc.info,  Node: Local Socket Example,  Prev: Local Namespace Details,  Up: Local Namespace
+
+16.5.3 Example of Local-Namespace Sockets
+-----------------------------------------
+
+Here is an example showing how to create and name a socket in the local
+namespace.
+
+
+     #include <stddef.h>
+     #include <stdio.h>
+     #include <errno.h>
+     #include <stdlib.h>
+     #include <string.h>
+     #include <sys/socket.h>
+     #include <sys/un.h>
+
+     int
+     make_named_socket (const char *filename)
+     {
+       struct sockaddr_un name;
+       int sock;
+       size_t size;
+
+       /* Create the socket. */
+       sock = socket (PF_LOCAL, SOCK_DGRAM, 0);
+       if (sock < 0)
+         {
+           perror ("socket");
+           exit (EXIT_FAILURE);
+         }
+
+       /* Bind a name to the socket. */
+       name.sun_family = AF_LOCAL;
+       strncpy (name.sun_path, filename, sizeof (name.sun_path));
+       name.sun_path[sizeof (name.sun_path) - 1] = '\0';
+
+       /* The size of the address is
+          the offset of the start of the filename,
+          plus its length (not including the terminating null byte).
+          Alternatively you can just do:
+          size = SUN_LEN (&name);
+      */
+       size = (offsetof (struct sockaddr_un, sun_path)
+               + strlen (name.sun_path));
+
+       if (bind (sock, (struct sockaddr *) &name, size) < 0)
+         {
+           perror ("bind");
+           exit (EXIT_FAILURE);
+         }
+
+       return sock;
+     }
+
+File: libc.info,  Node: Internet Namespace,  Next: Misc Namespaces,  Prev: Local Namespace,  Up: Sockets
+

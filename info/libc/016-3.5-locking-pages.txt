@@ -1,0 +1,284 @@
+3.5 Locking Pages
+=================
+
+You can tell the system to associate a particular virtual memory page
+with a real page frame and keep it that way — i.e., cause the page to be
+paged in if it isn’t already and mark it so it will never be paged out
+and consequently will never cause a page fault.  This is called
+“locking” a page.
+
+   The functions in this chapter lock and unlock the calling process’
+pages.
+
+* Menu:
+
+* Why Lock Pages::                Reasons to read this section.
+* Locked Memory Details::         Everything you need to know locked
+                                    memory
+* Page Lock Functions::           Here’s how to do it.
+
+File: libc.info,  Node: Why Lock Pages,  Next: Locked Memory Details,  Up: Locking Pages
+
+3.5.1 Why Lock Pages
+--------------------
+
+Because page faults cause paged out pages to be paged in transparently,
+a process rarely needs to be concerned about locking pages.  However,
+there are two reasons people sometimes are:
+
+   • Speed.  A page fault is transparent only insofar as the process is
+     not sensitive to how long it takes to do a simple memory access.
+     Time-critical processes, especially realtime processes, may not be
+     able to wait or may not be able to tolerate variance in execution
+     speed.
+
+     A process that needs to lock pages for this reason probably also
+     needs priority among other processes for use of the CPU. *Note
+     Priority::.
+
+     In some cases, the programmer knows better than the system’s demand
+     paging allocator which pages should remain in real memory to
+     optimize system performance.  In this case, locking pages can help.
+
+   • Privacy.  If you keep secrets in virtual memory and that virtual
+     memory gets paged out, that increases the chance that the secrets
+     will get out.  If a passphrase gets written out to disk swap space,
+     for example, it might still be there long after virtual and real
+     memory have been wiped clean.
+
+   Be aware that when you lock a page, that’s one fewer page frame that
+can be used to back other virtual memory (by the same or other
+processes), which can mean more page faults, which means the system runs
+more slowly.  In fact, if you lock enough memory, some programs may not
+be able to run at all for lack of real memory.
+
+File: libc.info,  Node: Locked Memory Details,  Next: Page Lock Functions,  Prev: Why Lock Pages,  Up: Locking Pages
+
+3.5.2 Locked Memory Details
+---------------------------
+
+A memory lock is associated with a virtual page, not a real frame.  The
+paging rule is: If a frame backs at least one locked page, don’t page it
+out.
+
+   Memory locks do not stack.  I.e., you can’t lock a particular page
+twice so that it has to be unlocked twice before it is truly unlocked.
+It is either locked or it isn’t.
+
+   A memory lock persists until the process that owns the memory
+explicitly unlocks it.  (But process termination and exec cause the
+virtual memory to cease to exist, which you might say means it isn’t
+locked any more).
+
+   Memory locks are not inherited by child processes.  (But note that on
+a modern Unix system, immediately after a fork, the parent’s and the
+child’s virtual address space are backed by the same real page frames,
+so the child enjoys the parent’s locks).  *Note Creating a Process::.
+
+   Because of its ability to impact other processes, only the superuser
+can lock a page.  Any process can unlock its own page.
+
+   The system sets limits on the amount of memory a process can have
+locked and the amount of real memory it can have dedicated to it.  *Note
+Limits on Resources::.
+
+   In Linux, locked pages aren’t as locked as you might think.  Two
+virtual pages that are not shared memory can nonetheless be backed by
+the same real frame.  The kernel does this in the name of efficiency
+when it knows both virtual pages contain identical data, and does it
+even if one or both of the virtual pages are locked.
+
+   But when a process modifies one of those pages, the kernel must get
+it a separate frame and fill it with the page’s data.  This is known as
+a “copy-on-write page fault”.  It takes a small amount of time and in a
+pathological case, getting that frame may require I/O.
+
+   To make sure this doesn’t happen to your program, don’t just lock the
+pages.  Write to them as well, unless you know you won’t write to them
+ever.  And to make sure you have pre-allocated frames for your stack,
+enter a scope that declares a C automatic variable larger than the
+maximum stack size you will need, set it to something, then return from
+its scope.
+
+File: libc.info,  Node: Page Lock Functions,  Prev: Locked Memory Details,  Up: Locking Pages
+
+3.5.3 Functions To Lock And Unlock Pages
+----------------------------------------
+
+The symbols in this section are declared in ‘sys/mman.h’.  These
+functions are defined by POSIX.1b, but their availability depends on
+your kernel.  If your kernel doesn’t allow these functions, they exist
+but always fail.  They _are_ available with a Linux kernel.
+
+   *Portability Note:* POSIX.1b requires that when the ‘mlock’ and
+‘munlock’ functions are available, the file ‘unistd.h’ define the macro
+‘_POSIX_MEMLOCK_RANGE’ and the file ‘limits.h’ define the macro
+‘PAGESIZE’ to be the size of a memory page in bytes.  It requires that
+when the ‘mlockall’ and ‘munlockall’ functions are available, the
+‘unistd.h’ file define the macro ‘_POSIX_MEMLOCK’.  The GNU C Library
+conforms to this requirement.
+
+ -- Function: int mlock (const void *ADDR, size_t LEN)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘mlock’ locks a range of the calling process’ virtual pages.
+
+     The range of memory starts at address ADDR and is LEN bytes long.
+     Actually, since you must lock whole pages, it is the range of pages
+     that include any part of the specified range.
+
+     When the function returns successfully, each of those pages is
+     backed by (connected to) a real frame (is resident) and is marked
+     to stay that way.  This means the function may cause page-ins and
+     have to wait for them.
+
+     When the function fails, it does not affect the lock status of any
+     pages.
+
+     The return value is zero if the function succeeds.  Otherwise, it
+     is ‘-1’ and ‘errno’ is set accordingly.  ‘errno’ values specific to
+     this function are:
+
+     ‘ENOMEM’
+             • At least some of the specified address range does not
+               exist in the calling process’ virtual address space.
+             • The locking would cause the process to exceed its locked
+               page limit.
+
+     ‘EPERM’
+          The calling process is not superuser.
+
+     ‘EINVAL’
+          LEN is not positive.
+
+     ‘ENOSYS’
+          The kernel does not provide ‘mlock’ capability.
+
+ -- Function: int mlock2 (const void *ADDR, size_t LEN, unsigned int
+          FLAGS)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function is similar to ‘mlock’.  If FLAGS is zero, a call to
+     ‘mlock2’ behaves exactly as the equivalent call to ‘mlock’.
+
+     The FLAGS argument must be a combination of zero or more of the
+     following flags:
+
+     ‘MLOCK_ONFAULT’
+
+          Only those pages in the specified address range which are
+          already in memory are locked immediately.  Additional pages in
+          the range are automatically locked in case of a page fault and
+          allocation of memory.
+
+     Like ‘mlock’, ‘mlock2’ returns zero on success and ‘-1’ on failure,
+     setting ‘errno’ accordingly.  Additional ‘errno’ values defined for
+     ‘mlock2’ are:
+
+     ‘EINVAL’
+          The specified (non-zero) FLAGS argument is not supported by
+          this system.
+
+   You can lock _all_ a process’ memory with ‘mlockall’.  You unlock
+memory with ‘munlock’ or ‘munlockall’.
+
+   To avoid all page faults in a C program, you have to use ‘mlockall’,
+because some of the memory a program uses is hidden from the C code,
+e.g.  the stack and automatic variables, and you wouldn’t know what
+address to tell ‘mlock’.
+
+ -- Function: int munlock (const void *ADDR, size_t LEN)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘munlock’ unlocks a range of the calling process’ virtual pages.
+
+     ‘munlock’ is the inverse of ‘mlock’ and functions completely
+     analogously to ‘mlock’, except that there is no ‘EPERM’ failure.
+
+ -- Function: int mlockall (int FLAGS)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘mlockall’ locks all the pages in a process’ virtual memory address
+     space, and/or any that are added to it in the future.  This
+     includes the pages of the code, data and stack segment, as well as
+     shared libraries, user space kernel data, shared memory, and memory
+     mapped files.
+
+     FLAGS is a string of single bit flags represented by the following
+     macros.  They tell ‘mlockall’ which of its functions you want.  All
+     other bits must be zero.
+
+     ‘MCL_CURRENT’
+          Lock all pages which currently exist in the calling process’
+          virtual address space.
+
+     ‘MCL_FUTURE’
+          Set a mode such that any pages added to the process’ virtual
+          address space in the future will be locked from birth.  This
+          mode does not affect future address spaces owned by the same
+          process so exec, which replaces a process’ address space,
+          wipes out ‘MCL_FUTURE’.  *Note Executing a File::.
+
+     When the function returns successfully, and you specified
+     ‘MCL_CURRENT’, all of the process’ pages are backed by (connected
+     to) real frames (they are resident) and are marked to stay that
+     way.  This means the function may cause page-ins and have to wait
+     for them.
+
+     When the process is in ‘MCL_FUTURE’ mode because it successfully
+     executed this function and specified ‘MCL_CURRENT’, any system call
+     by the process that requires space be added to its virtual address
+     space fails with ‘errno’ = ‘ENOMEM’ if locking the additional space
+     would cause the process to exceed its locked page limit.  In the
+     case that the address space addition that can’t be accommodated is
+     stack expansion, the stack expansion fails and the kernel sends a
+     ‘SIGSEGV’ signal to the process.
+
+     When the function fails, it does not affect the lock status of any
+     pages or the future locking mode.
+
+     The return value is zero if the function succeeds.  Otherwise, it
+     is ‘-1’ and ‘errno’ is set accordingly.  ‘errno’ values specific to
+     this function are:
+
+     ‘ENOMEM’
+             • At least some of the specified address range does not
+               exist in the calling process’ virtual address space.
+             • The locking would cause the process to exceed its locked
+               page limit.
+
+     ‘EPERM’
+          The calling process is not superuser.
+
+     ‘EINVAL’
+          Undefined bits in FLAGS are not zero.
+
+     ‘ENOSYS’
+          The kernel does not provide ‘mlockall’ capability.
+
+     You can lock just specific pages with ‘mlock’.  You unlock pages
+     with ‘munlockall’ and ‘munlock’.
+
+ -- Function: int munlockall (void)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘munlockall’ unlocks every page in the calling process’ virtual
+     address space and turns off ‘MCL_FUTURE’ future locking mode.
+
+     The return value is zero if the function succeeds.  Otherwise, it
+     is ‘-1’ and ‘errno’ is set accordingly.  The only way this function
+     can fail is for generic reasons that all functions and system calls
+     can fail, so there are no specific ‘errno’ values.
+
+File: libc.info,  Node: Character Handling,  Next: String and Array Utilities,  Prev: Memory,  Up: Top
+

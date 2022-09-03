@@ -1,0 +1,181 @@
+5.5 Concatenating Strings
+=========================
+
+The functions described in this section concatenate the contents of a
+string or wide string to another.  They follow the string-copying
+functions in their conventions.  *Note Copying Strings and Arrays::.
+‘strcat’ is declared in the header file ‘string.h’ while ‘wcscat’ is
+declared in ‘wchar.h’.
+
+ -- Function: char * strcat (char *restrict TO, const char *restrict
+          FROM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘strcat’ function is similar to ‘strcpy’, except that the bytes
+     from FROM are concatenated or appended to the end of TO, instead of
+     overwriting it.  That is, the first byte from FROM overwrites the
+     null byte marking the end of TO.
+
+     An equivalent definition for ‘strcat’ would be:
+
+          char *
+          strcat (char *restrict to, const char *restrict from)
+          {
+            strcpy (to + strlen (to), from);
+            return to;
+          }
+
+     This function has undefined results if the strings overlap.
+
+     As noted below, this function has significant performance issues.
+
+ -- Function: wchar_t * wcscat (wchar_t *restrict WTO, const wchar_t
+          *restrict WFROM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘wcscat’ function is similar to ‘wcscpy’, except that the wide
+     characters from WFROM are concatenated or appended to the end of
+     WTO, instead of overwriting it.  That is, the first wide character
+     from WFROM overwrites the null wide character marking the end of
+     WTO.
+
+     An equivalent definition for ‘wcscat’ would be:
+
+          wchar_t *
+          wcscat (wchar_t *wto, const wchar_t *wfrom)
+          {
+            wcscpy (wto + wcslen (wto), wfrom);
+            return wto;
+          }
+
+     This function has undefined results if the strings overlap.
+
+     As noted below, this function has significant performance issues.
+
+   Programmers using the ‘strcat’ or ‘wcscat’ function (or the ‘strncat’
+or ‘wcsncat’ functions defined in a later section, for that matter) can
+easily be recognized as lazy and reckless.  In almost all situations the
+lengths of the participating strings are known (it better should be
+since how can one otherwise ensure the allocated size of the buffer is
+sufficient?)  Or at least, one could know them if one keeps track of the
+results of the various function calls.  But then it is very inefficient
+to use ‘strcat’/‘wcscat’.  A lot of time is wasted finding the end of
+the destination string so that the actual copying can start.  This is a
+common example:
+
+     /* This function concatenates arbitrarily many strings.  The last
+        parameter must be ‘NULL’.  */
+     char *
+     concat (const char *str, ...)
+     {
+       va_list ap, ap2;
+       size_t total = 1;
+       const char *s;
+       char *result;
+
+       va_start (ap, str);
+       va_copy (ap2, ap);
+
+       /* Determine how much space we need.  */
+       for (s = str; s != NULL; s = va_arg (ap, const char *))
+         total += strlen (s);
+
+       va_end (ap);
+
+       result = (char *) malloc (total);
+       if (result != NULL)
+         {
+           result[0] = '\0';
+
+           /* Copy the strings.  */
+           for (s = str; s != NULL; s = va_arg (ap2, const char *))
+             strcat (result, s);
+         }
+
+       va_end (ap2);
+
+       return result;
+     }
+
+   This looks quite simple, especially the second loop where the strings
+are actually copied.  But these innocent lines hide a major performance
+penalty.  Just imagine that ten strings of 100 bytes each have to be
+concatenated.  For the second string we search the already stored 100
+bytes for the end of the string so that we can append the next string.
+For all strings in total the comparisons necessary to find the end of
+the intermediate results sums up to 5500!  If we combine the copying
+with the search for the allocation we can write this function more
+efficiently:
+
+     char *
+     concat (const char *str, ...)
+     {
+       va_list ap;
+       size_t allocated = 100;
+       char *result = (char *) malloc (allocated);
+
+       if (result != NULL)
+         {
+           char *newp;
+           char *wp;
+           const char *s;
+
+           va_start (ap, str);
+
+           wp = result;
+           for (s = str; s != NULL; s = va_arg (ap, const char *))
+             {
+               size_t len = strlen (s);
+
+               /* Resize the allocated memory if necessary.  */
+               if (wp + len + 1 > result + allocated)
+                 {
+                   allocated = (allocated + len) * 2;
+                   newp = (char *) realloc (result, allocated);
+                   if (newp == NULL)
+                     {
+                       free (result);
+                       return NULL;
+                     }
+                   wp = newp + (wp - result);
+                   result = newp;
+                 }
+
+               wp = mempcpy (wp, s, len);
+             }
+
+           /* Terminate the result string.  */
+           *wp++ = '\0';
+
+           /* Resize memory to the optimal size.  */
+           newp = realloc (result, wp - result);
+           if (newp != NULL)
+             result = newp;
+
+           va_end (ap);
+         }
+
+       return result;
+     }
+
+   With a bit more knowledge about the input strings one could fine-tune
+the memory allocation.  The difference we are pointing to here is that
+we don’t use ‘strcat’ anymore.  We always keep track of the length of
+the current intermediate result so we can save ourselves the search for
+the end of the string and use ‘mempcpy’.  Please note that we also don’t
+use ‘stpcpy’ which might seem more natural since we are handling
+strings.  But this is not necessary since we already know the length of
+the string and therefore can use the faster memory copying function.
+The example would work for wide characters the same way.
+
+   Whenever a programmer feels the need to use ‘strcat’ she or he should
+think twice and look through the program to see whether the code cannot
+be rewritten to take advantage of already calculated results.  Again: it
+is almost always unnecessary to use ‘strcat’.
+
+File: libc.info,  Node: Truncating Strings,  Next: String/Array Comparison,  Prev: Concatenating Strings,  Up: String and Array Utilities
+

@@ -1,0 +1,486 @@
+24.7 Blocking Signals
+=====================
+
+Blocking a signal means telling the operating system to hold it and
+deliver it later.  Generally, a program does not block signals
+indefinitely—it might as well ignore them by setting their actions to
+‘SIG_IGN’.  But it is useful to block signals briefly, to prevent them
+from interrupting sensitive operations.  For instance:
+
+   • You can use the ‘sigprocmask’ function to block signals while you
+     modify global variables that are also modified by the handlers for
+     these signals.
+
+   • You can set ‘sa_mask’ in your ‘sigaction’ call to block certain
+     signals while a particular signal handler runs.  This way, the
+     signal handler can run without being interrupted itself by signals.
+
+* Menu:
+
+* Why Block::                           The purpose of blocking signals.
+* Signal Sets::                         How to specify which signals to
+                                         block.
+* Process Signal Mask::                 Blocking delivery of signals to your
+				         process during normal execution.
+* Testing for Delivery::                Blocking to Test for Delivery of
+                                         a Signal.
+* Blocking for Handler::                Blocking additional signals while a
+				         handler is being run.
+* Checking for Pending Signals::        Checking for Pending Signals
+* Remembering a Signal::                How you can get almost the same
+                                         effect as blocking a signal, by
+                                         handling it and setting a flag
+                                         to be tested later.
+
+File: libc.info,  Node: Why Block,  Next: Signal Sets,  Up: Blocking Signals
+
+24.7.1 Why Blocking Signals is Useful
+-------------------------------------
+
+Temporary blocking of signals with ‘sigprocmask’ gives you a way to
+prevent interrupts during critical parts of your code.  If signals
+arrive in that part of the program, they are delivered later, after you
+unblock them.
+
+   One example where this is useful is for sharing data between a signal
+handler and the rest of the program.  If the type of the data is not
+‘sig_atomic_t’ (*note Atomic Data Access::), then the signal handler
+could run when the rest of the program has only half finished reading or
+writing the data.  This would lead to confusing consequences.
+
+   To make the program reliable, you can prevent the signal handler from
+running while the rest of the program is examining or modifying that
+data—by blocking the appropriate signal around the parts of the program
+that touch the data.
+
+   Blocking signals is also necessary when you want to perform a certain
+action only if a signal has not arrived.  Suppose that the handler for
+the signal sets a flag of type ‘sig_atomic_t’; you would like to test
+the flag and perform the action if the flag is not set.  This is
+unreliable.  Suppose the signal is delivered immediately after you test
+the flag, but before the consequent action: then the program will
+perform the action even though the signal has arrived.
+
+   The only way to test reliably for whether a signal has yet arrived is
+to test while the signal is blocked.
+
+File: libc.info,  Node: Signal Sets,  Next: Process Signal Mask,  Prev: Why Block,  Up: Blocking Signals
+
+24.7.2 Signal Sets
+------------------
+
+All of the signal blocking functions use a data structure called a
+“signal set” to specify what signals are affected.  Thus, every activity
+involves two stages: creating the signal set, and then passing it as an
+argument to a library function.
+
+   These facilities are declared in the header file ‘signal.h’.
+
+ -- Data Type: sigset_t
+
+     The ‘sigset_t’ data type is used to represent a signal set.
+     Internally, it may be implemented as either an integer or structure
+     type.
+
+     For portability, use only the functions described in this section
+     to initialize, change, and retrieve information from ‘sigset_t’
+     objects—don’t try to manipulate them directly.
+
+   There are two ways to initialize a signal set.  You can initially
+specify it to be empty with ‘sigemptyset’ and then add specified signals
+individually.  Or you can specify it to be full with ‘sigfillset’ and
+then delete specified signals individually.
+
+   You must always initialize the signal set with one of these two
+functions before using it in any other way.  Don’t try to set all the
+signals explicitly because the ‘sigset_t’ object might include some
+other information (like a version field) that needs to be initialized as
+well.  (In addition, it’s not wise to put into your program an
+assumption that the system has no signals aside from the ones you know
+about.)
+
+ -- Function: int sigemptyset (sigset_t *SET)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function initializes the signal set SET to exclude all of the
+     defined signals.  It always returns ‘0’.
+
+ -- Function: int sigfillset (sigset_t *SET)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function initializes the signal set SET to include all of the
+     defined signals.  Again, the return value is ‘0’.
+
+ -- Function: int sigaddset (sigset_t *SET, int SIGNUM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function adds the signal SIGNUM to the signal set SET.  All
+     ‘sigaddset’ does is modify SET; it does not block or unblock any
+     signals.
+
+     The return value is ‘0’ on success and ‘-1’ on failure.  The
+     following ‘errno’ error condition is defined for this function:
+
+     ‘EINVAL’
+          The SIGNUM argument doesn’t specify a valid signal.
+
+ -- Function: int sigdelset (sigset_t *SET, int SIGNUM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function removes the signal SIGNUM from the signal set SET.
+     All ‘sigdelset’ does is modify SET; it does not block or unblock
+     any signals.  The return value and error conditions are the same as
+     for ‘sigaddset’.
+
+   Finally, there is a function to test what signals are in a signal
+set:
+
+ -- Function: int sigismember (const sigset_t *SET, int SIGNUM)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     The ‘sigismember’ function tests whether the signal SIGNUM is a
+     member of the signal set SET.  It returns ‘1’ if the signal is in
+     the set, ‘0’ if not, and ‘-1’ if there is an error.
+
+     The following ‘errno’ error condition is defined for this function:
+
+     ‘EINVAL’
+          The SIGNUM argument doesn’t specify a valid signal.
+
+File: libc.info,  Node: Process Signal Mask,  Next: Testing for Delivery,  Prev: Signal Sets,  Up: Blocking Signals
+
+24.7.3 Process Signal Mask
+--------------------------
+
+The collection of signals that are currently blocked is called the
+“signal mask”.  Each process has its own signal mask.  When you create a
+new process (*note Creating a Process::), it inherits its parent’s mask.
+You can block or unblock signals with total flexibility by modifying the
+signal mask.
+
+   The prototype for the ‘sigprocmask’ function is in ‘signal.h’.
+
+   Note that you must not use ‘sigprocmask’ in multi-threaded processes,
+because each thread has its own signal mask and there is no single
+process signal mask.  According to POSIX, the behavior of ‘sigprocmask’
+in a multi-threaded process is “unspecified”.  Instead, use
+‘pthread_sigmask’.
+
+ -- Function: int sigprocmask (int HOW, const sigset_t *restrict SET,
+          sigset_t *restrict OLDSET)
+
+     Preliminary: | MT-Unsafe race:sigprocmask/bsd(SIG_UNBLOCK) |
+     AS-Unsafe lock/hurd | AC-Unsafe lock/hurd | *Note POSIX Safety
+     Concepts::.
+
+     The ‘sigprocmask’ function is used to examine or change the calling
+     process’s signal mask.  The HOW argument determines how the signal
+     mask is changed, and must be one of the following values:
+
+     ‘SIG_BLOCK’
+
+          Block the signals in ‘set’—add them to the existing mask.  In
+          other words, the new mask is the union of the existing mask
+          and SET.
+
+     ‘SIG_UNBLOCK’
+
+          Unblock the signals in SET—remove them from the existing mask.
+
+     ‘SIG_SETMASK’
+
+          Use SET for the mask; ignore the previous value of the mask.
+
+     The last argument, OLDSET, is used to return information about the
+     old process signal mask.  If you just want to change the mask
+     without looking at it, pass a null pointer as the OLDSET argument.
+     Similarly, if you want to know what’s in the mask without changing
+     it, pass a null pointer for SET (in this case the HOW argument is
+     not significant).  The OLDSET argument is often used to remember
+     the previous signal mask in order to restore it later.  (Since the
+     signal mask is inherited over ‘fork’ and ‘exec’ calls, you can’t
+     predict what its contents are when your program starts running.)
+
+     If invoking ‘sigprocmask’ causes any pending signals to be
+     unblocked, at least one of those signals is delivered to the
+     process before ‘sigprocmask’ returns.  The order in which pending
+     signals are delivered is not specified, but you can control the
+     order explicitly by making multiple ‘sigprocmask’ calls to unblock
+     various signals one at a time.
+
+     The ‘sigprocmask’ function returns ‘0’ if successful, and ‘-1’ to
+     indicate an error.  The following ‘errno’ error conditions are
+     defined for this function:
+
+     ‘EINVAL’
+          The HOW argument is invalid.
+
+     You can’t block the ‘SIGKILL’ and ‘SIGSTOP’ signals, but if the
+     signal set includes these, ‘sigprocmask’ just ignores them instead
+     of returning an error status.
+
+     Remember, too, that blocking program error signals such as ‘SIGFPE’
+     leads to undesirable results for signals generated by an actual
+     program error (as opposed to signals sent with ‘raise’ or ‘kill’).
+     This is because your program may be too broken to be able to
+     continue executing to a point where the signal is unblocked again.
+     *Note Program Error Signals::.
+
+File: libc.info,  Node: Testing for Delivery,  Next: Blocking for Handler,  Prev: Process Signal Mask,  Up: Blocking Signals
+
+24.7.4 Blocking to Test for Delivery of a Signal
+------------------------------------------------
+
+Now for a simple example.  Suppose you establish a handler for ‘SIGALRM’
+signals that sets a flag whenever a signal arrives, and your main
+program checks this flag from time to time and then resets it.  You can
+prevent additional ‘SIGALRM’ signals from arriving in the meantime by
+wrapping the critical part of the code with calls to ‘sigprocmask’, like
+this:
+
+     /* This variable is set by the SIGALRM signal handler. */
+     volatile sig_atomic_t flag = 0;
+
+     int
+     main (void)
+     {
+       sigset_t block_alarm;
+
+       ...
+
+       /* Initialize the signal mask. */
+       sigemptyset (&block_alarm);
+       sigaddset (&block_alarm, SIGALRM);
+
+       while (1)
+         {
+           /* Check if a signal has arrived; if so, reset the flag. */
+           sigprocmask (SIG_BLOCK, &block_alarm, NULL);
+           if (flag)
+             {
+               ACTIONS-IF-NOT-ARRIVED
+               flag = 0;
+             }
+           sigprocmask (SIG_UNBLOCK, &block_alarm, NULL);
+
+           ...
+         }
+     }
+
+File: libc.info,  Node: Blocking for Handler,  Next: Checking for Pending Signals,  Prev: Testing for Delivery,  Up: Blocking Signals
+
+24.7.5 Blocking Signals for a Handler
+-------------------------------------
+
+When a signal handler is invoked, you usually want it to be able to
+finish without being interrupted by another signal.  From the moment the
+handler starts until the moment it finishes, you must block signals that
+might confuse it or corrupt its data.
+
+   When a handler function is invoked on a signal, that signal is
+automatically blocked (in addition to any other signals that are already
+in the process’s signal mask) during the time the handler is running.
+If you set up a handler for ‘SIGTSTP’, for instance, then the arrival of
+that signal forces further ‘SIGTSTP’ signals to wait during the
+execution of the handler.
+
+   However, by default, other kinds of signals are not blocked; they can
+arrive during handler execution.
+
+   The reliable way to block other kinds of signals during the execution
+of the handler is to use the ‘sa_mask’ member of the ‘sigaction’
+structure.
+
+   Here is an example:
+
+     #include <signal.h>
+     #include <stddef.h>
+
+     void catch_stop ();
+
+     void
+     install_handler (void)
+     {
+       struct sigaction setup_action;
+       sigset_t block_mask;
+
+       sigemptyset (&block_mask);
+       /* Block other terminal-generated signals while handler runs. */
+       sigaddset (&block_mask, SIGINT);
+       sigaddset (&block_mask, SIGQUIT);
+       setup_action.sa_handler = catch_stop;
+       setup_action.sa_mask = block_mask;
+       setup_action.sa_flags = 0;
+       sigaction (SIGTSTP, &setup_action, NULL);
+     }
+
+   This is more reliable than blocking the other signals explicitly in
+the code for the handler.  If you block signals explicitly in the
+handler, you can’t avoid at least a short interval at the beginning of
+the handler where they are not yet blocked.
+
+   You cannot remove signals from the process’s current mask using this
+mechanism.  However, you can make calls to ‘sigprocmask’ within your
+handler to block or unblock signals as you wish.
+
+   In any case, when the handler returns, the system restores the mask
+that was in place before the handler was entered.  If any signals that
+become unblocked by this restoration are pending, the process will
+receive those signals immediately, before returning to the code that was
+interrupted.
+
+File: libc.info,  Node: Checking for Pending Signals,  Next: Remembering a Signal,  Prev: Blocking for Handler,  Up: Blocking Signals
+
+24.7.6 Checking for Pending Signals
+-----------------------------------
+
+You can find out which signals are pending at any time by calling
+‘sigpending’.  This function is declared in ‘signal.h’.
+
+ -- Function: int sigpending (sigset_t *SET)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock/hurd | AC-Unsafe lock/hurd
+     | *Note POSIX Safety Concepts::.
+
+     The ‘sigpending’ function stores information about pending signals
+     in SET.  If there is a pending signal that is blocked from
+     delivery, then that signal is a member of the returned set.  (You
+     can test whether a particular signal is a member of this set using
+     ‘sigismember’; see *note Signal Sets::.)
+
+     The return value is ‘0’ if successful, and ‘-1’ on failure.
+
+   Testing whether a signal is pending is not often useful.  Testing
+when that signal is not blocked is almost certainly bad design.
+
+   Here is an example.
+
+     #include <signal.h>
+     #include <stddef.h>
+
+     sigset_t base_mask, waiting_mask;
+
+     sigemptyset (&base_mask);
+     sigaddset (&base_mask, SIGINT);
+     sigaddset (&base_mask, SIGTSTP);
+
+     /* Block user interrupts while doing other processing. */
+     sigprocmask (SIG_SETMASK, &base_mask, NULL);
+     ...
+
+     /* After a while, check to see whether any signals are pending. */
+     sigpending (&waiting_mask);
+     if (sigismember (&waiting_mask, SIGINT)) {
+       /* User has tried to kill the process. */
+     }
+     else if (sigismember (&waiting_mask, SIGTSTP)) {
+       /* User has tried to stop the process. */
+     }
+
+   Remember that if there is a particular signal pending for your
+process, additional signals of that same type that arrive in the
+meantime might be discarded.  For example, if a ‘SIGINT’ signal is
+pending when another ‘SIGINT’ signal arrives, your program will probably
+only see one of them when you unblock this signal.
+
+   *Portability Note:* The ‘sigpending’ function is new in POSIX.1.
+Older systems have no equivalent facility.
+
+File: libc.info,  Node: Remembering a Signal,  Prev: Checking for Pending Signals,  Up: Blocking Signals
+
+24.7.7 Remembering a Signal to Act On Later
+-------------------------------------------
+
+Instead of blocking a signal using the library facilities, you can get
+almost the same results by making the handler set a flag to be tested
+later, when you “unblock”.  Here is an example:
+
+     /* If this flag is nonzero, don’t handle the signal right away. */
+     volatile sig_atomic_t signal_pending;
+
+     /* This is nonzero if a signal arrived and was not handled. */
+     volatile sig_atomic_t defer_signal;
+
+     void
+     handler (int signum)
+     {
+       if (defer_signal)
+         signal_pending = signum;
+       else
+         ... /* “Really” handle the signal. */
+     }
+
+     ...
+
+     void
+     update_mumble (int frob)
+     {
+       /* Prevent signals from having immediate effect. */
+       defer_signal++;
+       /* Now update ‘mumble’, without worrying about interruption. */
+       mumble.a = 1;
+       mumble.b = hack ();
+       mumble.c = frob;
+       /* We have updated ‘mumble’.  Handle any signal that came in. */
+       defer_signal--;
+       if (defer_signal == 0 && signal_pending != 0)
+         raise (signal_pending);
+     }
+
+   Note how the particular signal that arrives is stored in
+‘signal_pending’.  That way, we can handle several types of inconvenient
+signals with the same mechanism.
+
+   We increment and decrement ‘defer_signal’ so that nested critical
+sections will work properly; thus, if ‘update_mumble’ were called with
+‘signal_pending’ already nonzero, signals would be deferred not only
+within ‘update_mumble’, but also within the caller.  This is also why we
+do not check ‘signal_pending’ if ‘defer_signal’ is still nonzero.
+
+   The incrementing and decrementing of ‘defer_signal’ each require more
+than one instruction; it is possible for a signal to happen in the
+middle.  But that does not cause any problem.  If the signal happens
+early enough to see the value from before the increment or decrement,
+that is equivalent to a signal which came before the beginning of the
+increment or decrement, which is a case that works properly.
+
+   It is absolutely vital to decrement ‘defer_signal’ before testing
+‘signal_pending’, because this avoids a subtle bug.  If we did these
+things in the other order, like this,
+
+       if (defer_signal == 1 && signal_pending != 0)
+         raise (signal_pending);
+       defer_signal--;
+
+then a signal arriving in between the ‘if’ statement and the decrement
+would be effectively “lost” for an indefinite amount of time.  The
+handler would merely set ‘defer_signal’, but the program having already
+tested this variable, it would not test the variable again.
+
+   Bugs like these are called “timing errors”.  They are especially bad
+because they happen only rarely and are nearly impossible to reproduce.
+You can’t expect to find them with a debugger as you would find a
+reproducible bug.  So it is worth being especially careful to avoid
+them.
+
+   (You would not be tempted to write the code in this order, given the
+use of ‘defer_signal’ as a counter which must be tested along with
+‘signal_pending’.  After all, testing for zero is cleaner than testing
+for one.  But if you did not use ‘defer_signal’ as a counter, and gave
+it values of zero and one only, then either order might seem equally
+simple.  This is a further advantage of using a counter for
+‘defer_signal’: it will reduce the chance you will write the code in the
+wrong order and create a subtle bug.)
+
+File: libc.info,  Node: Waiting for a Signal,  Next: Signal Stack,  Prev: Blocking Signals,  Up: Signal Handling
+

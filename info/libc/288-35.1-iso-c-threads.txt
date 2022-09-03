@@ -1,0 +1,531 @@
+35.1 ISO C Threads
+==================
+
+This section describes the GNU C Library ISO C threads implementation.
+To have a deeper understanding of this API, it is strongly recommended
+to read ISO/IEC 9899:2011, section 7.26, in which ISO C threads were
+originally specified.  All types and function prototypes are declared in
+the header file ‘threads.h’.
+
+* Menu:
+
+* ISO C Threads Return Values:: Symbolic constants that represent a
+				function’s return value.
+* ISO C Thread Management::	Support for basic threading.
+* Call Once::			Single-call functions and macros.
+* ISO C Mutexes::		A low-level mechanism for mutual exclusion.
+* ISO C Condition Variables::	High-level objects for thread synchronization.
+* ISO C Thread-local Storage::	Functions to support thread-local storage.
+
+File: libc.info,  Node: ISO C Threads Return Values,  Next: ISO C Thread Management,  Up: ISO C Threads
+
+35.1.1 Return Values
+--------------------
+
+The ISO C thread specification provides the following enumeration
+constants for return values from functions in the API:
+
+‘thrd_timedout’
+
+     A specified time was reached without acquiring the requested
+     resource, usually a mutex or condition variable.
+
+‘thrd_success’
+
+     The requested operation succeeded.
+
+‘thrd_busy’
+
+     The requested operation failed because a requested resource is
+     already in use.
+
+‘thrd_error’
+
+     The requested operation failed.
+
+‘thrd_nomem’
+
+     The requested operation failed because it was unable to allocate
+     enough memory.
+
+File: libc.info,  Node: ISO C Thread Management,  Next: Call Once,  Prev: ISO C Threads Return Values,  Up: ISO C Threads
+
+35.1.2 Creation and Control
+---------------------------
+
+The GNU C Library implements a set of functions that allow the user to
+easily create and use threads.  Additional functionality is provided to
+control the behavior of threads.
+
+   The following data types are defined for managing threads:
+
+ -- Data Type: thrd_t
+
+     A unique object that identifies a thread.
+
+ -- Data Type: thrd_start_t
+
+     This data type is an ‘int (*) (void *)’ typedef that is passed to
+     ‘thrd_create’ when creating a new thread.  It should point to the
+     first function that thread will run.
+
+   The following functions are used for working with threads:
+
+ -- Function: int thrd_create (thrd_t *THR, thrd_start_t FUNC, void
+          *ARG)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘thrd_create’ creates a new thread that will execute the function
+     FUNC.  The object pointed to by ARG will be used as the argument to
+     FUNC.  If successful, THR is set to the new thread identifier.
+
+     This function may return ‘thrd_success’, ‘thrd_nomem’, or
+     ‘thrd_error’.
+
+ -- Function: thrd_t thrd_current (void)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     This function returns the identifier of the calling thread.
+
+ -- Function: int thrd_equal (thrd_t LHS, thrd_t RHS)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘thrd_equal’ checks whether LHS and RHS refer to the same thread.
+     If LHS and RHS are different threads, this function returns 0;
+     otherwise, the return value is non-zero.
+
+ -- Function: int thrd_sleep (const struct timespec *TIME_POINT, struct
+          timespec *REMAINING)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘thrd_sleep’ blocks the execution of the current thread for at
+     least until the elapsed time pointed to by TIME_POINT has been
+     reached.  This function does not take an absolute time, but a
+     duration that the thread is required to be blocked.  *Note Time
+     Basics::, and *note Elapsed Time::.
+
+     The thread may wake early if a signal that is not ignored is
+     received.  In such a case, if ‘remaining’ is not NULL, the
+     remaining time duration is stored in the object pointed to by
+     REMAINING.
+
+     ‘thrd_sleep’ returns 0 if it blocked for at least the amount of
+     time in ‘time_point’, -1 if it was interrupted by a signal, or a
+     negative number on failure.
+
+ -- Function: void thrd_yield (void)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘thrd_yield’ provides a hint to the implementation to reschedule
+     the execution of the current thread, allowing other threads to run.
+
+ -- Function: _Noreturn void thrd_exit (int RES)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘thrd_exit’ terminates execution of the calling thread and sets its
+     result code to RES.
+
+     If this function is called from a single-threaded process, the call
+     is equivalent to calling ‘exit’ with ‘EXIT_SUCCESS’ (*note Normal
+     Termination::).  Also note that returning from a function that
+     started a thread is equivalent to calling ‘thrd_exit’.
+
+ -- Function: int thrd_detach (thrd_t THR)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘thrd_detach’ detaches the thread identified by ‘thr’ from the
+     current control thread.  The resources held by the detached thread
+     will be freed automatically once the thread exits.  The parent
+     thread will never be notified by any THR signal.
+
+     Calling ‘thrd_detach’ on a thread that was previously detached or
+     joined by another thread results in undefined behavior.
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+ -- Function: int thrd_join (thrd_t THR, int *RES)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘thrd_join’ blocks the current thread until the thread identified
+     by ‘thr’ finishes execution.  If ‘res’ is not NULL, the result code
+     of the thread is put into the location pointed to by RES.  The
+     termination of the thread “synchronizes-with” the completion of
+     this function, meaning both threads have arrived at a common point
+     in their execution.
+
+     Calling ‘thrd_join’ on a thread that was previously detached or
+     joined by another thread results in undefined behavior.
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+File: libc.info,  Node: Call Once,  Next: ISO C Mutexes,  Prev: ISO C Thread Management,  Up: ISO C Threads
+
+35.1.3 Call Once
+----------------
+
+In order to guarantee single access to a function, the GNU C Library
+implements a “call once function” to ensure a function is only called
+once in the presence of multiple, potentially calling threads.
+
+ -- Data Type: once_flag
+
+     A complete object type capable of holding a flag used by
+     ‘call_once’.
+
+ -- Macro: ONCE_FLAG_INIT
+
+     This value is used to initialize an object of type ‘once_flag’.
+
+ -- Function: void call_once (once_flag *FLAG, void (*FUNC) (void))
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘call_once’ calls function FUNC exactly once, even if invoked from
+     several threads.  The completion of the function FUNC
+     synchronizes-with all previous or subsequent calls to ‘call_once’
+     with the same ‘flag’ variable.
+
+File: libc.info,  Node: ISO C Mutexes,  Next: ISO C Condition Variables,  Prev: Call Once,  Up: ISO C Threads
+
+35.1.4 Mutexes
+--------------
+
+To have better control of resources and how threads access them, the GNU
+C Library implements a “mutex” object, which can help avoid race
+conditions and other concurrency issues.  The term “mutex” refers to
+mutual exclusion.
+
+   The fundamental data type for a mutex is the ‘mtx_t’:
+
+ -- Data Type: mtx_t
+
+     The ‘mtx_t’ data type uniquely identifies a mutex object.
+
+   The ISO C standard defines several types of mutexes.  They are
+represented by the following symbolic constants:
+
+‘mtx_plain’
+
+     A mutex that does not support timeout, or test and return.
+
+‘mtx_recursive’
+
+     A mutex that supports recursive locking, which means that the
+     owning thread can lock it more than once without causing deadlock.
+
+‘mtx_timed’
+
+     A mutex that supports timeout.
+
+   The following functions are used for working with mutexes:
+
+ -- Function: int mtx_init (mtx_t *MUTEX, int TYPE)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘mtx_init’ creates a new mutex object with type TYPE.  The object
+     pointed to by MUTEX is set to the identifier of the newly created
+     mutex.
+
+     Not all combinations of mutex types are valid for the ‘type’
+     argument.  Valid uses of mutex types for the ‘type’ argument are:
+
+     ‘mtx_plain’
+          A non-recursive mutex that does not support timeout.
+
+     ‘mtx_timed’
+          A non-recursive mutex that does support timeout.
+
+     ‘mtx_plain | mtx_recursive’
+          A recursive mutex that does not support timeout.
+
+     ‘mtx_timed | mtx_recursive’
+          A recursive mutex that does support timeout.
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+ -- Function: int mtx_lock (mtx_t *MUTEX)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     ‘mtx_lock’ blocks the current thread until the mutex pointed to by
+     MUTEX is locked.  The behavior is undefined if the current thread
+     has already locked the mutex and the mutex is not recursive.
+
+     Prior calls to ‘mtx_unlock’ on the same mutex synchronize-with this
+     operation (if this operation succeeds), and all lock/unlock
+     operations on any given mutex form a single total order (similar to
+     the modification order of an atomic).
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+ -- Function: int mtx_timedlock (mtx_t *restrict MUTEX, const struct
+          timespec *restrict TIME_POINT)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     ‘mtx_timedlock’ blocks the current thread until the mutex pointed
+     to by MUTEX is locked or until the calendar time pointed to by
+     TIME_POINT has been reached.  Since this function takes an absolute
+     time, if a duration is required, the calendar time must be
+     calculated manually.  *Note Time Basics::, and *note Calendar
+     Time::.
+
+     If the current thread has already locked the mutex and the mutex is
+     not recursive, or if the mutex does not support timeout, the
+     behavior of this function is undefined.
+
+     Prior calls to ‘mtx_unlock’ on the same mutex synchronize-with this
+     operation (if this operation succeeds), and all lock/unlock
+     operations on any given mutex form a single total order (similar to
+     the modification order of an atomic).
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+ -- Function: int mtx_trylock (mtx_t *MUTEX)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     ‘mtx_trylock’ tries to lock the mutex pointed to by MUTEX without
+     blocking.  It returns immediately if the mutex is already locked.
+
+     Prior calls to ‘mtx_unlock’ on the same mutex synchronize-with this
+     operation (if this operation succeeds), and all lock/unlock
+     operations on any given mutex form a single total order (similar to
+     the modification order of an atomic).
+
+     This function returns ‘thrd_success’ if the lock was obtained,
+     ‘thrd_busy’ if the mutex is already locked, and ‘thrd_error’ on
+     failure.
+
+ -- Function: int mtx_unlock (mtx_t *MUTEX)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘mtx_unlock’ unlocks the mutex pointed to by MUTEX.  The behavior
+     is undefined if the mutex is not locked by the calling thread.
+
+     This function synchronizes-with subsequent ‘mtx_lock’,
+     ‘mtx_trylock’, and ‘mtx_timedlock’ calls on the same mutex.  All
+     lock/unlock operations on any given mutex form a single total order
+     (similar to the modification order of an atomic).
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+ -- Function: void mtx_destroy (mtx_t *MUTEX)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘mtx_destroy’ destroys the mutex pointed to by MUTEX.  If there are
+     any threads waiting on the mutex, the behavior is undefined.
+
+File: libc.info,  Node: ISO C Condition Variables,  Next: ISO C Thread-local Storage,  Prev: ISO C Mutexes,  Up: ISO C Threads
+
+35.1.5 Condition Variables
+--------------------------
+
+Mutexes are not the only synchronization mechanisms available.  For some
+more complex tasks, the GNU C Library also implements “condition
+variables”, which allow the programmer to think at a higher level when
+solving complex synchronization problems.  They are used to synchronize
+threads waiting on a certain condition to happen.
+
+   The fundamental data type for condition variables is the ‘cnd_t’:
+
+ -- Data Type: cnd_t
+
+     The ‘cnd_t’ uniquely identifies a condition variable object.
+
+   The following functions are used for working with condition
+variables:
+
+ -- Function: int cnd_init (cnd_t *COND)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘cnd_init’ initializes a new condition variable, identified by
+     COND.
+
+     This function may return ‘thrd_success’, ‘thrd_nomem’, or
+     ‘thrd_error’.
+
+ -- Function: int cnd_signal (cnd_t *COND)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘cnd_signal’ unblocks one thread that is currently waiting on the
+     condition variable pointed to by COND.  If a thread is successfully
+     unblocked, this function returns ‘thrd_success’.  If no threads are
+     blocked, this function does nothing and returns ‘thrd_success’.
+     Otherwise, this function returns ‘thrd_error’.
+
+ -- Function: int cnd_broadcast (cnd_t *COND)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘cnd_broadcast’ unblocks all the threads that are currently waiting
+     on the condition variable pointed to by COND.  This function
+     returns ‘thrd_success’ on success.  If no threads are blocked, this
+     function does nothing and returns ‘thrd_success’.  Otherwise, this
+     function returns ‘thrd_error’.
+
+ -- Function: int cnd_wait (cnd_t *COND, mtx_t *MUTEX)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     ‘cnd_wait’ atomically unlocks the mutex pointed to by MUTEX and
+     blocks on the condition variable pointed to by COND until the
+     thread is signaled by ‘cnd_signal’ or ‘cnd_broadcast’.  The mutex
+     is locked again before the function returns.
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+ -- Function: int cnd_timedwait (cnd_t *restrict COND, mtx_t *restrict
+          MUTEX, const struct timespec *restrict TIME_POINT)
+
+     Preliminary: | MT-Safe | AS-Unsafe lock | AC-Unsafe lock | *Note
+     POSIX Safety Concepts::.
+
+     ‘cnd_timedwait’ atomically unlocks the mutex pointed to by MUTEX
+     and blocks on the condition variable pointed to by COND until the
+     thread is signaled by ‘cnd_signal’ or ‘cnd_broadcast’, or until the
+     calendar time pointed to by TIME_POINT has been reached.  The mutex
+     is locked again before the function returns.
+
+     As for ‘mtx_timedlock’, since this function takes an absolute time,
+     if a duration is required, the calendar time must be calculated
+     manually.  *Note Time Basics::, and *note Calendar Time::.
+
+     This function may return ‘thrd_success’, ‘thrd_nomem’, or
+     ‘thrd_error’.
+
+ -- Function: void cnd_destroy (cnd_t *COND)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘cnd_destroy’ destroys the condition variable pointed to by COND.
+     If there are threads waiting on COND, the behavior is undefined.
+
+File: libc.info,  Node: ISO C Thread-local Storage,  Prev: ISO C Condition Variables,  Up: ISO C Threads
+
+35.1.6 Thread-local Storage
+---------------------------
+
+The GNU C Library implements functions to provide “thread-local
+storage”, a mechanism by which variables can be defined to have unique
+per-thread storage, lifetimes that match the thread lifetime, and
+destructors that cleanup the unique per-thread storage.
+
+   Several data types and macros exist for working with thread-local
+storage:
+
+ -- Data Type: tss_t
+
+     The ‘tss_t’ data type identifies a thread-specific storage object.
+     Even if shared, every thread will have its own instance of the
+     variable, with different values.
+
+ -- Data Type: tss_dtor_t
+
+     The ‘tss_dtor_t’ is a function pointer of type ‘void (*) (void *)’,
+     to be used as a thread-specific storage destructor.  The function
+     will be called when the current thread calls ‘thrd_exit’ (but never
+     when calling ‘tss_delete’ or ‘exit’).
+
+ -- Macro: thread_local
+
+     ‘thread_local’ is used to mark a variable with thread storage
+     duration, which means it is created when the thread starts and
+     cleaned up when the thread ends.
+
+     _Note:_ For C++, C++11 or later is required to use the
+     ‘thread_local’ keyword.
+
+ -- Macro: TSS_DTOR_ITERATIONS
+
+     ‘TSS_DTOR_ITERATIONS’ is an integer constant expression
+     representing the maximum number of iterations over all thread-local
+     destructors at the time of thread termination.  This value provides
+     a bounded limit to the destruction of thread-local storage; e.g.,
+     consider a destructor that creates more thread-local storage.
+
+   The following functions are used to manage thread-local storage:
+
+ -- Function: int tss_create (tss_t *TSS_KEY, tss_dtor_t DESTRUCTOR)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘tss_create’ creates a new thread-specific storage key and stores
+     it in the object pointed to by TSS_KEY.  Although the same key
+     value may be used by different threads, the values bound to the key
+     by ‘tss_set’ are maintained on a per-thread basis and persist for
+     the life of the calling thread.
+
+     If ‘destructor’ is not NULL, a destructor function will be set, and
+     called when the thread finishes its execution by calling
+     ‘thrd_exit’.
+
+     This function returns ‘thrd_success’ if ‘tss_key’ is successfully
+     set to a unique value for the thread; otherwise, ‘thrd_error’ is
+     returned and the value of ‘tss_key’ is undefined.
+
+ -- Function: int tss_set (tss_t TSS_KEY, void *VAL)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘tss_set’ sets the value of the thread-specific storage identified
+     by TSS_KEY for the current thread to VAL.  Different threads may
+     set different values to the same key.
+
+     This function returns either ‘thrd_success’ or ‘thrd_error’.
+
+ -- Function: void * tss_get (tss_t TSS_KEY)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘tss_get’ returns the value identified by TSS_KEY held in
+     thread-specific storage for the current thread.  Different threads
+     may get different values identified by the same key.  On failure,
+     ‘tss_get’ returns zero.
+
+ -- Function: void tss_delete (tss_t TSS_KEY)
+
+     Preliminary: | MT-Safe | AS-Safe | AC-Safe | *Note POSIX Safety
+     Concepts::.
+
+     ‘tss_delete’ destroys the thread-specific storage identified by
+     TSS_KEY.
+
+File: libc.info,  Node: POSIX Threads,  Prev: ISO C Threads,  Up: Threads
+
