@@ -1,0 +1,366 @@
+5.2 The Call Graph
+==================
+
+The "call graph" shows how much time was spent in each function and its
+children.  From this information, you can find functions that, while
+they themselves may not have used much time, called other functions that
+did use unusual amounts of time.
+
+   Here is a sample call from a small program.  This call came from the
+same 'gprof' run as the flat profile example in the previous section.
+
+     granularity: each sample hit covers 2 byte(s) for 20.00% of 0.05 seconds
+
+     index % time    self  children    called     name
+                                                      <spontaneous>
+     [1]    100.0    0.00    0.05                 start [1]
+                     0.00    0.05       1/1           main [2]
+                     0.00    0.00       1/2           on_exit [28]
+                     0.00    0.00       1/1           exit [59]
+     -----------------------------------------------
+                     0.00    0.05       1/1           start [1]
+     [2]    100.0    0.00    0.05       1         main [2]
+                     0.00    0.05       1/1           report [3]
+     -----------------------------------------------
+                     0.00    0.05       1/1           main [2]
+     [3]    100.0    0.00    0.05       1         report [3]
+                     0.00    0.03       8/8           timelocal [6]
+                     0.00    0.01       1/1           print [9]
+                     0.00    0.01       9/9           fgets [12]
+                     0.00    0.00      12/34          strncmp <cycle 1> [40]
+                     0.00    0.00       8/8           lookup [20]
+                     0.00    0.00       1/1           fopen [21]
+                     0.00    0.00       8/8           chewtime [24]
+                     0.00    0.00       8/16          skipspace [44]
+     -----------------------------------------------
+     [4]     59.8    0.01        0.02       8+472     <cycle 2 as a whole> [4]
+                     0.01        0.02     244+260         offtime <cycle 2> [7]
+                     0.00        0.00     236+1           tzset <cycle 2> [26]
+     -----------------------------------------------
+
+   The lines full of dashes divide this table into "entries", one for
+each function.  Each entry has one or more lines.
+
+   In each entry, the primary line is the one that starts with an index
+number in square brackets.  The end of this line says which function the
+entry is for.  The preceding lines in the entry describe the callers of
+this function and the following lines describe its subroutines (also
+called "children" when we speak of the call graph).
+
+   The entries are sorted by time spent in the function and its
+subroutines.
+
+   The internal profiling function 'mcount' (*note The Flat Profile:
+Flat Profile.) is never mentioned in the call graph.
+
+* Menu:
+
+* Primary::       Details of the primary line's contents.
+* Callers::       Details of caller-lines' contents.
+* Subroutines::   Details of subroutine-lines' contents.
+* Cycles::        When there are cycles of recursion,
+                   such as 'a' calls 'b' calls 'a'...
+
+File: gprof.info,  Node: Primary,  Next: Callers,  Up: Call Graph
+
+5.2.1 The Primary Line
+----------------------
+
+The "primary line" in a call graph entry is the line that describes the
+function which the entry is about and gives the overall statistics for
+this function.
+
+   For reference, we repeat the primary line from the entry for function
+'report' in our main example, together with the heading line that shows
+the names of the fields:
+
+     index  % time    self  children called     name
+     ...
+     [3]    100.0    0.00    0.05       1         report [3]
+
+   Here is what the fields in the primary line mean:
+
+'index'
+     Entries are numbered with consecutive integers.  Each function
+     therefore has an index number, which appears at the beginning of
+     its primary line.
+
+     Each cross-reference to a function, as a caller or subroutine of
+     another, gives its index number as well as its name.  The index
+     number guides you if you wish to look for the entry for that
+     function.
+
+'% time'
+     This is the percentage of the total time that was spent in this
+     function, including time spent in subroutines called from this
+     function.
+
+     The time spent in this function is counted again for the callers of
+     this function.  Therefore, adding up these percentages is
+     meaningless.
+
+'self'
+     This is the total amount of time spent in this function.  This
+     should be identical to the number printed in the 'seconds' field
+     for this function in the flat profile.
+
+'children'
+     This is the total amount of time spent in the subroutine calls made
+     by this function.  This should be equal to the sum of all the
+     'self' and 'children' entries of the children listed directly below
+     this function.
+
+'called'
+     This is the number of times the function was called.
+
+     If the function called itself recursively, there are two numbers,
+     separated by a '+'.  The first number counts non-recursive calls,
+     and the second counts recursive calls.
+
+     In the example above, the function 'report' was called once from
+     'main'.
+
+'name'
+     This is the name of the current function.  The index number is
+     repeated after it.
+
+     If the function is part of a cycle of recursion, the cycle number
+     is printed between the function's name and the index number (*note
+     How Mutually Recursive Functions Are Described: Cycles.).  For
+     example, if function 'gnurr' is part of cycle number one, and has
+     index number twelve, its primary line would be end like this:
+
+          gnurr <cycle 1> [12]
+
+File: gprof.info,  Node: Callers,  Next: Subroutines,  Prev: Primary,  Up: Call Graph
+
+5.2.2 Lines for a Function's Callers
+------------------------------------
+
+A function's entry has a line for each function it was called by.  These
+lines' fields correspond to the fields of the primary line, but their
+meanings are different because of the difference in context.
+
+   For reference, we repeat two lines from the entry for the function
+'report', the primary line and one caller-line preceding it, together
+with the heading line that shows the names of the fields:
+
+     index  % time    self  children called     name
+     ...
+                     0.00    0.05       1/1           main [2]
+     [3]    100.0    0.00    0.05       1         report [3]
+
+   Here are the meanings of the fields in the caller-line for 'report'
+called from 'main':
+
+'self'
+     An estimate of the amount of time spent in 'report' itself when it
+     was called from 'main'.
+
+'children'
+     An estimate of the amount of time spent in subroutines of 'report'
+     when 'report' was called from 'main'.
+
+     The sum of the 'self' and 'children' fields is an estimate of the
+     amount of time spent within calls to 'report' from 'main'.
+
+'called'
+     Two numbers: the number of times 'report' was called from 'main',
+     followed by the total number of non-recursive calls to 'report'
+     from all its callers.
+
+'name and index number'
+     The name of the caller of 'report' to which this line applies,
+     followed by the caller's index number.
+
+     Not all functions have entries in the call graph; some options to
+     'gprof' request the omission of certain functions.  When a caller
+     has no entry of its own, it still has caller-lines in the entries
+     of the functions it calls.
+
+     If the caller is part of a recursion cycle, the cycle number is
+     printed between the name and the index number.
+
+   If the identity of the callers of a function cannot be determined, a
+dummy caller-line is printed which has '<spontaneous>' as the "caller's
+name" and all other fields blank.  This can happen for signal handlers.
+
+File: gprof.info,  Node: Subroutines,  Next: Cycles,  Prev: Callers,  Up: Call Graph
+
+5.2.3 Lines for a Function's Subroutines
+----------------------------------------
+
+A function's entry has a line for each of its subroutines--in other
+words, a line for each other function that it called.  These lines'
+fields correspond to the fields of the primary line, but their meanings
+are different because of the difference in context.
+
+   For reference, we repeat two lines from the entry for the function
+'main', the primary line and a line for a subroutine, together with the
+heading line that shows the names of the fields:
+
+     index  % time    self  children called     name
+     ...
+     [2]    100.0    0.00    0.05       1         main [2]
+                     0.00    0.05       1/1           report [3]
+
+   Here are the meanings of the fields in the subroutine-line for 'main'
+calling 'report':
+
+'self'
+     An estimate of the amount of time spent directly within 'report'
+     when 'report' was called from 'main'.
+
+'children'
+     An estimate of the amount of time spent in subroutines of 'report'
+     when 'report' was called from 'main'.
+
+     The sum of the 'self' and 'children' fields is an estimate of the
+     total time spent in calls to 'report' from 'main'.
+
+'called'
+     Two numbers, the number of calls to 'report' from 'main' followed
+     by the total number of non-recursive calls to 'report'.  This ratio
+     is used to determine how much of 'report''s 'self' and 'children'
+     time gets credited to 'main'.  *Note Estimating 'children' Times:
+     Assumptions.
+
+'name'
+     The name of the subroutine of 'main' to which this line applies,
+     followed by the subroutine's index number.
+
+     If the caller is part of a recursion cycle, the cycle number is
+     printed between the name and the index number.
+
+File: gprof.info,  Node: Cycles,  Prev: Subroutines,  Up: Call Graph
+
+5.2.4 How Mutually Recursive Functions Are Described
+----------------------------------------------------
+
+The graph may be complicated by the presence of "cycles of recursion" in
+the call graph.  A cycle exists if a function calls another function
+that (directly or indirectly) calls (or appears to call) the original
+function.  For example: if 'a' calls 'b', and 'b' calls 'a', then 'a'
+and 'b' form a cycle.
+
+   Whenever there are call paths both ways between a pair of functions,
+they belong to the same cycle.  If 'a' and 'b' call each other and 'b'
+and 'c' call each other, all three make one cycle.  Note that even if
+'b' only calls 'a' if it was not called from 'a', 'gprof' cannot
+determine this, so 'a' and 'b' are still considered a cycle.
+
+   The cycles are numbered with consecutive integers.  When a function
+belongs to a cycle, each time the function name appears in the call
+graph it is followed by '<cycle NUMBER>'.
+
+   The reason cycles matter is that they make the time values in the
+call graph paradoxical.  The "time spent in children" of 'a' should
+include the time spent in its subroutine 'b' and in 'b''s
+subroutines--but one of 'b''s subroutines is 'a'!  How much of 'a''s
+time should be included in the children of 'a', when 'a' is indirectly
+recursive?
+
+   The way 'gprof' resolves this paradox is by creating a single entry
+for the cycle as a whole.  The primary line of this entry describes the
+total time spent directly in the functions of the cycle.  The
+"subroutines" of the cycle are the individual functions of the cycle,
+and all other functions that were called directly by them.  The
+"callers" of the cycle are the functions, outside the cycle, that called
+functions in the cycle.
+
+   Here is an example portion of a call graph which shows a cycle
+containing functions 'a' and 'b'.  The cycle was entered by a call to
+'a' from 'main'; both 'a' and 'b' called 'c'.
+
+     index  % time    self  children called     name
+     ----------------------------------------
+                      1.77        0    1/1        main [2]
+     [3]     91.71    1.77        0    1+5    <cycle 1 as a whole> [3]
+                      1.02        0    3          b <cycle 1> [4]
+                      0.75        0    2          a <cycle 1> [5]
+     ----------------------------------------
+                                       3          a <cycle 1> [5]
+     [4]     52.85    1.02        0    0      b <cycle 1> [4]
+                                       2          a <cycle 1> [5]
+                         0        0    3/6        c [6]
+     ----------------------------------------
+                      1.77        0    1/1        main [2]
+                                       2          b <cycle 1> [4]
+     [5]     38.86    0.75        0    1      a <cycle 1> [5]
+                                       3          b <cycle 1> [4]
+                         0        0    3/6        c [6]
+     ----------------------------------------
+
+(The entire call graph for this program contains in addition an entry
+for 'main', which calls 'a', and an entry for 'c', with callers 'a' and
+'b'.)
+
+     index  % time    self  children called     name
+                                                  <spontaneous>
+     [1]    100.00       0     1.93    0      start [1]
+                      0.16     1.77    1/1        main [2]
+     ----------------------------------------
+                      0.16     1.77    1/1        start [1]
+     [2]    100.00    0.16     1.77    1      main [2]
+                      1.77        0    1/1        a <cycle 1> [5]
+     ----------------------------------------
+                      1.77        0    1/1        main [2]
+     [3]     91.71    1.77        0    1+5    <cycle 1 as a whole> [3]
+                      1.02        0    3          b <cycle 1> [4]
+                      0.75        0    2          a <cycle 1> [5]
+                         0        0    6/6        c [6]
+     ----------------------------------------
+                                       3          a <cycle 1> [5]
+     [4]     52.85    1.02        0    0      b <cycle 1> [4]
+                                       2          a <cycle 1> [5]
+                         0        0    3/6        c [6]
+     ----------------------------------------
+                      1.77        0    1/1        main [2]
+                                       2          b <cycle 1> [4]
+     [5]     38.86    0.75        0    1      a <cycle 1> [5]
+                                       3          b <cycle 1> [4]
+                         0        0    3/6        c [6]
+     ----------------------------------------
+                         0        0    3/6        b <cycle 1> [4]
+                         0        0    3/6        a <cycle 1> [5]
+     [6]      0.00       0        0    6      c [6]
+     ----------------------------------------
+
+   The 'self' field of the cycle's primary line is the total time spent
+in all the functions of the cycle.  It equals the sum of the 'self'
+fields for the individual functions in the cycle, found in the entry in
+the subroutine lines for these functions.
+
+   The 'children' fields of the cycle's primary line and subroutine
+lines count only subroutines outside the cycle.  Even though 'a' calls
+'b', the time spent in those calls to 'b' is not counted in 'a''s
+'children' time.  Thus, we do not encounter the problem of what to do
+when the time in those calls to 'b' includes indirect recursive calls
+back to 'a'.
+
+   The 'children' field of a caller-line in the cycle's entry estimates
+the amount of time spent _in the whole cycle_, and its other
+subroutines, on the times when that caller called a function in the
+cycle.
+
+   The 'called' field in the primary line for the cycle has two numbers:
+first, the number of times functions in the cycle were called by
+functions outside the cycle; second, the number of times they were
+called by functions in the cycle (including times when a function in the
+cycle calls itself).  This is a generalization of the usual split into
+non-recursive and recursive calls.
+
+   The 'called' field of a subroutine-line for a cycle member in the
+cycle's entry says how many time that function was called from functions
+in the cycle.  The total of all these is the second number in the
+primary line's 'called' field.
+
+   In the individual entry for a function in a cycle, the other
+functions in the same cycle can appear as subroutines and as callers.
+These lines show how many times each function in the cycle called or was
+called from each other function in the cycle.  The 'self' and 'children'
+fields in these lines are blank because of the difficulty of defining
+meanings for them when recursion is going on.
+
+File: gprof.info,  Node: Line-by-line,  Next: Annotated Source,  Prev: Call Graph,  Up: Output
+

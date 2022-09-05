@@ -1,0 +1,90 @@
+2 Compiling a Program for Profiling
+***********************************
+
+The first step in generating profile information for your program is to
+compile and link it with profiling enabled.
+
+   To compile a source file for profiling, specify the '-pg' option when
+you run the compiler.  (This is in addition to the options you normally
+use.)
+
+   To link the program for profiling, if you use a compiler such as 'cc'
+to do the linking, simply specify '-pg' in addition to your usual
+options.  The same option, '-pg', alters either compilation or linking
+to do what is necessary for profiling.  Here are examples:
+
+     cc -g -c myprog.c utils.c -pg
+     cc -o myprog myprog.o utils.o -pg
+
+   The '-pg' option also works with a command that both compiles and
+links:
+
+     cc -o myprog myprog.c utils.c -g -pg
+
+   Note: The '-pg' option must be part of your compilation options as
+well as your link options.  If it is not then no call-graph data will be
+gathered and when you run 'gprof' you will get an error message like
+this:
+
+     gprof: gmon.out file is missing call-graph data
+
+   If you add the '-Q' switch to suppress the printing of the call graph
+data you will still be able to see the time samples:
+
+     Flat profile:
+
+     Each sample counts as 0.01 seconds.
+       %   cumulative   self              self     total
+      time   seconds   seconds    calls  Ts/call  Ts/call  name
+      44.12      0.07     0.07                             zazLoop
+      35.29      0.14     0.06                             main
+      20.59      0.17     0.04                             bazMillion
+
+   If you run the linker 'ld' directly instead of through a compiler
+such as 'cc', you may have to specify a profiling startup file 'gcrt0.o'
+as the first input file instead of the usual startup file 'crt0.o'.  In
+addition, you would probably want to specify the profiling C library,
+'libc_p.a', by writing '-lc_p' instead of the usual '-lc'.  This is not
+absolutely necessary, but doing this gives you number-of-calls
+information for standard library functions such as 'read' and 'open'.
+For example:
+
+     ld -o myprog /lib/gcrt0.o myprog.o utils.o -lc_p
+
+   If you are running the program on a system which supports shared
+libraries you may run into problems with the profiling support code in a
+shared library being called before that library has been fully
+initialised.  This is usually detected by the program encountering a
+segmentation fault as soon as it is run.  The solution is to link
+against a static version of the library containing the profiling support
+code, which for 'gcc' users can be done via the '-static' or
+'-static-libgcc' command line option.  For example:
+
+     gcc -g -pg -static-libgcc myprog.c utils.c -o myprog
+
+   If you compile only some of the modules of the program with '-pg',
+you can still profile the program, but you won't get complete
+information about the modules that were compiled without '-pg'.  The
+only information you get for the functions in those modules is the total
+time spent in them; there is no record of how many times they were
+called, or from where.  This will not affect the flat profile (except
+that the 'calls' field for the functions will be blank), but will
+greatly reduce the usefulness of the call graph.
+
+   If you wish to perform line-by-line profiling you should use the
+'gcov' tool instead of 'gprof'.  See that tool's manual or info pages
+for more details of how to do this.
+
+   Note, older versions of 'gcc' produce line-by-line profiling
+information that works with 'gprof' rather than 'gcov' so there is still
+support for displaying this kind of information in 'gprof'.  *Note
+Line-by-line Profiling: Line-by-line.
+
+   It also worth noting that 'gcc' implements a '-finstrument-functions'
+command line option which will insert calls to special user supplied
+instrumentation routines at the entry and exit of every function in
+their program.  This can be used to implement an alternative profiling
+scheme.
+
+File: gprof.info,  Node: Executing,  Next: Invoking,  Prev: Compiling,  Up: Top
+

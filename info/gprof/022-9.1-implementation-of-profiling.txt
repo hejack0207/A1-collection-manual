@@ -1,0 +1,103 @@
+9.1 Implementation of Profiling
+===============================
+
+Profiling works by changing how every function in your program is
+compiled so that when it is called, it will stash away some information
+about where it was called from.  From this, the profiler can figure out
+what function called it, and can count how many times it was called.
+This change is made by the compiler when your program is compiled with
+the '-pg' option, which causes every function to call 'mcount' (or
+'_mcount', or '__mcount', depending on the OS and compiler) as one of
+its first operations.
+
+   The 'mcount' routine, included in the profiling library, is
+responsible for recording in an in-memory call graph table both its
+parent routine (the child) and its parent's parent.  This is typically
+done by examining the stack frame to find both the address of the child,
+and the return address in the original parent.  Since this is a very
+machine-dependent operation, 'mcount' itself is typically a short
+assembly-language stub routine that extracts the required information,
+and then calls '__mcount_internal' (a normal C function) with two
+arguments--'frompc' and 'selfpc'.  '__mcount_internal' is responsible
+for maintaining the in-memory call graph, which records 'frompc',
+'selfpc', and the number of times each of these call arcs was traversed.
+
+   GCC Version 2 provides a magical function
+('__builtin_return_address'), which allows a generic 'mcount' function
+to extract the required information from the stack frame.  However, on
+some architectures, most notably the SPARC, using this builtin can be
+very computationally expensive, and an assembly language version of
+'mcount' is used for performance reasons.
+
+   Number-of-calls information for library routines is collected by
+using a special version of the C library.  The programs in it are the
+same as in the usual C library, but they were compiled with '-pg'.  If
+you link your program with 'gcc ... -pg', it automatically uses the
+profiling version of the library.
+
+   Profiling also involves watching your program as it runs, and keeping
+a histogram of where the program counter happens to be every now and
+then.  Typically the program counter is looked at around 100 times per
+second of run time, but the exact frequency may vary from system to
+system.
+
+   This is done is one of two ways.  Most UNIX-like operating systems
+provide a 'profil()' system call, which registers a memory array with
+the kernel, along with a scale factor that determines how the program's
+address space maps into the array.  Typical scaling values cause every 2
+to 8 bytes of address space to map into a single array slot.  On every
+tick of the system clock (assuming the profiled program is running), the
+value of the program counter is examined and the corresponding slot in
+the memory array is incremented.  Since this is done in the kernel,
+which had to interrupt the process anyway to handle the clock interrupt,
+very little additional system overhead is required.
+
+   However, some operating systems, most notably Linux 2.0 (and
+earlier), do not provide a 'profil()' system call.  On such a system,
+arrangements are made for the kernel to periodically deliver a signal to
+the process (typically via 'setitimer()'), which then performs the same
+operation of examining the program counter and incrementing a slot in
+the memory array.  Since this method requires a signal to be delivered
+to user space every time a sample is taken, it uses considerably more
+overhead than kernel-based profiling.  Also, due to the added delay
+required to deliver the signal, this method is less accurate as well.
+
+   A special startup routine allocates memory for the histogram and
+either calls 'profil()' or sets up a clock signal handler.  This routine
+('monstartup') can be invoked in several ways.  On Linux systems, a
+special profiling startup file 'gcrt0.o', which invokes 'monstartup'
+before 'main', is used instead of the default 'crt0.o'.  Use of this
+special startup file is one of the effects of using 'gcc ... -pg' to
+link.  On SPARC systems, no special startup files are used.  Rather, the
+'mcount' routine, when it is invoked for the first time (typically when
+'main' is called), calls 'monstartup'.
+
+   If the compiler's '-a' option was used, basic-block counting is also
+enabled.  Each object file is then compiled with a static array of
+counts, initially zero.  In the executable code, every time a new
+basic-block begins (i.e., when an 'if' statement appears), an extra
+instruction is inserted to increment the corresponding count in the
+array.  At compile time, a paired array was constructed that recorded
+the starting address of each basic-block.  Taken together, the two
+arrays record the starting address of every basic-block, along with the
+number of times it was executed.
+
+   The profiling library also includes a function ('mcleanup') which is
+typically registered using 'atexit()' to be called as the program exits,
+and is responsible for writing the file 'gmon.out'.  Profiling is turned
+off, various headers are output, and the histogram is written, followed
+by the call-graph arcs and the basic-block counts.
+
+   The output from 'gprof' gives no indication of parts of your program
+that are limited by I/O or swapping bandwidth.  This is because samples
+of the program counter are taken at fixed intervals of the program's run
+time.  Therefore, the time measurements in 'gprof' output say nothing
+about time that your program was not running.  For example, a part of
+the program that creates so much data that it cannot all fit in physical
+memory at once may run very slowly due to thrashing, but 'gprof' will
+say it uses little time.  On the other hand, sampling by run time has
+the advantage that the amount of load due to other users won't directly
+affect the output you get.
+
+File: gprof.info,  Node: File Format,  Next: Internals,  Prev: Implementation,  Up: Details
+
