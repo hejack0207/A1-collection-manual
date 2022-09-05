@@ -1,0 +1,449 @@
+17.23 Iterators
+===============
+
+Ports often need to define similar patterns for more than one machine
+mode or for more than one rtx code.  GCC provides some simple iterator
+facilities to make this process easier.
+
+* Menu:
+
+* Mode Iterators::         Generating variations of patterns for different modes.
+* Code Iterators::         Doing the same for codes.
+* Int Iterators::          Doing the same for integers.
+* Subst Iterators::	   Generating variations of patterns for define_subst.
+* Parameterized Names::	   Specifying iterator values in C++ code.
+
+File: gccint.info,  Node: Mode Iterators,  Next: Code Iterators,  Up: Iterators
+
+17.23.1 Mode Iterators
+----------------------
+
+Ports often need to define similar patterns for two or more different
+modes.  For example:
+
+   * If a processor has hardware support for both single and double
+     floating-point arithmetic, the 'SFmode' patterns tend to be very
+     similar to the 'DFmode' ones.
+
+   * If a port uses 'SImode' pointers in one configuration and 'DImode'
+     pointers in another, it will usually have very similar 'SImode' and
+     'DImode' patterns for manipulating pointers.
+
+ Mode iterators allow several patterns to be instantiated from one '.md'
+file template.  They can be used with any type of rtx-based construct,
+such as a 'define_insn', 'define_split', or 'define_peephole2'.
+
+* Menu:
+
+* Defining Mode Iterators:: Defining a new mode iterator.
+* Substitutions::           Combining mode iterators with substitutions
+* Examples::                Examples
+
+File: gccint.info,  Node: Defining Mode Iterators,  Next: Substitutions,  Up: Mode Iterators
+
+17.23.1.1 Defining Mode Iterators
+.................................
+
+The syntax for defining a mode iterator is:
+
+     (define_mode_iterator NAME [(MODE1 "COND1") ... (MODEN "CONDN")])
+
+ This allows subsequent '.md' file constructs to use the mode suffix
+':NAME'.  Every construct that does so will be expanded N times, once
+with every use of ':NAME' replaced by ':MODE1', once with every use
+replaced by ':MODE2', and so on.  In the expansion for a particular
+MODEI, every C condition will also require that CONDI be true.
+
+ For example:
+
+     (define_mode_iterator P [(SI "Pmode == SImode") (DI "Pmode == DImode")])
+
+ defines a new mode suffix ':P'.  Every construct that uses ':P' will be
+expanded twice, once with every ':P' replaced by ':SI' and once with
+every ':P' replaced by ':DI'.  The ':SI' version will only apply if
+'Pmode == SImode' and the ':DI' version will only apply if 'Pmode ==
+DImode'.
+
+ As with other '.md' conditions, an empty string is treated as "always
+true".  '(MODE "")' can also be abbreviated to 'MODE'.  For example:
+
+     (define_mode_iterator GPR [SI (DI "TARGET_64BIT")])
+
+ means that the ':DI' expansion only applies if 'TARGET_64BIT' but that
+the ':SI' expansion has no such constraint.
+
+ Iterators are applied in the order they are defined.  This can be
+significant if two iterators are used in a construct that requires
+substitutions.  *Note Substitutions::.
+
+File: gccint.info,  Node: Substitutions,  Next: Examples,  Prev: Defining Mode Iterators,  Up: Mode Iterators
+
+17.23.1.2 Substitution in Mode Iterators
+........................................
+
+If an '.md' file construct uses mode iterators, each version of the
+construct will often need slightly different strings or modes.  For
+example:
+
+   * When a 'define_expand' defines several 'addM3' patterns (*note
+     Standard Names::), each expander will need to use the appropriate
+     mode name for M.
+
+   * When a 'define_insn' defines several instruction patterns, each
+     instruction will often use a different assembler mnemonic.
+
+   * When a 'define_insn' requires operands with different modes, using
+     an iterator for one of the operand modes usually requires a
+     specific mode for the other operand(s).
+
+ GCC supports such variations through a system of "mode attributes".
+There are two standard attributes: 'mode', which is the name of the mode
+in lower case, and 'MODE', which is the same thing in upper case.  You
+can define other attributes using:
+
+     (define_mode_attr NAME [(MODE1 "VALUE1") ... (MODEN "VALUEN")])
+
+ where NAME is the name of the attribute and VALUEI is the value
+associated with MODEI.
+
+ When GCC replaces some :ITERATOR with :MODE, it will scan each string
+and mode in the pattern for sequences of the form '<ITERATOR:ATTR>',
+where ATTR is the name of a mode attribute.  If the attribute is defined
+for MODE, the whole '<...>' sequence will be replaced by the appropriate
+attribute value.
+
+ For example, suppose an '.md' file has:
+
+     (define_mode_iterator P [(SI "Pmode == SImode") (DI "Pmode == DImode")])
+     (define_mode_attr load [(SI "lw") (DI "ld")])
+
+ If one of the patterns that uses ':P' contains the string
+'"<P:load>\t%0,%1"', the 'SI' version of that pattern will use
+'"lw\t%0,%1"' and the 'DI' version will use '"ld\t%0,%1"'.
+
+ Here is an example of using an attribute for a mode:
+
+     (define_mode_iterator LONG [SI DI])
+     (define_mode_attr SHORT [(SI "HI") (DI "SI")])
+     (define_insn ...
+       (sign_extend:LONG (match_operand:<LONG:SHORT> ...)) ...)
+
+ The 'ITERATOR:' prefix may be omitted, in which case the substitution
+will be attempted for every iterator expansion.
+
+File: gccint.info,  Node: Examples,  Prev: Substitutions,  Up: Mode Iterators
+
+17.23.1.3 Mode Iterator Examples
+................................
+
+Here is an example from the MIPS port.  It defines the following modes
+and attributes (among others):
+
+     (define_mode_iterator GPR [SI (DI "TARGET_64BIT")])
+     (define_mode_attr d [(SI "") (DI "d")])
+
+ and uses the following template to define both 'subsi3' and 'subdi3':
+
+     (define_insn "sub<mode>3"
+       [(set (match_operand:GPR 0 "register_operand" "=d")
+             (minus:GPR (match_operand:GPR 1 "register_operand" "d")
+                        (match_operand:GPR 2 "register_operand" "d")))]
+       ""
+       "<d>subu\t%0,%1,%2"
+       [(set_attr "type" "arith")
+        (set_attr "mode" "<MODE>")])
+
+ This is exactly equivalent to:
+
+     (define_insn "subsi3"
+       [(set (match_operand:SI 0 "register_operand" "=d")
+             (minus:SI (match_operand:SI 1 "register_operand" "d")
+                       (match_operand:SI 2 "register_operand" "d")))]
+       ""
+       "subu\t%0,%1,%2"
+       [(set_attr "type" "arith")
+        (set_attr "mode" "SI")])
+
+     (define_insn "subdi3"
+       [(set (match_operand:DI 0 "register_operand" "=d")
+             (minus:DI (match_operand:DI 1 "register_operand" "d")
+                       (match_operand:DI 2 "register_operand" "d")))]
+       ""
+       "dsubu\t%0,%1,%2"
+       [(set_attr "type" "arith")
+        (set_attr "mode" "DI")])
+
+File: gccint.info,  Node: Code Iterators,  Next: Int Iterators,  Prev: Mode Iterators,  Up: Iterators
+
+17.23.2 Code Iterators
+----------------------
+
+Code iterators operate in a similar way to mode iterators.  *Note Mode
+Iterators::.
+
+ The construct:
+
+     (define_code_iterator NAME [(CODE1 "COND1") ... (CODEN "CONDN")])
+
+ defines a pseudo rtx code NAME that can be instantiated as CODEI if
+condition CONDI is true.  Each CODEI must have the same rtx format.
+*Note RTL Classes::.
+
+ As with mode iterators, each pattern that uses NAME will be expanded N
+times, once with all uses of NAME replaced by CODE1, once with all uses
+replaced by CODE2, and so on.  *Note Defining Mode Iterators::.
+
+ It is possible to define attributes for codes as well as for modes.
+There are two standard code attributes: 'code', the name of the code in
+lower case, and 'CODE', the name of the code in upper case.  Other
+attributes are defined using:
+
+     (define_code_attr NAME [(CODE1 "VALUE1") ... (CODEN "VALUEN")])
+
+ Here's an example of code iterators in action, taken from the MIPS
+port:
+
+     (define_code_iterator any_cond [unordered ordered unlt unge uneq ltgt unle ungt
+                                     eq ne gt ge lt le gtu geu ltu leu])
+
+     (define_expand "b<code>"
+       [(set (pc)
+             (if_then_else (any_cond:CC (cc0)
+                                        (const_int 0))
+                           (label_ref (match_operand 0 ""))
+                           (pc)))]
+       ""
+     {
+       gen_conditional_branch (operands, <CODE>);
+       DONE;
+     })
+
+ This is equivalent to:
+
+     (define_expand "bunordered"
+       [(set (pc)
+             (if_then_else (unordered:CC (cc0)
+                                         (const_int 0))
+                           (label_ref (match_operand 0 ""))
+                           (pc)))]
+       ""
+     {
+       gen_conditional_branch (operands, UNORDERED);
+       DONE;
+     })
+
+     (define_expand "bordered"
+       [(set (pc)
+             (if_then_else (ordered:CC (cc0)
+                                       (const_int 0))
+                           (label_ref (match_operand 0 ""))
+                           (pc)))]
+       ""
+     {
+       gen_conditional_branch (operands, ORDERED);
+       DONE;
+     })
+
+     ...
+
+File: gccint.info,  Node: Int Iterators,  Next: Subst Iterators,  Prev: Code Iterators,  Up: Iterators
+
+17.23.3 Int Iterators
+---------------------
+
+Int iterators operate in a similar way to code iterators.  *Note Code
+Iterators::.
+
+ The construct:
+
+     (define_int_iterator NAME [(INT1 "COND1") ... (INTN "CONDN")])
+
+ defines a pseudo integer constant NAME that can be instantiated as INTI
+if condition CONDI is true.  Each INT must have the same rtx format.
+*Note RTL Classes::.  Int iterators can appear in only those rtx fields
+that have 'i' as the specifier.  This means that each INT has to be a
+constant defined using define_constant or define_c_enum.
+
+ As with mode and code iterators, each pattern that uses NAME will be
+expanded N times, once with all uses of NAME replaced by INT1, once with
+all uses replaced by INT2, and so on.  *Note Defining Mode Iterators::.
+
+ It is possible to define attributes for ints as well as for codes and
+modes.  Attributes are defined using:
+
+     (define_int_attr NAME [(INT1 "VALUE1") ... (INTN "VALUEN")])
+
+ Here's an example of int iterators in action, taken from the ARM port:
+
+     (define_int_iterator QABSNEG [UNSPEC_VQABS UNSPEC_VQNEG])
+
+     (define_int_attr absneg [(UNSPEC_VQABS "abs") (UNSPEC_VQNEG "neg")])
+
+     (define_insn "neon_vq<absneg><mode>"
+       [(set (match_operand:VDQIW 0 "s_register_operand" "=w")
+     	(unspec:VDQIW [(match_operand:VDQIW 1 "s_register_operand" "w")
+     		       (match_operand:SI 2 "immediate_operand" "i")]
+     		      QABSNEG))]
+       "TARGET_NEON"
+       "vq<absneg>.<V_s_elem>\t%<V_reg>0, %<V_reg>1"
+       [(set_attr "type" "neon_vqneg_vqabs")]
+     )
+
+
+ This is equivalent to:
+
+     (define_insn "neon_vqabs<mode>"
+       [(set (match_operand:VDQIW 0 "s_register_operand" "=w")
+     	(unspec:VDQIW [(match_operand:VDQIW 1 "s_register_operand" "w")
+     		       (match_operand:SI 2 "immediate_operand" "i")]
+     		      UNSPEC_VQABS))]
+       "TARGET_NEON"
+       "vqabs.<V_s_elem>\t%<V_reg>0, %<V_reg>1"
+       [(set_attr "type" "neon_vqneg_vqabs")]
+     )
+
+     (define_insn "neon_vqneg<mode>"
+       [(set (match_operand:VDQIW 0 "s_register_operand" "=w")
+     	(unspec:VDQIW [(match_operand:VDQIW 1 "s_register_operand" "w")
+     		       (match_operand:SI 2 "immediate_operand" "i")]
+     		      UNSPEC_VQNEG))]
+       "TARGET_NEON"
+       "vqneg.<V_s_elem>\t%<V_reg>0, %<V_reg>1"
+       [(set_attr "type" "neon_vqneg_vqabs")]
+     )
+
+
+File: gccint.info,  Node: Subst Iterators,  Next: Parameterized Names,  Prev: Int Iterators,  Up: Iterators
+
+17.23.4 Subst Iterators
+-----------------------
+
+Subst iterators are special type of iterators with the following
+restrictions: they could not be declared explicitly, they always have
+only two values, and they do not have explicit dedicated name.
+Subst-iterators are triggered only when corresponding subst-attribute is
+used in RTL-pattern.
+
+ Subst iterators transform templates in the following way: the templates
+are duplicated, the subst-attributes in these templates are replaced
+with the corresponding values, and a new attribute is implicitly added
+to the given 'define_insn'/'define_expand'.  The name of the added
+attribute matches the name of 'define_subst'.  Such attributes are
+declared implicitly, and it is not allowed to have a 'define_attr' named
+as a 'define_subst'.
+
+ Each subst iterator is linked to a 'define_subst'.  It is declared
+implicitly by the first appearance of the corresponding
+'define_subst_attr', and it is not allowed to define it explicitly.
+
+ Declarations of subst-attributes have the following syntax:
+
+     (define_subst_attr "NAME"
+       "SUBST-NAME"
+       "NO-SUBST-VALUE"
+       "SUBST-APPLIED-VALUE")
+
+ NAME is a string with which the given subst-attribute could be referred
+to.
+
+ SUBST-NAME shows which 'define_subst' should be applied to an
+RTL-template if the given subst-attribute is present in the
+RTL-template.
+
+ NO-SUBST-VALUE is a value with which subst-attribute would be replaced
+in the first copy of the original RTL-template.
+
+ SUBST-APPLIED-VALUE is a value with which subst-attribute would be
+replaced in the second copy of the original RTL-template.
+
+File: gccint.info,  Node: Parameterized Names,  Prev: Subst Iterators,  Up: Iterators
+
+17.23.5 Parameterized Names
+---------------------------
+
+Ports sometimes need to apply iterators using C++ code, in order to get
+the code or RTL pattern for a specific instruction.  For example,
+suppose we have the 'neon_vq<absneg><mode>' pattern given above:
+
+     (define_int_iterator QABSNEG [UNSPEC_VQABS UNSPEC_VQNEG])
+
+     (define_int_attr absneg [(UNSPEC_VQABS "abs") (UNSPEC_VQNEG "neg")])
+
+     (define_insn "neon_vq<absneg><mode>"
+       [(set (match_operand:VDQIW 0 "s_register_operand" "=w")
+     	(unspec:VDQIW [(match_operand:VDQIW 1 "s_register_operand" "w")
+     		       (match_operand:SI 2 "immediate_operand" "i")]
+     		      QABSNEG))]
+       ...
+     )
+
+ A port might need to generate this pattern for a variable 'QABSNEG'
+value and a variable 'VDQIW' mode.  There are two ways of doing this.
+The first is to build the rtx for the pattern directly from C++ code;
+this is a valid technique and avoids any risk of combinatorial
+explosion.  The second is to prefix the instruction name with the
+special character '@', which tells GCC to generate the four additional
+functions below.  In each case, NAME is the name of the instruction
+without the leading '@' character, without the '<...>' placeholders, and
+with any underscore before a '<...>' placeholder removed if keeping it
+would lead to a double or trailing underscore.
+
+'insn_code maybe_code_for_NAME (I1, I2, ...)'
+     See whether replacing the first '<...>' placeholder with iterator
+     value I1, the second with iterator value I2, and so on, gives a
+     valid instruction.  Return its code if so, otherwise return
+     'CODE_FOR_nothing'.
+
+'insn_code code_for_NAME (I1, I2, ...)'
+     Same, but abort the compiler if the requested instruction does not
+     exist.
+
+'rtx maybe_gen_NAME (I1, I2, ..., OP0, OP1, ...)'
+     Check for a valid instruction in the same way as
+     'maybe_code_for_NAME'.  If the instruction exists, generate an
+     instance of it using the operand values given by OP0, OP1, and so
+     on, otherwise return null.
+
+'rtx gen_NAME (I1, I2, ..., OP0, OP1, ...)'
+     Same, but abort the compiler if the requested instruction does not
+     exist, or if the instruction generator invoked the 'FAIL' macro.
+
+ For example, changing the pattern above to:
+
+     (define_insn "@neon_vq<absneg><mode>"
+       [(set (match_operand:VDQIW 0 "s_register_operand" "=w")
+     	(unspec:VDQIW [(match_operand:VDQIW 1 "s_register_operand" "w")
+     		       (match_operand:SI 2 "immediate_operand" "i")]
+     		      QABSNEG))]
+       ...
+     )
+
+ would define the same patterns as before, but in addition would
+generate the four functions below:
+
+     insn_code maybe_code_for_neon_vq (int, machine_mode);
+     insn_code code_for_neon_vq (int, machine_mode);
+     rtx maybe_gen_neon_vq (int, machine_mode, rtx, rtx, rtx);
+     rtx gen_neon_vq (int, machine_mode, rtx, rtx, rtx);
+
+ Calling 'code_for_neon_vq (UNSPEC_VQABS, V8QImode)' would then give
+'CODE_FOR_neon_vqabsv8qi'.
+
+ It is possible to have multiple '@' patterns with the same name and
+same types of iterator.  For example:
+
+     (define_insn "@some_arithmetic_op<mode>"
+       [(set (match_operand:INTEGER_MODES 0 "register_operand") ...)]
+       ...
+     )
+
+     (define_insn "@some_arithmetic_op<mode>"
+       [(set (match_operand:FLOAT_MODES 0 "register_operand") ...)]
+       ...
+     )
+
+ would produce a single set of functions that handles both
+'INTEGER_MODES' and 'FLOAT_MODES'.
+
+File: gccint.info,  Node: Target Macros,  Next: Host Config,  Prev: Machine Desc,  Up: Top
+

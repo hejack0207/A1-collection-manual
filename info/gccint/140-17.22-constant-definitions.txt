@@ -1,0 +1,139 @@
+17.22 Constant Definitions
+==========================
+
+Using literal constants inside instruction patterns reduces legibility
+and can be a maintenance problem.
+
+ To overcome this problem, you may use the 'define_constants'
+expression.  It contains a vector of name-value pairs.  From that point
+on, wherever any of the names appears in the MD file, it is as if the
+corresponding value had been written instead.  You may use
+'define_constants' multiple times; each appearance adds more constants
+to the table.  It is an error to redefine a constant with a different
+value.
+
+ To come back to the a29k load multiple example, instead of
+
+     (define_insn ""
+       [(match_parallel 0 "load_multiple_operation"
+          [(set (match_operand:SI 1 "gpc_reg_operand" "=r")
+                (match_operand:SI 2 "memory_operand" "m"))
+           (use (reg:SI 179))
+           (clobber (reg:SI 179))])]
+       ""
+       "loadm 0,0,%1,%2")
+
+ You could write:
+
+     (define_constants [
+         (R_BP 177)
+         (R_FC 178)
+         (R_CR 179)
+         (R_Q  180)
+     ])
+
+     (define_insn ""
+       [(match_parallel 0 "load_multiple_operation"
+          [(set (match_operand:SI 1 "gpc_reg_operand" "=r")
+                (match_operand:SI 2 "memory_operand" "m"))
+           (use (reg:SI R_CR))
+           (clobber (reg:SI R_CR))])]
+       ""
+       "loadm 0,0,%1,%2")
+
+ The constants that are defined with a define_constant are also output
+in the insn-codes.h header file as #defines.
+
+ You can also use the machine description file to define enumerations.
+Like the constants defined by 'define_constant', these enumerations are
+visible to both the machine description file and the main C code.
+
+ The syntax is as follows:
+
+     (define_c_enum "NAME" [
+       VALUE0
+       VALUE1
+       ...
+       VALUEN
+     ])
+
+ This definition causes the equivalent of the following C code to appear
+in 'insn-constants.h':
+
+     enum NAME {
+       VALUE0 = 0,
+       VALUE1 = 1,
+       ...
+       VALUEN = N
+     };
+     #define NUM_CNAME_VALUES (N + 1)
+
+ where CNAME is the capitalized form of NAME.  It also makes each VALUEI
+available in the machine description file, just as if it had been
+declared with:
+
+     (define_constants [(VALUEI I)])
+
+ Each VALUEI is usually an upper-case identifier and usually begins with
+CNAME.
+
+ You can split the enumeration definition into as many statements as you
+like.  The above example is directly equivalent to:
+
+     (define_c_enum "NAME" [VALUE0])
+     (define_c_enum "NAME" [VALUE1])
+     ...
+     (define_c_enum "NAME" [VALUEN])
+
+ Splitting the enumeration helps to improve the modularity of each
+individual '.md' file.  For example, if a port defines its
+synchronization instructions in a separate 'sync.md' file, it is
+convenient to define all synchronization-specific enumeration values in
+'sync.md' rather than in the main '.md' file.
+
+ Some enumeration names have special significance to GCC:
+
+'unspecv'
+     If an enumeration called 'unspecv' is defined, GCC will use it when
+     printing out 'unspec_volatile' expressions.  For example:
+
+          (define_c_enum "unspecv" [
+            UNSPECV_BLOCKAGE
+          ])
+
+     causes GCC to print '(unspec_volatile ... 0)' as:
+
+          (unspec_volatile ... UNSPECV_BLOCKAGE)
+
+'unspec'
+     If an enumeration called 'unspec' is defined, GCC will use it when
+     printing out 'unspec' expressions.  GCC will also use it when
+     printing out 'unspec_volatile' expressions unless an 'unspecv'
+     enumeration is also defined.  You can therefore decide whether to
+     keep separate enumerations for volatile and non-volatile
+     expressions or whether to use the same enumeration for both.
+
+ Another way of defining an enumeration is to use 'define_enum':
+
+     (define_enum "NAME" [
+       VALUE0
+       VALUE1
+       ...
+       VALUEN
+     ])
+
+ This directive implies:
+
+     (define_c_enum "NAME" [
+       CNAME_CVALUE0
+       CNAME_CVALUE1
+       ...
+       CNAME_CVALUEN
+     ])
+
+ where CVALUEI is the capitalized form of VALUEI.  However, unlike
+'define_c_enum', the enumerations defined by 'define_enum' can be used
+in attribute specifications (*note define_enum_attr::).
+
+File: gccint.info,  Node: Iterators,  Prev: Constant Definitions,  Up: Machine Desc
+

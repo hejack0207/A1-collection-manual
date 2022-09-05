@@ -1,0 +1,238 @@
+14.7 Constant Expression Types
+==============================
+
+The simplest RTL expressions are those that represent constant values.
+
+'(const_int I)'
+     This type of expression represents the integer value I.  I is
+     customarily accessed with the macro 'INTVAL' as in 'INTVAL (EXP)',
+     which is equivalent to 'XWINT (EXP, 0)'.
+
+     Constants generated for modes with fewer bits than in
+     'HOST_WIDE_INT' must be sign extended to full width (e.g., with
+     'gen_int_mode').  For constants for modes with more bits than in
+     'HOST_WIDE_INT' the implied high order bits of that constant are
+     copies of the top bit.  Note however that values are neither
+     inherently signed nor inherently unsigned; where necessary,
+     signedness is determined by the rtl operation instead.
+
+     There is only one expression object for the integer value zero; it
+     is the value of the variable 'const0_rtx'.  Likewise, the only
+     expression for integer value one is found in 'const1_rtx', the only
+     expression for integer value two is found in 'const2_rtx', and the
+     only expression for integer value negative one is found in
+     'constm1_rtx'.  Any attempt to create an expression of code
+     'const_int' and value zero, one, two or negative one will return
+     'const0_rtx', 'const1_rtx', 'const2_rtx' or 'constm1_rtx' as
+     appropriate.
+
+     Similarly, there is only one object for the integer whose value is
+     'STORE_FLAG_VALUE'.  It is found in 'const_true_rtx'.  If
+     'STORE_FLAG_VALUE' is one, 'const_true_rtx' and 'const1_rtx' will
+     point to the same object.  If 'STORE_FLAG_VALUE' is -1,
+     'const_true_rtx' and 'constm1_rtx' will point to the same object.
+
+'(const_double:M I0 I1 ...)'
+     This represents either a floating-point constant of mode M or (on
+     older ports that do not define 'TARGET_SUPPORTS_WIDE_INT') an
+     integer constant too large to fit into 'HOST_BITS_PER_WIDE_INT'
+     bits but small enough to fit within twice that number of bits.  In
+     the latter case, M will be 'VOIDmode'.  For integral values
+     constants for modes with more bits than twice the number in
+     'HOST_WIDE_INT' the implied high order bits of that constant are
+     copies of the top bit of 'CONST_DOUBLE_HIGH'.  Note however that
+     integral values are neither inherently signed nor inherently
+     unsigned; where necessary, signedness is determined by the rtl
+     operation instead.
+
+     On more modern ports, 'CONST_DOUBLE' only represents floating point
+     values.  New ports define 'TARGET_SUPPORTS_WIDE_INT' to make this
+     designation.
+
+     If M is 'VOIDmode', the bits of the value are stored in I0 and I1.
+     I0 is customarily accessed with the macro 'CONST_DOUBLE_LOW' and I1
+     with 'CONST_DOUBLE_HIGH'.
+
+     If the constant is floating point (regardless of its precision),
+     then the number of integers used to store the value depends on the
+     size of 'REAL_VALUE_TYPE' (*note Floating Point::).  The integers
+     represent a floating point number, but not precisely in the target
+     machine's or host machine's floating point format.  To convert them
+     to the precise bit pattern used by the target machine, use the
+     macro 'REAL_VALUE_TO_TARGET_DOUBLE' and friends (*note Data
+     Output::).
+
+'(const_wide_int:M NUNITS ELT0 ...)'
+     This contains an array of 'HOST_WIDE_INT's that is large enough to
+     hold any constant that can be represented on the target.  This form
+     of rtl is only used on targets that define
+     'TARGET_SUPPORTS_WIDE_INT' to be nonzero and then 'CONST_DOUBLE's
+     are only used to hold floating-point values.  If the target leaves
+     'TARGET_SUPPORTS_WIDE_INT' defined as 0, 'CONST_WIDE_INT's are not
+     used and 'CONST_DOUBLE's are as they were before.
+
+     The values are stored in a compressed format.  The higher-order 0s
+     or -1s are not represented if they are just the logical sign
+     extension of the number that is represented.
+
+'CONST_WIDE_INT_VEC (CODE)'
+     Returns the entire array of 'HOST_WIDE_INT's that are used to store
+     the value.  This macro should be rarely used.
+
+'CONST_WIDE_INT_NUNITS (CODE)'
+     The number of 'HOST_WIDE_INT's used to represent the number.  Note
+     that this generally is smaller than the number of 'HOST_WIDE_INT's
+     implied by the mode size.
+
+'CONST_WIDE_INT_ELT (CODE,I)'
+     Returns the 'i'th element of the array.  Element 0 is contains the
+     low order bits of the constant.
+
+'(const_fixed:M ...)'
+     Represents a fixed-point constant of mode M.  The operand is a data
+     structure of type 'struct fixed_value' and is accessed with the
+     macro 'CONST_FIXED_VALUE'.  The high part of data is accessed with
+     'CONST_FIXED_VALUE_HIGH'; the low part is accessed with
+     'CONST_FIXED_VALUE_LOW'.
+
+'(const_poly_int:M [C0 C1 ...])'
+     Represents a 'poly_int'-style polynomial integer with coefficients
+     C0, C1, ....  The coefficients are 'wide_int'-based integers rather
+     than rtxes.  'CONST_POLY_INT_COEFFS' gives the values of individual
+     coefficients (which is mostly only useful in low-level routines)
+     and 'const_poly_int_value' gives the full 'poly_int' value.
+
+'(const_vector:M [X0 X1 ...])'
+     Represents a vector constant.  The values in square brackets are
+     elements of the vector, which are always 'const_int',
+     'const_wide_int', 'const_double' or 'const_fixed' expressions.
+
+     Each vector constant V is treated as a specific instance of an
+     arbitrary-length sequence that itself contains
+     'CONST_VECTOR_NPATTERNS (V)' interleaved patterns.  Each pattern
+     has the form:
+
+          { BASE0, BASE1, BASE1 + STEP, BASE1 + STEP * 2, ... }
+
+     The first three elements in each pattern are enough to determine
+     the values of the other elements.  However, if all STEPs are zero,
+     only the first two elements are needed.  If in addition each BASE1
+     is equal to the corresponding BASE0, only the first element in each
+     pattern is needed.  The number of determining elements per pattern
+     is given by 'CONST_VECTOR_NELTS_PER_PATTERN (V)'.
+
+     For example, the constant:
+
+          { 0, 1, 2, 6, 3, 8, 4, 10, 5, 12, 6, 14, 7, 16, 8, 18 }
+
+     is interpreted as an interleaving of the sequences:
+
+          { 0, 2, 3, 4, 5, 6, 7, 8 }
+          { 1, 6, 8, 10, 12, 14, 16, 18 }
+
+     where the sequences are represented by the following patterns:
+
+          BASE0 == 0, BASE1 == 2, STEP == 1
+          BASE0 == 1, BASE1 == 6, STEP == 2
+
+     In this case:
+
+          CONST_VECTOR_NPATTERNS (V) == 2
+          CONST_VECTOR_NELTS_PER_PATTERN (V) == 3
+
+     Thus the first 6 elements ('{ 0, 1, 2, 6, 3, 8 }') are enough to
+     determine the whole sequence; we refer to them as the "encoded"
+     elements.  They are the only elements present in the square
+     brackets for variable-length 'const_vector's (i.e. for
+     'const_vector's whose mode M has a variable number of elements).
+     However, as a convenience to code that needs to handle both
+     'const_vector's and 'parallel's, all elements are present in the
+     square brackets for fixed-length 'const_vector's; the encoding
+     scheme simply reduces the amount of work involved in processing
+     constants that follow a regular pattern.
+
+     Sometimes this scheme can create two possible encodings of the same
+     vector.  For example { 0, 1 } could be seen as two patterns with
+     one element each or one pattern with two elements (BASE0 and
+     BASE1).  The canonical encoding is always the one with the fewest
+     patterns or (if both encodings have the same number of petterns)
+     the one with the fewest encoded elements.
+
+     'const_vector_encoding_nelts (V)' gives the total number of encoded
+     elements in V, which is 6 in the example above.
+     'CONST_VECTOR_ENCODED_ELT (V, I)' accesses the value of encoded
+     element I.
+
+     'CONST_VECTOR_DUPLICATE_P (V)' is true if V simply contains
+     repeated instances of 'CONST_VECTOR_NPATTERNS (V)' values.  This is
+     a shorthand for testing 'CONST_VECTOR_NELTS_PER_PATTERN (V) == 1'.
+
+     'CONST_VECTOR_STEPPED_P (V)' is true if at least one pattern in V
+     has a nonzero step.  This is a shorthand for testing
+     'CONST_VECTOR_NELTS_PER_PATTERN (V) == 3'.
+
+     'CONST_VECTOR_NUNITS (V)' gives the total number of elements in V;
+     it is a shorthand for getting the number of units in 'GET_MODE
+     (V)'.
+
+     The utility function 'const_vector_elt' gives the value of an
+     arbitrary element as an 'rtx'.  'const_vector_int_elt' gives the
+     same value as a 'wide_int'.
+
+'(const_string STR)'
+     Represents a constant string with value STR.  Currently this is
+     used only for insn attributes (*note Insn Attributes::) since
+     constant strings in C are placed in memory.
+
+'(symbol_ref:MODE SYMBOL)'
+     Represents the value of an assembler label for data.  SYMBOL is a
+     string that describes the name of the assembler label.  If it
+     starts with a '*', the label is the rest of SYMBOL not including
+     the '*'.  Otherwise, the label is SYMBOL, usually prefixed with
+     '_'.
+
+     The 'symbol_ref' contains a mode, which is usually 'Pmode'.
+     Usually that is the only mode for which a symbol is directly valid.
+
+'(label_ref:MODE LABEL)'
+     Represents the value of an assembler label for code.  It contains
+     one operand, an expression, which must be a 'code_label' or a
+     'note' of type 'NOTE_INSN_DELETED_LABEL' that appears in the
+     instruction sequence to identify the place where the label should
+     go.
+
+     The reason for using a distinct expression type for code label
+     references is so that jump optimization can distinguish them.
+
+     The 'label_ref' contains a mode, which is usually 'Pmode'.  Usually
+     that is the only mode for which a label is directly valid.
+
+'(const:M EXP)'
+     Represents a constant that is the result of an assembly-time
+     arithmetic computation.  The operand, EXP, contains only
+     'const_int', 'symbol_ref', 'label_ref' or 'unspec' expressions,
+     combined with 'plus' and 'minus'.  Any such 'unspec's are
+     target-specific and typically represent some form of relocation
+     operator.  M should be a valid address mode.
+
+'(high:M EXP)'
+     Represents the high-order bits of EXP.  The number of bits is
+     machine-dependent and is normally the number of bits specified in
+     an instruction that initializes the high order bits of a register.
+     It is used with 'lo_sum' to represent the typical two-instruction
+     sequence used in RISC machines to reference large immediate values
+     and/or link-time constants such as global memory addresses.  In the
+     latter case, M is 'Pmode' and EXP is usually a constant expression
+     involving 'symbol_ref'.
+
+ The macro 'CONST0_RTX (MODE)' refers to an expression with value 0 in
+mode MODE.  If mode MODE is of mode class 'MODE_INT', it returns
+'const0_rtx'.  If mode MODE is of mode class 'MODE_FLOAT', it returns a
+'CONST_DOUBLE' expression in mode MODE.  Otherwise, it returns a
+'CONST_VECTOR' expression in mode MODE.  Similarly, the macro
+'CONST1_RTX (MODE)' refers to an expression with value 1 in mode MODE
+and similarly for 'CONST2_RTX'.  The 'CONST1_RTX' and 'CONST2_RTX'
+macros are undefined for vector modes.
+
+File: gccint.info,  Node: Regs and Memory,  Next: Arithmetic,  Prev: Constants,  Up: RTL
+

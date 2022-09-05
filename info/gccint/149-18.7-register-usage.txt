@@ -1,0 +1,466 @@
+18.7 Register Usage
+===================
+
+This section explains how to describe what registers the target machine
+has, and how (in general) they can be used.
+
+ The description of which registers a specific instruction can use is
+done with register classes; see *note Register Classes::.  For
+information on using registers to access a stack frame, see *note Frame
+Registers::.  For passing values in registers, see *note Register
+Arguments::.  For returning values in registers, see *note Scalar
+Return::.
+
+* Menu:
+
+* Register Basics::             Number and kinds of registers.
+* Allocation Order::            Order in which registers are allocated.
+* Values in Registers::         What kinds of values each reg can hold.
+* Leaf Functions::              Renumbering registers for leaf functions.
+* Stack Registers::             Handling a register stack such as 80387.
+
+File: gccint.info,  Node: Register Basics,  Next: Allocation Order,  Up: Registers
+
+18.7.1 Basic Characteristics of Registers
+-----------------------------------------
+
+Registers have various characteristics.
+
+ -- Macro: FIRST_PSEUDO_REGISTER
+     Number of hardware registers known to the compiler.  They receive
+     numbers 0 through 'FIRST_PSEUDO_REGISTER-1'; thus, the first pseudo
+     register's number really is assigned the number
+     'FIRST_PSEUDO_REGISTER'.
+
+ -- Macro: FIXED_REGISTERS
+     An initializer that says which registers are used for fixed
+     purposes all throughout the compiled code and are therefore not
+     available for general allocation.  These would include the stack
+     pointer, the frame pointer (except on machines where that can be
+     used as a general register when no frame pointer is needed), the
+     program counter on machines where that is considered one of the
+     addressable registers, and any other numbered register with a
+     standard use.
+
+     This information is expressed as a sequence of numbers, separated
+     by commas and surrounded by braces.  The Nth number is 1 if
+     register N is fixed, 0 otherwise.
+
+     The table initialized from this macro, and the table initialized by
+     the following one, may be overridden at run time either
+     automatically, by the actions of the macro
+     'CONDITIONAL_REGISTER_USAGE', or by the user with the command
+     options '-ffixed-REG', '-fcall-used-REG' and '-fcall-saved-REG'.
+
+ -- Macro: CALL_USED_REGISTERS
+     Like 'FIXED_REGISTERS' but has 1 for each register that is
+     clobbered (in general) by function calls as well as for fixed
+     registers.  This macro therefore identifies the registers that are
+     not available for general allocation of values that must live
+     across function calls.
+
+     If a register has 0 in 'CALL_USED_REGISTERS', the compiler
+     automatically saves it on function entry and restores it on
+     function exit, if the register is used within the function.
+
+ -- Macro: CALL_REALLY_USED_REGISTERS
+     Like 'CALL_USED_REGISTERS' except this macro doesn't require that
+     the entire set of 'FIXED_REGISTERS' be included.
+     ('CALL_USED_REGISTERS' must be a superset of 'FIXED_REGISTERS').
+     This macro is optional.  If not specified, it defaults to the value
+     of 'CALL_USED_REGISTERS'.
+
+ -- Target Hook: bool TARGET_HARD_REGNO_CALL_PART_CLOBBERED (rtx_insn
+          *INSN, unsigned int REGNO, machine_mode MODE)
+     This hook should return true if REGNO is partly call-saved and
+     partly call-clobbered, and if a value of mode MODE would be partly
+     clobbered by call instruction INSN.  If INSN is NULL then it should
+     return true if any call could partly clobber the register.  For
+     example, if the low 32 bits of REGNO are preserved across a call
+     but higher bits are clobbered, this hook should return true for a
+     64-bit mode but false for a 32-bit mode.
+
+     The default implementation returns false, which is correct for
+     targets that don't have partly call-clobbered registers.
+
+ -- Target Hook: void TARGET_REMOVE_EXTRA_CALL_PRESERVED_REGS (rtx_insn
+          *INSN, HARD_REG_SET *USED_REGS)
+     This hook removes registers from the set of call-clobbered
+     registers in USED_REGS if, contrary to the default rules, something
+     guarantees that 'insn' preserves those registers.  For example,
+     some targets support variant ABIs in which functions preserve more
+     registers than normal functions would.  Removing those extra
+     registers from USED_REGS can lead to better register allocation.
+
+     The default implementation does nothing, which is always safe.
+     Defining the hook is purely an optimization.
+
+ -- Target Hook: rtx_insn * TARGET_RETURN_CALL_WITH_MAX_CLOBBERS
+          (rtx_insn *CALL_1, rtx_insn *CALL_2)
+     This hook returns a pointer to the call that partially clobbers the
+     most registers.  If a platform supports multiple ABIs where the
+     registers that are partially clobbered may vary, this function
+     compares two calls and returns a pointer to the one that clobbers
+     the most registers.  If both calls clobber the same registers,
+     CALL_1 must be returned.
+
+     The registers clobbered in different ABIs must be a proper subset
+     or superset of all other ABIs.  CALL_1 must always be a call insn,
+     call_2 may be NULL or a call insn.
+
+ -- Target Hook: const char * TARGET_GET_MULTILIB_ABI_NAME (void)
+     This hook returns name of multilib ABI name.
+
+ -- Target Hook: void TARGET_CONDITIONAL_REGISTER_USAGE (void)
+     This hook may conditionally modify five variables 'fixed_regs',
+     'call_used_regs', 'global_regs', 'reg_names', and
+     'reg_class_contents', to take into account any dependence of these
+     register sets on target flags.  The first three of these are of
+     type 'char []' (interpreted as boolean vectors).  'global_regs' is
+     a 'const char *[]', and 'reg_class_contents' is a 'HARD_REG_SET'.
+     Before the macro is called, 'fixed_regs', 'call_used_regs',
+     'reg_class_contents', and 'reg_names' have been initialized from
+     'FIXED_REGISTERS', 'CALL_USED_REGISTERS', 'REG_CLASS_CONTENTS', and
+     'REGISTER_NAMES', respectively.  'global_regs' has been cleared,
+     and any '-ffixed-REG', '-fcall-used-REG' and '-fcall-saved-REG'
+     command options have been applied.
+
+     If the usage of an entire class of registers depends on the target
+     flags, you may indicate this to GCC by using this macro to modify
+     'fixed_regs' and 'call_used_regs' to 1 for each of the registers in
+     the classes which should not be used by GCC.  Also make
+     'define_register_constraint's return 'NO_REGS' for constraints that
+     shouldn't be used.
+
+     (However, if this class is not included in 'GENERAL_REGS' and all
+     of the insn patterns whose constraints permit this class are
+     controlled by target switches, then GCC will automatically avoid
+     using these registers when the target switches are opposed to
+     them.)
+
+ -- Macro: INCOMING_REGNO (OUT)
+     Define this macro if the target machine has register windows.  This
+     C expression returns the register number as seen by the called
+     function corresponding to the register number OUT as seen by the
+     calling function.  Return OUT if register number OUT is not an
+     outbound register.
+
+ -- Macro: OUTGOING_REGNO (IN)
+     Define this macro if the target machine has register windows.  This
+     C expression returns the register number as seen by the calling
+     function corresponding to the register number IN as seen by the
+     called function.  Return IN if register number IN is not an inbound
+     register.
+
+ -- Macro: LOCAL_REGNO (REGNO)
+     Define this macro if the target machine has register windows.  This
+     C expression returns true if the register is call-saved but is in
+     the register window.  Unlike most call-saved registers, such
+     registers need not be explicitly restored on function exit or
+     during non-local gotos.
+
+ -- Macro: PC_REGNUM
+     If the program counter has a register number, define this as that
+     register number.  Otherwise, do not define it.
+
+File: gccint.info,  Node: Allocation Order,  Next: Values in Registers,  Prev: Register Basics,  Up: Registers
+
+18.7.2 Order of Allocation of Registers
+---------------------------------------
+
+Registers are allocated in order.
+
+ -- Macro: REG_ALLOC_ORDER
+     If defined, an initializer for a vector of integers, containing the
+     numbers of hard registers in the order in which GCC should prefer
+     to use them (from most preferred to least).
+
+     If this macro is not defined, registers are used lowest numbered
+     first (all else being equal).
+
+     One use of this macro is on machines where the highest numbered
+     registers must always be saved and the save-multiple-registers
+     instruction supports only sequences of consecutive registers.  On
+     such machines, define 'REG_ALLOC_ORDER' to be an initializer that
+     lists the highest numbered allocable register first.
+
+ -- Macro: ADJUST_REG_ALLOC_ORDER
+     A C statement (sans semicolon) to choose the order in which to
+     allocate hard registers for pseudo-registers local to a basic
+     block.
+
+     Store the desired register order in the array 'reg_alloc_order'.
+     Element 0 should be the register to allocate first; element 1, the
+     next register; and so on.
+
+     The macro body should not assume anything about the contents of
+     'reg_alloc_order' before execution of the macro.
+
+     On most machines, it is not necessary to define this macro.
+
+ -- Macro: HONOR_REG_ALLOC_ORDER
+     Normally, IRA tries to estimate the costs for saving a register in
+     the prologue and restoring it in the epilogue.  This discourages it
+     from using call-saved registers.  If a machine wants to ensure that
+     IRA allocates registers in the order given by REG_ALLOC_ORDER even
+     if some call-saved registers appear earlier than call-used ones,
+     then define this macro as a C expression to nonzero.  Default is 0.
+
+ -- Macro: IRA_HARD_REGNO_ADD_COST_MULTIPLIER (REGNO)
+     In some case register allocation order is not enough for the
+     Integrated Register Allocator (IRA) to generate a good code.  If
+     this macro is defined, it should return a floating point value
+     based on REGNO.  The cost of using REGNO for a pseudo will be
+     increased by approximately the pseudo's usage frequency times the
+     value returned by this macro.  Not defining this macro is
+     equivalent to having it always return '0.0'.
+
+     On most machines, it is not necessary to define this macro.
+
+File: gccint.info,  Node: Values in Registers,  Next: Leaf Functions,  Prev: Allocation Order,  Up: Registers
+
+18.7.3 How Values Fit in Registers
+----------------------------------
+
+This section discusses the macros that describe which kinds of values
+(specifically, which machine modes) each register can hold, and how many
+consecutive registers are needed for a given mode.
+
+ -- Target Hook: unsigned int TARGET_HARD_REGNO_NREGS (unsigned int
+          REGNO, machine_mode MODE)
+     This hook returns the number of consecutive hard registers,
+     starting at register number REGNO, required to hold a value of mode
+     MODE.  This hook must never return zero, even if a register cannot
+     hold the requested mode - indicate that with
+     'TARGET_HARD_REGNO_MODE_OK' and/or 'TARGET_CAN_CHANGE_MODE_CLASS'
+     instead.
+
+     The default definition returns the number of words in MODE.
+
+ -- Macro: HARD_REGNO_NREGS_HAS_PADDING (REGNO, MODE)
+     A C expression that is nonzero if a value of mode MODE, stored in
+     memory, ends with padding that causes it to take up more space than
+     in registers starting at register number REGNO (as determined by
+     multiplying GCC's notion of the size of the register when
+     containing this mode by the number of registers returned by
+     'TARGET_HARD_REGNO_NREGS').  By default this is zero.
+
+     For example, if a floating-point value is stored in three 32-bit
+     registers but takes up 128 bits in memory, then this would be
+     nonzero.
+
+     This macros only needs to be defined if there are cases where
+     'subreg_get_info' would otherwise wrongly determine that a 'subreg'
+     can be represented by an offset to the register number, when in
+     fact such a 'subreg' would contain some of the padding not stored
+     in registers and so not be representable.
+
+ -- Macro: HARD_REGNO_NREGS_WITH_PADDING (REGNO, MODE)
+     For values of REGNO and MODE for which
+     'HARD_REGNO_NREGS_HAS_PADDING' returns nonzero, a C expression
+     returning the greater number of registers required to hold the
+     value including any padding.  In the example above, the value would
+     be four.
+
+ -- Macro: REGMODE_NATURAL_SIZE (MODE)
+     Define this macro if the natural size of registers that hold values
+     of mode MODE is not the word size.  It is a C expression that
+     should give the natural size in bytes for the specified mode.  It
+     is used by the register allocator to try to optimize its results.
+     This happens for example on SPARC 64-bit where the natural size of
+     floating-point registers is still 32-bit.
+
+ -- Target Hook: bool TARGET_HARD_REGNO_MODE_OK (unsigned int REGNO,
+          machine_mode MODE)
+     This hook returns true if it is permissible to store a value of
+     mode MODE in hard register number REGNO (or in several registers
+     starting with that one).  The default definition returns true
+     unconditionally.
+
+     You need not include code to check for the numbers of fixed
+     registers, because the allocation mechanism considers them to be
+     always occupied.
+
+     On some machines, double-precision values must be kept in even/odd
+     register pairs.  You can implement that by defining this hook to
+     reject odd register numbers for such modes.
+
+     The minimum requirement for a mode to be OK in a register is that
+     the 'movMODE' instruction pattern support moves between the
+     register and other hard register in the same class and that moving
+     a value into the register and back out not alter it.
+
+     Since the same instruction used to move 'word_mode' will work for
+     all narrower integer modes, it is not necessary on any machine for
+     this hook to distinguish between these modes, provided you define
+     patterns 'movhi', etc., to take advantage of this.  This is useful
+     because of the interaction between 'TARGET_HARD_REGNO_MODE_OK' and
+     'TARGET_MODES_TIEABLE_P'; it is very desirable for all integer
+     modes to be tieable.
+
+     Many machines have special registers for floating point arithmetic.
+     Often people assume that floating point machine modes are allowed
+     only in floating point registers.  This is not true.  Any registers
+     that can hold integers can safely _hold_ a floating point machine
+     mode, whether or not floating arithmetic can be done on it in those
+     registers.  Integer move instructions can be used to move the
+     values.
+
+     On some machines, though, the converse is true: fixed-point machine
+     modes may not go in floating registers.  This is true if the
+     floating registers normalize any value stored in them, because
+     storing a non-floating value there would garble it.  In this case,
+     'TARGET_HARD_REGNO_MODE_OK' should reject fixed-point machine modes
+     in floating registers.  But if the floating registers do not
+     automatically normalize, if you can store any bit pattern in one
+     and retrieve it unchanged without a trap, then any machine mode may
+     go in a floating register, so you can define this hook to say so.
+
+     The primary significance of special floating registers is rather
+     that they are the registers acceptable in floating point arithmetic
+     instructions.  However, this is of no concern to
+     'TARGET_HARD_REGNO_MODE_OK'.  You handle it by writing the proper
+     constraints for those instructions.
+
+     On some machines, the floating registers are especially slow to
+     access, so that it is better to store a value in a stack frame than
+     in such a register if floating point arithmetic is not being done.
+     As long as the floating registers are not in class 'GENERAL_REGS',
+     they will not be used unless some pattern's constraint asks for
+     one.
+
+ -- Macro: HARD_REGNO_RENAME_OK (FROM, TO)
+     A C expression that is nonzero if it is OK to rename a hard
+     register FROM to another hard register TO.
+
+     One common use of this macro is to prevent renaming of a register
+     to another register that is not saved by a prologue in an interrupt
+     handler.
+
+     The default is always nonzero.
+
+ -- Target Hook: bool TARGET_MODES_TIEABLE_P (machine_mode MODE1,
+          machine_mode MODE2)
+     This hook returns true if a value of mode MODE1 is accessible in
+     mode MODE2 without copying.
+
+     If 'TARGET_HARD_REGNO_MODE_OK (R, MODE1)' and
+     'TARGET_HARD_REGNO_MODE_OK (R, MODE2)' are always the same for any
+     R, then 'TARGET_MODES_TIEABLE_P (MODE1, MODE2)' should be true.  If
+     they differ for any R, you should define this hook to return false
+     unless some other mechanism ensures the accessibility of the value
+     in a narrower mode.
+
+     You should define this hook to return true in as many cases as
+     possible since doing so will allow GCC to perform better register
+     allocation.  The default definition returns true unconditionally.
+
+ -- Target Hook: bool TARGET_HARD_REGNO_SCRATCH_OK (unsigned int REGNO)
+     This target hook should return 'true' if it is OK to use a hard
+     register REGNO as scratch reg in peephole2.
+
+     One common use of this macro is to prevent using of a register that
+     is not saved by a prologue in an interrupt handler.
+
+     The default version of this hook always returns 'true'.
+
+ -- Macro: AVOID_CCMODE_COPIES
+     Define this macro if the compiler should avoid copies to/from
+     'CCmode' registers.  You should only define this macro if support
+     for copying to/from 'CCmode' is incomplete.
+
+File: gccint.info,  Node: Leaf Functions,  Next: Stack Registers,  Prev: Values in Registers,  Up: Registers
+
+18.7.4 Handling Leaf Functions
+------------------------------
+
+On some machines, a leaf function (i.e., one which makes no calls) can
+run more efficiently if it does not make its own register window.  Often
+this means it is required to receive its arguments in the registers
+where they are passed by the caller, instead of the registers where they
+would normally arrive.
+
+ The special treatment for leaf functions generally applies only when
+other conditions are met; for example, often they may use only those
+registers for its own variables and temporaries.  We use the term "leaf
+function" to mean a function that is suitable for this special handling,
+so that functions with no calls are not necessarily "leaf functions".
+
+ GCC assigns register numbers before it knows whether the function is
+suitable for leaf function treatment.  So it needs to renumber the
+registers in order to output a leaf function.  The following macros
+accomplish this.
+
+ -- Macro: LEAF_REGISTERS
+     Name of a char vector, indexed by hard register number, which
+     contains 1 for a register that is allowable in a candidate for leaf
+     function treatment.
+
+     If leaf function treatment involves renumbering the registers, then
+     the registers marked here should be the ones before
+     renumbering--those that GCC would ordinarily allocate.  The
+     registers which will actually be used in the assembler code, after
+     renumbering, should not be marked with 1 in this vector.
+
+     Define this macro only if the target machine offers a way to
+     optimize the treatment of leaf functions.
+
+ -- Macro: LEAF_REG_REMAP (REGNO)
+     A C expression whose value is the register number to which REGNO
+     should be renumbered, when a function is treated as a leaf
+     function.
+
+     If REGNO is a register number which should not appear in a leaf
+     function before renumbering, then the expression should yield -1,
+     which will cause the compiler to abort.
+
+     Define this macro only if the target machine offers a way to
+     optimize the treatment of leaf functions, and registers need to be
+     renumbered to do this.
+
+ 'TARGET_ASM_FUNCTION_PROLOGUE' and 'TARGET_ASM_FUNCTION_EPILOGUE' must
+usually treat leaf functions specially.  They can test the C variable
+'current_function_is_leaf' which is nonzero for leaf functions.
+'current_function_is_leaf' is set prior to local register allocation and
+is valid for the remaining compiler passes.  They can also test the C
+variable 'current_function_uses_only_leaf_regs' which is nonzero for
+leaf functions which only use leaf registers.
+'current_function_uses_only_leaf_regs' is valid after all passes that
+modify the instructions have been run and is only useful if
+'LEAF_REGISTERS' is defined.
+
+File: gccint.info,  Node: Stack Registers,  Prev: Leaf Functions,  Up: Registers
+
+18.7.5 Registers That Form a Stack
+----------------------------------
+
+There are special features to handle computers where some of the
+"registers" form a stack.  Stack registers are normally written by
+pushing onto the stack, and are numbered relative to the top of the
+stack.
+
+ Currently, GCC can only handle one group of stack-like registers, and
+they must be consecutively numbered.  Furthermore, the existing support
+for stack-like registers is specific to the 80387 floating point
+coprocessor.  If you have a new architecture that uses stack-like
+registers, you will need to do substantial work on 'reg-stack.c' and
+write your machine description to cooperate with it, as well as defining
+these macros.
+
+ -- Macro: STACK_REGS
+     Define this if the machine has any stack-like registers.
+
+ -- Macro: STACK_REG_COVER_CLASS
+     This is a cover class containing the stack registers.  Define this
+     if the machine has any stack-like registers.
+
+ -- Macro: FIRST_STACK_REG
+     The number of the first stack-like register.  This one is the top
+     of the stack.
+
+ -- Macro: LAST_STACK_REG
+     The number of the last stack-like register.  This one is the bottom
+     of the stack.
+
+File: gccint.info,  Node: Register Classes,  Next: Stack and Calling,  Prev: Registers,  Up: Target Macros
+

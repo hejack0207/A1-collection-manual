@@ -1,0 +1,311 @@
+10.3 Comparisons involving 'poly_int'
+=====================================
+
+In general we need to compare sizes and offsets in two situations: those
+in which the values need to be ordered, and those in which the values
+can be unordered.  More loosely, the distinction is often between values
+that have a definite link (usually because they refer to the same
+underlying register or memory location) and values that have no definite
+link.  An example of the former is the relationship between the inner
+and outer sizes of a subreg, where we must know at compile time whether
+the subreg is paradoxical, partial, or complete.  An example of the
+latter is alias analysis: we might want to check whether two arbitrary
+memory references overlap.
+
+ Referring back to the examples in the previous section, it makes sense
+to ask whether a memory reference of size '3 + 4X' overlaps one of size
+'1 + 5X', but it does not make sense to have a subreg in which the outer
+mode has '3 + 4X' bytes and the inner mode has '1 + 5X' bytes (or vice
+versa).  Such subregs are always invalid and should trigger an internal
+compiler error if formed.
+
+ The underlying operators are the same in both cases, but the
+distinction affects how they are used.
+
+* Menu:
+
+* Comparison functions for poly_int::
+* Properties of the poly_int comparisons::
+* Comparing potentially-unordered poly_ints::
+* Comparing ordered poly_ints::
+* Checking for a poly_int marker value::
+* Range checks on poly_ints::
+* Sorting poly_ints::
+
+File: gccint.info,  Node: Comparison functions for poly_int,  Next: Properties of the poly_int comparisons,  Up: Comparisons involving poly_int
+
+10.3.1 Comparison functions for 'poly_int'
+------------------------------------------
+
+'poly_int' provides the following routines for checking whether a
+particular condition "may be" (might be) true:
+
+     maybe_lt maybe_le maybe_eq maybe_ge maybe_gt
+                       maybe_ne
+
+ The functions have their natural meaning:
+
+'maybe_lt(A, B)'
+     Return true if A might be less than B.
+
+'maybe_le(A, B)'
+     Return true if A might be less than or equal to B.
+
+'maybe_eq(A, B)'
+     Return true if A might be equal to B.
+
+'maybe_ne(A, B)'
+     Return true if A might not be equal to B.
+
+'maybe_ge(A, B)'
+     Return true if A might be greater than or equal to B.
+
+'maybe_gt(A, B)'
+     Return true if A might be greater than B.
+
+ For readability, 'poly_int' also provides "known" inverses of these
+functions:
+
+     known_lt (A, B) == !maybe_ge (A, B)
+     known_le (A, B) == !maybe_gt (A, B)
+     known_eq (A, B) == !maybe_ne (A, B)
+     known_ge (A, B) == !maybe_lt (A, B)
+     known_gt (A, B) == !maybe_le (A, B)
+     known_ne (A, B) == !maybe_eq (A, B)
+
+File: gccint.info,  Node: Properties of the poly_int comparisons,  Next: Comparing potentially-unordered poly_ints,  Prev: Comparison functions for poly_int,  Up: Comparisons involving poly_int
+
+10.3.2 Properties of the 'poly_int' comparisons
+-----------------------------------------------
+
+All "maybe" relations except 'maybe_ne' are transitive, so for example:
+
+     maybe_lt (A, B) && maybe_lt (B, C) implies maybe_lt (A, C)
+
+ for all A, B and C.  'maybe_lt', 'maybe_gt' and 'maybe_ne' are
+irreflexive, so for example:
+
+     !maybe_lt (A, A)
+
+ is true for all A.  'maybe_le', 'maybe_eq' and 'maybe_ge' are
+reflexive, so for example:
+
+     maybe_le (A, A)
+
+ is true for all A.  'maybe_eq' and 'maybe_ne' are symmetric, so:
+
+     maybe_eq (A, B) == maybe_eq (B, A)
+     maybe_ne (A, B) == maybe_ne (B, A)
+
+ for all A and B.  In addition:
+
+     maybe_le (A, B) == maybe_lt (A, B) || maybe_eq (A, B)
+     maybe_ge (A, B) == maybe_gt (A, B) || maybe_eq (A, B)
+     maybe_lt (A, B) == maybe_gt (B, A)
+     maybe_le (A, B) == maybe_ge (B, A)
+
+ However:
+
+     maybe_le (A, B) && maybe_le (B, A) does not imply !maybe_ne (A, B) [== known_eq (A, B)]
+     maybe_ge (A, B) && maybe_ge (B, A) does not imply !maybe_ne (A, B) [== known_eq (A, B)]
+
+ One example is again 'A == 3 + 4X' and 'B == 1 + 5X', where 'maybe_le
+(A, B)', 'maybe_ge (A, B)' and 'maybe_ne (A, B)' all hold.  'maybe_le'
+and 'maybe_ge' are therefore not antisymetric and do not form a partial
+order.
+
+ From the above, it follows that:
+
+   * All "known" relations except 'known_ne' are transitive.
+
+   * 'known_lt', 'known_ne' and 'known_gt' are irreflexive.
+
+   * 'known_le', 'known_eq' and 'known_ge' are reflexive.
+
+ Also:
+
+     known_lt (A, B) == known_gt (B, A)
+     known_le (A, B) == known_ge (B, A)
+     known_lt (A, B) implies !known_lt (B, A)  [asymmetry]
+     known_gt (A, B) implies !known_gt (B, A)
+     known_le (A, B) && known_le (B, A) == known_eq (A, B) [== !maybe_ne (A, B)]
+     known_ge (A, B) && known_ge (B, A) == known_eq (A, B) [== !maybe_ne (A, B)]
+
+ 'known_le' and 'known_ge' are therefore antisymmetric and are partial
+orders.  However:
+
+     known_le (A, B) does not imply known_lt (A, B) || known_eq (A, B)
+     known_ge (A, B) does not imply known_gt (A, B) || known_eq (A, B)
+
+ For example, 'known_le (4, 4 + 4X)' holds because the runtime
+indeterminate X is a nonnegative integer, but neither 'known_lt (4, 4 +
+4X)' nor 'known_eq (4, 4 + 4X)' hold.
+
+File: gccint.info,  Node: Comparing potentially-unordered poly_ints,  Next: Comparing ordered poly_ints,  Prev: Properties of the poly_int comparisons,  Up: Comparisons involving poly_int
+
+10.3.3 Comparing potentially-unordered 'poly_int's
+--------------------------------------------------
+
+In cases where there is no definite link between two 'poly_int's, we can
+usually make a conservatively-correct assumption.  For example, the
+conservative assumption for alias analysis is that two references
+_might_ alias.
+
+ One way of checking whether [BEGIN1, END1) might overlap [BEGIN2, END2)
+using the 'poly_int' comparisons is:
+
+     maybe_gt (END1, BEGIN2) && maybe_gt (END2, BEGIN1)
+
+ and another (equivalent) way is:
+
+     !(known_le (END1, BEGIN2) || known_le (END2, BEGIN1))
+
+ However, in this particular example, it is better to use the range
+helper functions instead.  *Note Range checks on poly_ints::.
+
+File: gccint.info,  Node: Comparing ordered poly_ints,  Next: Checking for a poly_int marker value,  Prev: Comparing potentially-unordered poly_ints,  Up: Comparisons involving poly_int
+
+10.3.4 Comparing ordered 'poly_int's
+------------------------------------
+
+In cases where there is a definite link between two 'poly_int's, such as
+the outer and inner sizes of subregs, we usually require the sizes to be
+ordered by the 'known_le' partial order.  'poly_int' provides the
+following utility functions for ordered values:
+
+'ordered_p (A, B)'
+     Return true if A and B are ordered by the 'known_le' partial order.
+
+'ordered_min (A, B)'
+     Assert that A and B are ordered by 'known_le' and return the
+     minimum of the two.  When using this function, please add a comment
+     explaining why the values are known to be ordered.
+
+'ordered_max (A, B)'
+     Assert that A and B are ordered by 'known_le' and return the
+     maximum of the two.  When using this function, please add a comment
+     explaining why the values are known to be ordered.
+
+ For example, if a subreg has an outer mode of size OUTER and an inner
+mode of size INNER:
+
+   * the subreg is complete if known_eq (INNER, OUTER)
+
+   * otherwise, the subreg is paradoxical if known_le (INNER, OUTER)
+
+   * otherwise, the subreg is partial if known_le (OUTER, INNER)
+
+   * otherwise, the subreg is ill-formed
+
+ Thus the subreg is only valid if 'ordered_p (OUTER, INNER)' is true.
+If this condition is already known to be true then:
+
+   * the subreg is complete if known_eq (INNER, OUTER)
+
+   * the subreg is paradoxical if maybe_lt (INNER, OUTER)
+
+   * the subreg is partial if maybe_lt (OUTER, INNER)
+
+ with the three conditions being mutually exclusive.
+
+ Code that checks whether a subreg is valid would therefore generally
+check whether 'ordered_p' holds (in addition to whatever other checks
+are required for subreg validity).  Code that is dealing with existing
+subregs can assert that 'ordered_p' holds and use either of the
+classifications above.
+
+File: gccint.info,  Node: Checking for a poly_int marker value,  Next: Range checks on poly_ints,  Prev: Comparing ordered poly_ints,  Up: Comparisons involving poly_int
+
+10.3.5 Checking for a 'poly_int' marker value
+---------------------------------------------
+
+It is sometimes useful to have a special "marker value" that is not
+meant to be taken literally.  For example, some code uses a size of -1
+to represent an unknown size, rather than having to carry around a
+separate boolean to say whether the size is known.
+
+ The best way of checking whether something is a marker value is
+'known_eq'.  Conversely the best way of checking whether something is
+_not_ a marker value is 'maybe_ne'.
+
+ Thus in the size example just mentioned, 'known_eq (size, -1)' would
+check for an unknown size and 'maybe_ne (size, -1)' would check for a
+known size.
+
+File: gccint.info,  Node: Range checks on poly_ints,  Next: Sorting poly_ints,  Prev: Checking for a poly_int marker value,  Up: Comparisons involving poly_int
+
+10.3.6 Range checks on 'poly_int's
+----------------------------------
+
+As well as the core comparisons (*note Comparison functions for
+poly_int::), 'poly_int' provides utilities for various kinds of range
+check.  In each case the range is represented by a start position and a
+size rather than a start position and an end position; this is because
+the former is used much more often than the latter in GCC.  Also, the
+sizes can be -1 (or all ones for unsigned sizes) to indicate a range
+with a known start position but an unknown size.  All other sizes must
+be nonnegative.  A range of size 0 does not contain anything or overlap
+anything.
+
+'known_size_p (SIZE)'
+     Return true if SIZE represents a known range size, false if it is
+     -1 or all ones (for signed and unsigned types respectively).
+
+'ranges_maybe_overlap_p (POS1, SIZE1, POS2, SIZE2)'
+     Return true if the range described by POS1 and SIZE1 _might_
+     overlap the range described by POS2 and SIZE2 (in other words,
+     return true if we cannot prove that the ranges are disjoint).
+
+'ranges_known_overlap_p (POS1, SIZE1, POS2, SIZE2)'
+     Return true if the range described by POS1 and SIZE1 is known to
+     overlap the range described by POS2 and SIZE2.
+
+'known_subrange_p (POS1, SIZE1, POS2, SIZE2)'
+     Return true if the range described by POS1 and SIZE1 is known to be
+     contained in the range described by POS2 and SIZE2.
+
+'maybe_in_range_p (VALUE, POS, SIZE)'
+     Return true if VALUE _might_ be in the range described by POS and
+     SIZE (in other words, return true if we cannot prove that VALUE is
+     outside that range).
+
+'known_in_range_p (VALUE, POS, SIZE)'
+     Return true if VALUE is known to be in the range described by POS
+     and SIZE.
+
+'endpoint_representable_p (POS, SIZE)'
+     Return true if the range described by POS and SIZE is open-ended or
+     if the endpoint (POS + SIZE) is representable in the same type as
+     POS and SIZE.  The function returns false if adding SIZE to POS
+     makes conceptual sense but could overflow.
+
+ There is also a 'poly_int' version of the 'IN_RANGE_P' macro:
+
+'coeffs_in_range_p (X, LOWER, UPPER)'
+     Return true if every coefficient of X is in the inclusive range
+     [LOWER, UPPER].  This function can be useful when testing whether
+     an operation would cause the values of coefficients to overflow.
+
+     Note that the function does not indicate whether X itself is in the
+     given range.  X can be either a constant or a 'poly_int'.
+
+File: gccint.info,  Node: Sorting poly_ints,  Prev: Range checks on poly_ints,  Up: Comparisons involving poly_int
+
+10.3.7 Sorting 'poly_int's
+--------------------------
+
+'poly_int' provides the following routine for sorting:
+
+'compare_sizes_for_sort (A, B)'
+     Compare A and B in reverse lexicographical order (that is, compare
+     the highest-indexed coefficients first).  This can be useful when
+     sorting data structures, since it has the effect of separating
+     constant and non-constant values.  If all values are nonnegative,
+     the constant values come first.
+
+     Note that the values do not necessarily end up in numerical order.
+     For example, '1 + 1X' would come after '100' in the sort order, but
+     may well be less than '100' at run time.
+
+File: gccint.info,  Node: Arithmetic on poly_ints,  Next: Alignment of poly_ints,  Prev: Comparisons involving poly_int,  Up: poly_int
+

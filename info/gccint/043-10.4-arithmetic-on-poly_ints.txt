@@ -1,0 +1,180 @@
+10.4 Arithmetic on 'poly_int's
+==============================
+
+Addition, subtraction, negation and bit inversion all work normally for
+'poly_int's.  Multiplication by a constant multiplier and left shifting
+by a constant shift amount also work normally.  General multiplication
+of two 'poly_int's is not supported and is not useful in practice.
+
+ Other operations are only conditionally supported: the operation might
+succeed or might fail, depending on the inputs.
+
+ This section describes both types of operation.
+
+* Menu:
+
+* Using poly_int with C++ arithmetic operators::
+* wi arithmetic on poly_ints::
+* Division of poly_ints::
+* Other poly_int arithmetic::
+
+File: gccint.info,  Node: Using poly_int with C++ arithmetic operators,  Next: wi arithmetic on poly_ints,  Up: Arithmetic on poly_ints
+
+10.4.1 Using 'poly_int' with C++ arithmetic operators
+-----------------------------------------------------
+
+The following C++ expressions are supported, where P1 and P2 are
+'poly_int's and where C1 and C2 are scalars:
+
+     -P1
+     ~P1
+
+     P1 + P2
+     P1 + C2
+     C1 + P2
+
+     P1 - P2
+     P1 - C2
+     C1 - P2
+
+     C1 * P2
+     P1 * C2
+
+     P1 << C2
+
+     P1 += P2
+     P1 += C2
+
+     P1 -= P2
+     P1 -= C2
+
+     P1 *= C2
+     P1 <<= C2
+
+ These arithmetic operations handle integer ranks in a similar way to
+C++.  The main difference is that every coefficient narrower than
+'HOST_WIDE_INT' promotes to 'HOST_WIDE_INT', whereas in C++ everything
+narrower than 'int' promotes to 'int'.  For example:
+
+     poly_uint16     + int          -> poly_int64
+     unsigned int    + poly_uint16  -> poly_int64
+     poly_int64      + int          -> poly_int64
+     poly_int32      + poly_uint64  -> poly_uint64
+     uint64          + poly_int64   -> poly_uint64
+     poly_offset_int + int32        -> poly_offset_int
+     offset_int      + poly_uint16  -> poly_offset_int
+
+ In the first two examples, both coefficients are narrower than
+'HOST_WIDE_INT', so the result has coefficients of type 'HOST_WIDE_INT'.
+In the other examples, the coefficient with the highest rank "wins".
+
+ If one of the operands is 'wide_int' or 'poly_wide_int', the rules are
+the same as for 'wide_int' arithmetic.
+
+File: gccint.info,  Node: wi arithmetic on poly_ints,  Next: Division of poly_ints,  Prev: Using poly_int with C++ arithmetic operators,  Up: Arithmetic on poly_ints
+
+10.4.2 'wi' arithmetic on 'poly_int's
+-------------------------------------
+
+As well as the C++ operators, 'poly_int' supports the following 'wi'
+routines:
+
+     wi::neg (P1, &OVERFLOW)
+
+     wi::add (P1, P2)
+     wi::add (P1, C2)
+     wi::add (C1, P1)
+     wi::add (P1, P2, SIGN, &OVERFLOW)
+
+     wi::sub (P1, P2)
+     wi::sub (P1, C2)
+     wi::sub (C1, P1)
+     wi::sub (P1, P2, SIGN, &OVERFLOW)
+
+     wi::mul (P1, C2)
+     wi::mul (C1, P1)
+     wi::mul (P1, C2, SIGN, &OVERFLOW)
+
+     wi::lshift (P1, C2)
+
+ These routines just check whether overflow occurs on any individual
+coefficient; it is not possible to know at compile time whether the
+final runtime value would overflow.
+
+File: gccint.info,  Node: Division of poly_ints,  Next: Other poly_int arithmetic,  Prev: wi arithmetic on poly_ints,  Up: Arithmetic on poly_ints
+
+10.4.3 Division of 'poly_int's
+------------------------------
+
+Division of 'poly_int's is possible for certain inputs.  The functions
+for division return true if the operation is possible and in most cases
+return the results by pointer.  The routines are:
+
+'multiple_p (A, B)'
+'multiple_p (A, B, &QUOTIENT)'
+     Return true if A is an exact multiple of B, storing the result in
+     QUOTIENT if so.  There are overloads for various combinations of
+     polynomial and constant A, B and QUOTIENT.
+
+'constant_multiple_p (A, B)'
+'constant_multiple_p (A, B, &QUOTIENT)'
+     Like 'multiple_p', but also test whether the multiple is a
+     compile-time constant.
+
+'can_div_trunc_p (A, B, &QUOTIENT)'
+'can_div_trunc_p (A, B, &QUOTIENT, &REMAINDER)'
+     Return true if we can calculate 'trunc (A / B)' at compile time,
+     storing the result in QUOTIENT and REMAINDER if so.
+
+'can_div_away_from_zero_p (A, B, &QUOTIENT)'
+     Return true if we can calculate 'A / B' at compile time, rounding
+     away from zero.  Store the result in QUOTIENT if so.
+
+     Note that this is true if and only if 'can_div_trunc_p' is true.
+     The only difference is in the rounding of the result.
+
+ There is also an asserting form of division:
+
+'exact_div (A, B)'
+     Assert that A is a multiple of B and return 'A / B'.  The result is
+     a 'poly_int' if A is a 'poly_int'.
+
+File: gccint.info,  Node: Other poly_int arithmetic,  Prev: Division of poly_ints,  Up: Arithmetic on poly_ints
+
+10.4.4 Other 'poly_int' arithmetic
+----------------------------------
+
+There are tentative routines for other operations besides division:
+
+'can_ior_p (A, B, &RESULT)'
+     Return true if we can calculate 'A | B' at compile time, storing
+     the result in RESULT if so.
+
+ Also, ANDs with a value '(1 << Y) - 1' or its inverse can be treated as
+alignment operations.  *Note Alignment of poly_ints::.
+
+ In addition, the following miscellaneous routines are available:
+
+'coeff_gcd (A)'
+     Return the greatest common divisor of all nonzero coefficients in
+     A, or zero if A is known to be zero.
+
+'common_multiple (A, B)'
+     Return a value that is a multiple of both A and B, where one value
+     is a 'poly_int' and the other is a scalar.  The result will be the
+     least common multiple for some indeterminate values but not
+     necessarily for all.
+
+'force_common_multiple (A, B)'
+     Return a value that is a multiple of both 'poly_int' A and
+     'poly_int' B, asserting that such a value exists.  The result will
+     be the least common multiple for some indeterminate values but not
+     necessarily for all.
+
+     When using this routine, please add a comment explaining why the
+     assertion is known to hold.
+
+ Please add any other operations that you find to be useful.
+
+File: gccint.info,  Node: Alignment of poly_ints,  Next: Computing bounds on poly_ints,  Prev: Arithmetic on poly_ints,  Up: poly_int
+

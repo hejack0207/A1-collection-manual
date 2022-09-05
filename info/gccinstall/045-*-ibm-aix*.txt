@@ -1,0 +1,150 @@
+*-ibm-aix*
+==========
+
+Support for AIX version 3 and older was discontinued in GCC 3.4.
+Support for AIX version 4.2 and older was discontinued in GCC 4.5.
+
+   "out of memory" bootstrap failures may indicate a problem with
+process resource limits (ulimit).  Hard limits are configured in the
+'/etc/security/limits' system configuration file.
+
+   GCC 4.9 and above require a C++ compiler for bootstrap.  IBM VAC++ /
+xlC cannot bootstrap GCC. xlc can bootstrap an older version of GCC and
+G++ can bootstrap recent releases of GCC.
+
+   GCC can bootstrap with recent versions of IBM XLC, but bootstrapping
+with an earlier release of GCC is recommended.  Bootstrapping with XLC
+requires a larger data segment, which can be enabled through the
+LDR_CNTRL environment variable, e.g.,
+
+     % LDR_CNTRL=MAXDATA=0x50000000
+     % export LDR_CNTRL
+
+   One can start with a pre-compiled version of GCC to build from
+sources.  One may delete GCC's "fixed" header files when starting with a
+version of GCC built for an earlier release of AIX.
+
+   To speed up the configuration phases of bootstrapping and installing
+GCC, one may use GNU Bash instead of AIX '/bin/sh', e.g.,
+
+     % CONFIG_SHELL=/opt/freeware/bin/bash
+     % export CONFIG_SHELL
+
+   and then proceed as described in the build instructions, where we
+strongly recommend specifying an absolute path to invoke
+SRCDIR/configure.
+
+   Because GCC on AIX is built as a 32-bit executable by default,
+(although it can generate 64-bit programs) the GMP and MPFR libraries
+required by gfortran must be 32-bit libraries.  Building GMP and MPFR as
+static archive libraries works better than shared libraries.
+
+   Errors involving 'alloca' when building GCC generally are due to an
+incorrect definition of 'CC' in the Makefile or mixing files compiled
+with the native C compiler and GCC.  During the stage1 phase of the
+build, the native AIX compiler *must* be invoked as 'cc' (not 'xlc').
+Once 'configure' has been informed of 'xlc', one needs to use 'make
+distclean' to remove the configure cache files and ensure that 'CC'
+environment variable does not provide a definition that will confuse
+'configure'.  If this error occurs during stage2 or later, then the
+problem most likely is the version of Make (see above).
+
+   The native 'as' and 'ld' are recommended for bootstrapping on AIX.
+The GNU Assembler, GNU Linker, and GNU Binutils version 2.20 is the
+minimum level that supports bootstrap on AIX 5.  The GNU Assembler has
+not been updated to support AIX 6 or AIX 7.  The native AIX tools do
+interoperate with GCC.
+
+   AIX 7.1 added partial support for DWARF debugging, but full support
+requires AIX 7.1 TL03 SP7 that supports additional DWARF sections and
+fixes a bug in the assembler.  AIX 7.1 TL03 SP5 distributed a version of
+libm.a missing important symbols; a fix for IV77796 will be included in
+SP6.
+
+   AIX 5.3 TL10, AIX 6.1 TL05 and AIX 7.1 TL00 introduced an AIX
+assembler change that sometimes produces corrupt assembly files causing
+AIX linker errors.  The bug breaks GCC bootstrap on AIX and can cause
+compilation failures with existing GCC installations.  An AIX iFix for
+AIX 5.3 is available (APAR IZ98385 for AIX 5.3 TL10, APAR IZ98477 for
+AIX 5.3 TL11 and IZ98134 for AIX 5.3 TL12).  AIX 5.3 TL11 SP8, AIX 5.3
+TL12 SP5, AIX 6.1 TL04 SP11, AIX 6.1 TL05 SP7, AIX 6.1 TL06 SP6, AIX 6.1
+TL07 and AIX 7.1 TL01 should include the fix.
+
+   Building 'libstdc++.a' requires a fix for an AIX Assembler bug APAR
+IY26685 (AIX 4.3) or APAR IY25528 (AIX 5.1).  It also requires a fix for
+another AIX Assembler bug and a co-dependent AIX Archiver fix referenced
+as APAR IY53606 (AIX 5.2) or as APAR IY54774 (AIX 5.1)
+
+   'libstdc++' in GCC 3.4 increments the major version number of the
+shared object and GCC installation places the 'libstdc++.a' shared
+library in a common location which will overwrite the and GCC 3.3
+version of the shared library.  Applications either need to be re-linked
+against the new shared library or the GCC 3.1 and GCC 3.3 versions of
+the 'libstdc++' shared object needs to be available to the AIX runtime
+loader.  The GCC 3.1 'libstdc++.so.4', if present, and GCC 3.3
+'libstdc++.so.5' shared objects can be installed for runtime dynamic
+loading using the following steps to set the 'F_LOADONLY' flag in the
+shared object for _each_ multilib 'libstdc++.a' installed:
+
+   Extract the shared objects from the currently installed 'libstdc++.a'
+archive:
+     % ar -x libstdc++.a libstdc++.so.4 libstdc++.so.5
+
+   Enable the 'F_LOADONLY' flag so that the shared object will be
+available for runtime dynamic loading, but not linking:
+     % strip -e libstdc++.so.4 libstdc++.so.5
+
+   Archive the runtime-only shared object in the GCC 3.4 'libstdc++.a'
+archive:
+     % ar -q libstdc++.a libstdc++.so.4 libstdc++.so.5
+
+   Eventually, the '--with-aix-soname=svr4' configure option may drop
+the need for this procedure for libraries that support it.
+
+   Linking executables and shared libraries may produce warnings of
+duplicate symbols.  The assembly files generated by GCC for AIX always
+have included multiple symbol definitions for certain global variable
+and function declarations in the original program.  The warnings should
+not prevent the linker from producing a correct library or runnable
+executable.
+
+   AIX 4.3 utilizes a "large format" archive to support both 32-bit and
+64-bit object modules.  The routines provided in AIX 4.3.0 and AIX 4.3.1
+to parse archive libraries did not handle the new format correctly.
+These routines are used by GCC and result in error messages during
+linking such as "not a COFF file".  The version of the routines shipped
+with AIX 4.3.1 should work for a 32-bit environment.  The '-g' option of
+the archive command may be used to create archives of 32-bit objects
+using the original "small format".  A correct version of the routines is
+shipped with AIX 4.3.2 and above.
+
+   Some versions of the AIX binder (linker) can fail with a relocation
+overflow severe error when the '-bbigtoc' option is used to link
+GCC-produced object files into an executable that overflows the TOC.  A
+fix for APAR IX75823 (OVERFLOW DURING LINK WHEN USING GCC AND -BBIGTOC)
+is available from IBM Customer Support and from its
+techsupport.services.ibm.com website as PTF U455193.
+
+   The AIX 4.3.2.1 linker (bos.rte.bind_cmds Level 4.3.2.1) will dump
+core with a segmentation fault when invoked by any version of GCC.  A
+fix for APAR IX87327 is available from IBM Customer Support and from its
+techsupport.services.ibm.com website as PTF U461879.  This fix is
+incorporated in AIX 4.3.3 and above.
+
+   The initial assembler shipped with AIX 4.3.0 generates incorrect
+object files.  A fix for APAR IX74254 (64BIT DISASSEMBLED OUTPUT FROM
+COMPILER FAILS TO ASSEMBLE/BIND) is available from IBM Customer Support
+and from its techsupport.services.ibm.com website as PTF U453956.  This
+fix is incorporated in AIX 4.3.1 and above.
+
+   AIX provides National Language Support (NLS).  Compilers and
+assemblers use NLS to support locale-specific representations of various
+data formats including floating-point numbers (e.g., '.' vs ',' for
+separating decimal fractions).  There have been problems reported where
+GCC does not produce the same floating-point formats that the assembler
+expects.  If one encounters this problem, set the 'LANG' environment
+variable to 'C' or 'En_US'.
+
+   A default can be specified with the '-mcpu=CPU_TYPE' switch and using
+the configure option '--with-cpu-CPU_TYPE'.
+

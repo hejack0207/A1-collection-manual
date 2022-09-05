@@ -1,0 +1,1746 @@
+7.2 Directives used within DejaGnu tests
+========================================
+
+* Menu:
+
+* Directives::  Syntax and descriptions of test directives.
+* Selectors:: Selecting targets to which a test applies.
+* Effective-Target Keywords:: Keywords describing target attributes.
+* Add Options:: Features for 'dg-add-options'
+* Require Support:: Variants of 'dg-require-SUPPORT'
+* Final Actions:: Commands for use in 'dg-final'
+
+File: gccint.info,  Node: Directives,  Next: Selectors,  Up: Test Directives
+
+7.2.1 Syntax and Descriptions of test directives
+------------------------------------------------
+
+Test directives appear within comments in a test source file and begin
+with 'dg-'.  Some of these are defined within DejaGnu and others are
+local to the GCC testsuite.
+
+ The order in which test directives appear in a test can be important:
+directives local to GCC sometimes override information used by the
+DejaGnu directives, which know nothing about the GCC directives, so the
+DejaGnu directives must precede GCC directives.
+
+ Several test directives include selectors (*note Selectors::) which are
+usually preceded by the keyword 'target' or 'xfail'.
+
+7.2.1.1 Specify how to build the test
+.....................................
+
+'{ dg-do DO-WHAT-KEYWORD [{ target/xfail SELECTOR }] }'
+     DO-WHAT-KEYWORD specifies how the test is compiled and whether it
+     is executed.  It is one of:
+
+     'preprocess'
+          Compile with '-E' to run only the preprocessor.
+     'compile'
+          Compile with '-S' to produce an assembly code file.
+     'assemble'
+          Compile with '-c' to produce a relocatable object file.
+     'link'
+          Compile, assemble, and link to produce an executable file.
+     'run'
+          Produce and run an executable file, which is expected to
+          return an exit code of 0.
+
+     The default is 'compile'.  That can be overridden for a set of
+     tests by redefining 'dg-do-what-default' within the '.exp' file for
+     those tests.
+
+     If the directive includes the optional '{ target SELECTOR }' then
+     the test is skipped unless the target system matches the SELECTOR.
+
+     If DO-WHAT-KEYWORD is 'run' and the directive includes the optional
+     '{ xfail SELECTOR }' and the selector is met then the test is
+     expected to fail.  The 'xfail' clause is ignored for other values
+     of DO-WHAT-KEYWORD; those tests can use directive 'dg-xfail-if'.
+
+7.2.1.2 Specify additional compiler options
+...........................................
+
+'{ dg-options OPTIONS [{ target SELECTOR }] }'
+     This DejaGnu directive provides a list of compiler options, to be
+     used if the target system matches SELECTOR, that replace the
+     default options used for this set of tests.
+
+'{ dg-add-options FEATURE ... }'
+     Add any compiler options that are needed to access certain
+     features.  This directive does nothing on targets that enable the
+     features by default, or that don't provide them at all.  It must
+     come after all 'dg-options' directives.  For supported values of
+     FEATURE see *note Add Options::.
+
+'{ dg-additional-options OPTIONS [{ target SELECTOR }] }'
+     This directive provides a list of compiler options, to be used if
+     the target system matches SELECTOR, that are added to the default
+     options used for this set of tests.
+
+7.2.1.3 Modify the test timeout value
+.....................................
+
+The normal timeout limit, in seconds, is found by searching the
+following in order:
+
+   * the value defined by an earlier 'dg-timeout' directive in the test
+
+   * variable TOOL_TIMEOUT defined by the set of tests
+
+   * GCC,TIMEOUT set in the target board
+
+   * 300
+
+'{ dg-timeout N [{target SELECTOR }] }'
+     Set the time limit for the compilation and for the execution of the
+     test to the specified number of seconds.
+
+'{ dg-timeout-factor X [{ target SELECTOR }] }'
+     Multiply the normal time limit for compilation and execution of the
+     test by the specified floating-point factor.
+
+7.2.1.4 Skip a test for some targets
+....................................
+
+'{ dg-skip-if COMMENT { SELECTOR } [{ INCLUDE-OPTS } [{ EXCLUDE-OPTS }]] }'
+     Arguments INCLUDE-OPTS and EXCLUDE-OPTS are lists in which each
+     element is a string of zero or more GCC options.  Skip the test if
+     all of the following conditions are met:
+        * the test system is included in SELECTOR
+
+        * for at least one of the option strings in INCLUDE-OPTS, every
+          option from that string is in the set of options with which
+          the test would be compiled; use '"*"' for an INCLUDE-OPTS list
+          that matches any options; that is the default if INCLUDE-OPTS
+          is not specified
+
+        * for each of the option strings in EXCLUDE-OPTS, at least one
+          option from that string is not in the set of options with
+          which the test would be compiled; use '""' for an empty
+          EXCLUDE-OPTS list; that is the default if EXCLUDE-OPTS is not
+          specified
+
+     For example, to skip a test if option '-Os' is present:
+
+          /* { dg-skip-if "" { *-*-* }  { "-Os" } { "" } } */
+
+     To skip a test if both options '-O2' and '-g' are present:
+
+          /* { dg-skip-if "" { *-*-* }  { "-O2 -g" } { "" } } */
+
+     To skip a test if either '-O2' or '-O3' is present:
+
+          /* { dg-skip-if "" { *-*-* }  { "-O2" "-O3" } { "" } } */
+
+     To skip a test unless option '-Os' is present:
+
+          /* { dg-skip-if "" { *-*-* }  { "*" } { "-Os" } } */
+
+     To skip a test if either '-O2' or '-O3' is used with '-g' but not
+     if '-fpic' is also present:
+
+          /* { dg-skip-if "" { *-*-* }  { "-O2 -g" "-O3 -g" } { "-fpic" } } */
+
+'{ dg-require-effective-target KEYWORD [{ SELECTOR }] }'
+     Skip the test if the test target, including current multilib flags,
+     is not covered by the effective-target keyword.  If the directive
+     includes the optional '{ SELECTOR }' then the effective-target test
+     is only performed if the target system matches the SELECTOR.  This
+     directive must appear after any 'dg-do' directive in the test and
+     before any 'dg-additional-sources' directive.  *Note
+     Effective-Target Keywords::.
+
+'{ dg-require-SUPPORT args }'
+     Skip the test if the target does not provide the required support.
+     These directives must appear after any 'dg-do' directive in the
+     test and before any 'dg-additional-sources' directive.  They
+     require at least one argument, which can be an empty string if the
+     specific procedure does not examine the argument.  *Note Require
+     Support::, for a complete list of these directives.
+
+7.2.1.5 Expect a test to fail for some targets
+..............................................
+
+'{ dg-xfail-if COMMENT { SELECTOR } [{ INCLUDE-OPTS } [{ EXCLUDE-OPTS }]] }'
+     Expect the test to fail if the conditions (which are the same as
+     for 'dg-skip-if') are met.  This does not affect the execute step.
+
+'{ dg-xfail-run-if COMMENT { SELECTOR } [{ INCLUDE-OPTS } [{ EXCLUDE-OPTS }]] }'
+     Expect the execute step of a test to fail if the conditions (which
+     are the same as for 'dg-skip-if') are met.
+
+7.2.1.6 Expect the test executable to fail
+..........................................
+
+'{ dg-shouldfail COMMENT [{ SELECTOR } [{ INCLUDE-OPTS } [{ EXCLUDE-OPTS }]]] }'
+     Expect the test executable to return a nonzero exit status if the
+     conditions (which are the same as for 'dg-skip-if') are met.
+
+7.2.1.7 Verify compiler messages
+................................
+
+Where LINE is an accepted argument for these commands, a value of '0'
+can be used if there is no line associated with the message.
+
+'{ dg-error REGEXP [COMMENT [{ target/xfail SELECTOR } [LINE] ]] }'
+     This DejaGnu directive appears on a source line that is expected to
+     get an error message, or else specifies the source line associated
+     with the message.  If there is no message for that line or if the
+     text of that message is not matched by REGEXP then the check fails
+     and COMMENT is included in the 'FAIL' message.  The check does not
+     look for the string 'error' unless it is part of REGEXP.
+
+'{ dg-warning REGEXP [COMMENT [{ target/xfail SELECTOR } [LINE] ]] }'
+     This DejaGnu directive appears on a source line that is expected to
+     get a warning message, or else specifies the source line associated
+     with the message.  If there is no message for that line or if the
+     text of that message is not matched by REGEXP then the check fails
+     and COMMENT is included in the 'FAIL' message.  The check does not
+     look for the string 'warning' unless it is part of REGEXP.
+
+'{ dg-message REGEXP [COMMENT [{ target/xfail SELECTOR } [LINE] ]] }'
+     The line is expected to get a message other than an error or
+     warning.  If there is no message for that line or if the text of
+     that message is not matched by REGEXP then the check fails and
+     COMMENT is included in the 'FAIL' message.
+
+'{ dg-bogus REGEXP [COMMENT [{ target/xfail SELECTOR } [LINE] ]] }'
+     This DejaGnu directive appears on a source line that should not get
+     a message matching REGEXP, or else specifies the source line
+     associated with the bogus message.  It is usually used with 'xfail'
+     to indicate that the message is a known problem for a particular
+     set of targets.
+
+'{ dg-line LINENUMVAR }'
+     This DejaGnu directive sets the variable LINENUMVAR to the line
+     number of the source line.  The variable LINENUMVAR can then be
+     used in subsequent 'dg-error', 'dg-warning', 'dg-message' and
+     'dg-bogus' directives.  For example:
+
+          int a;   /* { dg-line first_def_a } */
+          float a; /* { dg-error "conflicting types of" } */
+          /* { dg-message "previous declaration of" "" { target *-*-* } first_def_a } */
+
+'{ dg-excess-errors COMMENT [{ target/xfail SELECTOR }] }'
+     This DejaGnu directive indicates that the test is expected to fail
+     due to compiler messages that are not handled by 'dg-error',
+     'dg-warning' or 'dg-bogus'.  For this directive 'xfail' has the
+     same effect as 'target'.
+
+'{ dg-prune-output REGEXP }'
+     Prune messages matching REGEXP from the test output.
+
+7.2.1.8 Verify output of the test executable
+............................................
+
+'{ dg-output REGEXP [{ target/xfail SELECTOR }] }'
+     This DejaGnu directive compares REGEXP to the combined output that
+     the test executable writes to 'stdout' and 'stderr'.
+
+7.2.1.9 Specify additional files for a test
+...........................................
+
+'{ dg-additional-files "FILELIST" }'
+     Specify additional files, other than source files, that must be
+     copied to the system where the compiler runs.
+
+'{ dg-additional-sources "FILELIST" }'
+     Specify additional source files to appear in the compile line
+     following the main test file.
+
+7.2.1.10 Add checks at the end of a test
+........................................
+
+'{ dg-final { LOCAL-DIRECTIVE } }'
+     This DejaGnu directive is placed within a comment anywhere in the
+     source file and is processed after the test has been compiled and
+     run.  Multiple 'dg-final' commands are processed in the order in
+     which they appear in the source file.  *Note Final Actions::, for a
+     list of directives that can be used within 'dg-final'.
+
+File: gccint.info,  Node: Selectors,  Next: Effective-Target Keywords,  Prev: Directives,  Up: Test Directives
+
+7.2.2 Selecting targets to which a test applies
+-----------------------------------------------
+
+Several test directives include SELECTORs to limit the targets for which
+a test is run or to declare that a test is expected to fail on
+particular targets.
+
+ A selector is:
+   * one or more target triplets, possibly including wildcard
+     characters; use '*-*-*' to match any target
+   * a single effective-target keyword (*note Effective-Target
+     Keywords::)
+   * a logical expression
+
+ Depending on the context, the selector specifies whether a test is
+skipped and reported as unsupported or is expected to fail.  A context
+that allows either 'target' or 'xfail' also allows '{ target SELECTOR1
+xfail SELECTOR2 }' to skip the test for targets that don't match
+SELECTOR1 and the test to fail for targets that match SELECTOR2.
+
+ A selector expression appears within curly braces and uses a single
+logical operator: one of '!', '&&', or '||'.  An operand is another
+selector expression, an effective-target keyword, a single target
+triplet, or a list of target triplets within quotes or curly braces.
+For example:
+
+     { target { ! "hppa*-*-* ia64*-*-*" } }
+     { target { powerpc*-*-* && lp64 } }
+     { xfail { lp64 || vect_no_align } }
+
+File: gccint.info,  Node: Effective-Target Keywords,  Next: Add Options,  Prev: Selectors,  Up: Test Directives
+
+7.2.3 Keywords describing target attributes
+-------------------------------------------
+
+Effective-target keywords identify sets of targets that support
+particular functionality.  They are used to limit tests to be run only
+for particular targets, or to specify that particular sets of targets
+are expected to fail some tests.
+
+ Effective-target keywords are defined in 'lib/target-supports.exp' in
+the GCC testsuite, with the exception of those that are documented as
+being local to a particular test directory.
+
+ The 'effective target' takes into account all of the compiler options
+with which the test will be compiled, including the multilib options.
+By convention, keywords ending in '_nocache' can also include options
+specified for the particular test in an earlier 'dg-options' or
+'dg-add-options' directive.
+
+7.2.3.1 Endianness
+..................
+
+'be'
+     Target uses big-endian memory order for multi-byte and multi-word
+     data.
+
+'le'
+     Target uses little-endian memory order for multi-byte and
+     multi-word data.
+
+7.2.3.2 Data type sizes
+.......................
+
+'ilp32'
+     Target has 32-bit 'int', 'long', and pointers.
+
+'lp64'
+     Target has 32-bit 'int', 64-bit 'long' and pointers.
+
+'llp64'
+     Target has 32-bit 'int' and 'long', 64-bit 'long long' and
+     pointers.
+
+'double64'
+     Target has 64-bit 'double'.
+
+'double64plus'
+     Target has 'double' that is 64 bits or longer.
+
+'longdouble128'
+     Target has 128-bit 'long double'.
+
+'int32plus'
+     Target has 'int' that is at 32 bits or longer.
+
+'int16'
+     Target has 'int' that is 16 bits or shorter.
+
+'long_neq_int'
+     Target has 'int' and 'long' with different sizes.
+
+'int_eq_float'
+     Target has 'int' and 'float' with the same size.
+
+'ptr_eq_long'
+     Target has pointers ('void *') and 'long' with the same size.
+
+'large_double'
+     Target supports 'double' that is longer than 'float'.
+
+'large_long_double'
+     Target supports 'long double' that is longer than 'double'.
+
+'ptr32plus'
+     Target has pointers that are 32 bits or longer.
+
+'size20plus'
+     Target has a 20-bit or larger address space, so at least supports
+     16-bit array and structure sizes.
+
+'size32plus'
+     Target has a 32-bit or larger address space, so at least supports
+     24-bit array and structure sizes.
+
+'4byte_wchar_t'
+     Target has 'wchar_t' that is at least 4 bytes.
+
+'floatN'
+     Target has the '_FloatN' type.
+
+'floatNx'
+     Target has the '_FloatNx' type.
+
+'floatN_runtime'
+     Target has the '_FloatN' type, including runtime support for any
+     options added with 'dg-add-options'.
+
+'floatNx_runtime'
+     Target has the '_FloatNx' type, including runtime support for any
+     options added with 'dg-add-options'.
+
+'floatn_nx_runtime'
+     Target has runtime support for any options added with
+     'dg-add-options' for any '_FloatN' or '_FloatNx' type.
+
+'inf'
+     Target supports floating point infinite ('inf') for type 'double'.
+
+7.2.3.3 Fortran-specific attributes
+...................................
+
+'fortran_integer_16'
+     Target supports Fortran 'integer' that is 16 bytes or longer.
+
+'fortran_real_10'
+     Target supports Fortran 'real' that is 10 bytes or longer.
+
+'fortran_real_16'
+     Target supports Fortran 'real' that is 16 bytes or longer.
+
+'fortran_large_int'
+     Target supports Fortran 'integer' kinds larger than 'integer(8)'.
+
+'fortran_large_real'
+     Target supports Fortran 'real' kinds larger than 'real(8)'.
+
+7.2.3.4 Vector-specific attributes
+..................................
+
+'vect_align_stack_vars'
+     The target's ABI allows stack variables to be aligned to the
+     preferred vector alignment.
+
+'vect_avg_qi'
+     Target supports both signed and unsigned averaging operations on
+     vectors of bytes.
+
+'vect_condition'
+     Target supports vector conditional operations.
+
+'vect_cond_mixed'
+     Target supports vector conditional operations where comparison
+     operands have different type from the value operands.
+
+'vect_double'
+     Target supports hardware vectors of 'double'.
+
+'vect_double_cond_arith'
+     Target supports conditional addition, subtraction, multiplication,
+     division, minimum and maximum on vectors of 'double', via the
+     'cond_' optabs.
+
+'vect_element_align_preferred'
+     The target's preferred vector alignment is the same as the element
+     alignment.
+
+'vect_float'
+     Target supports hardware vectors of 'float' when
+     '-funsafe-math-optimizations' is in effect.
+
+'vect_float_strict'
+     Target supports hardware vectors of 'float' when
+     '-funsafe-math-optimizations' is not in effect.  This implies
+     'vect_float'.
+
+'vect_int'
+     Target supports hardware vectors of 'int'.
+
+'vect_long'
+     Target supports hardware vectors of 'long'.
+
+'vect_long_long'
+     Target supports hardware vectors of 'long long'.
+
+'vect_fully_masked'
+     Target supports fully-masked (also known as fully-predicated)
+     loops, so that vector loops can handle partial as well as full
+     vectors.
+
+'vect_masked_store'
+     Target supports vector masked stores.
+
+'vect_scatter_store'
+     Target supports vector scatter stores.
+
+'vect_aligned_arrays'
+     Target aligns arrays to vector alignment boundary.
+
+'vect_hw_misalign'
+     Target supports a vector misalign access.
+
+'vect_no_align'
+     Target does not support a vector alignment mechanism.
+
+'vect_peeling_profitable'
+     Target might require to peel loops for alignment purposes.
+
+'vect_no_int_min_max'
+     Target does not support a vector min and max instruction on 'int'.
+
+'vect_no_int_add'
+     Target does not support a vector add instruction on 'int'.
+
+'vect_no_bitwise'
+     Target does not support vector bitwise instructions.
+
+'vect_char_mult'
+     Target supports 'vector char' multiplication.
+
+'vect_short_mult'
+     Target supports 'vector short' multiplication.
+
+'vect_int_mult'
+     Target supports 'vector int' multiplication.
+
+'vect_long_mult'
+     Target supports 64 bit 'vector long' multiplication.
+
+'vect_extract_even_odd'
+     Target supports vector even/odd element extraction.
+
+'vect_extract_even_odd_wide'
+     Target supports vector even/odd element extraction of vectors with
+     elements 'SImode' or larger.
+
+'vect_interleave'
+     Target supports vector interleaving.
+
+'vect_strided'
+     Target supports vector interleaving and extract even/odd.
+
+'vect_strided_wide'
+     Target supports vector interleaving and extract even/odd for wide
+     element types.
+
+'vect_perm'
+     Target supports vector permutation.
+
+'vect_perm_byte'
+     Target supports permutation of vectors with 8-bit elements.
+
+'vect_perm_short'
+     Target supports permutation of vectors with 16-bit elements.
+
+'vect_perm3_byte'
+     Target supports permutation of vectors with 8-bit elements, and for
+     the default vector length it is possible to permute:
+          { a0, a1, a2, b0, b1, b2, ... }
+     to:
+          { a0, a0, a0, b0, b0, b0, ... }
+          { a1, a1, a1, b1, b1, b1, ... }
+          { a2, a2, a2, b2, b2, b2, ... }
+     using only two-vector permutes, regardless of how long the sequence
+     is.
+
+'vect_perm3_int'
+     Like 'vect_perm3_byte', but for 32-bit elements.
+
+'vect_perm3_short'
+     Like 'vect_perm3_byte', but for 16-bit elements.
+
+'vect_shift'
+     Target supports a hardware vector shift operation.
+
+'vect_unaligned_possible'
+     Target prefers vectors to have an alignment greater than element
+     alignment, but also allows unaligned vector accesses in some
+     circumstances.
+
+'vect_variable_length'
+     Target has variable-length vectors.
+
+'vect_widen_sum_hi_to_si'
+     Target supports a vector widening summation of 'short' operands
+     into 'int' results, or can promote (unpack) from 'short' to 'int'.
+
+'vect_widen_sum_qi_to_hi'
+     Target supports a vector widening summation of 'char' operands into
+     'short' results, or can promote (unpack) from 'char' to 'short'.
+
+'vect_widen_sum_qi_to_si'
+     Target supports a vector widening summation of 'char' operands into
+     'int' results.
+
+'vect_widen_mult_qi_to_hi'
+     Target supports a vector widening multiplication of 'char' operands
+     into 'short' results, or can promote (unpack) from 'char' to
+     'short' and perform non-widening multiplication of 'short'.
+
+'vect_widen_mult_hi_to_si'
+     Target supports a vector widening multiplication of 'short'
+     operands into 'int' results, or can promote (unpack) from 'short'
+     to 'int' and perform non-widening multiplication of 'int'.
+
+'vect_widen_mult_si_to_di_pattern'
+     Target supports a vector widening multiplication of 'int' operands
+     into 'long' results.
+
+'vect_sdot_qi'
+     Target supports a vector dot-product of 'signed char'.
+
+'vect_udot_qi'
+     Target supports a vector dot-product of 'unsigned char'.
+
+'vect_sdot_hi'
+     Target supports a vector dot-product of 'signed short'.
+
+'vect_udot_hi'
+     Target supports a vector dot-product of 'unsigned short'.
+
+'vect_pack_trunc'
+     Target supports a vector demotion (packing) of 'short' to 'char'
+     and from 'int' to 'short' using modulo arithmetic.
+
+'vect_unpack'
+     Target supports a vector promotion (unpacking) of 'char' to 'short'
+     and from 'char' to 'int'.
+
+'vect_intfloat_cvt'
+     Target supports conversion from 'signed int' to 'float'.
+
+'vect_uintfloat_cvt'
+     Target supports conversion from 'unsigned int' to 'float'.
+
+'vect_floatint_cvt'
+     Target supports conversion from 'float' to 'signed int'.
+
+'vect_floatuint_cvt'
+     Target supports conversion from 'float' to 'unsigned int'.
+
+'vect_intdouble_cvt'
+     Target supports conversion from 'signed int' to 'double'.
+
+'vect_doubleint_cvt'
+     Target supports conversion from 'double' to 'signed int'.
+
+'vect_max_reduc'
+     Target supports max reduction for vectors.
+
+'vect_sizes_16B_8B'
+     Target supports 16- and 8-bytes vectors.
+
+'vect_sizes_32B_16B'
+     Target supports 32- and 16-bytes vectors.
+
+'vect_logical_reduc'
+     Target supports AND, IOR and XOR reduction on vectors.
+
+'vect_fold_extract_last'
+     Target supports the 'fold_extract_last' optab.
+
+7.2.3.5 Thread Local Storage attributes
+.......................................
+
+'tls'
+     Target supports thread-local storage.
+
+'tls_native'
+     Target supports native (rather than emulated) thread-local storage.
+
+'tls_runtime'
+     Test system supports executing TLS executables.
+
+7.2.3.6 Decimal floating point attributes
+.........................................
+
+'dfp'
+     Targets supports compiling decimal floating point extension to C.
+
+'dfp_nocache'
+     Including the options used to compile this particular test, the
+     target supports compiling decimal floating point extension to C.
+
+'dfprt'
+     Test system can execute decimal floating point tests.
+
+'dfprt_nocache'
+     Including the options used to compile this particular test, the
+     test system can execute decimal floating point tests.
+
+'hard_dfp'
+     Target generates decimal floating point instructions with current
+     options.
+
+7.2.3.7 ARM-specific attributes
+...............................
+
+'arm32'
+     ARM target generates 32-bit code.
+
+'arm_eabi'
+     ARM target adheres to the ABI for the ARM Architecture.
+
+'arm_fp_ok'
+     ARM target defines '__ARM_FP' using '-mfloat-abi=softfp' or
+     equivalent options.  Some multilibs may be incompatible with these
+     options.
+
+'arm_hf_eabi'
+     ARM target adheres to the VFP and Advanced SIMD Register Arguments
+     variant of the ABI for the ARM Architecture (as selected with
+     '-mfloat-abi=hard').
+
+'arm_softfloat'
+     ARM target uses the soft-float ABI with no floating-point
+     instructions used whatsoever (as selected with '-mfloat-abi=soft').
+
+'arm_hard_vfp_ok'
+     ARM target supports '-mfpu=vfp -mfloat-abi=hard'.  Some multilibs
+     may be incompatible with these options.
+
+'arm_iwmmxt_ok'
+     ARM target supports '-mcpu=iwmmxt'.  Some multilibs may be
+     incompatible with this option.
+
+'arm_neon'
+     ARM target supports generating NEON instructions.
+
+'arm_tune_string_ops_prefer_neon'
+     Test CPU tune supports inlining string operations with NEON
+     instructions.
+
+'arm_neon_hw'
+     Test system supports executing NEON instructions.
+
+'arm_neonv2_hw'
+     Test system supports executing NEON v2 instructions.
+
+'arm_neon_ok'
+     ARM Target supports '-mfpu=neon -mfloat-abi=softfp' or compatible
+     options.  Some multilibs may be incompatible with these options.
+
+'arm_neon_ok_no_float_abi'
+     ARM Target supports NEON with '-mfpu=neon', but without any
+     -mfloat-abi= option.  Some multilibs may be incompatible with this
+     option.
+
+'arm_neonv2_ok'
+     ARM Target supports '-mfpu=neon-vfpv4 -mfloat-abi=softfp' or
+     compatible options.  Some multilibs may be incompatible with these
+     options.
+
+'arm_fp16_ok'
+     Target supports options to generate VFP half-precision
+     floating-point instructions.  Some multilibs may be incompatible
+     with these options.  This test is valid for ARM only.
+
+'arm_fp16_hw'
+     Target supports executing VFP half-precision floating-point
+     instructions.  This test is valid for ARM only.
+
+'arm_neon_fp16_ok'
+     ARM Target supports '-mfpu=neon-fp16 -mfloat-abi=softfp' or
+     compatible options, including '-mfp16-format=ieee' if necessary to
+     obtain the '__fp16' type.  Some multilibs may be incompatible with
+     these options.
+
+'arm_neon_fp16_hw'
+     Test system supports executing Neon half-precision float
+     instructions.  (Implies previous.)
+
+'arm_fp16_alternative_ok'
+     ARM target supports the ARM FP16 alternative format.  Some
+     multilibs may be incompatible with the options needed.
+
+'arm_fp16_none_ok'
+     ARM target supports specifying none as the ARM FP16 format.
+
+'arm_thumb1_ok'
+     ARM target generates Thumb-1 code for '-mthumb'.
+
+'arm_thumb2_ok'
+     ARM target generates Thumb-2 code for '-mthumb'.
+
+'arm_vfp_ok'
+     ARM target supports '-mfpu=vfp -mfloat-abi=softfp'.  Some multilibs
+     may be incompatible with these options.
+
+'arm_vfp3_ok'
+     ARM target supports '-mfpu=vfp3 -mfloat-abi=softfp'.  Some
+     multilibs may be incompatible with these options.
+
+'arm_v8_vfp_ok'
+     ARM target supports '-mfpu=fp-armv8 -mfloat-abi=softfp'.  Some
+     multilibs may be incompatible with these options.
+
+'arm_v8_neon_ok'
+     ARM target supports '-mfpu=neon-fp-armv8 -mfloat-abi=softfp'.  Some
+     multilibs may be incompatible with these options.
+
+'arm_v8_1a_neon_ok'
+     ARM target supports options to generate ARMv8.1-A Adv.SIMD
+     instructions.  Some multilibs may be incompatible with these
+     options.
+
+'arm_v8_1a_neon_hw'
+     ARM target supports executing ARMv8.1-A Adv.SIMD instructions.
+     Some multilibs may be incompatible with the options needed.
+     Implies arm_v8_1a_neon_ok.
+
+'arm_acq_rel'
+     ARM target supports acquire-release instructions.
+
+'arm_v8_2a_fp16_scalar_ok'
+     ARM target supports options to generate instructions for ARMv8.2-A
+     and scalar instructions from the FP16 extension.  Some multilibs
+     may be incompatible with these options.
+
+'arm_v8_2a_fp16_scalar_hw'
+     ARM target supports executing instructions for ARMv8.2-A and scalar
+     instructions from the FP16 extension.  Some multilibs may be
+     incompatible with these options.  Implies arm_v8_2a_fp16_neon_ok.
+
+'arm_v8_2a_fp16_neon_ok'
+     ARM target supports options to generate instructions from ARMv8.2-A
+     with the FP16 extension.  Some multilibs may be incompatible with
+     these options.  Implies arm_v8_2a_fp16_scalar_ok.
+
+'arm_v8_2a_fp16_neon_hw'
+     ARM target supports executing instructions from ARMv8.2-A with the
+     FP16 extension.  Some multilibs may be incompatible with these
+     options.  Implies arm_v8_2a_fp16_neon_ok and
+     arm_v8_2a_fp16_scalar_hw.
+
+'arm_v8_2a_dotprod_neon_ok'
+     ARM target supports options to generate instructions from ARMv8.2-A
+     with the Dot Product extension.  Some multilibs may be incompatible
+     with these options.
+
+'arm_v8_2a_dotprod_neon_hw'
+     ARM target supports executing instructions from ARMv8.2-A with the
+     Dot Product extension.  Some multilibs may be incompatible with
+     these options.  Implies arm_v8_2a_dotprod_neon_ok.
+
+'arm_fp16fml_neon_ok'
+     ARM target supports extensions to generate the 'VFMAL' and 'VFMLS'
+     half-precision floating-point instructions available from ARMv8.2-A
+     and onwards.  Some multilibs may be incompatible with these
+     options.
+
+'arm_prefer_ldrd_strd'
+     ARM target prefers 'LDRD' and 'STRD' instructions over 'LDM' and
+     'STM' instructions.
+
+'arm_thumb1_movt_ok'
+     ARM target generates Thumb-1 code for '-mthumb' with 'MOVW' and
+     'MOVT' instructions available.
+
+'arm_thumb1_cbz_ok'
+     ARM target generates Thumb-1 code for '-mthumb' with 'CBZ' and
+     'CBNZ' instructions available.
+
+'arm_divmod_simode'
+     ARM target for which divmod transform is disabled, if it supports
+     hardware div instruction.
+
+'arm_cmse_ok'
+     ARM target supports ARMv8-M Security Extensions, enabled by the
+     '-mcmse' option.
+
+'arm_coproc1_ok'
+     ARM target supports the following coprocessor instructions: 'CDP',
+     'LDC', 'STC', 'MCR' and 'MRC'.
+
+'arm_coproc2_ok'
+     ARM target supports all the coprocessor instructions also listed as
+     supported in *note arm_coproc1_ok:: in addition to the following:
+     'CDP2', 'LDC2', 'LDC2l', 'STC2', 'STC2l', 'MCR2' and 'MRC2'.
+
+'arm_coproc3_ok'
+     ARM target supports all the coprocessor instructions also listed as
+     supported in *note arm_coproc2_ok:: in addition the following:
+     'MCRR' and 'MRRC'.
+
+'arm_coproc4_ok'
+     ARM target supports all the coprocessor instructions also listed as
+     supported in *note arm_coproc3_ok:: in addition the following:
+     'MCRR2' and 'MRRC2'.
+
+7.2.3.8 AArch64-specific attributes
+...................................
+
+'aarch64_asm_<ext>_ok'
+     AArch64 assembler supports the architecture extension 'ext' via the
+     '.arch_extension' pseudo-op.
+'aarch64_tiny'
+     AArch64 target which generates instruction sequences for tiny
+     memory model.
+'aarch64_small'
+     AArch64 target which generates instruction sequences for small
+     memory model.
+'aarch64_large'
+     AArch64 target which generates instruction sequences for large
+     memory model.
+'aarch64_little_endian'
+     AArch64 target which generates instruction sequences for little
+     endian.
+'aarch64_big_endian'
+     AArch64 target which generates instruction sequences for big
+     endian.
+'aarch64_small_fpic'
+     Binutils installed on test system supports relocation types
+     required by -fpic for AArch64 small memory model.
+
+7.2.3.9 MIPS-specific attributes
+................................
+
+'mips64'
+     MIPS target supports 64-bit instructions.
+
+'nomips16'
+     MIPS target does not produce MIPS16 code.
+
+'mips16_attribute'
+     MIPS target can generate MIPS16 code.
+
+'mips_loongson'
+     MIPS target is a Loongson-2E or -2F target using an ABI that
+     supports the Loongson vector modes.
+
+'mips_msa'
+     MIPS target supports '-mmsa', MIPS SIMD Architecture (MSA).
+
+'mips_newabi_large_long_double'
+     MIPS target supports 'long double' larger than 'double' when using
+     the new ABI.
+
+'mpaired_single'
+     MIPS target supports '-mpaired-single'.
+
+7.2.3.10 PowerPC-specific attributes
+....................................
+
+'dfp_hw'
+     PowerPC target supports executing hardware DFP instructions.
+
+'p8vector_hw'
+     PowerPC target supports executing VSX instructions (ISA 2.07).
+
+'powerpc64'
+     Test system supports executing 64-bit instructions.
+
+'powerpc_altivec'
+     PowerPC target supports AltiVec.
+
+'powerpc_altivec_ok'
+     PowerPC target supports '-maltivec'.
+
+'powerpc_eabi_ok'
+     PowerPC target supports '-meabi'.
+
+'powerpc_elfv2'
+     PowerPC target supports '-mabi=elfv2'.
+
+'powerpc_fprs'
+     PowerPC target supports floating-point registers.
+
+'powerpc_hard_double'
+     PowerPC target supports hardware double-precision floating-point.
+
+'powerpc_htm_ok'
+     PowerPC target supports '-mhtm'
+
+'powerpc_p8vector_ok'
+     PowerPC target supports '-mpower8-vector'
+
+'powerpc_popcntb_ok'
+     PowerPC target supports the 'popcntb' instruction, indicating that
+     this target supports '-mcpu=power5'.
+
+'powerpc_ppu_ok'
+     PowerPC target supports '-mcpu=cell'.
+
+'powerpc_spe'
+     PowerPC target supports PowerPC SPE.
+
+'powerpc_spe_nocache'
+     Including the options used to compile this particular test, the
+     PowerPC target supports PowerPC SPE.
+
+'powerpc_spu'
+     PowerPC target supports PowerPC SPU.
+
+'powerpc_vsx_ok'
+     PowerPC target supports '-mvsx'.
+
+'powerpc_405_nocache'
+     Including the options used to compile this particular test, the
+     PowerPC target supports PowerPC 405.
+
+'ppc_recip_hw'
+     PowerPC target supports executing reciprocal estimate instructions.
+
+'spu_auto_overlay'
+     SPU target has toolchain that supports automatic overlay
+     generation.
+
+'vmx_hw'
+     PowerPC target supports executing AltiVec instructions.
+
+'vsx_hw'
+     PowerPC target supports executing VSX instructions (ISA 2.06).
+
+7.2.3.11 Other hardware attributes
+..................................
+
+'autoincdec'
+     Target supports autoincrement/decrement addressing.
+
+'avx'
+     Target supports compiling 'avx' instructions.
+
+'avx_runtime'
+     Target supports the execution of 'avx' instructions.
+
+'avx2'
+     Target supports compiling 'avx2' instructions.
+
+'avx2_runtime'
+     Target supports the execution of 'avx2' instructions.
+
+'avx512f'
+     Target supports compiling 'avx512f' instructions.
+
+'avx512f_runtime'
+     Target supports the execution of 'avx512f' instructions.
+
+'cell_hw'
+     Test system can execute AltiVec and Cell PPU instructions.
+
+'coldfire_fpu'
+     Target uses a ColdFire FPU.
+
+'divmod'
+     Target supporting hardware divmod insn or divmod libcall.
+
+'divmod_simode'
+     Target supporting hardware divmod insn or divmod libcall for
+     SImode.
+
+'hard_float'
+     Target supports FPU instructions.
+
+'non_strict_align'
+     Target does not require strict alignment.
+
+'pie_copyreloc'
+     The x86-64 target linker supports PIE with copy reloc.
+
+'rdrand'
+     Target supports x86 'rdrand' instruction.
+
+'sqrt_insn'
+     Target has a square root instruction that the compiler can
+     generate.
+
+'sse'
+     Target supports compiling 'sse' instructions.
+
+'sse_runtime'
+     Target supports the execution of 'sse' instructions.
+
+'sse2'
+     Target supports compiling 'sse2' instructions.
+
+'sse2_runtime'
+     Target supports the execution of 'sse2' instructions.
+
+'sync_char_short'
+     Target supports atomic operations on 'char' and 'short'.
+
+'sync_int_long'
+     Target supports atomic operations on 'int' and 'long'.
+
+'ultrasparc_hw'
+     Test environment appears to run executables on a simulator that
+     accepts only 'EM_SPARC' executables and chokes on 'EM_SPARC32PLUS'
+     or 'EM_SPARCV9' executables.
+
+'vect_cmdline_needed'
+     Target requires a command line argument to enable a SIMD
+     instruction set.
+
+'xorsign'
+     Target supports the xorsign optab expansion.
+
+7.2.3.12 Environment attributes
+...............................
+
+'c'
+     The language for the compiler under test is C.
+
+'c++'
+     The language for the compiler under test is C++.
+
+'c99_runtime'
+     Target provides a full C99 runtime.
+
+'correct_iso_cpp_string_wchar_protos'
+     Target 'string.h' and 'wchar.h' headers provide C++ required
+     overloads for 'strchr' etc.  functions.
+
+'d_runtime'
+     Target provides the D runtime.
+
+'dummy_wcsftime'
+     Target uses a dummy 'wcsftime' function that always returns zero.
+
+'fd_truncate'
+     Target can truncate a file from a file descriptor, as used by
+     'libgfortran/io/unix.c:fd_truncate'; i.e. 'ftruncate' or 'chsize'.
+
+'fenv'
+     Target provides 'fenv.h' include file.
+
+'fenv_exceptions'
+     Target supports 'fenv.h' with all the standard IEEE exceptions and
+     floating-point exceptions are raised by arithmetic operations.
+
+'freestanding'
+     Target is 'freestanding' as defined in section 4 of the C99
+     standard.  Effectively, it is a target which supports no extra
+     headers or libraries other than what is considered essential.
+
+'gettimeofday'
+     Target supports 'gettimeofday'.
+
+'init_priority'
+     Target supports constructors with initialization priority
+     arguments.
+
+'inttypes_types'
+     Target has the basic signed and unsigned types in 'inttypes.h'.
+     This is for tests that GCC's notions of these types agree with
+     those in the header, as some systems have only 'inttypes.h'.
+
+'lax_strtofp'
+     Target might have errors of a few ULP in string to floating-point
+     conversion functions and overflow is not always detected correctly
+     by those functions.
+
+'mempcpy'
+     Target provides 'mempcpy' function.
+
+'mmap'
+     Target supports 'mmap'.
+
+'newlib'
+     Target supports Newlib.
+
+'newlib_nano_io'
+     GCC was configured with '--enable-newlib-nano-formatted-io', which
+     reduces the code size of Newlib formatted I/O functions.
+
+'pow10'
+     Target provides 'pow10' function.
+
+'pthread'
+     Target can compile using 'pthread.h' with no errors or warnings.
+
+'pthread_h'
+     Target has 'pthread.h'.
+
+'run_expensive_tests'
+     Expensive testcases (usually those that consume excessive amounts
+     of CPU time) should be run on this target.  This can be enabled by
+     setting the 'GCC_TEST_RUN_EXPENSIVE' environment variable to a
+     non-empty string.
+
+'simulator'
+     Test system runs executables on a simulator (i.e. slowly) rather
+     than hardware (i.e. fast).
+
+'signal'
+     Target has 'signal.h'.
+
+'stabs'
+     Target supports the stabs debugging format.
+
+'stdint_types'
+     Target has the basic signed and unsigned C types in 'stdint.h'.
+     This will be obsolete when GCC ensures a working 'stdint.h' for all
+     targets.
+
+'stpcpy'
+     Target provides 'stpcpy' function.
+
+'trampolines'
+     Target supports trampolines.
+
+'uclibc'
+     Target supports uClibc.
+
+'unwrapped'
+     Target does not use a status wrapper.
+
+'vxworks_kernel'
+     Target is a VxWorks kernel.
+
+'vxworks_rtp'
+     Target is a VxWorks RTP.
+
+'wchar'
+     Target supports wide characters.
+
+7.2.3.13 Other attributes
+.........................
+
+'automatic_stack_alignment'
+     Target supports automatic stack alignment.
+
+'branch_cost'
+     Target supports '-branch-cost=N'.
+
+'cxa_atexit'
+     Target uses '__cxa_atexit'.
+
+'default_packed'
+     Target has packed layout of structure members by default.
+
+'exceptions'
+     Target supports exceptions.
+
+'fgraphite'
+     Target supports Graphite optimizations.
+
+'fixed_point'
+     Target supports fixed-point extension to C.
+
+'fopenacc'
+     Target supports OpenACC via '-fopenacc'.
+
+'fopenmp'
+     Target supports OpenMP via '-fopenmp'.
+
+'fpic'
+     Target supports '-fpic' and '-fPIC'.
+
+'freorder'
+     Target supports '-freorder-blocks-and-partition'.
+
+'fstack_protector'
+     Target supports '-fstack-protector'.
+
+'gas'
+     Target uses GNU 'as'.
+
+'gc_sections'
+     Target supports '--gc-sections'.
+
+'gld'
+     Target uses GNU 'ld'.
+
+'keeps_null_pointer_checks'
+     Target keeps null pointer checks, either due to the use of
+     '-fno-delete-null-pointer-checks' or hardwired into the target.
+
+'llvm_binutils'
+     Target is using an LLVM assembler and/or linker, instead of GNU
+     Binutils.
+
+'lto'
+     Compiler has been configured to support link-time optimization
+     (LTO).
+
+'lto_incremental'
+     Compiler and linker support link-time optimization relocatable
+     linking with '-r' and '-flto' options.
+
+'naked_functions'
+     Target supports the 'naked' function attribute.
+
+'named_sections'
+     Target supports named sections.
+
+'natural_alignment_32'
+     Target uses natural alignment (aligned to type size) for types of
+     32 bits or less.
+
+'target_natural_alignment_64'
+     Target uses natural alignment (aligned to type size) for types of
+     64 bits or less.
+
+'nonpic'
+     Target does not generate PIC by default.
+
+'offload_gcn'
+     Target has been configured for OpenACC/OpenMP offloading on AMD
+     GCN.
+
+'pie_enabled'
+     Target generates PIE by default.
+
+'pcc_bitfield_type_matters'
+     Target defines 'PCC_BITFIELD_TYPE_MATTERS'.
+
+'pe_aligned_commons'
+     Target supports '-mpe-aligned-commons'.
+
+'pie'
+     Target supports '-pie', '-fpie' and '-fPIE'.
+
+'rdynamic'
+     Target supports '-rdynamic'.
+
+'scalar_all_fma'
+     Target supports all four fused multiply-add optabs for both 'float'
+     and 'double'.  These optabs are: 'fma_optab', 'fms_optab',
+     'fnma_optab' and 'fnms_optab'.
+
+'section_anchors'
+     Target supports section anchors.
+
+'short_enums'
+     Target defaults to short enums.
+
+'stack_size'
+     Target has limited stack size.  The stack size limit can be
+     obtained using the STACK_SIZE macro defined by *note
+     'dg-add-options' feature 'stack_size': stack_size_ao.
+
+'static'
+     Target supports '-static'.
+
+'static_libgfortran'
+     Target supports statically linking 'libgfortran'.
+
+'string_merging'
+     Target supports merging string constants at link time.
+
+'ucn'
+     Target supports compiling and assembling UCN.
+
+'ucn_nocache'
+     Including the options used to compile this particular test, the
+     target supports compiling and assembling UCN.
+
+'unaligned_stack'
+     Target does not guarantee that its 'STACK_BOUNDARY' is greater than
+     or equal to the required vector alignment.
+
+'vector_alignment_reachable'
+     Vector alignment is reachable for types of 32 bits or less.
+
+'vector_alignment_reachable_for_64bit'
+     Vector alignment is reachable for types of 64 bits or less.
+
+'wchar_t_char16_t_compatible'
+     Target supports 'wchar_t' that is compatible with 'char16_t'.
+
+'wchar_t_char32_t_compatible'
+     Target supports 'wchar_t' that is compatible with 'char32_t'.
+
+'comdat_group'
+     Target uses comdat groups.
+
+7.2.3.14 Local to tests in 'gcc.target/i386'
+............................................
+
+'3dnow'
+     Target supports compiling '3dnow' instructions.
+
+'aes'
+     Target supports compiling 'aes' instructions.
+
+'fma4'
+     Target supports compiling 'fma4' instructions.
+
+'mfentry'
+     Target supports the '-mfentry' option that alters the position of
+     profiling calls such that they precede the prologue.
+
+'ms_hook_prologue'
+     Target supports attribute 'ms_hook_prologue'.
+
+'pclmul'
+     Target supports compiling 'pclmul' instructions.
+
+'sse3'
+     Target supports compiling 'sse3' instructions.
+
+'sse4'
+     Target supports compiling 'sse4' instructions.
+
+'sse4a'
+     Target supports compiling 'sse4a' instructions.
+
+'ssse3'
+     Target supports compiling 'ssse3' instructions.
+
+'vaes'
+     Target supports compiling 'vaes' instructions.
+
+'vpclmul'
+     Target supports compiling 'vpclmul' instructions.
+
+'xop'
+     Target supports compiling 'xop' instructions.
+
+7.2.3.15 Local to tests in 'gcc.target/spu/ea'
+..............................................
+
+'ealib'
+     Target '__ea' library functions are available.
+
+7.2.3.16 Local to tests in 'gcc.test-framework'
+...............................................
+
+'no'
+     Always returns 0.
+
+'yes'
+     Always returns 1.
+
+File: gccint.info,  Node: Add Options,  Next: Require Support,  Prev: Effective-Target Keywords,  Up: Test Directives
+
+7.2.4 Features for 'dg-add-options'
+-----------------------------------
+
+The supported values of FEATURE for directive 'dg-add-options' are:
+
+'arm_fp'
+     '__ARM_FP' definition.  Only ARM targets support this feature, and
+     only then in certain modes; see the *note arm_fp_ok effective
+     target keyword: arm_fp_ok.
+
+'arm_neon'
+     NEON support.  Only ARM targets support this feature, and only then
+     in certain modes; see the *note arm_neon_ok effective target
+     keyword: arm_neon_ok.
+
+'arm_fp16'
+     VFP half-precision floating point support.  This does not select
+     the FP16 format; for that, use *note arm_fp16_ieee: arm_fp16_ieee.
+     or *note arm_fp16_alternative: arm_fp16_alternative. instead.  This
+     feature is only supported by ARM targets and then only in certain
+     modes; see the *note arm_fp16_ok effective target keyword:
+     arm_fp16_ok.
+
+'arm_fp16_ieee'
+     ARM IEEE 754-2008 format VFP half-precision floating point support.
+     This feature is only supported by ARM targets and then only in
+     certain modes; see the *note arm_fp16_ok effective target keyword:
+     arm_fp16_ok.
+
+'arm_fp16_alternative'
+     ARM Alternative format VFP half-precision floating point support.
+     This feature is only supported by ARM targets and then only in
+     certain modes; see the *note arm_fp16_ok effective target keyword:
+     arm_fp16_ok.
+
+'arm_neon_fp16'
+     NEON and half-precision floating point support.  Only ARM targets
+     support this feature, and only then in certain modes; see the *note
+     arm_neon_fp16_ok effective target keyword: arm_neon_fp16_ok.
+
+'arm_vfp3'
+     arm vfp3 floating point support; see the *note arm_vfp3_ok
+     effective target keyword: arm_vfp3_ok.
+
+'arm_v8_1a_neon'
+     Add options for ARMv8.1-A with Adv.SIMD support, if this is
+     supported by the target; see the *note arm_v8_1a_neon_ok:
+     arm_v8_1a_neon_ok. effective target keyword.
+
+'arm_v8_2a_fp16_scalar'
+     Add options for ARMv8.2-A with scalar FP16 support, if this is
+     supported by the target; see the *note arm_v8_2a_fp16_scalar_ok:
+     arm_v8_2a_fp16_scalar_ok. effective target keyword.
+
+'arm_v8_2a_fp16_neon'
+     Add options for ARMv8.2-A with Adv.SIMD FP16 support, if this is
+     supported by the target; see the *note arm_v8_2a_fp16_neon_ok:
+     arm_v8_2a_fp16_neon_ok. effective target keyword.
+
+'arm_v8_2a_dotprod_neon'
+     Add options for ARMv8.2-A with Adv.SIMD Dot Product support, if
+     this is supported by the target; see the *note
+     arm_v8_2a_dotprod_neon_ok:: effective target keyword.
+
+'arm_fp16fml_neon'
+     Add options to enable generation of the 'VFMAL' and 'VFMSL'
+     instructions, if this is supported by the target; see the *note
+     arm_fp16fml_neon_ok:: effective target keyword.
+
+'bind_pic_locally'
+     Add the target-specific flags needed to enable functions to bind
+     locally when using pic/PIC passes in the testsuite.
+
+'c99_runtime'
+     Add the target-specific flags needed to access the C99 runtime.
+
+'floatN'
+     Add the target-specific flags needed to use the '_FloatN' type.
+
+'floatNx'
+     Add the target-specific flags needed to use the '_FloatNx' type.
+
+'ieee'
+     Add the target-specific flags needed to enable full IEEE compliance
+     mode.
+
+'mips16_attribute'
+     'mips16' function attributes.  Only MIPS targets support this
+     feature, and only then in certain modes.
+
+'stack_size'
+     Add the flags needed to define macro STACK_SIZE and set it to the
+     stack size limit associated with the *note 'stack_size' effective
+     target: stack_size_et.
+
+'sqrt_insn'
+     Add the target-specific flags needed to enable hardware square root
+     instructions, if any.
+
+'tls'
+     Add the target-specific flags needed to use thread-local storage.
+
+File: gccint.info,  Node: Require Support,  Next: Final Actions,  Prev: Add Options,  Up: Test Directives
+
+7.2.5 Variants of 'dg-require-SUPPORT'
+--------------------------------------
+
+A few of the 'dg-require' directives take arguments.
+
+'dg-require-iconv CODESET'
+     Skip the test if the target does not support iconv.  CODESET is the
+     codeset to convert to.
+
+'dg-require-profiling PROFOPT'
+     Skip the test if the target does not support profiling with option
+     PROFOPT.
+
+'dg-require-stack-check CHECK'
+     Skip the test if the target does not support the '-fstack-check'
+     option.  If CHECK is '""', support for '-fstack-check' is checked,
+     for '-fstack-check=("CHECK")' otherwise.
+
+'dg-require-stack-size SIZE'
+     Skip the test if the target does not support a stack size of SIZE.
+
+'dg-require-visibility VIS'
+     Skip the test if the target does not support the 'visibility'
+     attribute.  If VIS is '""', support for 'visibility("hidden")' is
+     checked, for 'visibility("VIS")' otherwise.
+
+ The original 'dg-require' directives were defined before there was
+support for effective-target keywords.  The directives that do not take
+arguments could be replaced with effective-target keywords.
+
+'dg-require-alias ""'
+     Skip the test if the target does not support the 'alias' attribute.
+
+'dg-require-ascii-locale ""'
+     Skip the test if the host does not support an ASCII locale.
+
+'dg-require-compat-dfp ""'
+     Skip this test unless both compilers in a 'compat' testsuite
+     support decimal floating point.
+
+'dg-require-cxa-atexit ""'
+     Skip the test if the target does not support '__cxa_atexit'.  This
+     is equivalent to 'dg-require-effective-target cxa_atexit'.
+
+'dg-require-dll ""'
+     Skip the test if the target does not support DLL attributes.
+
+'dg-require-fork ""'
+     Skip the test if the target does not support 'fork'.
+
+'dg-require-gc-sections ""'
+     Skip the test if the target's linker does not support the
+     '--gc-sections' flags.  This is equivalent to
+     'dg-require-effective-target gc-sections'.
+
+'dg-require-host-local ""'
+     Skip the test if the host is remote, rather than the same as the
+     build system.  Some tests are incompatible with DejaGnu's handling
+     of remote hosts, which involves copying the source file to the host
+     and compiling it with a relative path and "'-o a.out'".
+
+'dg-require-mkfifo ""'
+     Skip the test if the target does not support 'mkfifo'.
+
+'dg-require-named-sections ""'
+     Skip the test is the target does not support named sections.  This
+     is equivalent to 'dg-require-effective-target named_sections'.
+
+'dg-require-weak ""'
+     Skip the test if the target does not support weak symbols.
+
+'dg-require-weak-override ""'
+     Skip the test if the target does not support overriding weak
+     symbols.
+
+File: gccint.info,  Node: Final Actions,  Prev: Require Support,  Up: Test Directives
+
+7.2.6 Commands for use in 'dg-final'
+------------------------------------
+
+The GCC testsuite defines the following directives to be used within
+'dg-final'.
+
+7.2.6.1 Scan a particular file
+..............................
+
+'scan-file FILENAME REGEXP [{ target/xfail SELECTOR }]'
+     Passes if REGEXP matches text in FILENAME.
+'scan-file-not FILENAME REGEXP [{ target/xfail SELECTOR }]'
+     Passes if REGEXP does not match text in FILENAME.
+'scan-module MODULE REGEXP [{ target/xfail SELECTOR }]'
+     Passes if REGEXP matches in Fortran module MODULE.
+
+7.2.6.2 Scan the assembly output
+................................
+
+'scan-assembler REGEX [{ target/xfail SELECTOR }]'
+     Passes if REGEX matches text in the test's assembler output.
+
+'scan-assembler-not REGEX [{ target/xfail SELECTOR }]'
+     Passes if REGEX does not match text in the test's assembler output.
+
+'scan-assembler-times REGEX NUM [{ target/xfail SELECTOR }]'
+     Passes if REGEX is matched exactly NUM times in the test's
+     assembler output.
+
+'scan-assembler-dem REGEX [{ target/xfail SELECTOR }]'
+     Passes if REGEX matches text in the test's demangled assembler
+     output.
+
+'scan-assembler-dem-not REGEX [{ target/xfail SELECTOR }]'
+     Passes if REGEX does not match text in the test's demangled
+     assembler output.
+
+'scan-hidden SYMBOL [{ target/xfail SELECTOR }]'
+     Passes if SYMBOL is defined as a hidden symbol in the test's
+     assembly output.
+
+'scan-not-hidden SYMBOL [{ target/xfail SELECTOR }]'
+     Passes if SYMBOL is not defined as a hidden symbol in the test's
+     assembly output.
+
+7.2.6.3 Scan optimization dump files
+....................................
+
+These commands are available for KIND of 'tree', 'ltrans-tree',
+'offload-tree', 'rtl', 'offload-rtl', 'ipa', and 'wpa-ipa'.
+
+'scan-KIND-dump REGEX SUFFIX [{ target/xfail SELECTOR }]'
+     Passes if REGEX matches text in the dump file with suffix SUFFIX.
+
+'scan-KIND-dump-not REGEX SUFFIX [{ target/xfail SELECTOR }]'
+     Passes if REGEX does not match text in the dump file with suffix
+     SUFFIX.
+
+'scan-KIND-dump-times REGEX NUM SUFFIX [{ target/xfail SELECTOR }]'
+     Passes if REGEX is found exactly NUM times in the dump file with
+     suffix SUFFIX.
+
+'scan-KIND-dump-dem REGEX SUFFIX [{ target/xfail SELECTOR }]'
+     Passes if REGEX matches demangled text in the dump file with suffix
+     SUFFIX.
+
+'scan-KIND-dump-dem-not REGEX SUFFIX [{ target/xfail SELECTOR }]'
+     Passes if REGEX does not match demangled text in the dump file with
+     suffix SUFFIX.
+
+7.2.6.4 Check for output files
+..............................
+
+'output-exists [{ target/xfail SELECTOR }]'
+     Passes if compiler output file exists.
+
+'output-exists-not [{ target/xfail SELECTOR }]'
+     Passes if compiler output file does not exist.
+
+'scan-symbol REGEXP [{ target/xfail SELECTOR }]'
+     Passes if the pattern is present in the final executable.
+
+'scan-symbol-not REGEXP [{ target/xfail SELECTOR }]'
+     Passes if the pattern is absent from the final executable.
+
+7.2.6.5 Checks for 'gcov' tests
+...............................
+
+'run-gcov SOURCEFILE'
+     Check line counts in 'gcov' tests.
+
+'run-gcov [branches] [calls] { OPTS SOURCEFILE }'
+     Check branch and/or call counts, in addition to line counts, in
+     'gcov' tests.
+
+7.2.6.6 Clean up generated test files
+.....................................
+
+Usually the test-framework removes files that were generated during
+testing.  If a testcase, for example, uses any dumping mechanism to
+inspect a passes dump file, the testsuite recognized the dump option
+passed to the tool and schedules a final cleanup to remove these files.
+
+ There are, however, following additional cleanup directives that can be
+used to annotate a testcase "manually".
+'cleanup-coverage-files'
+     Removes coverage data files generated for this test.
+
+'cleanup-modules "LIST-OF-EXTRA-MODULES"'
+     Removes Fortran module files generated for this test, excluding the
+     module names listed in keep-modules.  Cleaning up module files is
+     usually done automatically by the testsuite by looking at the
+     source files and removing the modules after the test has been
+     executed.
+          module MoD1
+          end module MoD1
+          module Mod2
+          end module Mod2
+          module moD3
+          end module moD3
+          module mod4
+          end module mod4
+          ! { dg-final { cleanup-modules "mod1 mod2" } } ! redundant
+          ! { dg-final { keep-modules "mod3 mod4" } }
+
+'keep-modules "LIST-OF-MODULES-NOT-TO-DELETE"'
+     Whitespace separated list of module names that should not be
+     deleted by cleanup-modules.  If the list of modules is empty, all
+     modules defined in this file are kept.
+          module maybe_unneeded
+          end module maybe_unneeded
+          module keep1
+          end module keep1
+          module keep2
+          end module keep2
+          ! { dg-final { keep-modules "keep1 keep2" } } ! just keep these two
+          ! { dg-final { keep-modules "" } } ! keep all
+
+'dg-keep-saved-temps "LIST-OF-SUFFIXES-NOT-TO-DELETE"'
+     Whitespace separated list of suffixes that should not be deleted
+     automatically in a testcase that uses '-save-temps'.
+          // { dg-options "-save-temps -fpch-preprocess -I." }
+          int main() { return 0; }
+          // { dg-keep-saved-temps ".s" } ! just keep assembler file
+          // { dg-keep-saved-temps ".s" ".i" } ! ... and .i
+          // { dg-keep-saved-temps ".ii" ".o" } ! or just .ii and .o
+
+'cleanup-profile-file'
+     Removes profiling files generated for this test.
+
+'cleanup-repo-files'
+     Removes files generated for this test for '-frepo'.
+
+File: gccint.info,  Node: Ada Tests,  Next: C Tests,  Prev: Test Directives,  Up: Testsuites
+

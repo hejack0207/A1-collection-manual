@@ -1,0 +1,66 @@
+10.1 Overview of 'poly_int'
+===========================
+
+We define indeterminates X1, ..., XN whose values are only known at
+runtime and use polynomials of the form:
+
+     C0 + C1 * X1 + ... + CN * XN
+
+ to represent a size or offset whose value might depend on some of these
+indeterminates.  The coefficients C0, ..., CN are always known at
+compile time, with the C0 term being the "constant" part that does not
+depend on any runtime value.
+
+ GCC uses the 'poly_int' class to represent these coefficients.  The
+class has two template parameters: the first specifies the number of
+coefficients (N + 1) and the second specifies the type of the
+coefficients.  For example, 'poly_int<2, unsigned short>' represents a
+polynomial with two coefficients (and thus one indeterminate), with each
+coefficient having type 'unsigned short'.  When N is 0, the class
+degenerates to a single compile-time constant C0.
+
+ The number of coefficients needed for compilation is a fixed property
+of each target and is specified by the configuration macro
+'NUM_POLY_INT_COEFFS'.  The default value is 1, since most targets do
+not have such runtime invariants.  Targets that need a different value
+should '#define' the macro in their 'CPU-modes.def' file.  *Note Back
+End::.
+
+ 'poly_int' makes the simplifying requirement that each indeterminate
+must be a nonnegative integer.  An indeterminate value of 0 should
+usually represent the minimum possible runtime value, with C0 specifying
+the value in that case.
+
+ For example, when targetting the Arm SVE ISA, the single indeterminate
+represents the number of 128-bit blocks in a vector _beyond the minimum
+length of 128 bits_.  Thus the number of 64-bit doublewords in a vector
+is 2 + 2 * X1.  If an aggregate has a single SVE vector and 16
+additional bytes, its total size is 32 + 16 * X1 bytes.
+
+ The header file 'poly-int-types.h' provides typedefs for the most
+common forms of 'poly_int', all having 'NUM_POLY_INT_COEFFS'
+coefficients:
+
+'poly_uint16'
+     a 'poly_int' with 'unsigned short' coefficients.
+
+'poly_int64'
+     a 'poly_int' with 'HOST_WIDE_INT' coefficients.
+
+'poly_uint64'
+     a 'poly_int' with 'unsigned HOST_WIDE_INT' coefficients.
+
+'poly_offset_int'
+     a 'poly_int' with 'offset_int' coefficients.
+
+'poly_wide_int'
+     a 'poly_int' with 'wide_int' coefficients.
+
+'poly_widest_int'
+     a 'poly_int' with 'widest_int' coefficients.
+
+ Since the main purpose of 'poly_int' is to represent sizes and offsets,
+the last two typedefs are only rarely used.
+
+File: gccint.info,  Node: Consequences of using poly_int,  Next: Comparisons involving poly_int,  Prev: Overview of poly_int,  Up: poly_int
+

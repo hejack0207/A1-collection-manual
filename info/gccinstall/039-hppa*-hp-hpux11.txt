@@ -1,0 +1,105 @@
+hppa*-hp-hpux11
+===============
+
+GCC 3.0 and up support HP-UX 11.  GCC 2.95.x is not supported and cannot
+be used to compile GCC 3.0 and up.
+
+   The libffi library haven't been ported to 64-bit HP-UX and doesn't
+build.
+
+   Refer to binaries for information about obtaining precompiled GCC
+binaries for HP-UX.  Precompiled binaries must be obtained to build the
+Ada language as it cannot be bootstrapped using C.  Ada is only
+available for the 32-bit PA-RISC runtime.
+
+   Starting with GCC 3.4 an ISO C compiler is required to bootstrap.
+The bundled compiler supports only traditional C; you will need either
+HP's unbundled compiler, or a binary distribution of GCC.
+
+   It is possible to build GCC 3.3 starting with the bundled HP
+compiler, but the process requires several steps.  GCC 3.3 can then be
+used to build later versions.
+
+   There are several possible approaches to building the distribution.
+Binutils can be built first using the HP tools.  Then, the GCC
+distribution can be built.  The second approach is to build GCC first
+using the HP tools, then build binutils, then rebuild GCC.  There have
+been problems with various binary distributions, so it is best not to
+start from a binary distribution.
+
+   On 64-bit capable systems, there are two distinct targets.  Different
+installation prefixes must be used if both are to be installed on the
+same system.  The 'hppa[1-2]*-hp-hpux11*' target generates code for the
+32-bit PA-RISC runtime architecture and uses the HP linker.  The
+'hppa64-hp-hpux11*' target generates 64-bit code for the PA-RISC 2.0
+architecture.
+
+   The script config.guess now selects the target type based on the
+compiler detected during configuration.  You must define 'PATH' or 'CC'
+so that configure finds an appropriate compiler for the initial
+bootstrap.  When 'CC' is used, the definition should contain the options
+that are needed whenever 'CC' is used.
+
+   Specifically, options that determine the runtime architecture must be
+in 'CC' to correctly select the target for the build.  It is also
+convenient to place many other compiler options in 'CC'.  For example,
+'CC="cc -Ac +DA2.0W -Wp,-H16376 -D_CLASSIC_TYPES -D_HPUX_SOURCE"' can be
+used to bootstrap the GCC 3.3 branch with the HP compiler in 64-bit
+K&R/bundled mode.  The '+DA2.0W' option will result in the automatic
+selection of the 'hppa64-hp-hpux11*' target.  The macro definition table
+of cpp needs to be increased for a successful build with the HP
+compiler.  _CLASSIC_TYPES and _HPUX_SOURCE need to be defined when
+building with the bundled compiler, or when using the '-Ac' option.
+These defines aren't necessary with '-Ae'.
+
+   It is best to explicitly configure the 'hppa64-hp-hpux11*' target
+with the '--with-ld=...' option.  This overrides the standard search for
+ld.  The two linkers supported on this target require different
+commands.  The default linker is determined during configuration.  As a
+result, it's not possible to switch linkers in the middle of a GCC
+build.  This has been reported to sometimes occur in unified builds of
+binutils and GCC.
+
+   A recent linker patch must be installed for the correct operation of
+GCC 3.3 and later.  'PHSS_26559' and 'PHSS_24304' are the oldest linker
+patches that are known to work.  They are for HP-UX 11.00 and 11.11,
+respectively.  'PHSS_24303', the companion to 'PHSS_24304', might be
+usable but it hasn't been tested.  These patches have been superseded.
+Consult the HP patch database to obtain the currently recommended linker
+patch for your system.
+
+   The patches are necessary for the support of weak symbols on the
+32-bit port, and for the running of initializers and finalizers.  Weak
+symbols are implemented using SOM secondary definition symbols.  Prior
+to HP-UX 11, there are bugs in the linker support for secondary symbols.
+The patches correct a problem of linker core dumps creating shared
+libraries containing secondary symbols, as well as various other linking
+issues involving secondary symbols.
+
+   GCC 3.3 uses the ELF DT_INIT_ARRAY and DT_FINI_ARRAY capabilities to
+run initializers and finalizers on the 64-bit port.  The 32-bit port
+uses the linker '+init' and '+fini' options for the same purpose.  The
+patches correct various problems with the +init/+fini options, including
+program core dumps.  Binutils 2.14 corrects a problem on the 64-bit port
+resulting from HP's non-standard use of the .init and .fini sections for
+array initializers and finalizers.
+
+   Although the HP and GNU linkers are both supported for the
+'hppa64-hp-hpux11*' target, it is strongly recommended that the HP
+linker be used for link editing on this target.
+
+   At this time, the GNU linker does not support the creation of long
+branch stubs.  As a result, it cannot successfully link binaries
+containing branch offsets larger than 8 megabytes.  In addition, there
+are problems linking shared libraries, linking executables with
+'-static', and with dwarf2 unwind and exception support.  It also
+doesn't provide stubs for internal calls to global functions in shared
+libraries, so these calls cannot be overloaded.
+
+   The HP dynamic loader does not support GNU symbol versioning, so
+symbol versioning is not supported.  It may be necessary to disable
+symbol versioning with '--disable-symvers' when using GNU ld.
+
+   POSIX threads are the default.  The optional DCE thread library is
+not supported, so '--enable-threads=dce' does not work.
+

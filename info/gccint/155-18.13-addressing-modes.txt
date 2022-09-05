@@ -1,0 +1,537 @@
+18.13 Addressing Modes
+======================
+
+This is about addressing modes.
+
+ -- Macro: HAVE_PRE_INCREMENT
+ -- Macro: HAVE_PRE_DECREMENT
+ -- Macro: HAVE_POST_INCREMENT
+ -- Macro: HAVE_POST_DECREMENT
+     A C expression that is nonzero if the machine supports
+     pre-increment, pre-decrement, post-increment, or post-decrement
+     addressing respectively.
+
+ -- Macro: HAVE_PRE_MODIFY_DISP
+ -- Macro: HAVE_POST_MODIFY_DISP
+     A C expression that is nonzero if the machine supports pre- or
+     post-address side-effect generation involving constants other than
+     the size of the memory operand.
+
+ -- Macro: HAVE_PRE_MODIFY_REG
+ -- Macro: HAVE_POST_MODIFY_REG
+     A C expression that is nonzero if the machine supports pre- or
+     post-address side-effect generation involving a register
+     displacement.
+
+ -- Macro: CONSTANT_ADDRESS_P (X)
+     A C expression that is 1 if the RTX X is a constant which is a
+     valid address.  On most machines the default definition of
+     '(CONSTANT_P (X) && GET_CODE (X) != CONST_DOUBLE)' is acceptable,
+     but a few machines are more restrictive as to which constant
+     addresses are supported.
+
+ -- Macro: CONSTANT_P (X)
+     'CONSTANT_P', which is defined by target-independent code, accepts
+     integer-values expressions whose values are not explicitly known,
+     such as 'symbol_ref', 'label_ref', and 'high' expressions and
+     'const' arithmetic expressions, in addition to 'const_int' and
+     'const_double' expressions.
+
+ -- Macro: MAX_REGS_PER_ADDRESS
+     A number, the maximum number of registers that can appear in a
+     valid memory address.  Note that it is up to you to specify a value
+     equal to the maximum number that 'TARGET_LEGITIMATE_ADDRESS_P'
+     would ever accept.
+
+ -- Target Hook: bool TARGET_LEGITIMATE_ADDRESS_P (machine_mode MODE,
+          rtx X, bool STRICT)
+     A function that returns whether X (an RTX) is a legitimate memory
+     address on the target machine for a memory operand of mode MODE.
+
+     Legitimate addresses are defined in two variants: a strict variant
+     and a non-strict one.  The STRICT parameter chooses which variant
+     is desired by the caller.
+
+     The strict variant is used in the reload pass.  It must be defined
+     so that any pseudo-register that has not been allocated a hard
+     register is considered a memory reference.  This is because in
+     contexts where some kind of register is required, a pseudo-register
+     with no hard register must be rejected.  For non-hard registers,
+     the strict variant should look up the 'reg_renumber' array; it
+     should then proceed using the hard register number in the array, or
+     treat the pseudo as a memory reference if the array holds '-1'.
+
+     The non-strict variant is used in other passes.  It must be defined
+     to accept all pseudo-registers in every context where some kind of
+     register is required.
+
+     Normally, constant addresses which are the sum of a 'symbol_ref'
+     and an integer are stored inside a 'const' RTX to mark them as
+     constant.  Therefore, there is no need to recognize such sums
+     specifically as legitimate addresses.  Normally you would simply
+     recognize any 'const' as legitimate.
+
+     Usually 'PRINT_OPERAND_ADDRESS' is not prepared to handle constant
+     sums that are not marked with 'const'.  It assumes that a naked
+     'plus' indicates indexing.  If so, then you _must_ reject such
+     naked constant sums as illegitimate addresses, so that none of them
+     will be given to 'PRINT_OPERAND_ADDRESS'.
+
+     On some machines, whether a symbolic address is legitimate depends
+     on the section that the address refers to.  On these machines,
+     define the target hook 'TARGET_ENCODE_SECTION_INFO' to store the
+     information into the 'symbol_ref', and then check for it here.
+     When you see a 'const', you will have to look inside it to find the
+     'symbol_ref' in order to determine the section.  *Note Assembler
+     Format::.
+
+     Some ports are still using a deprecated legacy substitute for this
+     hook, the 'GO_IF_LEGITIMATE_ADDRESS' macro.  This macro has this
+     syntax:
+
+          #define GO_IF_LEGITIMATE_ADDRESS (MODE, X, LABEL)
+
+     and should 'goto LABEL' if the address X is a valid address on the
+     target machine for a memory operand of mode MODE.
+
+     Compiler source files that want to use the strict variant of this
+     macro define the macro 'REG_OK_STRICT'.  You should use an '#ifdef
+     REG_OK_STRICT' conditional to define the strict variant in that
+     case and the non-strict variant otherwise.
+
+     Using the hook is usually simpler because it limits the number of
+     files that are recompiled when changes are made.
+
+ -- Macro: TARGET_MEM_CONSTRAINT
+     A single character to be used instead of the default ''m''
+     character for general memory addresses.  This defines the
+     constraint letter which matches the memory addresses accepted by
+     'TARGET_LEGITIMATE_ADDRESS_P'.  Define this macro if you want to
+     support new address formats in your back end without changing the
+     semantics of the ''m'' constraint.  This is necessary in order to
+     preserve functionality of inline assembly constructs using the
+     ''m'' constraint.
+
+ -- Macro: FIND_BASE_TERM (X)
+     A C expression to determine the base term of address X, or to
+     provide a simplified version of X from which 'alias.c' can easily
+     find the base term.  This macro is used in only two places:
+     'find_base_value' and 'find_base_term' in 'alias.c'.
+
+     It is always safe for this macro to not be defined.  It exists so
+     that alias analysis can understand machine-dependent addresses.
+
+     The typical use of this macro is to handle addresses containing a
+     label_ref or symbol_ref within an UNSPEC.
+
+ -- Target Hook: rtx TARGET_LEGITIMIZE_ADDRESS (rtx X, rtx OLDX,
+          machine_mode MODE)
+     This hook is given an invalid memory address X for an operand of
+     mode MODE and should try to return a valid memory address.
+
+     X will always be the result of a call to 'break_out_memory_refs',
+     and OLDX will be the operand that was given to that function to
+     produce X.
+
+     The code of the hook should not alter the substructure of X.  If it
+     transforms X into a more legitimate form, it should return the new
+     X.
+
+     It is not necessary for this hook to come up with a legitimate
+     address, with the exception of native TLS addresses (*note Emulated
+     TLS::).  The compiler has standard ways of doing so in all cases.
+     In fact, if the target supports only emulated TLS, it is safe to
+     omit this hook or make it return X if it cannot find a valid way to
+     legitimize the address.  But often a machine-dependent strategy can
+     generate better code.
+
+ -- Macro: LEGITIMIZE_RELOAD_ADDRESS (X, MODE, OPNUM, TYPE, IND_LEVELS,
+          WIN)
+     A C compound statement that attempts to replace X, which is an
+     address that needs reloading, with a valid memory address for an
+     operand of mode MODE.  WIN will be a C statement label elsewhere in
+     the code.  It is not necessary to define this macro, but it might
+     be useful for performance reasons.
+
+     For example, on the i386, it is sometimes possible to use a single
+     reload register instead of two by reloading a sum of two pseudo
+     registers into a register.  On the other hand, for number of RISC
+     processors offsets are limited so that often an intermediate
+     address needs to be generated in order to address a stack slot.  By
+     defining 'LEGITIMIZE_RELOAD_ADDRESS' appropriately, the
+     intermediate addresses generated for adjacent some stack slots can
+     be made identical, and thus be shared.
+
+     _Note_: This macro should be used with caution.  It is necessary to
+     know something of how reload works in order to effectively use
+     this, and it is quite easy to produce macros that build in too much
+     knowledge of reload internals.
+
+     _Note_: This macro must be able to reload an address created by a
+     previous invocation of this macro.  If it fails to handle such
+     addresses then the compiler may generate incorrect code or abort.
+
+     The macro definition should use 'push_reload' to indicate parts
+     that need reloading; OPNUM, TYPE and IND_LEVELS are usually
+     suitable to be passed unaltered to 'push_reload'.
+
+     The code generated by this macro must not alter the substructure of
+     X.  If it transforms X into a more legitimate form, it should
+     assign X (which will always be a C variable) a new value.  This
+     also applies to parts that you change indirectly by calling
+     'push_reload'.
+
+     The macro definition may use 'strict_memory_address_p' to test if
+     the address has become legitimate.
+
+     If you want to change only a part of X, one standard way of doing
+     this is to use 'copy_rtx'.  Note, however, that it unshares only a
+     single level of rtl.  Thus, if the part to be changed is not at the
+     top level, you'll need to replace first the top level.  It is not
+     necessary for this macro to come up with a legitimate address; but
+     often a machine-dependent strategy can generate better code.
+
+ -- Target Hook: bool TARGET_MODE_DEPENDENT_ADDRESS_P (const_rtx ADDR,
+          addr_space_t ADDRSPACE)
+     This hook returns 'true' if memory address ADDR in address space
+     ADDRSPACE can have different meanings depending on the machine mode
+     of the memory reference it is used for or if the address is valid
+     for some modes but not others.
+
+     Autoincrement and autodecrement addresses typically have
+     mode-dependent effects because the amount of the increment or
+     decrement is the size of the operand being addressed.  Some
+     machines have other mode-dependent addresses.  Many RISC machines
+     have no mode-dependent addresses.
+
+     You may assume that ADDR is a valid address for the machine.
+
+     The default version of this hook returns 'false'.
+
+ -- Target Hook: bool TARGET_LEGITIMATE_CONSTANT_P (machine_mode MODE,
+          rtx X)
+     This hook returns true if X is a legitimate constant for a
+     MODE-mode immediate operand on the target machine.  You can assume
+     that X satisfies 'CONSTANT_P', so you need not check this.
+
+     The default definition returns true.
+
+ -- Target Hook: rtx TARGET_DELEGITIMIZE_ADDRESS (rtx X)
+     This hook is used to undo the possibly obfuscating effects of the
+     'LEGITIMIZE_ADDRESS' and 'LEGITIMIZE_RELOAD_ADDRESS' target macros.
+     Some backend implementations of these macros wrap symbol references
+     inside an 'UNSPEC' rtx to represent PIC or similar addressing
+     modes.  This target hook allows GCC's optimizers to understand the
+     semantics of these opaque 'UNSPEC's by converting them back into
+     their original form.
+
+ -- Target Hook: bool TARGET_CONST_NOT_OK_FOR_DEBUG_P (rtx X)
+     This hook should return true if X should not be emitted into debug
+     sections.
+
+ -- Target Hook: bool TARGET_CANNOT_FORCE_CONST_MEM (machine_mode MODE,
+          rtx X)
+     This hook should return true if X is of a form that cannot (or
+     should not) be spilled to the constant pool.  MODE is the mode of
+     X.
+
+     The default version of this hook returns false.
+
+     The primary reason to define this hook is to prevent reload from
+     deciding that a non-legitimate constant would be better reloaded
+     from the constant pool instead of spilling and reloading a register
+     holding the constant.  This restriction is often true of addresses
+     of TLS symbols for various targets.
+
+ -- Target Hook: bool TARGET_USE_BLOCKS_FOR_CONSTANT_P (machine_mode
+          MODE, const_rtx X)
+     This hook should return true if pool entries for constant X can be
+     placed in an 'object_block' structure.  MODE is the mode of X.
+
+     The default version returns false for all constants.
+
+ -- Target Hook: bool TARGET_USE_BLOCKS_FOR_DECL_P (const_tree DECL)
+     This hook should return true if pool entries for DECL should be
+     placed in an 'object_block' structure.
+
+     The default version returns true for all decls.
+
+ -- Target Hook: tree TARGET_BUILTIN_RECIPROCAL (tree FNDECL)
+     This hook should return the DECL of a function that implements the
+     reciprocal of the machine-specific builtin function FNDECL, or
+     'NULL_TREE' if such a function is not available.
+
+ -- Target Hook: tree TARGET_VECTORIZE_BUILTIN_MASK_FOR_LOAD (void)
+     This hook should return the DECL of a function F that given an
+     address ADDR as an argument returns a mask M that can be used to
+     extract from two vectors the relevant data that resides in ADDR in
+     case ADDR is not properly aligned.
+
+     The autovectorizer, when vectorizing a load operation from an
+     address ADDR that may be unaligned, will generate two vector loads
+     from the two aligned addresses around ADDR.  It then generates a
+     'REALIGN_LOAD' operation to extract the relevant data from the two
+     loaded vectors.  The first two arguments to 'REALIGN_LOAD', V1 and
+     V2, are the two vectors, each of size VS, and the third argument,
+     OFF, defines how the data will be extracted from these two vectors:
+     if OFF is 0, then the returned vector is V2; otherwise, the
+     returned vector is composed from the last VS-OFF elements of V1
+     concatenated to the first OFF elements of V2.
+
+     If this hook is defined, the autovectorizer will generate a call to
+     F (using the DECL tree that this hook returns) and will use the
+     return value of F as the argument OFF to 'REALIGN_LOAD'.
+     Therefore, the mask M returned by F should comply with the
+     semantics expected by 'REALIGN_LOAD' described above.  If this hook
+     is not defined, then ADDR will be used as the argument OFF to
+     'REALIGN_LOAD', in which case the low log2(VS) - 1 bits of ADDR
+     will be considered.
+
+ -- Target Hook: int TARGET_VECTORIZE_BUILTIN_VECTORIZATION_COST (enum
+          vect_cost_for_stmt TYPE_OF_COST, tree VECTYPE, int MISALIGN)
+     Returns cost of different scalar or vector statements for
+     vectorization cost model.  For vector memory operations the cost
+     may depend on type (VECTYPE) and misalignment value (MISALIGN).
+
+ -- Target Hook: poly_uint64 TARGET_VECTORIZE_PREFERRED_VECTOR_ALIGNMENT
+          (const_tree TYPE)
+     This hook returns the preferred alignment in bits for accesses to
+     vectors of type TYPE in vectorized code.  This might be less than
+     or greater than the ABI-defined value returned by
+     'TARGET_VECTOR_ALIGNMENT'.  It can be equal to the alignment of a
+     single element, in which case the vectorizer will not try to
+     optimize for alignment.
+
+     The default hook returns 'TYPE_ALIGN (TYPE)', which is correct for
+     most targets.
+
+ -- Target Hook: bool TARGET_VECTORIZE_VECTOR_ALIGNMENT_REACHABLE
+          (const_tree TYPE, bool IS_PACKED)
+     Return true if vector alignment is reachable (by peeling N
+     iterations) for the given scalar type TYPE.  IS_PACKED is false if
+     the scalar access using TYPE is known to be naturally aligned.
+
+ -- Target Hook: bool TARGET_VECTORIZE_VEC_PERM_CONST (machine_mode
+          MODE, rtx OUTPUT, rtx IN0, rtx IN1, const vec_perm_indices
+          &SEL)
+     This hook is used to test whether the target can permute up to two
+     vectors of mode MODE using the permutation vector 'sel', and also
+     to emit such a permutation.  In the former case IN0, IN1 and OUT
+     are all null.  In the latter case IN0 and IN1 are the source
+     vectors and OUT is the destination vector; all three are registers
+     of mode MODE.  IN1 is the same as IN0 if SEL describes a
+     permutation on one vector instead of two.
+
+     Return true if the operation is possible, emitting instructions for
+     it if rtxes are provided.
+
+     If the hook returns false for a mode with multibyte elements, GCC
+     will try the equivalent byte operation.  If that also fails, it
+     will try forcing the selector into a register and using the
+     VEC_PERMMODE instruction pattern.  There is no need for the hook to
+     handle these two implementation approaches itself.
+
+ -- Target Hook: tree TARGET_VECTORIZE_BUILTIN_CONVERSION (unsigned
+          CODE, tree DEST_TYPE, tree SRC_TYPE)
+     This hook should return the DECL of a function that implements
+     conversion of the input vector of type SRC_TYPE to type DEST_TYPE.
+     The value of CODE is one of the enumerators in 'enum tree_code' and
+     specifies how the conversion is to be applied (truncation,
+     rounding, etc.).
+
+     If this hook is defined, the autovectorizer will use the
+     'TARGET_VECTORIZE_BUILTIN_CONVERSION' target hook when vectorizing
+     conversion.  Otherwise, it will return 'NULL_TREE'.
+
+ -- Target Hook: tree TARGET_VECTORIZE_BUILTIN_VECTORIZED_FUNCTION
+          (unsigned CODE, tree VEC_TYPE_OUT, tree VEC_TYPE_IN)
+     This hook should return the decl of a function that implements the
+     vectorized variant of the function with the 'combined_fn' code CODE
+     or 'NULL_TREE' if such a function is not available.  The return
+     type of the vectorized function shall be of vector type
+     VEC_TYPE_OUT and the argument types should be VEC_TYPE_IN.
+
+ -- Target Hook: tree TARGET_VECTORIZE_BUILTIN_MD_VECTORIZED_FUNCTION
+          (tree FNDECL, tree VEC_TYPE_OUT, tree VEC_TYPE_IN)
+     This hook should return the decl of a function that implements the
+     vectorized variant of target built-in function 'fndecl'.  The
+     return type of the vectorized function shall be of vector type
+     VEC_TYPE_OUT and the argument types should be VEC_TYPE_IN.
+
+ -- Target Hook: bool TARGET_VECTORIZE_SUPPORT_VECTOR_MISALIGNMENT
+          (machine_mode MODE, const_tree TYPE, int MISALIGNMENT, bool
+          IS_PACKED)
+     This hook should return true if the target supports misaligned
+     vector store/load of a specific factor denoted in the MISALIGNMENT
+     parameter.  The vector store/load should be of machine mode MODE
+     and the elements in the vectors should be of type TYPE.  IS_PACKED
+     parameter is true if the memory access is defined in a packed
+     struct.
+
+ -- Target Hook: machine_mode TARGET_VECTORIZE_PREFERRED_SIMD_MODE
+          (scalar_mode MODE)
+     This hook should return the preferred mode for vectorizing scalar
+     mode MODE.  The default is equal to 'word_mode', because the
+     vectorizer can do some transformations even in absence of
+     specialized SIMD hardware.
+
+ -- Target Hook: machine_mode TARGET_VECTORIZE_SPLIT_REDUCTION
+          (machine_mode)
+     This hook should return the preferred mode to split the final
+     reduction step on MODE to.  The reduction is then carried out
+     reducing upper against lower halves of vectors recursively until
+     the specified mode is reached.  The default is MODE which means no
+     splitting.
+
+ -- Target Hook: void TARGET_VECTORIZE_AUTOVECTORIZE_VECTOR_SIZES
+          (vector_sizes *SIZES)
+     If the mode returned by 'TARGET_VECTORIZE_PREFERRED_SIMD_MODE' is
+     not the only one that is worth considering, this hook should add
+     all suitable vector sizes to SIZES, in order of decreasing
+     preference.  The first one should be the size of
+     'TARGET_VECTORIZE_PREFERRED_SIMD_MODE'.
+
+     The hook does not need to do anything if the vector returned by
+     'TARGET_VECTORIZE_PREFERRED_SIMD_MODE' is the only one relevant for
+     autovectorization.  The default implementation does nothing.
+
+ -- Target Hook: opt_machine_mode TARGET_VECTORIZE_GET_MASK_MODE
+          (poly_uint64 NUNITS, poly_uint64 LENGTH)
+     A vector mask is a value that holds one boolean result for every
+     element in a vector.  This hook returns the machine mode that
+     should be used to represent such a mask when the vector in question
+     is LENGTH bytes long and contains NUNITS elements.  The hook
+     returns an empty 'opt_machine_mode' if no such mode exists.
+
+     The default implementation returns the mode of an integer vector
+     that is LENGTH bytes long and that contains NUNITS elements, if
+     such a mode exists.
+
+ -- Target Hook: bool TARGET_VECTORIZE_EMPTY_MASK_IS_EXPENSIVE (unsigned
+          IFN)
+     This hook returns true if masked internal function IFN (really of
+     type 'internal_fn') should be considered expensive when the mask is
+     all zeros.  GCC can then try to branch around the instruction
+     instead.
+
+ -- Target Hook: void * TARGET_VECTORIZE_INIT_COST (struct loop
+          *LOOP_INFO)
+     This hook should initialize target-specific data structures in
+     preparation for modeling the costs of vectorizing a loop or basic
+     block.  The default allocates three unsigned integers for
+     accumulating costs for the prologue, body, and epilogue of the loop
+     or basic block.  If LOOP_INFO is non-NULL, it identifies the loop
+     being vectorized; otherwise a single block is being vectorized.
+
+ -- Target Hook: unsigned TARGET_VECTORIZE_ADD_STMT_COST (void *DATA,
+          int COUNT, enum vect_cost_for_stmt KIND, struct _stmt_vec_info
+          *STMT_INFO, int MISALIGN, enum vect_cost_model_location WHERE)
+     This hook should update the target-specific DATA in response to
+     adding COUNT copies of the given KIND of statement to a loop or
+     basic block.  The default adds the builtin vectorizer cost for the
+     copies of the statement to the accumulator specified by WHERE, (the
+     prologue, body, or epilogue) and returns the amount added.  The
+     return value should be viewed as a tentative cost that may later be
+     revised.
+
+ -- Target Hook: void TARGET_VECTORIZE_FINISH_COST (void *DATA, unsigned
+          *PROLOGUE_COST, unsigned *BODY_COST, unsigned *EPILOGUE_COST)
+     This hook should complete calculations of the cost of vectorizing a
+     loop or basic block based on DATA, and return the prologue, body,
+     and epilogue costs as unsigned integers.  The default returns the
+     value of the three accumulators.
+
+ -- Target Hook: void TARGET_VECTORIZE_DESTROY_COST_DATA (void *DATA)
+     This hook should release DATA and any related data structures
+     allocated by TARGET_VECTORIZE_INIT_COST. The default releases the
+     accumulator.
+
+ -- Target Hook: tree TARGET_VECTORIZE_BUILTIN_GATHER (const_tree
+          MEM_VECTYPE, const_tree INDEX_TYPE, int SCALE)
+     Target builtin that implements vector gather operation.
+     MEM_VECTYPE is the vector type of the load and INDEX_TYPE is scalar
+     type of the index, scaled by SCALE.  The default is 'NULL_TREE'
+     which means to not vectorize gather loads.
+
+ -- Target Hook: tree TARGET_VECTORIZE_BUILTIN_SCATTER (const_tree
+          VECTYPE, const_tree INDEX_TYPE, int SCALE)
+     Target builtin that implements vector scatter operation.  VECTYPE
+     is the vector type of the store and INDEX_TYPE is scalar type of
+     the index, scaled by SCALE.  The default is 'NULL_TREE' which means
+     to not vectorize scatter stores.
+
+ -- Target Hook: int TARGET_SIMD_CLONE_COMPUTE_VECSIZE_AND_SIMDLEN
+          (struct cgraph_node *, struct cgraph_simd_clone *, TREE, INT)
+     This hook should set VECSIZE_MANGLE, VECSIZE_INT, VECSIZE_FLOAT
+     fields in SIMD_CLONE structure pointed by CLONE_INFO argument and
+     also SIMDLEN field if it was previously 0.  The hook should return
+     0 if SIMD clones shouldn't be emitted, or number of VECSIZE_MANGLE
+     variants that should be emitted.
+
+ -- Target Hook: void TARGET_SIMD_CLONE_ADJUST (struct cgraph_node *)
+     This hook should add implicit 'attribute(target("..."))' attribute
+     to SIMD clone NODE if needed.
+
+ -- Target Hook: int TARGET_SIMD_CLONE_USABLE (struct cgraph_node *)
+     This hook should return -1 if SIMD clone NODE shouldn't be used in
+     vectorized loops in current function, or non-negative number if it
+     is usable.  In that case, the smaller the number is, the more
+     desirable it is to use it.
+
+ -- Target Hook: int TARGET_SIMT_VF (void)
+     Return number of threads in SIMT thread group on the target.
+
+ -- Target Hook: bool TARGET_GOACC_VALIDATE_DIMS (tree DECL, int *DIMS,
+          int FN_LEVEL, unsigned USED)
+     This hook should check the launch dimensions provided for an
+     OpenACC compute region, or routine.  Defaulted values are
+     represented as -1 and non-constant values as 0.  The FN_LEVEL is
+     negative for the function corresponding to the compute region.  For
+     a routine is is the outermost level at which partitioned execution
+     may be spawned.  The hook should verify non-default values.  If
+     DECL is NULL, global defaults are being validated and unspecified
+     defaults should be filled in.  Diagnostics should be issued as
+     appropriate.  Return true, if changes have been made.  You must
+     override this hook to provide dimensions larger than 1.
+
+ -- Target Hook: int TARGET_GOACC_DIM_LIMIT (int AXIS)
+     This hook should return the maximum size of a particular dimension,
+     or zero if unbounded.
+
+ -- Target Hook: bool TARGET_GOACC_FORK_JOIN (gcall *CALL, const int
+          *DIMS, bool IS_FORK)
+     This hook can be used to convert IFN_GOACC_FORK and IFN_GOACC_JOIN
+     function calls to target-specific gimple, or indicate whether they
+     should be retained.  It is executed during the oacc_device_lower
+     pass.  It should return true, if the call should be retained.  It
+     should return false, if it is to be deleted (either because
+     target-specific gimple has been inserted before it, or there is no
+     need for it).  The default hook returns false, if there are no RTL
+     expanders for them.
+
+ -- Target Hook: void TARGET_GOACC_REDUCTION (gcall *CALL)
+     This hook is used by the oacc_transform pass to expand calls to the
+     GOACC_REDUCTION internal function, into a sequence of gimple
+     instructions.  CALL is gimple statement containing the call to the
+     function.  This hook removes statement CALL after the expanded
+     sequence has been inserted.  This hook is also responsible for
+     allocating any storage for reductions when necessary.
+
+ -- Target Hook: tree TARGET_PREFERRED_ELSE_VALUE (unsigned IFN, tree
+          TYPE, unsigned NOPS, tree *OPS)
+     This hook returns the target's preferred final argument for a call
+     to conditional internal function IFN (really of type
+     'internal_fn').  TYPE specifies the return type of the function and
+     OPS are the operands to the conditional operation, of which there
+     are NOPS.
+
+     For example, if IFN is 'IFN_COND_ADD', the hook returns a value of
+     type TYPE that should be used when 'OPS[0]' and 'OPS[1]' are
+     conditionally added together.
+
+     This hook is only relevant if the target supports conditional
+     patterns like 'cond_addM'.  The default implementation returns a
+     zero constant of type TYPE.
+
+File: gccint.info,  Node: Anchored Addresses,  Next: Condition Code,  Prev: Addressing Modes,  Up: Target Macros
+

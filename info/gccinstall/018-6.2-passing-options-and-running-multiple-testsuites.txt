@@ -1,0 +1,58 @@
+6.2 Passing options and running multiple testsuites
+===================================================
+
+You can pass multiple options to the testsuite using the
+'--target_board' option of DejaGNU, either passed as part of
+'RUNTESTFLAGS', or directly to 'runtest' if you prefer to work outside
+the makefiles.  For example,
+
+     make check-g++ RUNTESTFLAGS="--target_board=unix/-O3/-fmerge-constants"
+
+   will run the standard 'g++' testsuites ("unix" is the target name for
+a standard native testsuite situation), passing '-O3 -fmerge-constants'
+to the compiler on every test, i.e., slashes separate options.
+
+   You can run the testsuites multiple times using combinations of
+options with a syntax similar to the brace expansion of popular shells:
+
+     ..."--target_board=arm-sim\{-mhard-float,-msoft-float\}\{-O1,-O2,-O3,\}"
+
+   (Note the empty option caused by the trailing comma in the final
+group.)  The following will run each testsuite eight times using the
+'arm-sim' target, as if you had specified all possible combinations
+yourself:
+
+     --target_board='arm-sim/-mhard-float/-O1 \
+                     arm-sim/-mhard-float/-O2 \
+                     arm-sim/-mhard-float/-O3 \
+                     arm-sim/-mhard-float \
+                     arm-sim/-msoft-float/-O1 \
+                     arm-sim/-msoft-float/-O2 \
+                     arm-sim/-msoft-float/-O3 \
+                     arm-sim/-msoft-float'
+
+   They can be combined as many times as you wish, in arbitrary ways.
+This list:
+
+     ..."--target_board=unix/-Wextra\{-O3,-fno-strength\}\{-fomit-frame,\}"
+
+   will generate four combinations, all involving '-Wextra'.
+
+   The disadvantage to this method is that the testsuites are run in
+serial, which is a waste on multiprocessor systems.  For users with GNU
+Make and a shell which performs brace expansion, you can run the
+testsuites in parallel by having the shell perform the combinations and
+'make' do the parallel runs.  Instead of using '--target_board', use a
+special makefile target:
+
+     make -jN check-TESTSUITE//TEST-TARGET/OPTION1/OPTION2/...
+
+   For example,
+
+     make -j3 check-gcc//sh-hms-sim/{-m1,-m2,-m3,-m3e,-m4}/{,-nofpu}
+
+   will run three concurrent "make-gcc" testsuites, eventually testing
+all ten combinations as described above.  Note that this is currently
+only supported in the 'gcc' subdirectory.  (To see how this works, try
+typing 'echo' before the example given here.)
+

@@ -1,0 +1,2448 @@
+17.9 Standard Pattern Names For Generation
+==========================================
+
+Here is a table of the instruction names that are meaningful in the RTL
+generation pass of the compiler.  Giving one of these names to an
+instruction pattern tells the RTL generation pass that it can use the
+pattern to accomplish a certain task.
+
+'movM'
+     Here M stands for a two-letter machine mode name, in lowercase.
+     This instruction pattern moves data with that machine mode from
+     operand 1 to operand 0.  For example, 'movsi' moves full-word data.
+
+     If operand 0 is a 'subreg' with mode M of a register whose own mode
+     is wider than M, the effect of this instruction is to store the
+     specified value in the part of the register that corresponds to
+     mode M.  Bits outside of M, but which are within the same target
+     word as the 'subreg' are undefined.  Bits which are outside the
+     target word are left unchanged.
+
+     This class of patterns is special in several ways.  First of all,
+     each of these names up to and including full word size _must_ be
+     defined, because there is no other way to copy a datum from one
+     place to another.  If there are patterns accepting operands in
+     larger modes, 'movM' must be defined for integer modes of those
+     sizes.
+
+     Second, these patterns are not used solely in the RTL generation
+     pass.  Even the reload pass can generate move insns to copy values
+     from stack slots into temporary registers.  When it does so, one of
+     the operands is a hard register and the other is an operand that
+     can need to be reloaded into a register.
+
+     Therefore, when given such a pair of operands, the pattern must
+     generate RTL which needs no reloading and needs no temporary
+     registers--no registers other than the operands.  For example, if
+     you support the pattern with a 'define_expand', then in such a case
+     the 'define_expand' mustn't call 'force_reg' or any other such
+     function which might generate new pseudo registers.
+
+     This requirement exists even for subword modes on a RISC machine
+     where fetching those modes from memory normally requires several
+     insns and some temporary registers.
+
+     During reload a memory reference with an invalid address may be
+     passed as an operand.  Such an address will be replaced with a
+     valid address later in the reload pass.  In this case, nothing may
+     be done with the address except to use it as it stands.  If it is
+     copied, it will not be replaced with a valid address.  No attempt
+     should be made to make such an address into a valid address and no
+     routine (such as 'change_address') that will do so may be called.
+     Note that 'general_operand' will fail when applied to such an
+     address.
+
+     The global variable 'reload_in_progress' (which must be explicitly
+     declared if required) can be used to determine whether such special
+     handling is required.
+
+     The variety of operands that have reloads depends on the rest of
+     the machine description, but typically on a RISC machine these can
+     only be pseudo registers that did not get hard registers, while on
+     other machines explicit memory references will get optional
+     reloads.
+
+     If a scratch register is required to move an object to or from
+     memory, it can be allocated using 'gen_reg_rtx' prior to life
+     analysis.
+
+     If there are cases which need scratch registers during or after
+     reload, you must provide an appropriate secondary_reload target
+     hook.
+
+     The macro 'can_create_pseudo_p' can be used to determine if it is
+     unsafe to create new pseudo registers.  If this variable is
+     nonzero, then it is unsafe to call 'gen_reg_rtx' to allocate a new
+     pseudo.
+
+     The constraints on a 'movM' must permit moving any hard register to
+     any other hard register provided that 'TARGET_HARD_REGNO_MODE_OK'
+     permits mode M in both registers and 'TARGET_REGISTER_MOVE_COST'
+     applied to their classes returns a value of 2.
+
+     It is obligatory to support floating point 'movM' instructions into
+     and out of any registers that can hold fixed point values, because
+     unions and structures (which have modes 'SImode' or 'DImode') can
+     be in those registers and they may have floating point members.
+
+     There may also be a need to support fixed point 'movM' instructions
+     in and out of floating point registers.  Unfortunately, I have
+     forgotten why this was so, and I don't know whether it is still
+     true.  If 'TARGET_HARD_REGNO_MODE_OK' rejects fixed point values in
+     floating point registers, then the constraints of the fixed point
+     'movM' instructions must be designed to avoid ever trying to reload
+     into a floating point register.
+
+'reload_inM'
+'reload_outM'
+     These named patterns have been obsoleted by the target hook
+     'secondary_reload'.
+
+     Like 'movM', but used when a scratch register is required to move
+     between operand 0 and operand 1.  Operand 2 describes the scratch
+     register.  See the discussion of the 'SECONDARY_RELOAD_CLASS' macro
+     in *note Register Classes::.
+
+     There are special restrictions on the form of the 'match_operand's
+     used in these patterns.  First, only the predicate for the reload
+     operand is examined, i.e., 'reload_in' examines operand 1, but not
+     the predicates for operand 0 or 2.  Second, there may be only one
+     alternative in the constraints.  Third, only a single register
+     class letter may be used for the constraint; subsequent constraint
+     letters are ignored.  As a special exception, an empty constraint
+     string matches the 'ALL_REGS' register class.  This may relieve
+     ports of the burden of defining an 'ALL_REGS' constraint letter
+     just for these patterns.
+
+'movstrictM'
+     Like 'movM' except that if operand 0 is a 'subreg' with mode M of a
+     register whose natural mode is wider, the 'movstrictM' instruction
+     is guaranteed not to alter any of the register except the part
+     which belongs to mode M.
+
+'movmisalignM'
+     This variant of a move pattern is designed to load or store a value
+     from a memory address that is not naturally aligned for its mode.
+     For a store, the memory will be in operand 0; for a load, the
+     memory will be in operand 1.  The other operand is guaranteed not
+     to be a memory, so that it's easy to tell whether this is a load or
+     store.
+
+     This pattern is used by the autovectorizer, and when expanding a
+     'MISALIGNED_INDIRECT_REF' expression.
+
+'load_multiple'
+     Load several consecutive memory locations into consecutive
+     registers.  Operand 0 is the first of the consecutive registers,
+     operand 1 is the first memory location, and operand 2 is a
+     constant: the number of consecutive registers.
+
+     Define this only if the target machine really has such an
+     instruction; do not define this if the most efficient way of
+     loading consecutive registers from memory is to do them one at a
+     time.
+
+     On some machines, there are restrictions as to which consecutive
+     registers can be stored into memory, such as particular starting or
+     ending register numbers or only a range of valid counts.  For those
+     machines, use a 'define_expand' (*note Expander Definitions::) and
+     make the pattern fail if the restrictions are not met.
+
+     Write the generated insn as a 'parallel' with elements being a
+     'set' of one register from the appropriate memory location (you may
+     also need 'use' or 'clobber' elements).  Use a 'match_parallel'
+     (*note RTL Template::) to recognize the insn.  See 'rs6000.md' for
+     examples of the use of this insn pattern.
+
+'store_multiple'
+     Similar to 'load_multiple', but store several consecutive registers
+     into consecutive memory locations.  Operand 0 is the first of the
+     consecutive memory locations, operand 1 is the first register, and
+     operand 2 is a constant: the number of consecutive registers.
+
+'vec_load_lanesMN'
+     Perform an interleaved load of several vectors from memory operand
+     1 into register operand 0.  Both operands have mode M.  The
+     register operand is viewed as holding consecutive vectors of mode
+     N, while the memory operand is a flat array that contains the same
+     number of elements.  The operation is equivalent to:
+
+          int c = GET_MODE_SIZE (M) / GET_MODE_SIZE (N);
+          for (j = 0; j < GET_MODE_NUNITS (N); j++)
+            for (i = 0; i < c; i++)
+              operand0[i][j] = operand1[j * c + i];
+
+     For example, 'vec_load_lanestiv4hi' loads 8 16-bit values from
+     memory into a register of mode 'TI'.  The register contains two
+     consecutive vectors of mode 'V4HI'.
+
+     This pattern can only be used if:
+          TARGET_ARRAY_MODE_SUPPORTED_P (N, C)
+     is true.  GCC assumes that, if a target supports this kind of
+     instruction for some mode N, it also supports unaligned loads for
+     vectors of mode N.
+
+     This pattern is not allowed to 'FAIL'.
+
+'vec_mask_load_lanesMN'
+     Like 'vec_load_lanesMN', but takes an additional mask operand
+     (operand 2) that specifies which elements of the destination
+     vectors should be loaded.  Other elements of the destination
+     vectors are set to zero.  The operation is equivalent to:
+
+          int c = GET_MODE_SIZE (M) / GET_MODE_SIZE (N);
+          for (j = 0; j < GET_MODE_NUNITS (N); j++)
+            if (operand2[j])
+              for (i = 0; i < c; i++)
+                operand0[i][j] = operand1[j * c + i];
+            else
+              for (i = 0; i < c; i++)
+                operand0[i][j] = 0;
+
+     This pattern is not allowed to 'FAIL'.
+
+'vec_store_lanesMN'
+     Equivalent to 'vec_load_lanesMN', with the memory and register
+     operands reversed.  That is, the instruction is equivalent to:
+
+          int c = GET_MODE_SIZE (M) / GET_MODE_SIZE (N);
+          for (j = 0; j < GET_MODE_NUNITS (N); j++)
+            for (i = 0; i < c; i++)
+              operand0[j * c + i] = operand1[i][j];
+
+     for a memory operand 0 and register operand 1.
+
+     This pattern is not allowed to 'FAIL'.
+
+'vec_mask_store_lanesMN'
+     Like 'vec_store_lanesMN', but takes an additional mask operand
+     (operand 2) that specifies which elements of the source vectors
+     should be stored.  The operation is equivalent to:
+
+          int c = GET_MODE_SIZE (M) / GET_MODE_SIZE (N);
+          for (j = 0; j < GET_MODE_NUNITS (N); j++)
+            if (operand2[j])
+              for (i = 0; i < c; i++)
+                operand0[j * c + i] = operand1[i][j];
+
+     This pattern is not allowed to 'FAIL'.
+
+'gather_loadM'
+     Load several separate memory locations into a vector of mode M.
+     Operand 1 is a scalar base address and operand 2 is a vector of
+     offsets from that base.  Operand 0 is a destination vector with the
+     same number of elements as the offset.  For each element index I:
+
+        * extend the offset element I to address width, using zero
+          extension if operand 3 is 1 and sign extension if operand 3 is
+          zero;
+        * multiply the extended offset by operand 4;
+        * add the result to the base; and
+        * load the value at that address into element I of operand 0.
+
+     The value of operand 3 does not matter if the offsets are already
+     address width.
+
+'mask_gather_loadM'
+     Like 'gather_loadM', but takes an extra mask operand as operand 5.
+     Bit I of the mask is set if element I of the result should be
+     loaded from memory and clear if element I of the result should be
+     set to zero.
+
+'scatter_storeM'
+     Store a vector of mode M into several distinct memory locations.
+     Operand 0 is a scalar base address and operand 1 is a vector of
+     offsets from that base.  Operand 4 is the vector of values that
+     should be stored, which has the same number of elements as the
+     offset.  For each element index I:
+
+        * extend the offset element I to address width, using zero
+          extension if operand 2 is 1 and sign extension if operand 2 is
+          zero;
+        * multiply the extended offset by operand 3;
+        * add the result to the base; and
+        * store element I of operand 4 to that address.
+
+     The value of operand 2 does not matter if the offsets are already
+     address width.
+
+'mask_scatter_storeM'
+     Like 'scatter_storeM', but takes an extra mask operand as operand
+     5.  Bit I of the mask is set if element I of the result should be
+     stored to memory.
+
+'vec_setM'
+     Set given field in the vector value.  Operand 0 is the vector to
+     modify, operand 1 is new value of field and operand 2 specify the
+     field index.
+
+'vec_extractMN'
+     Extract given field from the vector value.  Operand 1 is the
+     vector, operand 2 specify field index and operand 0 place to store
+     value into.  The N mode is the mode of the field or vector of
+     fields that should be extracted, should be either element mode of
+     the vector mode M, or a vector mode with the same element mode and
+     smaller number of elements.  If N is a vector mode, the index is
+     counted in units of that mode.
+
+'vec_initMN'
+     Initialize the vector to given values.  Operand 0 is the vector to
+     initialize and operand 1 is parallel containing values for
+     individual fields.  The N mode is the mode of the elements, should
+     be either element mode of the vector mode M, or a vector mode with
+     the same element mode and smaller number of elements.
+
+'vec_duplicateM'
+     Initialize vector output operand 0 so that each element has the
+     value given by scalar input operand 1.  The vector has mode M and
+     the scalar has the mode appropriate for one element of M.
+
+     This pattern only handles duplicates of non-constant inputs.
+     Constant vectors go through the 'movM' pattern instead.
+
+     This pattern is not allowed to 'FAIL'.
+
+'vec_seriesM'
+     Initialize vector output operand 0 so that element I is equal to
+     operand 1 plus I times operand 2.  In other words, create a linear
+     series whose base value is operand 1 and whose step is operand 2.
+
+     The vector output has mode M and the scalar inputs have the mode
+     appropriate for one element of M.  This pattern is not used for
+     floating-point vectors, in order to avoid having to specify the
+     rounding behavior for I > 1.
+
+     This pattern is not allowed to 'FAIL'.
+
+'while_ultMN'
+     Set operand 0 to a mask that is true while incrementing operand 1
+     gives a value that is less than operand 2.  Operand 0 has mode N
+     and operands 1 and 2 are scalar integers of mode M.  The operation
+     is equivalent to:
+
+          operand0[0] = operand1 < operand2;
+          for (i = 1; i < GET_MODE_NUNITS (N); i++)
+            operand0[i] = operand0[i - 1] && (operand1 + i < operand2);
+
+'vec_cmpMN'
+     Output a vector comparison.  Operand 0 of mode N is the destination
+     for predicate in operand 1 which is a signed vector comparison with
+     operands of mode M in operands 2 and 3.  Predicate is computed by
+     element-wise evaluation of the vector comparison with a truth value
+     of all-ones and a false value of all-zeros.
+
+'vec_cmpuMN'
+     Similar to 'vec_cmpMN' but perform unsigned vector comparison.
+
+'vec_cmpeqMN'
+     Similar to 'vec_cmpMN' but perform equality or non-equality vector
+     comparison only.  If 'vec_cmpMN' or 'vec_cmpuMN' instruction
+     pattern is supported, it will be preferred over 'vec_cmpeqMN', so
+     there is no need to define this instruction pattern if the others
+     are supported.
+
+'vcondMN'
+     Output a conditional vector move.  Operand 0 is the destination to
+     receive a combination of operand 1 and operand 2, which are of mode
+     M, dependent on the outcome of the predicate in operand 3 which is
+     a signed vector comparison with operands of mode N in operands 4
+     and 5.  The modes M and N should have the same size.  Operand 0
+     will be set to the value OP1 & MSK | OP2 & ~MSK where MSK is
+     computed by element-wise evaluation of the vector comparison with a
+     truth value of all-ones and a false value of all-zeros.
+
+'vconduMN'
+     Similar to 'vcondMN' but performs unsigned vector comparison.
+
+'vcondeqMN'
+     Similar to 'vcondMN' but performs equality or non-equality vector
+     comparison only.  If 'vcondMN' or 'vconduMN' instruction pattern is
+     supported, it will be preferred over 'vcondeqMN', so there is no
+     need to define this instruction pattern if the others are
+     supported.
+
+'vcond_mask_MN'
+     Similar to 'vcondMN' but operand 3 holds a pre-computed result of
+     vector comparison.
+
+'maskloadMN'
+     Perform a masked load of vector from memory operand 1 of mode M
+     into register operand 0.  Mask is provided in register operand 2 of
+     mode N.
+
+     This pattern is not allowed to 'FAIL'.
+
+'maskstoreMN'
+     Perform a masked store of vector from register operand 1 of mode M
+     into memory operand 0.  Mask is provided in register operand 2 of
+     mode N.
+
+     This pattern is not allowed to 'FAIL'.
+
+'vec_permM'
+     Output a (variable) vector permutation.  Operand 0 is the
+     destination to receive elements from operand 1 and operand 2, which
+     are of mode M.  Operand 3 is the "selector".  It is an integral
+     mode vector of the same width and number of elements as mode M.
+
+     The input elements are numbered from 0 in operand 1 through 2*N-1
+     in operand 2.  The elements of the selector must be computed modulo
+     2*N.  Note that if 'rtx_equal_p(operand1, operand2)', this can be
+     implemented with just operand 1 and selector elements modulo N.
+
+     In order to make things easy for a number of targets, if there is
+     no 'vec_perm' pattern for mode M, but there is for mode Q where Q
+     is a vector of 'QImode' of the same width as M, the middle-end will
+     lower the mode M 'VEC_PERM_EXPR' to mode Q.
+
+     See also 'TARGET_VECTORIZER_VEC_PERM_CONST', which performs the
+     analogous operation for constant selectors.
+
+'pushM1'
+     Output a push instruction.  Operand 0 is value to push.  Used only
+     when 'PUSH_ROUNDING' is defined.  For historical reason, this
+     pattern may be missing and in such case an 'mov' expander is used
+     instead, with a 'MEM' expression forming the push operation.  The
+     'mov' expander method is deprecated.
+
+'addM3'
+     Add operand 2 and operand 1, storing the result in operand 0.  All
+     operands must have mode M.  This can be used even on two-address
+     machines, by means of constraints requiring operands 1 and 0 to be
+     the same location.
+
+'ssaddM3', 'usaddM3'
+'subM3', 'sssubM3', 'ussubM3'
+'mulM3', 'ssmulM3', 'usmulM3'
+'divM3', 'ssdivM3'
+'udivM3', 'usdivM3'
+'modM3', 'umodM3'
+'uminM3', 'umaxM3'
+'andM3', 'iorM3', 'xorM3'
+     Similar, for other arithmetic operations.
+
+'addvM4'
+     Like 'addM3' but takes a 'code_label' as operand 3 and emits code
+     to jump to it if signed overflow occurs during the addition.  This
+     pattern is used to implement the built-in functions performing
+     signed integer addition with overflow checking.
+
+'subvM4', 'mulvM4'
+     Similar, for other signed arithmetic operations.
+
+'uaddvM4'
+     Like 'addvM4' but for unsigned addition.  That is to say, the
+     operation is the same as signed addition but the jump is taken only
+     on unsigned overflow.
+
+'usubvM4', 'umulvM4'
+     Similar, for other unsigned arithmetic operations.
+
+'addptrM3'
+     Like 'addM3' but is guaranteed to only be used for address
+     calculations.  The expanded code is not allowed to clobber the
+     condition code.  It only needs to be defined if 'addM3' sets the
+     condition code.  If adds used for address calculations and normal
+     adds are not compatible it is required to expand a distinct pattern
+     (e.g. using an unspec).  The pattern is used by LRA to emit address
+     calculations.  'addM3' is used if 'addptrM3' is not defined.
+
+'fmaM4'
+     Multiply operand 2 and operand 1, then add operand 3, storing the
+     result in operand 0 without doing an intermediate rounding step.
+     All operands must have mode M.  This pattern is used to implement
+     the 'fma', 'fmaf', and 'fmal' builtin functions from the ISO C99
+     standard.
+
+'fmsM4'
+     Like 'fmaM4', except operand 3 subtracted from the product instead
+     of added to the product.  This is represented in the rtl as
+
+          (fma:M OP1 OP2 (neg:M OP3))
+
+'fnmaM4'
+     Like 'fmaM4' except that the intermediate product is negated before
+     being added to operand 3.  This is represented in the rtl as
+
+          (fma:M (neg:M OP1) OP2 OP3)
+
+'fnmsM4'
+     Like 'fmsM4' except that the intermediate product is negated before
+     subtracting operand 3.  This is represented in the rtl as
+
+          (fma:M (neg:M OP1) OP2 (neg:M OP3))
+
+'sminM3', 'smaxM3'
+     Signed minimum and maximum operations.  When used with floating
+     point, if both operands are zeros, or if either operand is 'NaN',
+     then it is unspecified which of the two operands is returned as the
+     result.
+
+'fminM3', 'fmaxM3'
+     IEEE-conformant minimum and maximum operations.  If one operand is
+     a quiet 'NaN', then the other operand is returned.  If both
+     operands are quiet 'NaN', then a quiet 'NaN' is returned.  In the
+     case when gcc supports signaling 'NaN' (-fsignaling-nans) an
+     invalid floating point exception is raised and a quiet 'NaN' is
+     returned.
+
+     All operands have mode M, which is a scalar or vector
+     floating-point mode.  These patterns are not allowed to 'FAIL'.
+
+'reduc_smin_scal_M', 'reduc_smax_scal_M'
+     Find the signed minimum/maximum of the elements of a vector.  The
+     vector is operand 1, and operand 0 is the scalar result, with mode
+     equal to the mode of the elements of the input vector.
+
+'reduc_umin_scal_M', 'reduc_umax_scal_M'
+     Find the unsigned minimum/maximum of the elements of a vector.  The
+     vector is operand 1, and operand 0 is the scalar result, with mode
+     equal to the mode of the elements of the input vector.
+
+'reduc_plus_scal_M'
+     Compute the sum of the elements of a vector.  The vector is operand
+     1, and operand 0 is the scalar result, with mode equal to the mode
+     of the elements of the input vector.
+
+'reduc_and_scal_M'
+'reduc_ior_scal_M'
+'reduc_xor_scal_M'
+     Compute the bitwise 'AND'/'IOR'/'XOR' reduction of the elements of
+     a vector of mode M.  Operand 1 is the vector input and operand 0 is
+     the scalar result.  The mode of the scalar result is the same as
+     one element of M.
+
+'extract_last_M'
+     Find the last set bit in mask operand 1 and extract the associated
+     element of vector operand 2.  Store the result in scalar operand 0.
+     Operand 2 has vector mode M while operand 0 has the mode
+     appropriate for one element of M.  Operand 1 has the usual mask
+     mode for vectors of mode M; see 'TARGET_VECTORIZE_GET_MASK_MODE'.
+
+'fold_extract_last_M'
+     If any bits of mask operand 2 are set, find the last set bit,
+     extract the associated element from vector operand 3, and store the
+     result in operand 0.  Store operand 1 in operand 0 otherwise.
+     Operand 3 has mode M and operands 0 and 1 have the mode appropriate
+     for one element of M.  Operand 2 has the usual mask mode for
+     vectors of mode M; see 'TARGET_VECTORIZE_GET_MASK_MODE'.
+
+'fold_left_plus_M'
+     Take scalar operand 1 and successively add each element from vector
+     operand 2.  Store the result in scalar operand 0.  The vector has
+     mode M and the scalars have the mode appropriate for one element of
+     M.  The operation is strictly in-order: there is no reassociation.
+
+'sdot_prodM'
+'udot_prodM'
+     Compute the sum of the products of two signed/unsigned elements.
+     Operand 1 and operand 2 are of the same mode.  Their product, which
+     is of a wider mode, is computed and added to operand 3.  Operand 3
+     is of a mode equal or wider than the mode of the product.  The
+     result is placed in operand 0, which is of the same mode as operand
+     3.
+
+'ssadM'
+'usadM'
+     Compute the sum of absolute differences of two signed/unsigned
+     elements.  Operand 1 and operand 2 are of the same mode.  Their
+     absolute difference, which is of a wider mode, is computed and
+     added to operand 3.  Operand 3 is of a mode equal or wider than the
+     mode of the absolute difference.  The result is placed in operand
+     0, which is of the same mode as operand 3.
+
+'widen_ssumM3'
+'widen_usumM3'
+     Operands 0 and 2 are of the same mode, which is wider than the mode
+     of operand 1.  Add operand 1 to operand 2 and place the widened
+     result in operand 0.  (This is used express accumulation of
+     elements into an accumulator of a wider mode.)
+
+'vec_shl_insert_M'
+     Shift the elements in vector input operand 1 left one element (i.e.
+     away from element 0) and fill the vacated element 0 with the scalar
+     in operand 2.  Store the result in vector output operand 0.
+     Operands 0 and 1 have mode M and operand 2 has the mode appropriate
+     for one element of M.
+
+'vec_shr_M'
+     Whole vector right shift in bits, i.e. towards element 0.  Operand
+     1 is a vector to be shifted.  Operand 2 is an integer shift amount
+     in bits.  Operand 0 is where the resulting shifted vector is
+     stored.  The output and input vectors should have the same modes.
+
+'vec_pack_trunc_M'
+     Narrow (demote) and merge the elements of two vectors.  Operands 1
+     and 2 are vectors of the same mode having N integral or floating
+     point elements of size S.  Operand 0 is the resulting vector in
+     which 2*N elements of size N/2 are concatenated after narrowing
+     them down using truncation.
+
+'vec_pack_sbool_trunc_M'
+     Narrow and merge the elements of two vectors.  Operands 1 and 2 are
+     vectors of the same type having N boolean elements.  Operand 0 is
+     the resulting vector in which 2*N elements are concatenated.  The
+     last operand (operand 3) is the number of elements in the output
+     vector 2*N as a 'CONST_INT'.  This instruction pattern is used when
+     all the vector input and output operands have the same scalar mode
+     M and thus using 'vec_pack_trunc_M' would be ambiguous.
+
+'vec_pack_ssat_M', 'vec_pack_usat_M'
+     Narrow (demote) and merge the elements of two vectors.  Operands 1
+     and 2 are vectors of the same mode having N integral elements of
+     size S. Operand 0 is the resulting vector in which the elements of
+     the two input vectors are concatenated after narrowing them down
+     using signed/unsigned saturating arithmetic.
+
+'vec_pack_sfix_trunc_M', 'vec_pack_ufix_trunc_M'
+     Narrow, convert to signed/unsigned integral type and merge the
+     elements of two vectors.  Operands 1 and 2 are vectors of the same
+     mode having N floating point elements of size S.  Operand 0 is the
+     resulting vector in which 2*N elements of size N/2 are
+     concatenated.
+
+'vec_packs_float_M', 'vec_packu_float_M'
+     Narrow, convert to floating point type and merge the elements of
+     two vectors.  Operands 1 and 2 are vectors of the same mode having
+     N signed/unsigned integral elements of size S.  Operand 0 is the
+     resulting vector in which 2*N elements of size N/2 are
+     concatenated.
+
+'vec_unpacks_hi_M', 'vec_unpacks_lo_M'
+     Extract and widen (promote) the high/low part of a vector of signed
+     integral or floating point elements.  The input vector (operand 1)
+     has N elements of size S.  Widen (promote) the high/low elements of
+     the vector using signed or floating point extension and place the
+     resulting N/2 values of size 2*S in the output vector (operand 0).
+
+'vec_unpacku_hi_M', 'vec_unpacku_lo_M'
+     Extract and widen (promote) the high/low part of a vector of
+     unsigned integral elements.  The input vector (operand 1) has N
+     elements of size S. Widen (promote) the high/low elements of the
+     vector using zero extension and place the resulting N/2 values of
+     size 2*S in the output vector (operand 0).
+
+'vec_unpacks_sbool_hi_M', 'vec_unpacks_sbool_lo_M'
+     Extract the high/low part of a vector of boolean elements that have
+     scalar mode M.  The input vector (operand 1) has N elements, the
+     output vector (operand 0) has N/2 elements.  The last operand
+     (operand 2) is the number of elements of the input vector N as a
+     'CONST_INT'.  These patterns are used if both the input and output
+     vectors have the same scalar mode M and thus using
+     'vec_unpacks_hi_M' or 'vec_unpacks_lo_M' would be ambiguous.
+
+'vec_unpacks_float_hi_M', 'vec_unpacks_float_lo_M'
+'vec_unpacku_float_hi_M', 'vec_unpacku_float_lo_M'
+     Extract, convert to floating point type and widen the high/low part
+     of a vector of signed/unsigned integral elements.  The input vector
+     (operand 1) has N elements of size S.  Convert the high/low
+     elements of the vector using floating point conversion and place
+     the resulting N/2 values of size 2*S in the output vector (operand
+     0).
+
+'vec_unpack_sfix_trunc_hi_M',
+'vec_unpack_sfix_trunc_lo_M'
+'vec_unpack_ufix_trunc_hi_M'
+'vec_unpack_ufix_trunc_lo_M'
+     Extract, convert to signed/unsigned integer type and widen the
+     high/low part of a vector of floating point elements.  The input
+     vector (operand 1) has N elements of size S.  Convert the high/low
+     elements of the vector to integers and place the resulting N/2
+     values of size 2*S in the output vector (operand 0).
+
+'vec_widen_umult_hi_M', 'vec_widen_umult_lo_M'
+'vec_widen_smult_hi_M', 'vec_widen_smult_lo_M'
+'vec_widen_umult_even_M', 'vec_widen_umult_odd_M'
+'vec_widen_smult_even_M', 'vec_widen_smult_odd_M'
+     Signed/Unsigned widening multiplication.  The two inputs (operands
+     1 and 2) are vectors with N signed/unsigned elements of size S.
+     Multiply the high/low or even/odd elements of the two vectors, and
+     put the N/2 products of size 2*S in the output vector (operand 0).
+     A target shouldn't implement even/odd pattern pair if it is less
+     efficient than lo/hi one.
+
+'vec_widen_ushiftl_hi_M', 'vec_widen_ushiftl_lo_M'
+'vec_widen_sshiftl_hi_M', 'vec_widen_sshiftl_lo_M'
+     Signed/Unsigned widening shift left.  The first input (operand 1)
+     is a vector with N signed/unsigned elements of size S.  Operand 2
+     is a constant.  Shift the high/low elements of operand 1, and put
+     the N/2 results of size 2*S in the output vector (operand 0).
+
+'mulhisi3'
+     Multiply operands 1 and 2, which have mode 'HImode', and store a
+     'SImode' product in operand 0.
+
+'mulqihi3', 'mulsidi3'
+     Similar widening-multiplication instructions of other widths.
+
+'umulqihi3', 'umulhisi3', 'umulsidi3'
+     Similar widening-multiplication instructions that do unsigned
+     multiplication.
+
+'usmulqihi3', 'usmulhisi3', 'usmulsidi3'
+     Similar widening-multiplication instructions that interpret the
+     first operand as unsigned and the second operand as signed, then do
+     a signed multiplication.
+
+'smulM3_highpart'
+     Perform a signed multiplication of operands 1 and 2, which have
+     mode M, and store the most significant half of the product in
+     operand 0.  The least significant half of the product is discarded.
+
+'umulM3_highpart'
+     Similar, but the multiplication is unsigned.
+
+'maddMN4'
+     Multiply operands 1 and 2, sign-extend them to mode N, add operand
+     3, and store the result in operand 0.  Operands 1 and 2 have mode M
+     and operands 0 and 3 have mode N.  Both modes must be integer or
+     fixed-point modes and N must be twice the size of M.
+
+     In other words, 'maddMN4' is like 'mulMN3' except that it also adds
+     operand 3.
+
+     These instructions are not allowed to 'FAIL'.
+
+'umaddMN4'
+     Like 'maddMN4', but zero-extend the multiplication operands instead
+     of sign-extending them.
+
+'ssmaddMN4'
+     Like 'maddMN4', but all involved operations must be
+     signed-saturating.
+
+'usmaddMN4'
+     Like 'umaddMN4', but all involved operations must be
+     unsigned-saturating.
+
+'msubMN4'
+     Multiply operands 1 and 2, sign-extend them to mode N, subtract the
+     result from operand 3, and store the result in operand 0.  Operands
+     1 and 2 have mode M and operands 0 and 3 have mode N.  Both modes
+     must be integer or fixed-point modes and N must be twice the size
+     of M.
+
+     In other words, 'msubMN4' is like 'mulMN3' except that it also
+     subtracts the result from operand 3.
+
+     These instructions are not allowed to 'FAIL'.
+
+'umsubMN4'
+     Like 'msubMN4', but zero-extend the multiplication operands instead
+     of sign-extending them.
+
+'ssmsubMN4'
+     Like 'msubMN4', but all involved operations must be
+     signed-saturating.
+
+'usmsubMN4'
+     Like 'umsubMN4', but all involved operations must be
+     unsigned-saturating.
+
+'divmodM4'
+     Signed division that produces both a quotient and a remainder.
+     Operand 1 is divided by operand 2 to produce a quotient stored in
+     operand 0 and a remainder stored in operand 3.
+
+     For machines with an instruction that produces both a quotient and
+     a remainder, provide a pattern for 'divmodM4' but do not provide
+     patterns for 'divM3' and 'modM3'.  This allows optimization in the
+     relatively common case when both the quotient and remainder are
+     computed.
+
+     If an instruction that just produces a quotient or just a remainder
+     exists and is more efficient than the instruction that produces
+     both, write the output routine of 'divmodM4' to call
+     'find_reg_note' and look for a 'REG_UNUSED' note on the quotient or
+     remainder and generate the appropriate instruction.
+
+'udivmodM4'
+     Similar, but does unsigned division.
+
+'ashlM3', 'ssashlM3', 'usashlM3'
+     Arithmetic-shift operand 1 left by a number of bits specified by
+     operand 2, and store the result in operand 0.  Here M is the mode
+     of operand 0 and operand 1; operand 2's mode is specified by the
+     instruction pattern, and the compiler will convert the operand to
+     that mode before generating the instruction.  The shift or rotate
+     expander or instruction pattern should explicitly specify the mode
+     of the operand 2, it should never be 'VOIDmode'.  The meaning of
+     out-of-range shift counts can optionally be specified by
+     'TARGET_SHIFT_TRUNCATION_MASK'.  *Note
+     TARGET_SHIFT_TRUNCATION_MASK::.  Operand 2 is always a scalar type.
+
+'ashrM3', 'lshrM3', 'rotlM3', 'rotrM3'
+     Other shift and rotate instructions, analogous to the 'ashlM3'
+     instructions.  Operand 2 is always a scalar type.
+
+'vashlM3', 'vashrM3', 'vlshrM3', 'vrotlM3', 'vrotrM3'
+     Vector shift and rotate instructions that take vectors as operand 2
+     instead of a scalar type.
+
+'avgM3_floor'
+'uavgM3_floor'
+     Signed and unsigned average instructions.  These instructions add
+     operands 1 and 2 without truncation, divide the result by 2, round
+     towards -Inf, and store the result in operand 0.  This is
+     equivalent to the C code:
+          narrow op0, op1, op2;
+          ...
+          op0 = (narrow) (((wide) op1 + (wide) op2) >> 1);
+     where the sign of 'narrow' determines whether this is a signed or
+     unsigned operation.
+
+'avgM3_ceil'
+'uavgM3_ceil'
+     Like 'avgM3_floor' and 'uavgM3_floor', but round towards +Inf.
+     This is equivalent to the C code:
+          narrow op0, op1, op2;
+          ...
+          op0 = (narrow) (((wide) op1 + (wide) op2 + 1) >> 1);
+
+'bswapM2'
+     Reverse the order of bytes of operand 1 and store the result in
+     operand 0.
+
+'negM2', 'ssnegM2', 'usnegM2'
+     Negate operand 1 and store the result in operand 0.
+
+'negvM3'
+     Like 'negM2' but takes a 'code_label' as operand 2 and emits code
+     to jump to it if signed overflow occurs during the negation.
+
+'absM2'
+     Store the absolute value of operand 1 into operand 0.
+
+'sqrtM2'
+     Store the square root of operand 1 into operand 0.  Both operands
+     have mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'rsqrtM2'
+     Store the reciprocal of the square root of operand 1 into operand
+     0.  Both operands have mode M, which is a scalar or vector
+     floating-point mode.
+
+     On most architectures this pattern is only approximate, so either
+     its C condition or the 'TARGET_OPTAB_SUPPORTED_P' hook should check
+     for the appropriate math flags.  (Using the C condition is more
+     direct, but using 'TARGET_OPTAB_SUPPORTED_P' can be useful if a
+     target-specific built-in also uses the 'rsqrtM2' pattern.)
+
+     This pattern is not allowed to 'FAIL'.
+
+'fmodM3'
+     Store the remainder of dividing operand 1 by operand 2 into operand
+     0, rounded towards zero to an integer.  All operands have mode M,
+     which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'remainderM3'
+     Store the remainder of dividing operand 1 by operand 2 into operand
+     0, rounded to the nearest integer.  All operands have mode M, which
+     is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'scalbM3'
+     Raise 'FLT_RADIX' to the power of operand 2, multiply it by operand
+     1, and store the result in operand 0.  All operands have mode M,
+     which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'ldexpM3'
+     Raise 2 to the power of operand 2, multiply it by operand 1, and
+     store the result in operand 0.  Operands 0 and 1 have mode M, which
+     is a scalar or vector floating-point mode.  Operand 2's mode has
+     the same number of elements as M and each element is wide enough to
+     store an 'int'.  The integers are signed.
+
+     This pattern is not allowed to 'FAIL'.
+
+'cosM2'
+     Store the cosine of operand 1 into operand 0.  Both operands have
+     mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'sinM2'
+     Store the sine of operand 1 into operand 0.  Both operands have
+     mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'sincosM3'
+     Store the cosine of operand 2 into operand 0 and the sine of
+     operand 2 into operand 1.  All operands have mode M, which is a
+     scalar or vector floating-point mode.
+
+     Targets that can calculate the sine and cosine simultaneously can
+     implement this pattern as opposed to implementing individual
+     'sinM2' and 'cosM2' patterns.  The 'sin' and 'cos' built-in
+     functions will then be expanded to the 'sincosM3' pattern, with one
+     of the output values left unused.
+
+'tanM2'
+     Store the tangent of operand 1 into operand 0.  Both operands have
+     mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'asinM2'
+     Store the arc sine of operand 1 into operand 0.  Both operands have
+     mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'acosM2'
+     Store the arc cosine of operand 1 into operand 0.  Both operands
+     have mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'atanM2'
+     Store the arc tangent of operand 1 into operand 0.  Both operands
+     have mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'expM2'
+     Raise e (the base of natural logarithms) to the power of operand 1
+     and store the result in operand 0.  Both operands have mode M,
+     which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'expm1M2'
+     Raise e (the base of natural logarithms) to the power of operand 1,
+     subtract 1, and store the result in operand 0.  Both operands have
+     mode M, which is a scalar or vector floating-point mode.
+
+     For inputs close to zero, the pattern is expected to be more
+     accurate than a separate 'expM2' and 'subM3' would be.
+
+     This pattern is not allowed to 'FAIL'.
+
+'exp10M2'
+     Raise 10 to the power of operand 1 and store the result in operand
+     0.  Both operands have mode M, which is a scalar or vector
+     floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'exp2M2'
+     Raise 2 to the power of operand 1 and store the result in operand
+     0.  Both operands have mode M, which is a scalar or vector
+     floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'logM2'
+     Store the natural logarithm of operand 1 into operand 0.  Both
+     operands have mode M, which is a scalar or vector floating-point
+     mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'log1pM2'
+     Add 1 to operand 1, compute the natural logarithm, and store the
+     result in operand 0.  Both operands have mode M, which is a scalar
+     or vector floating-point mode.
+
+     For inputs close to zero, the pattern is expected to be more
+     accurate than a separate 'addM3' and 'logM2' would be.
+
+     This pattern is not allowed to 'FAIL'.
+
+'log10M2'
+     Store the base-10 logarithm of operand 1 into operand 0.  Both
+     operands have mode M, which is a scalar or vector floating-point
+     mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'log2M2'
+     Store the base-2 logarithm of operand 1 into operand 0.  Both
+     operands have mode M, which is a scalar or vector floating-point
+     mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'logbM2'
+     Store the base-'FLT_RADIX' logarithm of operand 1 into operand 0.
+     Both operands have mode M, which is a scalar or vector
+     floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'significandM2'
+     Store the significand of floating-point operand 1 in operand 0.
+     Both operands have mode M, which is a scalar or vector
+     floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'powM3'
+     Store the value of operand 1 raised to the exponent operand 2 into
+     operand 0.  All operands have mode M, which is a scalar or vector
+     floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'atan2M3'
+     Store the arc tangent (inverse tangent) of operand 1 divided by
+     operand 2 into operand 0, using the signs of both arguments to
+     determine the quadrant of the result.  All operands have mode M,
+     which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'floorM2'
+     Store the largest integral value not greater than operand 1 in
+     operand 0.  Both operands have mode M, which is a scalar or vector
+     floating-point mode.  If '-ffp-int-builtin-inexact' is in effect,
+     the "inexact" exception may be raised for noninteger operands;
+     otherwise, it may not.
+
+     This pattern is not allowed to 'FAIL'.
+
+'btruncM2'
+     Round operand 1 to an integer, towards zero, and store the result
+     in operand 0.  Both operands have mode M, which is a scalar or
+     vector floating-point mode.  If '-ffp-int-builtin-inexact' is in
+     effect, the "inexact" exception may be raised for noninteger
+     operands; otherwise, it may not.
+
+     This pattern is not allowed to 'FAIL'.
+
+'roundM2'
+     Round operand 1 to the nearest integer, rounding away from zero in
+     the event of a tie, and store the result in operand 0.  Both
+     operands have mode M, which is a scalar or vector floating-point
+     mode.  If '-ffp-int-builtin-inexact' is in effect, the "inexact"
+     exception may be raised for noninteger operands; otherwise, it may
+     not.
+
+     This pattern is not allowed to 'FAIL'.
+
+'ceilM2'
+     Store the smallest integral value not less than operand 1 in
+     operand 0.  Both operands have mode M, which is a scalar or vector
+     floating-point mode.  If '-ffp-int-builtin-inexact' is in effect,
+     the "inexact" exception may be raised for noninteger operands;
+     otherwise, it may not.
+
+     This pattern is not allowed to 'FAIL'.
+
+'nearbyintM2'
+     Round operand 1 to an integer, using the current rounding mode, and
+     store the result in operand 0.  Do not raise an inexact condition
+     when the result is different from the argument.  Both operands have
+     mode M, which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'rintM2'
+     Round operand 1 to an integer, using the current rounding mode, and
+     store the result in operand 0.  Raise an inexact condition when the
+     result is different from the argument.  Both operands have mode M,
+     which is a scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'lrintMN2'
+     Convert operand 1 (valid for floating point mode M) to fixed point
+     mode N as a signed number according to the current rounding mode
+     and store in operand 0 (which has mode N).
+
+'lroundMN2'
+     Convert operand 1 (valid for floating point mode M) to fixed point
+     mode N as a signed number rounding to nearest and away from zero
+     and store in operand 0 (which has mode N).
+
+'lfloorMN2'
+     Convert operand 1 (valid for floating point mode M) to fixed point
+     mode N as a signed number rounding down and store in operand 0
+     (which has mode N).
+
+'lceilMN2'
+     Convert operand 1 (valid for floating point mode M) to fixed point
+     mode N as a signed number rounding up and store in operand 0 (which
+     has mode N).
+
+'copysignM3'
+     Store a value with the magnitude of operand 1 and the sign of
+     operand 2 into operand 0.  All operands have mode M, which is a
+     scalar or vector floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'xorsignM3'
+     Equivalent to 'op0 = op1 * copysign (1.0, op2)': store a value with
+     the magnitude of operand 1 and the sign of operand 2 into operand
+     0.  All operands have mode M, which is a scalar or vector
+     floating-point mode.
+
+     This pattern is not allowed to 'FAIL'.
+
+'ffsM2'
+     Store into operand 0 one plus the index of the least significant
+     1-bit of operand 1.  If operand 1 is zero, store zero.
+
+     M is either a scalar or vector integer mode.  When it is a scalar,
+     operand 1 has mode M but operand 0 can have whatever scalar integer
+     mode is suitable for the target.  The compiler will insert
+     conversion instructions as necessary (typically to convert the
+     result to the same width as 'int').  When M is a vector, both
+     operands must have mode M.
+
+     This pattern is not allowed to 'FAIL'.
+
+'clrsbM2'
+     Count leading redundant sign bits.  Store into operand 0 the number
+     of redundant sign bits in operand 1, starting at the most
+     significant bit position.  A redundant sign bit is defined as any
+     sign bit after the first.  As such, this count will be one less
+     than the count of leading sign bits.
+
+     M is either a scalar or vector integer mode.  When it is a scalar,
+     operand 1 has mode M but operand 0 can have whatever scalar integer
+     mode is suitable for the target.  The compiler will insert
+     conversion instructions as necessary (typically to convert the
+     result to the same width as 'int').  When M is a vector, both
+     operands must have mode M.
+
+     This pattern is not allowed to 'FAIL'.
+
+'clzM2'
+     Store into operand 0 the number of leading 0-bits in operand 1,
+     starting at the most significant bit position.  If operand 1 is 0,
+     the 'CLZ_DEFINED_VALUE_AT_ZERO' (*note Misc::) macro defines if the
+     result is undefined or has a useful value.
+
+     M is either a scalar or vector integer mode.  When it is a scalar,
+     operand 1 has mode M but operand 0 can have whatever scalar integer
+     mode is suitable for the target.  The compiler will insert
+     conversion instructions as necessary (typically to convert the
+     result to the same width as 'int').  When M is a vector, both
+     operands must have mode M.
+
+     This pattern is not allowed to 'FAIL'.
+
+'ctzM2'
+     Store into operand 0 the number of trailing 0-bits in operand 1,
+     starting at the least significant bit position.  If operand 1 is 0,
+     the 'CTZ_DEFINED_VALUE_AT_ZERO' (*note Misc::) macro defines if the
+     result is undefined or has a useful value.
+
+     M is either a scalar or vector integer mode.  When it is a scalar,
+     operand 1 has mode M but operand 0 can have whatever scalar integer
+     mode is suitable for the target.  The compiler will insert
+     conversion instructions as necessary (typically to convert the
+     result to the same width as 'int').  When M is a vector, both
+     operands must have mode M.
+
+     This pattern is not allowed to 'FAIL'.
+
+'popcountM2'
+     Store into operand 0 the number of 1-bits in operand 1.
+
+     M is either a scalar or vector integer mode.  When it is a scalar,
+     operand 1 has mode M but operand 0 can have whatever scalar integer
+     mode is suitable for the target.  The compiler will insert
+     conversion instructions as necessary (typically to convert the
+     result to the same width as 'int').  When M is a vector, both
+     operands must have mode M.
+
+     This pattern is not allowed to 'FAIL'.
+
+'parityM2'
+     Store into operand 0 the parity of operand 1, i.e. the number of
+     1-bits in operand 1 modulo 2.
+
+     M is either a scalar or vector integer mode.  When it is a scalar,
+     operand 1 has mode M but operand 0 can have whatever scalar integer
+     mode is suitable for the target.  The compiler will insert
+     conversion instructions as necessary (typically to convert the
+     result to the same width as 'int').  When M is a vector, both
+     operands must have mode M.
+
+     This pattern is not allowed to 'FAIL'.
+
+'one_cmplM2'
+     Store the bitwise-complement of operand 1 into operand 0.
+
+'movmemM'
+     Block move instruction.  The destination and source blocks of
+     memory are the first two operands, and both are 'mem:BLK's with an
+     address in mode 'Pmode'.
+
+     The number of bytes to move is the third operand, in mode M.
+     Usually, you specify 'Pmode' for M.  However, if you can generate
+     better code knowing the range of valid lengths is smaller than
+     those representable in a full Pmode pointer, you should provide a
+     pattern with a mode corresponding to the range of values you can
+     handle efficiently (e.g., 'QImode' for values in the range 0-127;
+     note we avoid numbers that appear negative) and also a pattern with
+     'Pmode'.
+
+     The fourth operand is the known shared alignment of the source and
+     destination, in the form of a 'const_int' rtx.  Thus, if the
+     compiler knows that both source and destination are word-aligned,
+     it may provide the value 4 for this operand.
+
+     Optional operands 5 and 6 specify expected alignment and size of
+     block respectively.  The expected alignment differs from alignment
+     in operand 4 in a way that the blocks are not required to be
+     aligned according to it in all cases.  This expected alignment is
+     also in bytes, just like operand 4.  Expected size, when unknown,
+     is set to '(const_int -1)'.
+
+     Descriptions of multiple 'movmemM' patterns can only be beneficial
+     if the patterns for smaller modes have fewer restrictions on their
+     first, second and fourth operands.  Note that the mode M in
+     'movmemM' does not impose any restriction on the mode of
+     individually moved data units in the block.
+
+     These patterns need not give special consideration to the
+     possibility that the source and destination strings might overlap.
+
+'movstr'
+     String copy instruction, with 'stpcpy' semantics.  Operand 0 is an
+     output operand in mode 'Pmode'.  The addresses of the destination
+     and source strings are operands 1 and 2, and both are 'mem:BLK's
+     with addresses in mode 'Pmode'.  The execution of the expansion of
+     this pattern should store in operand 0 the address in which the
+     'NUL' terminator was stored in the destination string.
+
+     This patern has also several optional operands that are same as in
+     'setmem'.
+
+'setmemM'
+     Block set instruction.  The destination string is the first
+     operand, given as a 'mem:BLK' whose address is in mode 'Pmode'.
+     The number of bytes to set is the second operand, in mode M.  The
+     value to initialize the memory with is the third operand.  Targets
+     that only support the clearing of memory should reject any value
+     that is not the constant 0.  See 'movmemM' for a discussion of the
+     choice of mode.
+
+     The fourth operand is the known alignment of the destination, in
+     the form of a 'const_int' rtx.  Thus, if the compiler knows that
+     the destination is word-aligned, it may provide the value 4 for
+     this operand.
+
+     Optional operands 5 and 6 specify expected alignment and size of
+     block respectively.  The expected alignment differs from alignment
+     in operand 4 in a way that the blocks are not required to be
+     aligned according to it in all cases.  This expected alignment is
+     also in bytes, just like operand 4.  Expected size, when unknown,
+     is set to '(const_int -1)'.  Operand 7 is the minimal size of the
+     block and operand 8 is the maximal size of the block (NULL if it
+     cannot be represented as CONST_INT). Operand 9 is the probable
+     maximal size (i.e. we cannot rely on it for correctness, but it can
+     be used for choosing proper code sequence for a given size).
+
+     The use for multiple 'setmemM' is as for 'movmemM'.
+
+'cmpstrnM'
+     String compare instruction, with five operands.  Operand 0 is the
+     output; it has mode M.  The remaining four operands are like the
+     operands of 'movmemM'.  The two memory blocks specified are
+     compared byte by byte in lexicographic order starting at the
+     beginning of each string.  The instruction is not allowed to
+     prefetch more than one byte at a time since either string may end
+     in the first byte and reading past that may access an invalid page
+     or segment and cause a fault.  The comparison terminates early if
+     the fetched bytes are different or if they are equal to zero.  The
+     effect of the instruction is to store a value in operand 0 whose
+     sign indicates the result of the comparison.
+
+'cmpstrM'
+     String compare instruction, without known maximum length.  Operand
+     0 is the output; it has mode M.  The second and third operand are
+     the blocks of memory to be compared; both are 'mem:BLK' with an
+     address in mode 'Pmode'.
+
+     The fourth operand is the known shared alignment of the source and
+     destination, in the form of a 'const_int' rtx.  Thus, if the
+     compiler knows that both source and destination are word-aligned,
+     it may provide the value 4 for this operand.
+
+     The two memory blocks specified are compared byte by byte in
+     lexicographic order starting at the beginning of each string.  The
+     instruction is not allowed to prefetch more than one byte at a time
+     since either string may end in the first byte and reading past that
+     may access an invalid page or segment and cause a fault.  The
+     comparison will terminate when the fetched bytes are different or
+     if they are equal to zero.  The effect of the instruction is to
+     store a value in operand 0 whose sign indicates the result of the
+     comparison.
+
+'cmpmemM'
+     Block compare instruction, with five operands like the operands of
+     'cmpstrM'.  The two memory blocks specified are compared byte by
+     byte in lexicographic order starting at the beginning of each
+     block.  Unlike 'cmpstrM' the instruction can prefetch any bytes in
+     the two memory blocks.  Also unlike 'cmpstrM' the comparison will
+     not stop if both bytes are zero.  The effect of the instruction is
+     to store a value in operand 0 whose sign indicates the result of
+     the comparison.
+
+'strlenM'
+     Compute the length of a string, with three operands.  Operand 0 is
+     the result (of mode M), operand 1 is a 'mem' referring to the first
+     character of the string, operand 2 is the character to search for
+     (normally zero), and operand 3 is a constant describing the known
+     alignment of the beginning of the string.
+
+'floatMN2'
+     Convert signed integer operand 1 (valid for fixed point mode M) to
+     floating point mode N and store in operand 0 (which has mode N).
+
+'floatunsMN2'
+     Convert unsigned integer operand 1 (valid for fixed point mode M)
+     to floating point mode N and store in operand 0 (which has mode N).
+
+'fixMN2'
+     Convert operand 1 (valid for floating point mode M) to fixed point
+     mode N as a signed number and store in operand 0 (which has mode
+     N).  This instruction's result is defined only when the value of
+     operand 1 is an integer.
+
+     If the machine description defines this pattern, it also needs to
+     define the 'ftrunc' pattern.
+
+'fixunsMN2'
+     Convert operand 1 (valid for floating point mode M) to fixed point
+     mode N as an unsigned number and store in operand 0 (which has mode
+     N).  This instruction's result is defined only when the value of
+     operand 1 is an integer.
+
+'ftruncM2'
+     Convert operand 1 (valid for floating point mode M) to an integer
+     value, still represented in floating point mode M, and store it in
+     operand 0 (valid for floating point mode M).
+
+'fix_truncMN2'
+     Like 'fixMN2' but works for any floating point value of mode M by
+     converting the value to an integer.
+
+'fixuns_truncMN2'
+     Like 'fixunsMN2' but works for any floating point value of mode M
+     by converting the value to an integer.
+
+'truncMN2'
+     Truncate operand 1 (valid for mode M) to mode N and store in
+     operand 0 (which has mode N).  Both modes must be fixed point or
+     both floating point.
+
+'extendMN2'
+     Sign-extend operand 1 (valid for mode M) to mode N and store in
+     operand 0 (which has mode N).  Both modes must be fixed point or
+     both floating point.
+
+'zero_extendMN2'
+     Zero-extend operand 1 (valid for mode M) to mode N and store in
+     operand 0 (which has mode N).  Both modes must be fixed point.
+
+'fractMN2'
+     Convert operand 1 of mode M to mode N and store in operand 0 (which
+     has mode N).  Mode M and mode N could be fixed-point to
+     fixed-point, signed integer to fixed-point, fixed-point to signed
+     integer, floating-point to fixed-point, or fixed-point to
+     floating-point.  When overflows or underflows happen, the results
+     are undefined.
+
+'satfractMN2'
+     Convert operand 1 of mode M to mode N and store in operand 0 (which
+     has mode N).  Mode M and mode N could be fixed-point to
+     fixed-point, signed integer to fixed-point, or floating-point to
+     fixed-point.  When overflows or underflows happen, the instruction
+     saturates the results to the maximum or the minimum.
+
+'fractunsMN2'
+     Convert operand 1 of mode M to mode N and store in operand 0 (which
+     has mode N).  Mode M and mode N could be unsigned integer to
+     fixed-point, or fixed-point to unsigned integer.  When overflows or
+     underflows happen, the results are undefined.
+
+'satfractunsMN2'
+     Convert unsigned integer operand 1 of mode M to fixed-point mode N
+     and store in operand 0 (which has mode N).  When overflows or
+     underflows happen, the instruction saturates the results to the
+     maximum or the minimum.
+
+'extvM'
+     Extract a bit-field from register operand 1, sign-extend it, and
+     store it in operand 0.  Operand 2 specifies the width of the field
+     in bits and operand 3 the starting bit, which counts from the most
+     significant bit if 'BITS_BIG_ENDIAN' is true and from the least
+     significant bit otherwise.
+
+     Operands 0 and 1 both have mode M.  Operands 2 and 3 have a
+     target-specific mode.
+
+'extvmisalignM'
+     Extract a bit-field from memory operand 1, sign extend it, and
+     store it in operand 0.  Operand 2 specifies the width in bits and
+     operand 3 the starting bit.  The starting bit is always somewhere
+     in the first byte of operand 1; it counts from the most significant
+     bit if 'BITS_BIG_ENDIAN' is true and from the least significant bit
+     otherwise.
+
+     Operand 0 has mode M while operand 1 has 'BLK' mode.  Operands 2
+     and 3 have a target-specific mode.
+
+     The instruction must not read beyond the last byte of the
+     bit-field.
+
+'extzvM'
+     Like 'extvM' except that the bit-field value is zero-extended.
+
+'extzvmisalignM'
+     Like 'extvmisalignM' except that the bit-field value is
+     zero-extended.
+
+'insvM'
+     Insert operand 3 into a bit-field of register operand 0.  Operand 1
+     specifies the width of the field in bits and operand 2 the starting
+     bit, which counts from the most significant bit if
+     'BITS_BIG_ENDIAN' is true and from the least significant bit
+     otherwise.
+
+     Operands 0 and 3 both have mode M.  Operands 1 and 2 have a
+     target-specific mode.
+
+'insvmisalignM'
+     Insert operand 3 into a bit-field of memory operand 0.  Operand 1
+     specifies the width of the field in bits and operand 2 the starting
+     bit.  The starting bit is always somewhere in the first byte of
+     operand 0; it counts from the most significant bit if
+     'BITS_BIG_ENDIAN' is true and from the least significant bit
+     otherwise.
+
+     Operand 3 has mode M while operand 0 has 'BLK' mode.  Operands 1
+     and 2 have a target-specific mode.
+
+     The instruction must not read or write beyond the last byte of the
+     bit-field.
+
+'extv'
+     Extract a bit-field from operand 1 (a register or memory operand),
+     where operand 2 specifies the width in bits and operand 3 the
+     starting bit, and store it in operand 0.  Operand 0 must have mode
+     'word_mode'.  Operand 1 may have mode 'byte_mode' or 'word_mode';
+     often 'word_mode' is allowed only for registers.  Operands 2 and 3
+     must be valid for 'word_mode'.
+
+     The RTL generation pass generates this instruction only with
+     constants for operands 2 and 3 and the constant is never zero for
+     operand 2.
+
+     The bit-field value is sign-extended to a full word integer before
+     it is stored in operand 0.
+
+     This pattern is deprecated; please use 'extvM' and 'extvmisalignM'
+     instead.
+
+'extzv'
+     Like 'extv' except that the bit-field value is zero-extended.
+
+     This pattern is deprecated; please use 'extzvM' and
+     'extzvmisalignM' instead.
+
+'insv'
+     Store operand 3 (which must be valid for 'word_mode') into a
+     bit-field in operand 0, where operand 1 specifies the width in bits
+     and operand 2 the starting bit.  Operand 0 may have mode
+     'byte_mode' or 'word_mode'; often 'word_mode' is allowed only for
+     registers.  Operands 1 and 2 must be valid for 'word_mode'.
+
+     The RTL generation pass generates this instruction only with
+     constants for operands 1 and 2 and the constant is never zero for
+     operand 1.
+
+     This pattern is deprecated; please use 'insvM' and 'insvmisalignM'
+     instead.
+
+'movMODEcc'
+     Conditionally move operand 2 or operand 3 into operand 0 according
+     to the comparison in operand 1.  If the comparison is true, operand
+     2 is moved into operand 0, otherwise operand 3 is moved.
+
+     The mode of the operands being compared need not be the same as the
+     operands being moved.  Some machines, sparc64 for example, have
+     instructions that conditionally move an integer value based on the
+     floating point condition codes and vice versa.
+
+     If the machine does not have conditional move instructions, do not
+     define these patterns.
+
+'addMODEcc'
+     Similar to 'movMODEcc' but for conditional addition.  Conditionally
+     move operand 2 or (operands 2 + operand 3) into operand 0 according
+     to the comparison in operand 1.  If the comparison is false,
+     operand 2 is moved into operand 0, otherwise (operand 2 + operand
+     3) is moved.
+
+'cond_addMODE'
+'cond_subMODE'
+'cond_mulMODE'
+'cond_divMODE'
+'cond_udivMODE'
+'cond_modMODE'
+'cond_umodMODE'
+'cond_andMODE'
+'cond_iorMODE'
+'cond_xorMODE'
+'cond_sminMODE'
+'cond_smaxMODE'
+'cond_uminMODE'
+'cond_umaxMODE'
+     When operand 1 is true, perform an operation on operands 2 and 3
+     and store the result in operand 0, otherwise store operand 4 in
+     operand 0.  The operation works elementwise if the operands are
+     vectors.
+
+     The scalar case is equivalent to:
+
+          op0 = op1 ? op2 OP op3 : op4;
+
+     while the vector case is equivalent to:
+
+          for (i = 0; i < GET_MODE_NUNITS (M); i++)
+            op0[i] = op1[i] ? op2[i] OP op3[i] : op4[i];
+
+     where, for example, OP is '+' for 'cond_addMODE'.
+
+     When defined for floating-point modes, the contents of 'op3[i]' are
+     not interpreted if 'op1[i]' is false, just like they would not be
+     in a normal C '?:' condition.
+
+     Operands 0, 2, 3 and 4 all have mode M.  Operand 1 is a scalar
+     integer if M is scalar, otherwise it has the mode returned by
+     'TARGET_VECTORIZE_GET_MASK_MODE'.
+
+'cond_fmaMODE'
+'cond_fmsMODE'
+'cond_fnmaMODE'
+'cond_fnmsMODE'
+     Like 'cond_addM', except that the conditional operation takes 3
+     operands rather than two.  For example, the vector form of
+     'cond_fmaMODE' is equivalent to:
+
+          for (i = 0; i < GET_MODE_NUNITS (M); i++)
+            op0[i] = op1[i] ? fma (op2[i], op3[i], op4[i]) : op5[i];
+
+'negMODEcc'
+     Similar to 'movMODEcc' but for conditional negation.  Conditionally
+     move the negation of operand 2 or the unchanged operand 3 into
+     operand 0 according to the comparison in operand 1.  If the
+     comparison is true, the negation of operand 2 is moved into operand
+     0, otherwise operand 3 is moved.
+
+'notMODEcc'
+     Similar to 'negMODEcc' but for conditional complement.
+     Conditionally move the bitwise complement of operand 2 or the
+     unchanged operand 3 into operand 0 according to the comparison in
+     operand 1.  If the comparison is true, the complement of operand 2
+     is moved into operand 0, otherwise operand 3 is moved.
+
+'cstoreMODE4'
+     Store zero or nonzero in operand 0 according to whether a
+     comparison is true.  Operand 1 is a comparison operator.  Operand 2
+     and operand 3 are the first and second operand of the comparison,
+     respectively.  You specify the mode that operand 0 must have when
+     you write the 'match_operand' expression.  The compiler
+     automatically sees which mode you have used and supplies an operand
+     of that mode.
+
+     The value stored for a true condition must have 1 as its low bit,
+     or else must be negative.  Otherwise the instruction is not
+     suitable and you should omit it from the machine description.  You
+     describe to the compiler exactly which value is stored by defining
+     the macro 'STORE_FLAG_VALUE' (*note Misc::).  If a description
+     cannot be found that can be used for all the possible comparison
+     operators, you should pick one and use a 'define_expand' to map all
+     results onto the one you chose.
+
+     These operations may 'FAIL', but should do so only in relatively
+     uncommon cases; if they would 'FAIL' for common cases involving
+     integer comparisons, it is best to restrict the predicates to not
+     allow these operands.  Likewise if a given comparison operator will
+     always fail, independent of the operands (for floating-point modes,
+     the 'ordered_comparison_operator' predicate is often useful in this
+     case).
+
+     If this pattern is omitted, the compiler will generate a
+     conditional branch--for example, it may copy a constant one to the
+     target and branching around an assignment of zero to the target--or
+     a libcall.  If the predicate for operand 1 only rejects some
+     operators, it will also try reordering the operands and/or
+     inverting the result value (e.g. by an exclusive OR). These
+     possibilities could be cheaper or equivalent to the instructions
+     used for the 'cstoreMODE4' pattern followed by those required to
+     convert a positive result from 'STORE_FLAG_VALUE' to 1; in this
+     case, you can and should make operand 1's predicate reject some
+     operators in the 'cstoreMODE4' pattern, or remove the pattern
+     altogether from the machine description.
+
+'cbranchMODE4'
+     Conditional branch instruction combined with a compare instruction.
+     Operand 0 is a comparison operator.  Operand 1 and operand 2 are
+     the first and second operands of the comparison, respectively.
+     Operand 3 is the 'code_label' to jump to.
+
+'jump'
+     A jump inside a function; an unconditional branch.  Operand 0 is
+     the 'code_label' to jump to.  This pattern name is mandatory on all
+     machines.
+
+'call'
+     Subroutine call instruction returning no value.  Operand 0 is the
+     function to call; operand 1 is the number of bytes of arguments
+     pushed as a 'const_int'; operand 2 is the number of registers used
+     as operands.
+
+     On most machines, operand 2 is not actually stored into the RTL
+     pattern.  It is supplied for the sake of some RISC machines which
+     need to put this information into the assembler code; they can put
+     it in the RTL instead of operand 1.
+
+     Operand 0 should be a 'mem' RTX whose address is the address of the
+     function.  Note, however, that this address can be a 'symbol_ref'
+     expression even if it would not be a legitimate memory address on
+     the target machine.  If it is also not a valid argument for a call
+     instruction, the pattern for this operation should be a
+     'define_expand' (*note Expander Definitions::) that places the
+     address into a register and uses that register in the call
+     instruction.
+
+'call_value'
+     Subroutine call instruction returning a value.  Operand 0 is the
+     hard register in which the value is returned.  There are three more
+     operands, the same as the three operands of the 'call' instruction
+     (but with numbers increased by one).
+
+     Subroutines that return 'BLKmode' objects use the 'call' insn.
+
+'call_pop', 'call_value_pop'
+     Similar to 'call' and 'call_value', except used if defined and if
+     'RETURN_POPS_ARGS' is nonzero.  They should emit a 'parallel' that
+     contains both the function call and a 'set' to indicate the
+     adjustment made to the frame pointer.
+
+     For machines where 'RETURN_POPS_ARGS' can be nonzero, the use of
+     these patterns increases the number of functions for which the
+     frame pointer can be eliminated, if desired.
+
+'untyped_call'
+     Subroutine call instruction returning a value of any type.  Operand
+     0 is the function to call; operand 1 is a memory location where the
+     result of calling the function is to be stored; operand 2 is a
+     'parallel' expression where each element is a 'set' expression that
+     indicates the saving of a function return value into the result
+     block.
+
+     This instruction pattern should be defined to support
+     '__builtin_apply' on machines where special instructions are needed
+     to call a subroutine with arbitrary arguments or to save the value
+     returned.  This instruction pattern is required on machines that
+     have multiple registers that can hold a return value (i.e.
+     'FUNCTION_VALUE_REGNO_P' is true for more than one register).
+
+'return'
+     Subroutine return instruction.  This instruction pattern name
+     should be defined only if a single instruction can do all the work
+     of returning from a function.
+
+     Like the 'movM' patterns, this pattern is also used after the RTL
+     generation phase.  In this case it is to support machines where
+     multiple instructions are usually needed to return from a function,
+     but some class of functions only requires one instruction to
+     implement a return.  Normally, the applicable functions are those
+     which do not need to save any registers or allocate stack space.
+
+     It is valid for this pattern to expand to an instruction using
+     'simple_return' if no epilogue is required.
+
+'simple_return'
+     Subroutine return instruction.  This instruction pattern name
+     should be defined only if a single instruction can do all the work
+     of returning from a function on a path where no epilogue is
+     required.  This pattern is very similar to the 'return' instruction
+     pattern, but it is emitted only by the shrink-wrapping optimization
+     on paths where the function prologue has not been executed, and a
+     function return should occur without any of the effects of the
+     epilogue.  Additional uses may be introduced on paths where both
+     the prologue and the epilogue have executed.
+
+     For such machines, the condition specified in this pattern should
+     only be true when 'reload_completed' is nonzero and the function's
+     epilogue would only be a single instruction.  For machines with
+     register windows, the routine 'leaf_function_p' may be used to
+     determine if a register window push is required.
+
+     Machines that have conditional return instructions should define
+     patterns such as
+
+          (define_insn ""
+            [(set (pc)
+                  (if_then_else (match_operator
+                                   0 "comparison_operator"
+                                   [(cc0) (const_int 0)])
+                                (return)
+                                (pc)))]
+            "CONDITION"
+            "...")
+
+     where CONDITION would normally be the same condition specified on
+     the named 'return' pattern.
+
+'untyped_return'
+     Untyped subroutine return instruction.  This instruction pattern
+     should be defined to support '__builtin_return' on machines where
+     special instructions are needed to return a value of any type.
+
+     Operand 0 is a memory location where the result of calling a
+     function with '__builtin_apply' is stored; operand 1 is a
+     'parallel' expression where each element is a 'set' expression that
+     indicates the restoring of a function return value from the result
+     block.
+
+'nop'
+     No-op instruction.  This instruction pattern name should always be
+     defined to output a no-op in assembler code.  '(const_int 0)' will
+     do as an RTL pattern.
+
+'indirect_jump'
+     An instruction to jump to an address which is operand zero.  This
+     pattern name is mandatory on all machines.
+
+'casesi'
+     Instruction to jump through a dispatch table, including bounds
+     checking.  This instruction takes five operands:
+
+       1. The index to dispatch on, which has mode 'SImode'.
+
+       2. The lower bound for indices in the table, an integer constant.
+
+       3. The total range of indices in the table--the largest index
+          minus the smallest one (both inclusive).
+
+       4. A label that precedes the table itself.
+
+       5. A label to jump to if the index has a value outside the
+          bounds.
+
+     The table is an 'addr_vec' or 'addr_diff_vec' inside of a
+     'jump_table_data'.  The number of elements in the table is one plus
+     the difference between the upper bound and the lower bound.
+
+'tablejump'
+     Instruction to jump to a variable address.  This is a low-level
+     capability which can be used to implement a dispatch table when
+     there is no 'casesi' pattern.
+
+     This pattern requires two operands: the address or offset, and a
+     label which should immediately precede the jump table.  If the
+     macro 'CASE_VECTOR_PC_RELATIVE' evaluates to a nonzero value then
+     the first operand is an offset which counts from the address of the
+     table; otherwise, it is an absolute address to jump to.  In either
+     case, the first operand has mode 'Pmode'.
+
+     The 'tablejump' insn is always the last insn before the jump table
+     it uses.  Its assembler code normally has no need to use the second
+     operand, but you should incorporate it in the RTL pattern so that
+     the jump optimizer will not delete the table as unreachable code.
+
+'doloop_end'
+     Conditional branch instruction that decrements a register and jumps
+     if the register is nonzero.  Operand 0 is the register to decrement
+     and test; operand 1 is the label to jump to if the register is
+     nonzero.  *Note Looping Patterns::.
+
+     This optional instruction pattern should be defined for machines
+     with low-overhead looping instructions as the loop optimizer will
+     try to modify suitable loops to utilize it.  The target hook
+     'TARGET_CAN_USE_DOLOOP_P' controls the conditions under which
+     low-overhead loops can be used.
+
+'doloop_begin'
+     Companion instruction to 'doloop_end' required for machines that
+     need to perform some initialization, such as loading a special
+     counter register.  Operand 1 is the associated 'doloop_end' pattern
+     and operand 0 is the register that it decrements.
+
+     If initialization insns do not always need to be emitted, use a
+     'define_expand' (*note Expander Definitions::) and make it fail.
+
+'canonicalize_funcptr_for_compare'
+     Canonicalize the function pointer in operand 1 and store the result
+     into operand 0.
+
+     Operand 0 is always a 'reg' and has mode 'Pmode'; operand 1 may be
+     a 'reg', 'mem', 'symbol_ref', 'const_int', etc and also has mode
+     'Pmode'.
+
+     Canonicalization of a function pointer usually involves computing
+     the address of the function which would be called if the function
+     pointer were used in an indirect call.
+
+     Only define this pattern if function pointers on the target machine
+     can have different values but still call the same function when
+     used in an indirect call.
+
+'save_stack_block'
+'save_stack_function'
+'save_stack_nonlocal'
+'restore_stack_block'
+'restore_stack_function'
+'restore_stack_nonlocal'
+     Most machines save and restore the stack pointer by copying it to
+     or from an object of mode 'Pmode'.  Do not define these patterns on
+     such machines.
+
+     Some machines require special handling for stack pointer saves and
+     restores.  On those machines, define the patterns corresponding to
+     the non-standard cases by using a 'define_expand' (*note Expander
+     Definitions::) that produces the required insns.  The three types
+     of saves and restores are:
+
+       1. 'save_stack_block' saves the stack pointer at the start of a
+          block that allocates a variable-sized object, and
+          'restore_stack_block' restores the stack pointer when the
+          block is exited.
+
+       2. 'save_stack_function' and 'restore_stack_function' do a
+          similar job for the outermost block of a function and are used
+          when the function allocates variable-sized objects or calls
+          'alloca'.  Only the epilogue uses the restored stack pointer,
+          allowing a simpler save or restore sequence on some machines.
+
+       3. 'save_stack_nonlocal' is used in functions that contain labels
+          branched to by nested functions.  It saves the stack pointer
+          in such a way that the inner function can use
+          'restore_stack_nonlocal' to restore the stack pointer.  The
+          compiler generates code to restore the frame and argument
+          pointer registers, but some machines require saving and
+          restoring additional data such as register window information
+          or stack backchains.  Place insns in these patterns to save
+          and restore any such required data.
+
+     When saving the stack pointer, operand 0 is the save area and
+     operand 1 is the stack pointer.  The mode used to allocate the save
+     area defaults to 'Pmode' but you can override that choice by
+     defining the 'STACK_SAVEAREA_MODE' macro (*note Storage Layout::).
+     You must specify an integral mode, or 'VOIDmode' if no save area is
+     needed for a particular type of save (either because no save is
+     needed or because a machine-specific save area can be used).
+     Operand 0 is the stack pointer and operand 1 is the save area for
+     restore operations.  If 'save_stack_block' is defined, operand 0
+     must not be 'VOIDmode' since these saves can be arbitrarily nested.
+
+     A save area is a 'mem' that is at a constant offset from
+     'virtual_stack_vars_rtx' when the stack pointer is saved for use by
+     nonlocal gotos and a 'reg' in the other two cases.
+
+'allocate_stack'
+     Subtract (or add if 'STACK_GROWS_DOWNWARD' is undefined) operand 1
+     from the stack pointer to create space for dynamically allocated
+     data.
+
+     Store the resultant pointer to this space into operand 0.  If you
+     are allocating space from the main stack, do this by emitting a
+     move insn to copy 'virtual_stack_dynamic_rtx' to operand 0.  If you
+     are allocating the space elsewhere, generate code to copy the
+     location of the space to operand 0.  In the latter case, you must
+     ensure this space gets freed when the corresponding space on the
+     main stack is free.
+
+     Do not define this pattern if all that must be done is the
+     subtraction.  Some machines require other operations such as stack
+     probes or maintaining the back chain.  Define this pattern to emit
+     those operations in addition to updating the stack pointer.
+
+'check_stack'
+     If stack checking (*note Stack Checking::) cannot be done on your
+     system by probing the stack, define this pattern to perform the
+     needed check and signal an error if the stack has overflowed.  The
+     single operand is the address in the stack farthest from the
+     current stack pointer that you need to validate.  Normally, on
+     platforms where this pattern is needed, you would obtain the stack
+     limit from a global or thread-specific variable or register.
+
+'probe_stack_address'
+     If stack checking (*note Stack Checking::) can be done on your
+     system by probing the stack but without the need to actually access
+     it, define this pattern and signal an error if the stack has
+     overflowed.  The single operand is the memory address in the stack
+     that needs to be probed.
+
+'probe_stack'
+     If stack checking (*note Stack Checking::) can be done on your
+     system by probing the stack but doing it with a "store zero"
+     instruction is not valid or optimal, define this pattern to do the
+     probing differently and signal an error if the stack has
+     overflowed.  The single operand is the memory reference in the
+     stack that needs to be probed.
+
+'nonlocal_goto'
+     Emit code to generate a non-local goto, e.g., a jump from one
+     function to a label in an outer function.  This pattern has four
+     arguments, each representing a value to be used in the jump.  The
+     first argument is to be loaded into the frame pointer, the second
+     is the address to branch to (code to dispatch to the actual label),
+     the third is the address of a location where the stack is saved,
+     and the last is the address of the label, to be placed in the
+     location for the incoming static chain.
+
+     On most machines you need not define this pattern, since GCC will
+     already generate the correct code, which is to load the frame
+     pointer and static chain, restore the stack (using the
+     'restore_stack_nonlocal' pattern, if defined), and jump indirectly
+     to the dispatcher.  You need only define this pattern if this code
+     will not work on your machine.
+
+'nonlocal_goto_receiver'
+     This pattern, if defined, contains code needed at the target of a
+     nonlocal goto after the code already generated by GCC.  You will
+     not normally need to define this pattern.  A typical reason why you
+     might need this pattern is if some value, such as a pointer to a
+     global table, must be restored when the frame pointer is restored.
+     Note that a nonlocal goto only occurs within a unit-of-translation,
+     so a global table pointer that is shared by all functions of a
+     given module need not be restored.  There are no arguments.
+
+'exception_receiver'
+     This pattern, if defined, contains code needed at the site of an
+     exception handler that isn't needed at the site of a nonlocal goto.
+     You will not normally need to define this pattern.  A typical
+     reason why you might need this pattern is if some value, such as a
+     pointer to a global table, must be restored after control flow is
+     branched to the handler of an exception.  There are no arguments.
+
+'builtin_setjmp_setup'
+     This pattern, if defined, contains additional code needed to
+     initialize the 'jmp_buf'.  You will not normally need to define
+     this pattern.  A typical reason why you might need this pattern is
+     if some value, such as a pointer to a global table, must be
+     restored.  Though it is preferred that the pointer value be
+     recalculated if possible (given the address of a label for
+     instance).  The single argument is a pointer to the 'jmp_buf'.
+     Note that the buffer is five words long and that the first three
+     are normally used by the generic mechanism.
+
+'builtin_setjmp_receiver'
+     This pattern, if defined, contains code needed at the site of a
+     built-in setjmp that isn't needed at the site of a nonlocal goto.
+     You will not normally need to define this pattern.  A typical
+     reason why you might need this pattern is if some value, such as a
+     pointer to a global table, must be restored.  It takes one
+     argument, which is the label to which builtin_longjmp transferred
+     control; this pattern may be emitted at a small offset from that
+     label.
+
+'builtin_longjmp'
+     This pattern, if defined, performs the entire action of the
+     longjmp.  You will not normally need to define this pattern unless
+     you also define 'builtin_setjmp_setup'.  The single argument is a
+     pointer to the 'jmp_buf'.
+
+'eh_return'
+     This pattern, if defined, affects the way '__builtin_eh_return',
+     and thence the call frame exception handling library routines, are
+     built.  It is intended to handle non-trivial actions needed along
+     the abnormal return path.
+
+     The address of the exception handler to which the function should
+     return is passed as operand to this pattern.  It will normally need
+     to copied by the pattern to some special register or memory
+     location.  If the pattern needs to determine the location of the
+     target call frame in order to do so, it may use
+     'EH_RETURN_STACKADJ_RTX', if defined; it will have already been
+     assigned.
+
+     If this pattern is not defined, the default action will be to
+     simply copy the return address to 'EH_RETURN_HANDLER_RTX'.  Either
+     that macro or this pattern needs to be defined if call frame
+     exception handling is to be used.
+
+'prologue'
+     This pattern, if defined, emits RTL for entry to a function.  The
+     function entry is responsible for setting up the stack frame,
+     initializing the frame pointer register, saving callee saved
+     registers, etc.
+
+     Using a prologue pattern is generally preferred over defining
+     'TARGET_ASM_FUNCTION_PROLOGUE' to emit assembly code for the
+     prologue.
+
+     The 'prologue' pattern is particularly useful for targets which
+     perform instruction scheduling.
+
+'window_save'
+     This pattern, if defined, emits RTL for a register window save.  It
+     should be defined if the target machine has register windows but
+     the window events are decoupled from calls to subroutines.  The
+     canonical example is the SPARC architecture.
+
+'epilogue'
+     This pattern emits RTL for exit from a function.  The function exit
+     is responsible for deallocating the stack frame, restoring callee
+     saved registers and emitting the return instruction.
+
+     Using an epilogue pattern is generally preferred over defining
+     'TARGET_ASM_FUNCTION_EPILOGUE' to emit assembly code for the
+     epilogue.
+
+     The 'epilogue' pattern is particularly useful for targets which
+     perform instruction scheduling or which have delay slots for their
+     return instruction.
+
+'sibcall_epilogue'
+     This pattern, if defined, emits RTL for exit from a function
+     without the final branch back to the calling function.  This
+     pattern will be emitted before any sibling call (aka tail call)
+     sites.
+
+     The 'sibcall_epilogue' pattern must not clobber any arguments used
+     for parameter passing or any stack slots for arguments passed to
+     the current function.
+
+'trap'
+     This pattern, if defined, signals an error, typically by causing
+     some kind of signal to be raised.
+
+'ctrapMM4'
+     Conditional trap instruction.  Operand 0 is a piece of RTL which
+     performs a comparison, and operands 1 and 2 are the arms of the
+     comparison.  Operand 3 is the trap code, an integer.
+
+     A typical 'ctrap' pattern looks like
+
+          (define_insn "ctrapsi4"
+            [(trap_if (match_operator 0 "trap_operator"
+                       [(match_operand 1 "register_operand")
+                        (match_operand 2 "immediate_operand")])
+                      (match_operand 3 "const_int_operand" "i"))]
+            ""
+            "...")
+
+'prefetch'
+     This pattern, if defined, emits code for a non-faulting data
+     prefetch instruction.  Operand 0 is the address of the memory to
+     prefetch.  Operand 1 is a constant 1 if the prefetch is preparing
+     for a write to the memory address, or a constant 0 otherwise.
+     Operand 2 is the expected degree of temporal locality of the data
+     and is a value between 0 and 3, inclusive; 0 means that the data
+     has no temporal locality, so it need not be left in the cache after
+     the access; 3 means that the data has a high degree of temporal
+     locality and should be left in all levels of cache possible; 1 and
+     2 mean, respectively, a low or moderate degree of temporal
+     locality.
+
+     Targets that do not support write prefetches or locality hints can
+     ignore the values of operands 1 and 2.
+
+'blockage'
+     This pattern defines a pseudo insn that prevents the instruction
+     scheduler and other passes from moving instructions and using
+     register equivalences across the boundary defined by the blockage
+     insn.  This needs to be an UNSPEC_VOLATILE pattern or a volatile
+     ASM.
+
+'memory_blockage'
+     This pattern, if defined, represents a compiler memory barrier, and
+     will be placed at points across which RTL passes may not propagate
+     memory accesses.  This instruction needs to read and write volatile
+     BLKmode memory.  It does not need to generate any machine
+     instruction.  If this pattern is not defined, the compiler falls
+     back to emitting an instruction corresponding to 'asm volatile (""
+     ::: "memory")'.
+
+'memory_barrier'
+     If the target memory model is not fully synchronous, then this
+     pattern should be defined to an instruction that orders both loads
+     and stores before the instruction with respect to loads and stores
+     after the instruction.  This pattern has no operands.
+
+'speculation_barrier'
+     If the target can support speculative execution, then this pattern
+     should be defined to an instruction that will block subsequent
+     execution until any prior speculation conditions has been resolved.
+     The pattern must also ensure that the compiler cannot move memory
+     operations past the barrier, so it needs to be an UNSPEC_VOLATILE
+     pattern.  The pattern has no operands.
+
+     If this pattern is not defined then the default expansion of
+     '__builtin_speculation_safe_value' will emit a warning.  You can
+     suppress this warning by defining this pattern with a final
+     condition of '0' (zero), which tells the compiler that a
+     speculation barrier is not needed for this target.
+
+'sync_compare_and_swapMODE'
+     This pattern, if defined, emits code for an atomic compare-and-swap
+     operation.  Operand 1 is the memory on which the atomic operation
+     is performed.  Operand 2 is the "old" value to be compared against
+     the current contents of the memory location.  Operand 3 is the
+     "new" value to store in the memory if the compare succeeds.
+     Operand 0 is the result of the operation; it should contain the
+     contents of the memory before the operation.  If the compare
+     succeeds, this should obviously be a copy of operand 2.
+
+     This pattern must show that both operand 0 and operand 1 are
+     modified.
+
+     This pattern must issue any memory barrier instructions such that
+     all memory operations before the atomic operation occur before the
+     atomic operation and all memory operations after the atomic
+     operation occur after the atomic operation.
+
+     For targets where the success or failure of the compare-and-swap
+     operation is available via the status flags, it is possible to
+     avoid a separate compare operation and issue the subsequent branch
+     or store-flag operation immediately after the compare-and-swap.  To
+     this end, GCC will look for a 'MODE_CC' set in the output of
+     'sync_compare_and_swapMODE'; if the machine description includes
+     such a set, the target should also define special 'cbranchcc4'
+     and/or 'cstorecc4' instructions.  GCC will then be able to take the
+     destination of the 'MODE_CC' set and pass it to the 'cbranchcc4' or
+     'cstorecc4' pattern as the first operand of the comparison (the
+     second will be '(const_int 0)').
+
+     For targets where the operating system may provide support for this
+     operation via library calls, the 'sync_compare_and_swap_optab' may
+     be initialized to a function with the same interface as the
+     '__sync_val_compare_and_swap_N' built-in.  If the entire set of
+     __SYNC builtins are supported via library calls, the target can
+     initialize all of the optabs at once with 'init_sync_libfuncs'.
+     For the purposes of C++11 'std::atomic::is_lock_free', it is
+     assumed that these library calls do _not_ use any kind of
+     interruptable locking.
+
+'sync_addMODE', 'sync_subMODE'
+'sync_iorMODE', 'sync_andMODE'
+'sync_xorMODE', 'sync_nandMODE'
+     These patterns emit code for an atomic operation on memory.
+     Operand 0 is the memory on which the atomic operation is performed.
+     Operand 1 is the second operand to the binary operator.
+
+     This pattern must issue any memory barrier instructions such that
+     all memory operations before the atomic operation occur before the
+     atomic operation and all memory operations after the atomic
+     operation occur after the atomic operation.
+
+     If these patterns are not defined, the operation will be
+     constructed from a compare-and-swap operation, if defined.
+
+'sync_old_addMODE', 'sync_old_subMODE'
+'sync_old_iorMODE', 'sync_old_andMODE'
+'sync_old_xorMODE', 'sync_old_nandMODE'
+     These patterns emit code for an atomic operation on memory, and
+     return the value that the memory contained before the operation.
+     Operand 0 is the result value, operand 1 is the memory on which the
+     atomic operation is performed, and operand 2 is the second operand
+     to the binary operator.
+
+     This pattern must issue any memory barrier instructions such that
+     all memory operations before the atomic operation occur before the
+     atomic operation and all memory operations after the atomic
+     operation occur after the atomic operation.
+
+     If these patterns are not defined, the operation will be
+     constructed from a compare-and-swap operation, if defined.
+
+'sync_new_addMODE', 'sync_new_subMODE'
+'sync_new_iorMODE', 'sync_new_andMODE'
+'sync_new_xorMODE', 'sync_new_nandMODE'
+     These patterns are like their 'sync_old_OP' counterparts, except
+     that they return the value that exists in the memory location after
+     the operation, rather than before the operation.
+
+'sync_lock_test_and_setMODE'
+     This pattern takes two forms, based on the capabilities of the
+     target.  In either case, operand 0 is the result of the operand,
+     operand 1 is the memory on which the atomic operation is performed,
+     and operand 2 is the value to set in the lock.
+
+     In the ideal case, this operation is an atomic exchange operation,
+     in which the previous value in memory operand is copied into the
+     result operand, and the value operand is stored in the memory
+     operand.
+
+     For less capable targets, any value operand that is not the
+     constant 1 should be rejected with 'FAIL'.  In this case the target
+     may use an atomic test-and-set bit operation.  The result operand
+     should contain 1 if the bit was previously set and 0 if the bit was
+     previously clear.  The true contents of the memory operand are
+     implementation defined.
+
+     This pattern must issue any memory barrier instructions such that
+     the pattern as a whole acts as an acquire barrier, that is all
+     memory operations after the pattern do not occur until the lock is
+     acquired.
+
+     If this pattern is not defined, the operation will be constructed
+     from a compare-and-swap operation, if defined.
+
+'sync_lock_releaseMODE'
+     This pattern, if defined, releases a lock set by
+     'sync_lock_test_and_setMODE'.  Operand 0 is the memory that
+     contains the lock; operand 1 is the value to store in the lock.
+
+     If the target doesn't implement full semantics for
+     'sync_lock_test_and_setMODE', any value operand which is not the
+     constant 0 should be rejected with 'FAIL', and the true contents of
+     the memory operand are implementation defined.
+
+     This pattern must issue any memory barrier instructions such that
+     the pattern as a whole acts as a release barrier, that is the lock
+     is released only after all previous memory operations have
+     completed.
+
+     If this pattern is not defined, then a 'memory_barrier' pattern
+     will be emitted, followed by a store of the value to the memory
+     operand.
+
+'atomic_compare_and_swapMODE'
+     This pattern, if defined, emits code for an atomic compare-and-swap
+     operation with memory model semantics.  Operand 2 is the memory on
+     which the atomic operation is performed.  Operand 0 is an output
+     operand which is set to true or false based on whether the
+     operation succeeded.  Operand 1 is an output operand which is set
+     to the contents of the memory before the operation was attempted.
+     Operand 3 is the value that is expected to be in memory.  Operand 4
+     is the value to put in memory if the expected value is found there.
+     Operand 5 is set to 1 if this compare and swap is to be treated as
+     a weak operation.  Operand 6 is the memory model to be used if the
+     operation is a success.  Operand 7 is the memory model to be used
+     if the operation fails.
+
+     If memory referred to in operand 2 contains the value in operand 3,
+     then operand 4 is stored in memory pointed to by operand 2 and
+     fencing based on the memory model in operand 6 is issued.
+
+     If memory referred to in operand 2 does not contain the value in
+     operand 3, then fencing based on the memory model in operand 7 is
+     issued.
+
+     If a target does not support weak compare-and-swap operations, or
+     the port elects not to implement weak operations, the argument in
+     operand 5 can be ignored.  Note a strong implementation must be
+     provided.
+
+     If this pattern is not provided, the '__atomic_compare_exchange'
+     built-in functions will utilize the legacy 'sync_compare_and_swap'
+     pattern with an '__ATOMIC_SEQ_CST' memory model.
+
+'atomic_loadMODE'
+     This pattern implements an atomic load operation with memory model
+     semantics.  Operand 1 is the memory address being loaded from.
+     Operand 0 is the result of the load.  Operand 2 is the memory model
+     to be used for the load operation.
+
+     If not present, the '__atomic_load' built-in function will either
+     resort to a normal load with memory barriers, or a compare-and-swap
+     operation if a normal load would not be atomic.
+
+'atomic_storeMODE'
+     This pattern implements an atomic store operation with memory model
+     semantics.  Operand 0 is the memory address being stored to.
+     Operand 1 is the value to be written.  Operand 2 is the memory
+     model to be used for the operation.
+
+     If not present, the '__atomic_store' built-in function will attempt
+     to perform a normal store and surround it with any required memory
+     fences.  If the store would not be atomic, then an
+     '__atomic_exchange' is attempted with the result being ignored.
+
+'atomic_exchangeMODE'
+     This pattern implements an atomic exchange operation with memory
+     model semantics.  Operand 1 is the memory location the operation is
+     performed on.  Operand 0 is an output operand which is set to the
+     original value contained in the memory pointed to by operand 1.
+     Operand 2 is the value to be stored.  Operand 3 is the memory model
+     to be used.
+
+     If this pattern is not present, the built-in function
+     '__atomic_exchange' will attempt to preform the operation with a
+     compare and swap loop.
+
+'atomic_addMODE', 'atomic_subMODE'
+'atomic_orMODE', 'atomic_andMODE'
+'atomic_xorMODE', 'atomic_nandMODE'
+     These patterns emit code for an atomic operation on memory with
+     memory model semantics.  Operand 0 is the memory on which the
+     atomic operation is performed.  Operand 1 is the second operand to
+     the binary operator.  Operand 2 is the memory model to be used by
+     the operation.
+
+     If these patterns are not defined, attempts will be made to use
+     legacy 'sync' patterns, or equivalent patterns which return a
+     result.  If none of these are available a compare-and-swap loop
+     will be used.
+
+'atomic_fetch_addMODE', 'atomic_fetch_subMODE'
+'atomic_fetch_orMODE', 'atomic_fetch_andMODE'
+'atomic_fetch_xorMODE', 'atomic_fetch_nandMODE'
+     These patterns emit code for an atomic operation on memory with
+     memory model semantics, and return the original value.  Operand 0
+     is an output operand which contains the value of the memory
+     location before the operation was performed.  Operand 1 is the
+     memory on which the atomic operation is performed.  Operand 2 is
+     the second operand to the binary operator.  Operand 3 is the memory
+     model to be used by the operation.
+
+     If these patterns are not defined, attempts will be made to use
+     legacy 'sync' patterns.  If none of these are available a
+     compare-and-swap loop will be used.
+
+'atomic_add_fetchMODE', 'atomic_sub_fetchMODE'
+'atomic_or_fetchMODE', 'atomic_and_fetchMODE'
+'atomic_xor_fetchMODE', 'atomic_nand_fetchMODE'
+     These patterns emit code for an atomic operation on memory with
+     memory model semantics and return the result after the operation is
+     performed.  Operand 0 is an output operand which contains the value
+     after the operation.  Operand 1 is the memory on which the atomic
+     operation is performed.  Operand 2 is the second operand to the
+     binary operator.  Operand 3 is the memory model to be used by the
+     operation.
+
+     If these patterns are not defined, attempts will be made to use
+     legacy 'sync' patterns, or equivalent patterns which return the
+     result before the operation followed by the arithmetic operation
+     required to produce the result.  If none of these are available a
+     compare-and-swap loop will be used.
+
+'atomic_test_and_set'
+     This pattern emits code for '__builtin_atomic_test_and_set'.
+     Operand 0 is an output operand which is set to true if the previous
+     previous contents of the byte was "set", and false otherwise.
+     Operand 1 is the 'QImode' memory to be modified.  Operand 2 is the
+     memory model to be used.
+
+     The specific value that defines "set" is implementation defined,
+     and is normally based on what is performed by the native atomic
+     test and set instruction.
+
+'atomic_bit_test_and_setMODE'
+'atomic_bit_test_and_complementMODE'
+'atomic_bit_test_and_resetMODE'
+     These patterns emit code for an atomic bitwise operation on memory
+     with memory model semantics, and return the original value of the
+     specified bit.  Operand 0 is an output operand which contains the
+     value of the specified bit from the memory location before the
+     operation was performed.  Operand 1 is the memory on which the
+     atomic operation is performed.  Operand 2 is the bit within the
+     operand, starting with least significant bit.  Operand 3 is the
+     memory model to be used by the operation.  Operand 4 is a flag - it
+     is 'const1_rtx' if operand 0 should contain the original value of
+     the specified bit in the least significant bit of the operand, and
+     'const0_rtx' if the bit should be in its original position in the
+     operand.  'atomic_bit_test_and_setMODE' atomically sets the
+     specified bit after remembering its original value,
+     'atomic_bit_test_and_complementMODE' inverts the specified bit and
+     'atomic_bit_test_and_resetMODE' clears the specified bit.
+
+     If these patterns are not defined, attempts will be made to use
+     'atomic_fetch_orMODE', 'atomic_fetch_xorMODE' or
+     'atomic_fetch_andMODE' instruction patterns, or their 'sync'
+     counterparts.  If none of these are available a compare-and-swap
+     loop will be used.
+
+'mem_thread_fence'
+     This pattern emits code required to implement a thread fence with
+     memory model semantics.  Operand 0 is the memory model to be used.
+
+     For the '__ATOMIC_RELAXED' model no instructions need to be issued
+     and this expansion is not invoked.
+
+     The compiler always emits a compiler memory barrier regardless of
+     what expanding this pattern produced.
+
+     If this pattern is not defined, the compiler falls back to
+     expanding the 'memory_barrier' pattern, then to emitting
+     '__sync_synchronize' library call, and finally to just placing a
+     compiler memory barrier.
+
+'get_thread_pointerMODE'
+'set_thread_pointerMODE'
+     These patterns emit code that reads/sets the TLS thread pointer.
+     Currently, these are only needed if the target needs to support the
+     '__builtin_thread_pointer' and '__builtin_set_thread_pointer'
+     builtins.
+
+     The get/set patterns have a single output/input operand
+     respectively, with MODE intended to be 'Pmode'.
+
+'stack_protect_combined_set'
+     This pattern, if defined, moves a 'ptr_mode' value from an address
+     whose declaration RTX is given in operand 1 to the memory in
+     operand 0 without leaving the value in a register afterward.  If
+     several instructions are needed by the target to perform the
+     operation (eg.  to load the address from a GOT entry then load the
+     'ptr_mode' value and finally store it), it is the backend's
+     responsibility to ensure no intermediate result gets spilled.  This
+     is to avoid leaking the value some place that an attacker might use
+     to rewrite the stack guard slot after having clobbered it.
+
+     If this pattern is not defined, then the address declaration is
+     expanded first in the standard way and a 'stack_protect_set'
+     pattern is then generated to move the value from that address to
+     the address in operand 0.
+
+'stack_protect_set'
+     This pattern, if defined, moves a 'ptr_mode' value from the valid
+     memory location in operand 1 to the memory in operand 0 without
+     leaving the value in a register afterward.  This is to avoid
+     leaking the value some place that an attacker might use to rewrite
+     the stack guard slot after having clobbered it.
+
+     Note: on targets where the addressing modes do not allow to load
+     directly from stack guard address, the address is expanded in a
+     standard way first which could cause some spills.
+
+     If this pattern is not defined, then a plain move pattern is
+     generated.
+
+'stack_protect_combined_test'
+     This pattern, if defined, compares a 'ptr_mode' value from an
+     address whose declaration RTX is given in operand 1 with the memory
+     in operand 0 without leaving the value in a register afterward and
+     branches to operand 2 if the values were equal.  If several
+     instructions are needed by the target to perform the operation (eg.
+     to load the address from a GOT entry then load the 'ptr_mode' value
+     and finally store it), it is the backend's responsibility to ensure
+     no intermediate result gets spilled.  This is to avoid leaking the
+     value some place that an attacker might use to rewrite the stack
+     guard slot after having clobbered it.
+
+     If this pattern is not defined, then the address declaration is
+     expanded first in the standard way and a 'stack_protect_test'
+     pattern is then generated to compare the value from that address to
+     the value at the memory in operand 0.
+
+'stack_protect_test'
+     This pattern, if defined, compares a 'ptr_mode' value from the
+     valid memory location in operand 1 with the memory in operand 0
+     without leaving the value in a register afterward and branches to
+     operand 2 if the values were equal.
+
+     If this pattern is not defined, then a plain compare pattern and
+     conditional branch pattern is used.
+
+'clear_cache'
+     This pattern, if defined, flushes the instruction cache for a
+     region of memory.  The region is bounded to by the Pmode pointers
+     in operand 0 inclusive and operand 1 exclusive.
+
+     If this pattern is not defined, a call to the library function
+     '__clear_cache' is used.
+
+File: gccint.info,  Node: Pattern Ordering,  Next: Dependent Patterns,  Prev: Standard Names,  Up: Machine Desc
+

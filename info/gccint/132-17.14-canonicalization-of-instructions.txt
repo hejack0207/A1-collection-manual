@@ -1,0 +1,121 @@
+17.14 Canonicalization of Instructions
+======================================
+
+There are often cases where multiple RTL expressions could represent an
+operation performed by a single machine instruction.  This situation is
+most commonly encountered with logical, branch, and multiply-accumulate
+instructions.  In such cases, the compiler attempts to convert these
+multiple RTL expressions into a single canonical form to reduce the
+number of insn patterns required.
+
+ In addition to algebraic simplifications, following canonicalizations
+are performed:
+
+   * For commutative and comparison operators, a constant is always made
+     the second operand.  If a machine only supports a constant as the
+     second operand, only patterns that match a constant in the second
+     operand need be supplied.
+
+   * For associative operators, a sequence of operators will always
+     chain to the left; for instance, only the left operand of an
+     integer 'plus' can itself be a 'plus'.  'and', 'ior', 'xor',
+     'plus', 'mult', 'smin', 'smax', 'umin', and 'umax' are associative
+     when applied to integers, and sometimes to floating-point.
+
+   * For these operators, if only one operand is a 'neg', 'not', 'mult',
+     'plus', or 'minus' expression, it will be the first operand.
+
+   * In combinations of 'neg', 'mult', 'plus', and 'minus', the 'neg'
+     operations (if any) will be moved inside the operations as far as
+     possible.  For instance, '(neg (mult A B))' is canonicalized as
+     '(mult (neg A) B)', but '(plus (mult (neg B) C) A)' is
+     canonicalized as '(minus A (mult B C))'.
+
+   * For the 'compare' operator, a constant is always the second operand
+     if the first argument is a condition code register or '(cc0)'.
+
+   * For instructions that inherently set a condition code register, the
+     'compare' operator is always written as the first RTL expression of
+     the 'parallel' instruction pattern.  For example,
+
+          (define_insn ""
+            [(set (reg:CCZ FLAGS_REG)
+          	(compare:CCZ
+          	  (plus:SI
+          	    (match_operand:SI 1 "register_operand" "%r")
+          	    (match_operand:SI 2 "register_operand" "r"))
+          	  (const_int 0)))
+             (set (match_operand:SI 0 "register_operand" "=r")
+          	(plus:SI (match_dup 1) (match_dup 2)))]
+            ""
+            "addl %0, %1, %2")
+
+   * An operand of 'neg', 'not', 'mult', 'plus', or 'minus' is made the
+     first operand under the same conditions as above.
+
+   * '(ltu (plus A B) B)' is converted to '(ltu (plus A B) A)'.
+     Likewise with 'geu' instead of 'ltu'.
+
+   * '(minus X (const_int N))' is converted to '(plus X (const_int
+     -N))'.
+
+   * Within address computations (i.e., inside 'mem'), a left shift is
+     converted into the appropriate multiplication by a power of two.
+
+   * De Morgan's Law is used to move bitwise negation inside a bitwise
+     logical-and or logical-or operation.  If this results in only one
+     operand being a 'not' expression, it will be the first one.
+
+     A machine that has an instruction that performs a bitwise
+     logical-and of one operand with the bitwise negation of the other
+     should specify the pattern for that instruction as
+
+          (define_insn ""
+            [(set (match_operand:M 0 ...)
+                  (and:M (not:M (match_operand:M 1 ...))
+                               (match_operand:M 2 ...)))]
+            "..."
+            "...")
+
+     Similarly, a pattern for a "NAND" instruction should be written
+
+          (define_insn ""
+            [(set (match_operand:M 0 ...)
+                  (ior:M (not:M (match_operand:M 1 ...))
+                               (not:M (match_operand:M 2 ...))))]
+            "..."
+            "...")
+
+     In both cases, it is not necessary to include patterns for the many
+     logically equivalent RTL expressions.
+
+   * The only possible RTL expressions involving both bitwise
+     exclusive-or and bitwise negation are '(xor:M X Y)' and '(not:M
+     (xor:M X Y))'.
+
+   * The sum of three items, one of which is a constant, will only
+     appear in the form
+
+          (plus:M (plus:M X Y) CONSTANT)
+
+   * Equality comparisons of a group of bits (usually a single bit) with
+     zero will be written using 'zero_extract' rather than the
+     equivalent 'and' or 'sign_extract' operations.
+
+   * '(sign_extend:M1 (mult:M2 (sign_extend:M2 X) (sign_extend:M2 Y)))'
+     is converted to '(mult:M1 (sign_extend:M1 X) (sign_extend:M1 Y))',
+     and likewise for 'zero_extend'.
+
+   * '(sign_extend:M1 (mult:M2 (ashiftrt:M2 X S) (sign_extend:M2 Y)))'
+     is converted to '(mult:M1 (sign_extend:M1 (ashiftrt:M2 X S))
+     (sign_extend:M1 Y))', and likewise for patterns using 'zero_extend'
+     and 'lshiftrt'.  If the second operand of 'mult' is also a shift,
+     then that is extended also.  This transformation is only applied
+     when it can be proven that the original operation had sufficient
+     precision to prevent overflow.
+
+ Further canonicalization rules are defined in the function
+'commutative_operand_precedence' in 'gcc/rtlanal.c'.
+
+File: gccint.info,  Node: Expander Definitions,  Next: Insn Splitting,  Prev: Insn Canonicalizations,  Up: Machine Desc
+

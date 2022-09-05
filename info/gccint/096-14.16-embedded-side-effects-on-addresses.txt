@@ -1,0 +1,76 @@
+14.16 Embedded Side-Effects on Addresses
+========================================
+
+Six special side-effect expression codes appear as memory addresses.
+
+'(pre_dec:M X)'
+     Represents the side effect of decrementing X by a standard amount
+     and represents also the value that X has after being decremented.
+     X must be a 'reg' or 'mem', but most machines allow only a 'reg'.
+     M must be the machine mode for pointers on the machine in use.  The
+     amount X is decremented by is the length in bytes of the machine
+     mode of the containing memory reference of which this expression
+     serves as the address.  Here is an example of its use:
+
+          (mem:DF (pre_dec:SI (reg:SI 39)))
+
+     This says to decrement pseudo register 39 by the length of a
+     'DFmode' value and use the result to address a 'DFmode' value.
+
+'(pre_inc:M X)'
+     Similar, but specifies incrementing X instead of decrementing it.
+
+'(post_dec:M X)'
+     Represents the same side effect as 'pre_dec' but a different value.
+     The value represented here is the value X has before being
+     decremented.
+
+'(post_inc:M X)'
+     Similar, but specifies incrementing X instead of decrementing it.
+
+'(post_modify:M X Y)'
+
+     Represents the side effect of setting X to Y and represents X
+     before X is modified.  X must be a 'reg' or 'mem', but most
+     machines allow only a 'reg'.  M must be the machine mode for
+     pointers on the machine in use.
+
+     The expression Y must be one of three forms: '(plus:M X Z)',
+     '(minus:M X Z)', or '(plus:M X I)', where Z is an index register
+     and I is a constant.
+
+     Here is an example of its use:
+
+          (mem:SF (post_modify:SI (reg:SI 42) (plus (reg:SI 42)
+                                                    (reg:SI 48))))
+
+     This says to modify pseudo register 42 by adding the contents of
+     pseudo register 48 to it, after the use of what ever 42 points to.
+
+'(pre_modify:M X EXPR)'
+     Similar except side effects happen before the use.
+
+ These embedded side effect expressions must be used with care.
+Instruction patterns may not use them.  Until the 'flow' pass of the
+compiler, they may occur only to represent pushes onto the stack.  The
+'flow' pass finds cases where registers are incremented or decremented
+in one instruction and used as an address shortly before or after; these
+cases are then transformed to use pre- or post-increment or -decrement.
+
+ If a register used as the operand of these expressions is used in
+another address in an insn, the original value of the register is used.
+Uses of the register outside of an address are not permitted within the
+same insn as a use in an embedded side effect expression because such
+insns behave differently on different machines and hence must be treated
+as ambiguous and disallowed.
+
+ An instruction that can be represented with an embedded side effect
+could also be represented using 'parallel' containing an additional
+'set' to describe how the address register is altered.  This is not done
+because machines that allow these operations at all typically allow them
+wherever a memory address is called for.  Describing them as additional
+parallel stores would require doubling the number of entries in the
+machine description.
+
+File: gccint.info,  Node: Assembler,  Next: Debug Information,  Prev: Incdec,  Up: RTL
+

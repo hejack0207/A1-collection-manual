@@ -1,0 +1,662 @@
+18.8 Register Classes
+=====================
+
+On many machines, the numbered registers are not all equivalent.  For
+example, certain registers may not be allowed for indexed addressing;
+certain registers may not be allowed in some instructions.  These
+machine restrictions are described to the compiler using "register
+classes".
+
+ You define a number of register classes, giving each one a name and
+saying which of the registers belong to it.  Then you can specify
+register classes that are allowed as operands to particular instruction
+patterns.
+
+ In general, each register will belong to several classes.  In fact, one
+class must be named 'ALL_REGS' and contain all the registers.  Another
+class must be named 'NO_REGS' and contain no registers.  Often the union
+of two classes will be another class; however, this is not required.
+
+ One of the classes must be named 'GENERAL_REGS'.  There is nothing
+terribly special about the name, but the operand constraint letters 'r'
+and 'g' specify this class.  If 'GENERAL_REGS' is the same as
+'ALL_REGS', just define it as a macro which expands to 'ALL_REGS'.
+
+ Order the classes so that if class X is contained in class Y then X has
+a lower class number than Y.
+
+ The way classes other than 'GENERAL_REGS' are specified in operand
+constraints is through machine-dependent operand constraint letters.
+You can define such letters to correspond to various classes, then use
+them in operand constraints.
+
+ You must define the narrowest register classes for allocatable
+registers, so that each class either has no subclasses, or that for some
+mode, the move cost between registers within the class is cheaper than
+moving a register in the class to or from memory (*note Costs::).
+
+ You should define a class for the union of two classes whenever some
+instruction allows both classes.  For example, if an instruction allows
+either a floating point (coprocessor) register or a general register for
+a certain operand, you should define a class 'FLOAT_OR_GENERAL_REGS'
+which includes both of them.  Otherwise you will get suboptimal code, or
+even internal compiler errors when reload cannot find a register in the
+class computed via 'reg_class_subunion'.
+
+ You must also specify certain redundant information about the register
+classes: for each class, which classes contain it and which ones are
+contained in it; for each pair of classes, the largest class contained
+in their union.
+
+ When a value occupying several consecutive registers is expected in a
+certain class, all the registers used must belong to that class.
+Therefore, register classes cannot be used to enforce a requirement for
+a register pair to start with an even-numbered register.  The way to
+specify this requirement is with 'TARGET_HARD_REGNO_MODE_OK'.
+
+ Register classes used for input-operands of bitwise-and or shift
+instructions have a special requirement: each such class must have, for
+each fixed-point machine mode, a subclass whose registers can transfer
+that mode to or from memory.  For example, on some machines, the
+operations for single-byte values ('QImode') are limited to certain
+registers.  When this is so, each register class that is used in a
+bitwise-and or shift instruction must have a subclass consisting of
+registers from which single-byte values can be loaded or stored.  This
+is so that 'PREFERRED_RELOAD_CLASS' can always have a possible value to
+return.
+
+ -- Data type: enum reg_class
+     An enumerated type that must be defined with all the register class
+     names as enumerated values.  'NO_REGS' must be first.  'ALL_REGS'
+     must be the last register class, followed by one more enumerated
+     value, 'LIM_REG_CLASSES', which is not a register class but rather
+     tells how many classes there are.
+
+     Each register class has a number, which is the value of casting the
+     class name to type 'int'.  The number serves as an index in many of
+     the tables described below.
+
+ -- Macro: N_REG_CLASSES
+     The number of distinct register classes, defined as follows:
+
+          #define N_REG_CLASSES (int) LIM_REG_CLASSES
+
+ -- Macro: REG_CLASS_NAMES
+     An initializer containing the names of the register classes as C
+     string constants.  These names are used in writing some of the
+     debugging dumps.
+
+ -- Macro: REG_CLASS_CONTENTS
+     An initializer containing the contents of the register classes, as
+     integers which are bit masks.  The Nth integer specifies the
+     contents of class N.  The way the integer MASK is interpreted is
+     that register R is in the class if 'MASK & (1 << R)' is 1.
+
+     When the machine has more than 32 registers, an integer does not
+     suffice.  Then the integers are replaced by sub-initializers,
+     braced groupings containing several integers.  Each sub-initializer
+     must be suitable as an initializer for the type 'HARD_REG_SET'
+     which is defined in 'hard-reg-set.h'.  In this situation, the first
+     integer in each sub-initializer corresponds to registers 0 through
+     31, the second integer to registers 32 through 63, and so on.
+
+ -- Macro: REGNO_REG_CLASS (REGNO)
+     A C expression whose value is a register class containing hard
+     register REGNO.  In general there is more than one such class;
+     choose a class which is "minimal", meaning that no smaller class
+     also contains the register.
+
+ -- Macro: BASE_REG_CLASS
+     A macro whose definition is the name of the class to which a valid
+     base register must belong.  A base register is one used in an
+     address which is the register value plus a displacement.
+
+ -- Macro: MODE_BASE_REG_CLASS (MODE)
+     This is a variation of the 'BASE_REG_CLASS' macro which allows the
+     selection of a base register in a mode dependent manner.  If MODE
+     is VOIDmode then it should return the same value as
+     'BASE_REG_CLASS'.
+
+ -- Macro: MODE_BASE_REG_REG_CLASS (MODE)
+     A C expression whose value is the register class to which a valid
+     base register must belong in order to be used in a base plus index
+     register address.  You should define this macro if base plus index
+     addresses have different requirements than other base register
+     uses.
+
+ -- Macro: MODE_CODE_BASE_REG_CLASS (MODE, ADDRESS_SPACE, OUTER_CODE,
+          INDEX_CODE)
+     A C expression whose value is the register class to which a valid
+     base register for a memory reference in mode MODE to address space
+     ADDRESS_SPACE must belong.  OUTER_CODE and INDEX_CODE define the
+     context in which the base register occurs.  OUTER_CODE is the code
+     of the immediately enclosing expression ('MEM' for the top level of
+     an address, 'ADDRESS' for something that occurs in an
+     'address_operand').  INDEX_CODE is the code of the corresponding
+     index expression if OUTER_CODE is 'PLUS'; 'SCRATCH' otherwise.
+
+ -- Macro: INDEX_REG_CLASS
+     A macro whose definition is the name of the class to which a valid
+     index register must belong.  An index register is one used in an
+     address where its value is either multiplied by a scale factor or
+     added to another register (as well as added to a displacement).
+
+ -- Macro: REGNO_OK_FOR_BASE_P (NUM)
+     A C expression which is nonzero if register number NUM is suitable
+     for use as a base register in operand addresses.
+
+ -- Macro: REGNO_MODE_OK_FOR_BASE_P (NUM, MODE)
+     A C expression that is just like 'REGNO_OK_FOR_BASE_P', except that
+     that expression may examine the mode of the memory reference in
+     MODE.  You should define this macro if the mode of the memory
+     reference affects whether a register may be used as a base
+     register.  If you define this macro, the compiler will use it
+     instead of 'REGNO_OK_FOR_BASE_P'.  The mode may be 'VOIDmode' for
+     addresses that appear outside a 'MEM', i.e., as an
+     'address_operand'.
+
+ -- Macro: REGNO_MODE_OK_FOR_REG_BASE_P (NUM, MODE)
+     A C expression which is nonzero if register number NUM is suitable
+     for use as a base register in base plus index operand addresses,
+     accessing memory in mode MODE.  It may be either a suitable hard
+     register or a pseudo register that has been allocated such a hard
+     register.  You should define this macro if base plus index
+     addresses have different requirements than other base register
+     uses.
+
+     Use of this macro is deprecated; please use the more general
+     'REGNO_MODE_CODE_OK_FOR_BASE_P'.
+
+ -- Macro: REGNO_MODE_CODE_OK_FOR_BASE_P (NUM, MODE, ADDRESS_SPACE,
+          OUTER_CODE, INDEX_CODE)
+     A C expression which is nonzero if register number NUM is suitable
+     for use as a base register in operand addresses, accessing memory
+     in mode MODE in address space ADDRESS_SPACE.  This is similar to
+     'REGNO_MODE_OK_FOR_BASE_P', except that that expression may examine
+     the context in which the register appears in the memory reference.
+     OUTER_CODE is the code of the immediately enclosing expression
+     ('MEM' if at the top level of the address, 'ADDRESS' for something
+     that occurs in an 'address_operand').  INDEX_CODE is the code of
+     the corresponding index expression if OUTER_CODE is 'PLUS';
+     'SCRATCH' otherwise.  The mode may be 'VOIDmode' for addresses that
+     appear outside a 'MEM', i.e., as an 'address_operand'.
+
+ -- Macro: REGNO_OK_FOR_INDEX_P (NUM)
+     A C expression which is nonzero if register number NUM is suitable
+     for use as an index register in operand addresses.  It may be
+     either a suitable hard register or a pseudo register that has been
+     allocated such a hard register.
+
+     The difference between an index register and a base register is
+     that the index register may be scaled.  If an address involves the
+     sum of two registers, neither one of them scaled, then either one
+     may be labeled the "base" and the other the "index"; but whichever
+     labeling is used must fit the machine's constraints of which
+     registers may serve in each capacity.  The compiler will try both
+     labelings, looking for one that is valid, and will reload one or
+     both registers only if neither labeling works.
+
+ -- Target Hook: reg_class_t TARGET_PREFERRED_RENAME_CLASS (reg_class_t
+          RCLASS)
+     A target hook that places additional preference on the register
+     class to use when it is necessary to rename a register in class
+     RCLASS to another class, or perhaps NO_REGS, if no preferred
+     register class is found or hook 'preferred_rename_class' is not
+     implemented.  Sometimes returning a more restrictive class makes
+     better code.  For example, on ARM, thumb-2 instructions using
+     'LO_REGS' may be smaller than instructions using 'GENERIC_REGS'.
+     By returning 'LO_REGS' from 'preferred_rename_class', code size can
+     be reduced.
+
+ -- Target Hook: reg_class_t TARGET_PREFERRED_RELOAD_CLASS (rtx X,
+          reg_class_t RCLASS)
+     A target hook that places additional restrictions on the register
+     class to use when it is necessary to copy value X into a register
+     in class RCLASS.  The value is a register class; perhaps RCLASS, or
+     perhaps another, smaller class.
+
+     The default version of this hook always returns value of 'rclass'
+     argument.
+
+     Sometimes returning a more restrictive class makes better code.
+     For example, on the 68000, when X is an integer constant that is in
+     range for a 'moveq' instruction, the value of this macro is always
+     'DATA_REGS' as long as RCLASS includes the data registers.
+     Requiring a data register guarantees that a 'moveq' will be used.
+
+     One case where 'TARGET_PREFERRED_RELOAD_CLASS' must not return
+     RCLASS is if X is a legitimate constant which cannot be loaded into
+     some register class.  By returning 'NO_REGS' you can force X into a
+     memory location.  For example, rs6000 can load immediate values
+     into general-purpose registers, but does not have an instruction
+     for loading an immediate value into a floating-point register, so
+     'TARGET_PREFERRED_RELOAD_CLASS' returns 'NO_REGS' when X is a
+     floating-point constant.  If the constant can't be loaded into any
+     kind of register, code generation will be better if
+     'TARGET_LEGITIMATE_CONSTANT_P' makes the constant illegitimate
+     instead of using 'TARGET_PREFERRED_RELOAD_CLASS'.
+
+     If an insn has pseudos in it after register allocation, reload will
+     go through the alternatives and call repeatedly
+     'TARGET_PREFERRED_RELOAD_CLASS' to find the best one.  Returning
+     'NO_REGS', in this case, makes reload add a '!' in front of the
+     constraint: the x86 back-end uses this feature to discourage usage
+     of 387 registers when math is done in the SSE registers (and vice
+     versa).
+
+ -- Macro: PREFERRED_RELOAD_CLASS (X, CLASS)
+     A C expression that places additional restrictions on the register
+     class to use when it is necessary to copy value X into a register
+     in class CLASS.  The value is a register class; perhaps CLASS, or
+     perhaps another, smaller class.  On many machines, the following
+     definition is safe:
+
+          #define PREFERRED_RELOAD_CLASS(X,CLASS) CLASS
+
+     Sometimes returning a more restrictive class makes better code.
+     For example, on the 68000, when X is an integer constant that is in
+     range for a 'moveq' instruction, the value of this macro is always
+     'DATA_REGS' as long as CLASS includes the data registers.
+     Requiring a data register guarantees that a 'moveq' will be used.
+
+     One case where 'PREFERRED_RELOAD_CLASS' must not return CLASS is if
+     X is a legitimate constant which cannot be loaded into some
+     register class.  By returning 'NO_REGS' you can force X into a
+     memory location.  For example, rs6000 can load immediate values
+     into general-purpose registers, but does not have an instruction
+     for loading an immediate value into a floating-point register, so
+     'PREFERRED_RELOAD_CLASS' returns 'NO_REGS' when X is a
+     floating-point constant.  If the constant cannot be loaded into any
+     kind of register, code generation will be better if
+     'TARGET_LEGITIMATE_CONSTANT_P' makes the constant illegitimate
+     instead of using 'TARGET_PREFERRED_RELOAD_CLASS'.
+
+     If an insn has pseudos in it after register allocation, reload will
+     go through the alternatives and call repeatedly
+     'PREFERRED_RELOAD_CLASS' to find the best one.  Returning
+     'NO_REGS', in this case, makes reload add a '!' in front of the
+     constraint: the x86 back-end uses this feature to discourage usage
+     of 387 registers when math is done in the SSE registers (and vice
+     versa).
+
+ -- Target Hook: reg_class_t TARGET_PREFERRED_OUTPUT_RELOAD_CLASS (rtx
+          X, reg_class_t RCLASS)
+     Like 'TARGET_PREFERRED_RELOAD_CLASS', but for output reloads
+     instead of input reloads.
+
+     The default version of this hook always returns value of 'rclass'
+     argument.
+
+     You can also use 'TARGET_PREFERRED_OUTPUT_RELOAD_CLASS' to
+     discourage reload from using some alternatives, like
+     'TARGET_PREFERRED_RELOAD_CLASS'.
+
+ -- Macro: LIMIT_RELOAD_CLASS (MODE, CLASS)
+     A C expression that places additional restrictions on the register
+     class to use when it is necessary to be able to hold a value of
+     mode MODE in a reload register for which class CLASS would
+     ordinarily be used.
+
+     Unlike 'PREFERRED_RELOAD_CLASS', this macro should be used when
+     there are certain modes that simply cannot go in certain reload
+     classes.
+
+     The value is a register class; perhaps CLASS, or perhaps another,
+     smaller class.
+
+     Don't define this macro unless the target machine has limitations
+     which require the macro to do something nontrivial.
+
+ -- Target Hook: reg_class_t TARGET_SECONDARY_RELOAD (bool IN_P, rtx X,
+          reg_class_t RELOAD_CLASS, machine_mode RELOAD_MODE,
+          secondary_reload_info *SRI)
+     Many machines have some registers that cannot be copied directly to
+     or from memory or even from other types of registers.  An example
+     is the 'MQ' register, which on most machines, can only be copied to
+     or from general registers, but not memory.  Below, we shall be
+     using the term 'intermediate register' when a move operation cannot
+     be performed directly, but has to be done by copying the source
+     into the intermediate register first, and then copying the
+     intermediate register to the destination.  An intermediate register
+     always has the same mode as source and destination.  Since it holds
+     the actual value being copied, reload might apply optimizations to
+     re-use an intermediate register and eliding the copy from the
+     source when it can determine that the intermediate register still
+     holds the required value.
+
+     Another kind of secondary reload is required on some machines which
+     allow copying all registers to and from memory, but require a
+     scratch register for stores to some memory locations (e.g., those
+     with symbolic address on the RT, and those with certain symbolic
+     address on the SPARC when compiling PIC).  Scratch registers need
+     not have the same mode as the value being copied, and usually hold
+     a different value than that being copied.  Special patterns in the
+     md file are needed to describe how the copy is performed with the
+     help of the scratch register; these patterns also describe the
+     number, register class(es) and mode(s) of the scratch register(s).
+
+     In some cases, both an intermediate and a scratch register are
+     required.
+
+     For input reloads, this target hook is called with nonzero IN_P,
+     and X is an rtx that needs to be copied to a register of class
+     RELOAD_CLASS in RELOAD_MODE.  For output reloads, this target hook
+     is called with zero IN_P, and a register of class RELOAD_CLASS
+     needs to be copied to rtx X in RELOAD_MODE.
+
+     If copying a register of RELOAD_CLASS from/to X requires an
+     intermediate register, the hook 'secondary_reload' should return
+     the register class required for this intermediate register.  If no
+     intermediate register is required, it should return NO_REGS. If
+     more than one intermediate register is required, describe the one
+     that is closest in the copy chain to the reload register.
+
+     If scratch registers are needed, you also have to describe how to
+     perform the copy from/to the reload register to/from this closest
+     intermediate register.  Or if no intermediate register is required,
+     but still a scratch register is needed, describe the copy from/to
+     the reload register to/from the reload operand X.
+
+     You do this by setting 'sri->icode' to the instruction code of a
+     pattern in the md file which performs the move.  Operands 0 and 1
+     are the output and input of this copy, respectively.  Operands from
+     operand 2 onward are for scratch operands.  These scratch operands
+     must have a mode, and a single-register-class output constraint.
+
+     When an intermediate register is used, the 'secondary_reload' hook
+     will be called again to determine how to copy the intermediate
+     register to/from the reload operand X, so your hook must also have
+     code to handle the register class of the intermediate operand.
+
+     X might be a pseudo-register or a 'subreg' of a pseudo-register,
+     which could either be in a hard register or in memory.  Use
+     'true_regnum' to find out; it will return -1 if the pseudo is in
+     memory and the hard register number if it is in a register.
+
+     Scratch operands in memory (constraint '"=m"' / '"=&m"') are
+     currently not supported.  For the time being, you will have to
+     continue to use 'TARGET_SECONDARY_MEMORY_NEEDED' for that purpose.
+
+     'copy_cost' also uses this target hook to find out how values are
+     copied.  If you want it to include some extra cost for the need to
+     allocate (a) scratch register(s), set 'sri->extra_cost' to the
+     additional cost.  Or if two dependent moves are supposed to have a
+     lower cost than the sum of the individual moves due to expected
+     fortuitous scheduling and/or special forwarding logic, you can set
+     'sri->extra_cost' to a negative amount.
+
+ -- Macro: SECONDARY_RELOAD_CLASS (CLASS, MODE, X)
+ -- Macro: SECONDARY_INPUT_RELOAD_CLASS (CLASS, MODE, X)
+ -- Macro: SECONDARY_OUTPUT_RELOAD_CLASS (CLASS, MODE, X)
+     These macros are obsolete, new ports should use the target hook
+     'TARGET_SECONDARY_RELOAD' instead.
+
+     These are obsolete macros, replaced by the
+     'TARGET_SECONDARY_RELOAD' target hook.  Older ports still define
+     these macros to indicate to the reload phase that it may need to
+     allocate at least one register for a reload in addition to the
+     register to contain the data.  Specifically, if copying X to a
+     register CLASS in MODE requires an intermediate register, you were
+     supposed to define 'SECONDARY_INPUT_RELOAD_CLASS' to return the
+     largest register class all of whose registers can be used as
+     intermediate registers or scratch registers.
+
+     If copying a register CLASS in MODE to X requires an intermediate
+     or scratch register, 'SECONDARY_OUTPUT_RELOAD_CLASS' was supposed
+     to be defined be defined to return the largest register class
+     required.  If the requirements for input and output reloads were
+     the same, the macro 'SECONDARY_RELOAD_CLASS' should have been used
+     instead of defining both macros identically.
+
+     The values returned by these macros are often 'GENERAL_REGS'.
+     Return 'NO_REGS' if no spare register is needed; i.e., if X can be
+     directly copied to or from a register of CLASS in MODE without
+     requiring a scratch register.  Do not define this macro if it would
+     always return 'NO_REGS'.
+
+     If a scratch register is required (either with or without an
+     intermediate register), you were supposed to define patterns for
+     'reload_inM' or 'reload_outM', as required (*note Standard Names::.
+     These patterns, which were normally implemented with a
+     'define_expand', should be similar to the 'movM' patterns, except
+     that operand 2 is the scratch register.
+
+     These patterns need constraints for the reload register and scratch
+     register that contain a single register class.  If the original
+     reload register (whose class is CLASS) can meet the constraint
+     given in the pattern, the value returned by these macros is used
+     for the class of the scratch register.  Otherwise, two additional
+     reload registers are required.  Their classes are obtained from the
+     constraints in the insn pattern.
+
+     X might be a pseudo-register or a 'subreg' of a pseudo-register,
+     which could either be in a hard register or in memory.  Use
+     'true_regnum' to find out; it will return -1 if the pseudo is in
+     memory and the hard register number if it is in a register.
+
+     These macros should not be used in the case where a particular
+     class of registers can only be copied to memory and not to another
+     class of registers.  In that case, secondary reload registers are
+     not needed and would not be helpful.  Instead, a stack location
+     must be used to perform the copy and the 'movM' pattern should use
+     memory as an intermediate storage.  This case often occurs between
+     floating-point and general registers.
+
+ -- Target Hook: bool TARGET_SECONDARY_MEMORY_NEEDED (machine_mode MODE,
+          reg_class_t CLASS1, reg_class_t CLASS2)
+     Certain machines have the property that some registers cannot be
+     copied to some other registers without using memory.  Define this
+     hook on those machines to return true if objects of mode M in
+     registers of CLASS1 can only be copied to registers of class CLASS2
+     by storing a register of CLASS1 into memory and loading that memory
+     location into a register of CLASS2.  The default definition returns
+     false for all inputs.
+
+ -- Macro: SECONDARY_MEMORY_NEEDED_RTX (MODE)
+     Normally when 'TARGET_SECONDARY_MEMORY_NEEDED' is defined, the
+     compiler allocates a stack slot for a memory location needed for
+     register copies.  If this macro is defined, the compiler instead
+     uses the memory location defined by this macro.
+
+     Do not define this macro if you do not define
+     'TARGET_SECONDARY_MEMORY_NEEDED'.
+
+ -- Target Hook: machine_mode TARGET_SECONDARY_MEMORY_NEEDED_MODE
+          (machine_mode MODE)
+     If 'TARGET_SECONDARY_MEMORY_NEEDED' tells the compiler to use
+     memory when moving between two particular registers of mode MODE,
+     this hook specifies the mode that the memory should have.
+
+     The default depends on 'TARGET_LRA_P'.  Without LRA, the default is
+     to use a word-sized mode for integral modes that are smaller than a
+     a word.  This is right thing to do on most machines because it
+     ensures that all bits of the register are copied and prevents
+     accesses to the registers in a narrower mode, which some machines
+     prohibit for floating-point registers.
+
+     However, this default behavior is not correct on some machines,
+     such as the DEC Alpha, that store short integers in floating-point
+     registers differently than in integer registers.  On those
+     machines, the default widening will not work correctly and you must
+     define this hook to suppress that widening in some cases.  See the
+     file 'alpha.c' for details.
+
+     With LRA, the default is to use MODE unmodified.
+
+ -- Target Hook: void TARGET_SELECT_EARLY_REMAT_MODES (sbitmap MODES)
+     On some targets, certain modes cannot be held in registers around a
+     standard ABI call and are relatively expensive to spill to the
+     stack.  The early rematerialization pass can help in such cases by
+     aggressively recomputing values after calls, so that they don't
+     need to be spilled.
+
+     This hook returns the set of such modes by setting the associated
+     bits in MODES.  The default implementation selects no modes, which
+     has the effect of disabling the early rematerialization pass.
+
+ -- Target Hook: bool TARGET_CLASS_LIKELY_SPILLED_P (reg_class_t RCLASS)
+     A target hook which returns 'true' if pseudos that have been
+     assigned to registers of class RCLASS would likely be spilled
+     because registers of RCLASS are needed for spill registers.
+
+     The default version of this target hook returns 'true' if RCLASS
+     has exactly one register and 'false' otherwise.  On most machines,
+     this default should be used.  For generally register-starved
+     machines, such as i386, or machines with right register
+     constraints, such as SH, this hook can be used to avoid excessive
+     spilling.
+
+     This hook is also used by some of the global intra-procedural code
+     transformations to throtle code motion, to avoid increasing
+     register pressure.
+
+ -- Target Hook: unsigned char TARGET_CLASS_MAX_NREGS (reg_class_t
+          RCLASS, machine_mode MODE)
+     A target hook returns the maximum number of consecutive registers
+     of class RCLASS needed to hold a value of mode MODE.
+
+     This is closely related to the macro 'TARGET_HARD_REGNO_NREGS'.  In
+     fact, the value returned by 'TARGET_CLASS_MAX_NREGS (RCLASS, MODE)'
+     target hook should be the maximum value of 'TARGET_HARD_REGNO_NREGS
+     (REGNO, MODE)' for all REGNO values in the class RCLASS.
+
+     This target hook helps control the handling of multiple-word values
+     in the reload pass.
+
+     The default version of this target hook returns the size of MODE in
+     words.
+
+ -- Macro: CLASS_MAX_NREGS (CLASS, MODE)
+     A C expression for the maximum number of consecutive registers of
+     class CLASS needed to hold a value of mode MODE.
+
+     This is closely related to the macro 'TARGET_HARD_REGNO_NREGS'.  In
+     fact, the value of the macro 'CLASS_MAX_NREGS (CLASS, MODE)' should
+     be the maximum value of 'TARGET_HARD_REGNO_NREGS (REGNO, MODE)' for
+     all REGNO values in the class CLASS.
+
+     This macro helps control the handling of multiple-word values in
+     the reload pass.
+
+ -- Target Hook: bool TARGET_CAN_CHANGE_MODE_CLASS (machine_mode FROM,
+          machine_mode TO, reg_class_t RCLASS)
+     This hook returns true if it is possible to bitcast values held in
+     registers of class RCLASS from mode FROM to mode TO and if doing so
+     preserves the low-order bits that are common to both modes.  The
+     result is only meaningful if RCLASS has registers that can hold
+     both 'from' and 'to'.  The default implementation returns true.
+
+     As an example of when such bitcasting is invalid, loading 32-bit
+     integer or floating-point objects into floating-point registers on
+     Alpha extends them to 64 bits.  Therefore loading a 64-bit object
+     and then storing it as a 32-bit object does not store the low-order
+     32 bits, as would be the case for a normal register.  Therefore,
+     'alpha.h' defines 'TARGET_CAN_CHANGE_MODE_CLASS' to return:
+
+          (GET_MODE_SIZE (from) == GET_MODE_SIZE (to)
+           || !reg_classes_intersect_p (FLOAT_REGS, rclass))
+
+     Even if storing from a register in mode TO would be valid, if both
+     FROM and 'raw_reg_mode' for RCLASS are wider than 'word_mode', then
+     we must prevent TO narrowing the mode.  This happens when the
+     middle-end assumes that it can load or store pieces of an N-word
+     pseudo, and that the pseudo will eventually be allocated to N
+     'word_mode' hard registers.  Failure to prevent this kind of mode
+     change will result in the entire 'raw_reg_mode' being modified
+     instead of the partial value that the middle-end intended.
+
+ -- Target Hook: reg_class_t TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
+          (int, REG_CLASS_T, REG_CLASS_T)
+     A target hook which can change allocno class for given pseudo from
+     allocno and best class calculated by IRA.
+
+     The default version of this target hook always returns given class.
+
+ -- Target Hook: bool TARGET_LRA_P (void)
+     A target hook which returns true if we use LRA instead of reload
+     pass.  The default version of this target hook returns true.  New
+     ports should use LRA, and existing ports are encouraged to convert.
+
+ -- Target Hook: int TARGET_REGISTER_PRIORITY (int)
+     A target hook which returns the register priority number to which
+     the register HARD_REGNO belongs to.  The bigger the number, the
+     more preferable the hard register usage (when all other conditions
+     are the same).  This hook can be used to prefer some hard register
+     over others in LRA. For example, some x86-64 register usage needs
+     additional prefix which makes instructions longer.  The hook can
+     return lower priority number for such registers make them less
+     favorable and as result making the generated code smaller.  The
+     default version of this target hook returns always zero.
+
+ -- Target Hook: bool TARGET_REGISTER_USAGE_LEVELING_P (void)
+     A target hook which returns true if we need register usage
+     leveling.  That means if a few hard registers are equally good for
+     the assignment, we choose the least used hard register.  The
+     register usage leveling may be profitable for some targets.  Don't
+     use the usage leveling for targets with conditional execution or
+     targets with big register files as it hurts if-conversion and
+     cross-jumping optimizations.  The default version of this target
+     hook returns always false.
+
+ -- Target Hook: bool TARGET_DIFFERENT_ADDR_DISPLACEMENT_P (void)
+     A target hook which returns true if an address with the same
+     structure can have different maximal legitimate displacement.  For
+     example, the displacement can depend on memory mode or on operand
+     combinations in the insn.  The default version of this target hook
+     returns always false.
+
+ -- Target Hook: bool TARGET_CANNOT_SUBSTITUTE_MEM_EQUIV_P (rtx SUBST)
+     A target hook which returns 'true' if SUBST can't substitute safely
+     pseudos with equivalent memory values during register allocation.
+     The default version of this target hook returns 'false'.  On most
+     machines, this default should be used.  For generally machines with
+     non orthogonal register usage for addressing, such as SH, this hook
+     can be used to avoid excessive spilling.
+
+ -- Target Hook: bool TARGET_LEGITIMIZE_ADDRESS_DISPLACEMENT (rtx
+          *OFFSET1, rtx *OFFSET2, poly_int64 ORIG_OFFSET, machine_mode
+          MODE)
+     This hook tries to split address offset ORIG_OFFSET into two parts:
+     one that should be added to the base address to create a local
+     anchor point, and an additional offset that can be applied to the
+     anchor to address a value of mode MODE.  The idea is that the local
+     anchor could be shared by other accesses to nearby locations.
+
+     The hook returns true if it succeeds, storing the offset of the
+     anchor from the base in OFFSET1 and the offset of the final address
+     from the anchor in OFFSET2.  The default implementation returns
+     false.
+
+ -- Target Hook: reg_class_t TARGET_SPILL_CLASS (reg_class_t,
+          MACHINE_MODE)
+     This hook defines a class of registers which could be used for
+     spilling pseudos of the given mode and class, or 'NO_REGS' if only
+     memory should be used.  Not defining this hook is equivalent to
+     returning 'NO_REGS' for all inputs.
+
+ -- Target Hook: bool TARGET_ADDITIONAL_ALLOCNO_CLASS_P (reg_class_t)
+     This hook should return 'true' if given class of registers should
+     be an allocno class in any way.  Usually RA uses only one register
+     class from all classes containing the same register set.  In some
+     complicated cases, you need to have two or more such classes as
+     allocno ones for RA correct work.  Not defining this hook is
+     equivalent to returning 'false' for all inputs.
+
+ -- Target Hook: scalar_int_mode TARGET_CSTORE_MODE (enum insn_code
+          ICODE)
+     This hook defines the machine mode to use for the boolean result of
+     conditional store patterns.  The ICODE argument is the instruction
+     code for the cstore being performed.  Not definiting this hook is
+     the same as accepting the mode encoded into operand 0 of the cstore
+     expander patterns.
+
+ -- Target Hook: int TARGET_COMPUTE_PRESSURE_CLASSES (enum reg_class
+          *PRESSURE_CLASSES)
+     A target hook which lets a backend compute the set of pressure
+     classes to be used by those optimization passes which take register
+     pressure into account, as opposed to letting IRA compute them.  It
+     returns the number of register classes stored in the array
+     PRESSURE_CLASSES.
+
+File: gccint.info,  Node: Stack and Calling,  Next: Varargs,  Prev: Register Classes,  Up: Target Macros
+

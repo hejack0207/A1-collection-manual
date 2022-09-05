@@ -1,0 +1,250 @@
+14.9 RTL Expressions for Arithmetic
+===================================
+
+Unless otherwise specified, all the operands of arithmetic expressions
+must be valid for mode M.  An operand is valid for mode M if it has mode
+M, or if it is a 'const_int' or 'const_double' and M is a mode of class
+'MODE_INT'.
+
+ For commutative binary operations, constants should be placed in the
+second operand.
+
+'(plus:M X Y)'
+'(ss_plus:M X Y)'
+'(us_plus:M X Y)'
+
+     These three expressions all represent the sum of the values
+     represented by X and Y carried out in machine mode M.  They differ
+     in their behavior on overflow of integer modes.  'plus' wraps round
+     modulo the width of M; 'ss_plus' saturates at the maximum signed
+     value representable in M; 'us_plus' saturates at the maximum
+     unsigned value.
+
+'(lo_sum:M X Y)'
+
+     This expression represents the sum of X and the low-order bits of
+     Y.  It is used with 'high' (*note Constants::) to represent the
+     typical two-instruction sequence used in RISC machines to reference
+     large immediate values and/or link-time constants such as global
+     memory addresses.  In the latter case, M is 'Pmode' and Y is
+     usually a constant expression involving 'symbol_ref'.
+
+     The number of low order bits is machine-dependent but is normally
+     the number of bits in mode M minus the number of bits set by
+     'high'.
+
+'(minus:M X Y)'
+'(ss_minus:M X Y)'
+'(us_minus:M X Y)'
+
+     These three expressions represent the result of subtracting Y from
+     X, carried out in mode M.  Behavior on overflow is the same as for
+     the three variants of 'plus' (see above).
+
+'(compare:M X Y)'
+     Represents the result of subtracting Y from X for purposes of
+     comparison.  The result is computed without overflow, as if with
+     infinite precision.
+
+     Of course, machines cannot really subtract with infinite precision.
+     However, they can pretend to do so when only the sign of the result
+     will be used, which is the case when the result is stored in the
+     condition code.  And that is the _only_ way this kind of expression
+     may validly be used: as a value to be stored in the condition
+     codes, either '(cc0)' or a register.  *Note Comparisons::.
+
+     The mode M is not related to the modes of X and Y, but instead is
+     the mode of the condition code value.  If '(cc0)' is used, it is
+     'VOIDmode'.  Otherwise it is some mode in class 'MODE_CC', often
+     'CCmode'.  *Note Condition Code::.  If M is 'VOIDmode' or 'CCmode',
+     the operation returns sufficient information (in an unspecified
+     format) so that any comparison operator can be applied to the
+     result of the 'COMPARE' operation.  For other modes in class
+     'MODE_CC', the operation only returns a subset of this information.
+
+     Normally, X and Y must have the same mode.  Otherwise, 'compare' is
+     valid only if the mode of X is in class 'MODE_INT' and Y is a
+     'const_int' or 'const_double' with mode 'VOIDmode'.  The mode of X
+     determines what mode the comparison is to be done in; thus it must
+     not be 'VOIDmode'.
+
+     If one of the operands is a constant, it should be placed in the
+     second operand and the comparison code adjusted as appropriate.
+
+     A 'compare' specifying two 'VOIDmode' constants is not valid since
+     there is no way to know in what mode the comparison is to be
+     performed; the comparison must either be folded during the
+     compilation or the first operand must be loaded into a register
+     while its mode is still known.
+
+'(neg:M X)'
+'(ss_neg:M X)'
+'(us_neg:M X)'
+     These two expressions represent the negation (subtraction from
+     zero) of the value represented by X, carried out in mode M.  They
+     differ in the behavior on overflow of integer modes.  In the case
+     of 'neg', the negation of the operand may be a number not
+     representable in mode M, in which case it is truncated to M.
+     'ss_neg' and 'us_neg' ensure that an out-of-bounds result saturates
+     to the maximum or minimum signed or unsigned value.
+
+'(mult:M X Y)'
+'(ss_mult:M X Y)'
+'(us_mult:M X Y)'
+     Represents the signed product of the values represented by X and Y
+     carried out in machine mode M.  'ss_mult' and 'us_mult' ensure that
+     an out-of-bounds result saturates to the maximum or minimum signed
+     or unsigned value.
+
+     Some machines support a multiplication that generates a product
+     wider than the operands.  Write the pattern for this as
+
+          (mult:M (sign_extend:M X) (sign_extend:M Y))
+
+     where M is wider than the modes of X and Y, which need not be the
+     same.
+
+     For unsigned widening multiplication, use the same idiom, but with
+     'zero_extend' instead of 'sign_extend'.
+
+'(fma:M X Y Z)'
+     Represents the 'fma', 'fmaf', and 'fmal' builtin functions, which
+     compute 'X * Y + Z' without doing an intermediate rounding step.
+
+'(div:M X Y)'
+'(ss_div:M X Y)'
+     Represents the quotient in signed division of X by Y, carried out
+     in machine mode M.  If M is a floating point mode, it represents
+     the exact quotient; otherwise, the integerized quotient.  'ss_div'
+     ensures that an out-of-bounds result saturates to the maximum or
+     minimum signed value.
+
+     Some machines have division instructions in which the operands and
+     quotient widths are not all the same; you should represent such
+     instructions using 'truncate' and 'sign_extend' as in,
+
+          (truncate:M1 (div:M2 X (sign_extend:M2 Y)))
+
+'(udiv:M X Y)'
+'(us_div:M X Y)'
+     Like 'div' but represents unsigned division.  'us_div' ensures that
+     an out-of-bounds result saturates to the maximum or minimum
+     unsigned value.
+
+'(mod:M X Y)'
+'(umod:M X Y)'
+     Like 'div' and 'udiv' but represent the remainder instead of the
+     quotient.
+
+'(smin:M X Y)'
+'(smax:M X Y)'
+     Represents the smaller (for 'smin') or larger (for 'smax') of X and
+     Y, interpreted as signed values in mode M.  When used with floating
+     point, if both operands are zeros, or if either operand is 'NaN',
+     then it is unspecified which of the two operands is returned as the
+     result.
+
+'(umin:M X Y)'
+'(umax:M X Y)'
+     Like 'smin' and 'smax', but the values are interpreted as unsigned
+     integers.
+
+'(not:M X)'
+     Represents the bitwise complement of the value represented by X,
+     carried out in mode M, which must be a fixed-point machine mode.
+
+'(and:M X Y)'
+     Represents the bitwise logical-and of the values represented by X
+     and Y, carried out in machine mode M, which must be a fixed-point
+     machine mode.
+
+'(ior:M X Y)'
+     Represents the bitwise inclusive-or of the values represented by X
+     and Y, carried out in machine mode M, which must be a fixed-point
+     mode.
+
+'(xor:M X Y)'
+     Represents the bitwise exclusive-or of the values represented by X
+     and Y, carried out in machine mode M, which must be a fixed-point
+     mode.
+
+'(ashift:M X C)'
+'(ss_ashift:M X C)'
+'(us_ashift:M X C)'
+     These three expressions represent the result of arithmetically
+     shifting X left by C places.  They differ in their behavior on
+     overflow of integer modes.  An 'ashift' operation is a plain shift
+     with no special behavior in case of a change in the sign bit;
+     'ss_ashift' and 'us_ashift' saturates to the minimum or maximum
+     representable value if any of the bits shifted out differs from the
+     final sign bit.
+
+     X have mode M, a fixed-point machine mode.  C be a fixed-point mode
+     or be a constant with mode 'VOIDmode'; which mode is determined by
+     the mode called for in the machine description entry for the
+     left-shift instruction.  For example, on the VAX, the mode of C is
+     'QImode' regardless of M.
+
+'(lshiftrt:M X C)'
+'(ashiftrt:M X C)'
+     Like 'ashift' but for right shift.  Unlike the case for left shift,
+     these two operations are distinct.
+
+'(rotate:M X C)'
+'(rotatert:M X C)'
+     Similar but represent left and right rotate.  If C is a constant,
+     use 'rotate'.
+
+'(abs:M X)'
+'(ss_abs:M X)'
+     Represents the absolute value of X, computed in mode M.  'ss_abs'
+     ensures that an out-of-bounds result saturates to the maximum
+     signed value.
+
+'(sqrt:M X)'
+     Represents the square root of X, computed in mode M.  Most often M
+     will be a floating point mode.
+
+'(ffs:M X)'
+     Represents one plus the index of the least significant 1-bit in X,
+     represented as an integer of mode M.  (The value is zero if X is
+     zero.)  The mode of X must be M or 'VOIDmode'.
+
+'(clrsb:M X)'
+     Represents the number of redundant leading sign bits in X,
+     represented as an integer of mode M, starting at the most
+     significant bit position.  This is one less than the number of
+     leading sign bits (either 0 or 1), with no special cases.  The mode
+     of X must be M or 'VOIDmode'.
+
+'(clz:M X)'
+     Represents the number of leading 0-bits in X, represented as an
+     integer of mode M, starting at the most significant bit position.
+     If X is zero, the value is determined by
+     'CLZ_DEFINED_VALUE_AT_ZERO' (*note Misc::).  Note that this is one
+     of the few expressions that is not invariant under widening.  The
+     mode of X must be M or 'VOIDmode'.
+
+'(ctz:M X)'
+     Represents the number of trailing 0-bits in X, represented as an
+     integer of mode M, starting at the least significant bit position.
+     If X is zero, the value is determined by
+     'CTZ_DEFINED_VALUE_AT_ZERO' (*note Misc::).  Except for this case,
+     'ctz(x)' is equivalent to 'ffs(X) - 1'.  The mode of X must be M or
+     'VOIDmode'.
+
+'(popcount:M X)'
+     Represents the number of 1-bits in X, represented as an integer of
+     mode M.  The mode of X must be M or 'VOIDmode'.
+
+'(parity:M X)'
+     Represents the number of 1-bits modulo 2 in X, represented as an
+     integer of mode M.  The mode of X must be M or 'VOIDmode'.
+
+'(bswap:M X)'
+     Represents the value X with the order of bytes reversed, carried
+     out in mode M, which must be a fixed-point machine mode.  The mode
+     of X must be M or 'VOIDmode'.
+
+File: gccint.info,  Node: Comparisons,  Next: Bit-Fields,  Prev: Arithmetic,  Up: RTL
+
