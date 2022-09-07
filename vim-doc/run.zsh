@@ -9,4 +9,4 @@ awkscript="$(pwd)/split-text.awk"
 while read f; do
     cd ${f:A:h}
     awk -f $awkscript ${f:A:t}
-done <<<$(find . -name '*.txt')
+done <<<$(find "1.USER MANUAL" "2.REFERENCE MANUAL/" -name '*.txt')
