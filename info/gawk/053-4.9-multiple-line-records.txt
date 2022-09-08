@@ -1,0 +1,139 @@
+4.9 Multiple-Line Records
+=========================
+
+In some databases, a single line cannot conveniently hold all the
+information in one entry.  In such cases, you can use multiline records.
+The first step in doing this is to choose your data format.
+
+   One technique is to use an unusual character or string to separate
+records.  For example, you could use the formfeed character (written
+'\f' in 'awk', as in C) to separate them, making each record a page of
+the file.  To do this, just set the variable 'RS' to '"\f"' (a string
+containing the formfeed character).  Any other character could equally
+well be used, as long as it won't be part of the data in a record.
+
+   Another technique is to have blank lines separate records.  By a
+special dispensation, an empty string as the value of 'RS' indicates
+that records are separated by one or more blank lines.  When 'RS' is set
+to the empty string, each record always ends at the first blank line
+encountered.  The next record doesn't start until the first nonblank
+line that follows.  No matter how many blank lines appear in a row, they
+all act as one record separator.  (Blank lines must be completely empty;
+lines that contain only whitespace do not count.)
+
+   You can achieve the same effect as 'RS = ""' by assigning the string
+'"\n\n+"' to 'RS'.  This regexp matches the newline at the end of the
+record and one or more blank lines after the record.  In addition, a
+regular expression always matches the longest possible sequence when
+there is a choice (*note Leftmost Longest::).  So, the next record
+doesn't start until the first nonblank line that follows--no matter how
+many blank lines appear in a row, they are considered one record
+separator.
+
+   However, there is an important difference between 'RS = ""' and 'RS =
+"\n\n+"'.  In the first case, leading newlines in the input data file
+are ignored, and if a file ends without extra blank lines after the last
+record, the final newline is removed from the record.  In the second
+case, this special processing is not done.  (d.c.)
+
+   Now that the input is separated into records, the second step is to
+separate the fields in the records.  One way to do this is to divide
+each of the lines into fields in the normal manner.  This happens by
+default as the result of a special feature.  When 'RS' is set to the
+empty string _and_ 'FS' is set to a single character, the newline
+character _always_ acts as a field separator.  This is in addition to
+whatever field separations result from 'FS'.(1)
+
+   The original motivation for this special exception was probably to
+provide useful behavior in the default case (i.e., 'FS' is equal to
+'" "').  This feature can be a problem if you really don't want the
+newline character to separate fields, because there is no way to prevent
+it.  However, you can work around this by using the 'split()' function
+to break up the record manually (*note String Functions::).  If you have
+a single-character field separator, you can work around the special
+feature in a different way, by making 'FS' into a regexp for that single
+character.  For example, if the field separator is a percent character,
+instead of 'FS = "%"', use 'FS = "[%]"'.
+
+   Another way to separate fields is to put each field on a separate
+line: to do this, just set the variable 'FS' to the string '"\n"'.
+(This single-character separator matches a single newline.)  A practical
+example of a data file organized this way might be a mailing list, where
+blank lines separate the entries.  Consider a mailing list in a file
+named 'addresses', which looks like this:
+
+     Jane Doe
+     123 Main Street
+     Anywhere, SE 12345-6789
+
+     John Smith
+     456 Tree-lined Avenue
+     Smallville, MW 98765-4321
+     ...
+
+A simple program to process this file is as follows:
+
+     # addrs.awk --- simple mailing list program
+
+     # Records are separated by blank lines.
+     # Each line is one field.
+     BEGIN { RS = "" ; FS = "\n" }
+
+     {
+           print "Name is:", $1
+           print "Address is:", $2
+           print "City and State are:", $3
+           print ""
+     }
+
+   Running the program produces the following output:
+
+     $ awk -f addrs.awk addresses
+     -| Name is: Jane Doe
+     -| Address is: 123 Main Street
+     -| City and State are: Anywhere, SE 12345-6789
+     -|
+     -| Name is: John Smith
+     -| Address is: 456 Tree-lined Avenue
+     -| City and State are: Smallville, MW 98765-4321
+     -|
+     ...
+
+   *Note Labels Program:: for a more realistic program dealing with
+address lists.  The following list summarizes how records are split,
+based on the value of 'RS'.  ('==' means "is equal to.")
+
+'RS == "\n"'
+     Records are separated by the newline character ('\n').  In effect,
+     every line in the data file is a separate record, including blank
+     lines.  This is the default.
+
+'RS == ANY SINGLE CHARACTER'
+     Records are separated by each occurrence of the character.
+     Multiple successive occurrences delimit empty records.
+
+'RS == ""'
+     Records are separated by runs of blank lines.  When 'FS' is a
+     single character, then the newline character always serves as a
+     field separator, in addition to whatever value 'FS' may have.
+     Leading and trailing newlines in a file are ignored.
+
+'RS == REGEXP'
+     Records are separated by occurrences of characters that match
+     REGEXP.  Leading and trailing matches of REGEXP delimit empty
+     records.  (This is a 'gawk' extension; it is not specified by the
+     POSIX standard.)
+
+   If not in compatibility mode (*note Options::), 'gawk' sets 'RT' to
+the input text that matched the value specified by 'RS'.  But if the
+input file ended without any text that matches 'RS', then 'gawk' sets
+'RT' to the null string.
+
+   ---------- Footnotes ----------
+
+   (1) When 'FS' is the null string ('""') or a regexp, this special
+feature of 'RS' does not apply.  It does apply to the default field
+separator of a single space: 'FS = " "'.
+
+File: gawk.info,  Node: Getline,  Next: Read Timeout,  Prev: Multiple Line,  Up: Reading Files
+

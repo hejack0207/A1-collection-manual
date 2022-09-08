@@ -1,0 +1,100 @@
+4.7 Defining Fields by Content
+==============================
+
+This minor node discusses an advanced feature of 'gawk'.  If you are a
+novice 'awk' user, you might want to skip it on the first reading.
+
+   Normally, when using 'FS', 'gawk' defines the fields as the parts of
+the record that occur in between each field separator.  In other words,
+'FS' defines what a field _is not_, instead of what a field _is_.
+However, there are times when you really want to define the fields by
+what they are, and not by what they are not.
+
+   The most notorious such case is so-called "comma-separated values"
+(CSV) data.  Many spreadsheet programs, for example, can export their
+data into text files, where each record is terminated with a newline,
+and fields are separated by commas.  If commas only separated the data,
+there wouldn't be an issue.  The problem comes when one of the fields
+contains an _embedded_ comma.  In such cases, most programs embed the
+field in double quotes.(1)  So, we might have data like this:
+
+     Robbins,Arnold,"1234 A Pretty Street, NE",MyTown,MyState,12345-6789,USA
+
+   The 'FPAT' variable offers a solution for cases like this.  The value
+of 'FPAT' should be a string that provides a regular expression.  This
+regular expression describes the contents of each field.
+
+   In the case of CSV data as presented here, each field is either
+"anything that is not a comma," or "a double quote, anything that is not
+a double quote, and a closing double quote."  If written as a regular
+expression constant (*note Regexp::), we would have
+'/([^,]+)|("[^"]+")/'.  Writing this as a string requires us to escape
+the double quotes, leading to:
+
+     FPAT = "([^,]+)|(\"[^\"]+\")"
+
+   Putting this to use, here is a simple program to parse the data:
+
+     BEGIN {
+         FPAT = "([^,]+)|(\"[^\"]+\")"
+     }
+
+     {
+         print "NF = ", NF
+         for (i = 1; i <= NF; i++) {
+             printf("$%d = <%s>\n", i, $i)
+         }
+     }
+
+   When run, we get the following:
+
+     $ gawk -f simple-csv.awk addresses.csv
+     NF =  7
+     $1 = <Robbins>
+     $2 = <Arnold>
+     $3 = <"1234 A Pretty Street, NE">
+     $4 = <MyTown>
+     $5 = <MyState>
+     $6 = <12345-6789>
+     $7 = <USA>
+
+   Note the embedded comma in the value of '$3'.
+
+   A straightforward improvement when processing CSV data of this sort
+would be to remove the quotes when they occur, with something like this:
+
+     if (substr($i, 1, 1) == "\"") {
+         len = length($i)
+         $i = substr($i, 2, len - 2)    # Get text within the two quotes
+     }
+
+   As with 'FS', the 'IGNORECASE' variable (*note User-modified::)
+affects field splitting with 'FPAT'.
+
+   Assigning a value to 'FPAT' overrides field splitting with 'FS' and
+with 'FIELDWIDTHS'.
+
+     NOTE: Some programs export CSV data that contains embedded newlines
+     between the double quotes.  'gawk' provides no way to deal with
+     this.  Even though a formal specification for CSV data exists,
+     there isn't much more to be done; the 'FPAT' mechanism provides an
+     elegant solution for the majority of cases, and the 'gawk'
+     developers are satisfied with that.
+
+   As written, the regexp used for 'FPAT' requires that each field
+contain at least one character.  A straightforward modification
+(changing the first '+' to '*') allows fields to be empty:
+
+     FPAT = "([^,]*)|(\"[^\"]+\")"
+
+   Finally, the 'patsplit()' function makes the same functionality
+available for splitting regular strings (*note String Functions::).
+
+   ---------- Footnotes ----------
+
+   (1) The CSV format lacked a formal standard definition for many
+years.  RFC 4180 (http://www.ietf.org/rfc/rfc4180.txt) standardizes the
+most common practices.
+
+File: gawk.info,  Node: Testing field creation,  Next: Multiple Line,  Prev: Splitting By Content,  Up: Reading Files
+

@@ -1,0 +1,146 @@
+13.2 GNU 'gettext'
+==================
+
+'gawk' uses GNU 'gettext' to provide its internationalization features.
+The facilities in GNU 'gettext' focus on messages: strings printed by a
+program, either directly or via formatting with 'printf' or
+'sprintf()'.(1)
+
+   When using GNU 'gettext', each application has its own "text domain".
+This is a unique name, such as 'kpilot' or 'gawk', that identifies the
+application.  A complete application may have multiple
+components--programs written in C or C++, as well as scripts written in
+'sh' or 'awk'.  All of the components use the same text domain.
+
+   To make the discussion concrete, assume we're writing an application
+named 'guide'.  Internationalization consists of the following steps, in
+this order:
+
+  1. The programmer reviews the source for all of 'guide''s components
+     and marks each string that is a candidate for translation.  For
+     example, '"`-F': option required"' is a good candidate for
+     translation.  A table with strings of option names is not (e.g.,
+     'gawk''s '--profile' option should remain the same, no matter what
+     the local language).
+
+  2. The programmer indicates the application's text domain ('"guide"')
+     to the 'gettext' library, by calling the 'textdomain()' function.
+
+  3. Messages from the application are extracted from the source code
+     and collected into a portable object template file ('guide.pot'),
+     which lists the strings and their translations.  The translations
+     are initially empty.  The original (usually English) messages serve
+     as the key for lookup of the translations.
+
+  4. For each language with a translator, 'guide.pot' is copied to a
+     portable object file ('.po') and translations are created and
+     shipped with the application.  For example, there might be a
+     'fr.po' for a French translation.
+
+  5. Each language's '.po' file is converted into a binary message
+     object ('.gmo') file.  A message object file contains the original
+     messages and their translations in a binary format that allows fast
+     lookup of translations at runtime.
+
+  6. When 'guide' is built and installed, the binary translation files
+     are installed in a standard place.
+
+  7. For testing and development, it is possible to tell 'gettext' to
+     use '.gmo' files in a different directory than the standard one by
+     using the 'bindtextdomain()' function.
+
+  8. At runtime, 'guide' looks up each string via a call to 'gettext()'.
+     The returned string is the translated string if available, or the
+     original string if not.
+
+  9. If necessary, it is possible to access messages from a different
+     text domain than the one belonging to the application, without
+     having to switch the application's default text domain back and
+     forth.
+
+   In C (or C++), the string marking and dynamic translation lookup are
+accomplished by wrapping each string in a call to 'gettext()':
+
+     printf("%s", gettext("Don't Panic!\n"));
+
+   The tools that extract messages from source code pull out all strings
+enclosed in calls to 'gettext()'.
+
+   The GNU 'gettext' developers, recognizing that typing 'gettext(...)'
+over and over again is both painful and ugly to look at, use the macro
+'_' (an underscore) to make things easier:
+
+     /* In the standard header file: */
+     #define _(str) gettext(str)
+
+     /* In the program text: */
+     printf("%s", _("Don't Panic!\n"));
+
+This reduces the typing overhead to just three extra characters per
+string and is considerably easier to read as well.
+
+   There are locale "categories" for different types of locale-related
+information.  The defined locale categories that 'gettext' knows about
+are:
+
+'LC_MESSAGES'
+     Text messages.  This is the default category for 'gettext'
+     operations, but it is possible to supply a different one
+     explicitly, if necessary.  (It is almost never necessary to supply
+     a different category.)
+
+'LC_COLLATE'
+     Text-collation information (i.e., how different characters and/or
+     groups of characters sort in a given language).
+
+'LC_CTYPE'
+     Character-type information (alphabetic, digit, upper- or lowercase,
+     and so on) as well as character encoding.  This information is
+     accessed via the POSIX character classes in regular expressions,
+     such as '/[[:alnum:]]/' (*note Bracket Expressions::).
+
+'LC_MONETARY'
+     Monetary information, such as the currency symbol, and whether the
+     symbol goes before or after a number.
+
+'LC_NUMERIC'
+     Numeric information, such as which characters to use for the
+     decimal point and the thousands separator.(2)
+
+'LC_TIME'
+     Time- and date-related information, such as 12- or 24-hour clock,
+     month printed before or after the day in a date, local month
+     abbreviations, and so on.
+
+'LC_ALL'
+     All of the above.  (Not too useful in the context of 'gettext'.)
+
+     NOTE: As described in *note Locales::, environment variables with
+     the same name as the locale categories ('LC_CTYPE', 'LC_ALL', etc.)
+     influence 'gawk''s behavior (and that of other utilities).
+
+     Normally, these variables also affect how the 'gettext' library
+     finds translations.  However, the 'LANGUAGE' environment variable
+     overrides the 'LC_XXX' variables.  Many GNU/Linux systems may
+     define this variable without your knowledge, causing 'gawk' to not
+     find the correct translations.  If this happens to you, look to see
+     if 'LANGUAGE' is defined, and if so, use the shell's 'unset'
+     command to remove it.
+
+   For testing translations of 'gawk' itself, you can set the
+'GAWK_LOCALE_DIR' environment variable.  See the documentation for the C
+'bindtextdomain()' function and also see *note Other Environment
+Variables::.
+
+   ---------- Footnotes ----------
+
+   (1) For some operating systems, the 'gawk' port doesn't support GNU
+'gettext'.  Therefore, these features are not available if you are using
+one of those operating systems.  Sorry.
+
+   (2) Americans use a comma every three decimal places and a period for
+the decimal point, while many Europeans do exactly the opposite:
+1,234.56 versus 1.234,56.
+
+File: gawk.info,  Node: Programmer i18n,  Next: Translator i18n,  Prev: Explaining gettext,  Up: Internationalization
+

@@ -1,0 +1,395 @@
+12.2 Controlling Array Traversal and Array Sorting
+==================================================
+
+'gawk' lets you control the order in which a 'for (INDX in ARRAY)' loop
+traverses an array.
+
+   In addition, two built-in functions, 'asort()' and 'asorti()', let
+you sort arrays based on the array values and indices, respectively.
+These two functions also provide control over the sorting criteria used
+to order the elements during sorting.
+
+* Menu:
+
+* Controlling Array Traversal:: How to use PROCINFO["sorted_in"].
+* Array Sorting Functions::     How to use 'asort()' and 'asorti()'.
+
+File: gawk.info,  Node: Controlling Array Traversal,  Next: Array Sorting Functions,  Up: Array Sorting
+
+12.2.1 Controlling Array Traversal
+----------------------------------
+
+By default, the order in which a 'for (INDX in ARRAY)' loop scans an
+array is not defined; it is generally based upon the internal
+implementation of arrays inside 'awk'.
+
+   Often, though, it is desirable to be able to loop over the elements
+in a particular order that you, the programmer, choose.  'gawk' lets you
+do this.
+
+   *note Controlling Scanning:: describes how you can assign special,
+predefined values to 'PROCINFO["sorted_in"]' in order to control the
+order in which 'gawk' traverses an array during a 'for' loop.
+
+   In addition, the value of 'PROCINFO["sorted_in"]' can be a function
+name.(1)  This lets you traverse an array based on any custom criterion.
+The array elements are ordered according to the return value of this
+function.  The comparison function should be defined with at least four
+arguments:
+
+     function comp_func(i1, v1, i2, v2)
+     {
+         COMPARE ELEMENTS 1 AND 2 IN SOME FASHION
+         RETURN < 0; 0; OR > 0
+     }
+
+   Here, 'i1' and 'i2' are the indices, and 'v1' and 'v2' are the
+corresponding values of the two elements being compared.  Either 'v1' or
+'v2', or both, can be arrays if the array being traversed contains
+subarrays as values.  (*Note Arrays of Arrays:: for more information
+about subarrays.)  The three possible return values are interpreted as
+follows:
+
+'comp_func(i1, v1, i2, v2) < 0'
+     Index 'i1' comes before index 'i2' during loop traversal.
+
+'comp_func(i1, v1, i2, v2) == 0'
+     Indices 'i1' and 'i2' come together, but the relative order with
+     respect to each other is undefined.
+
+'comp_func(i1, v1, i2, v2) > 0'
+     Index 'i1' comes after index 'i2' during loop traversal.
+
+   Our first comparison function can be used to scan an array in
+numerical order of the indices:
+
+     function cmp_num_idx(i1, v1, i2, v2)
+     {
+          # numerical index comparison, ascending order
+          return (i1 - i2)
+     }
+
+   Our second function traverses an array based on the string order of
+the element values rather than by indices:
+
+     function cmp_str_val(i1, v1, i2, v2)
+     {
+         # string value comparison, ascending order
+         v1 = v1 ""
+         v2 = v2 ""
+         if (v1 < v2)
+             return -1
+         return (v1 != v2)
+     }
+
+   The third comparison function makes all numbers, and numeric strings
+without any leading or trailing spaces, come out first during loop
+traversal:
+
+     function cmp_num_str_val(i1, v1, i2, v2,   n1, n2)
+     {
+          # numbers before string value comparison, ascending order
+          n1 = v1 + 0
+          n2 = v2 + 0
+          if (n1 == v1)
+              return (n2 == v2) ? (n1 - n2) : -1
+          else if (n2 == v2)
+              return 1
+          return (v1 < v2) ? -1 : (v1 != v2)
+     }
+
+   Here is a main program to demonstrate how 'gawk' behaves using each
+of the previous functions:
+
+     BEGIN {
+         data["one"] = 10
+         data["two"] = 20
+         data[10] = "one"
+         data[100] = 100
+         data[20] = "two"
+
+         f[1] = "cmp_num_idx"
+         f[2] = "cmp_str_val"
+         f[3] = "cmp_num_str_val"
+         for (i = 1; i <= 3; i++) {
+             printf("Sort function: %s\n", f[i])
+             PROCINFO["sorted_in"] = f[i]
+             for (j in data)
+                 printf("\tdata[%s] = %s\n", j, data[j])
+             print ""
+         }
+     }
+
+   Here are the results when the program is run:
+
+     $ gawk -f compdemo.awk
+     -| Sort function: cmp_num_idx      Sort by numeric index
+     -|     data[two] = 20
+     -|     data[one] = 10              Both strings are numerically zero
+     -|     data[10] = one
+     -|     data[20] = two
+     -|     data[100] = 100
+     -|
+     -| Sort function: cmp_str_val      Sort by element values as strings
+     -|     data[one] = 10
+     -|     data[100] = 100             String 100 is less than string 20
+     -|     data[two] = 20
+     -|     data[10] = one
+     -|     data[20] = two
+     -|
+     -| Sort function: cmp_num_str_val  Sort all numeric values before all strings
+     -|     data[one] = 10
+     -|     data[two] = 20
+     -|     data[100] = 100
+     -|     data[10] = one
+     -|     data[20] = two
+
+   Consider sorting the entries of a GNU/Linux system password file
+according to login name.  The following program sorts records by a
+specific field position and can be used for this purpose:
+
+     # passwd-sort.awk --- simple program to sort by field position
+     # field position is specified by the global variable POS
+
+     function cmp_field(i1, v1, i2, v2)
+     {
+         # comparison by value, as string, and ascending order
+         return v1[POS] < v2[POS] ? -1 : (v1[POS] != v2[POS])
+     }
+
+     {
+         for (i = 1; i <= NF; i++)
+             a[NR][i] = $i
+     }
+
+     END {
+         PROCINFO["sorted_in"] = "cmp_field"
+         if (POS < 1 || POS > NF)
+             POS = 1
+
+         for (i in a) {
+             for (j = 1; j <= NF; j++)
+                 printf("%s%c", a[i][j], j < NF ? ":" : "")
+             print ""
+         }
+     }
+
+   The first field in each entry of the password file is the user's
+login name, and the fields are separated by colons.  Each record defines
+a subarray, with each field as an element in the subarray.  Running the
+program produces the following output:
+
+     $ gawk -v POS=1 -F: -f sort.awk /etc/passwd
+     -| adm:x:3:4:adm:/var/adm:/sbin/nologin
+     -| apache:x:48:48:Apache:/var/www:/sbin/nologin
+     -| avahi:x:70:70:Avahi daemon:/:/sbin/nologin
+     ...
+
+   The comparison should normally always return the same value when
+given a specific pair of array elements as its arguments.  If
+inconsistent results are returned, then the order is undefined.  This
+behavior can be exploited to introduce random order into otherwise
+seemingly ordered data:
+
+     function cmp_randomize(i1, v1, i2, v2)
+     {
+         # random order (caution: this may never terminate!)
+         return (2 - 4 * rand())
+     }
+
+   As already mentioned, the order of the indices is arbitrary if two
+elements compare equal.  This is usually not a problem, but letting the
+tied elements come out in arbitrary order can be an issue, especially
+when comparing item values.  The partial ordering of the equal elements
+may change the next time the array is traversed, if other elements are
+added to or removed from the array.  One way to resolve ties when
+comparing elements with otherwise equal values is to include the indices
+in the comparison rules.  Note that doing this may make the loop
+traversal less efficient, so consider it only if necessary.  The
+following comparison functions force a deterministic order, and are
+based on the fact that the (string) indices of two elements are never
+equal:
+
+     function cmp_numeric(i1, v1, i2, v2)
+     {
+         # numerical value (and index) comparison, descending order
+         return (v1 != v2) ? (v2 - v1) : (i2 - i1)
+     }
+
+     function cmp_string(i1, v1, i2, v2)
+     {
+         # string value (and index) comparison, descending order
+         v1 = v1 i1
+         v2 = v2 i2
+         return (v1 > v2) ? -1 : (v1 != v2)
+     }
+
+   A custom comparison function can often simplify ordered loop
+traversal, and the sky is really the limit when it comes to designing
+such a function.
+
+   When string comparisons are made during a sort, either for element
+values where one or both aren't numbers, or for element indices handled
+as strings, the value of 'IGNORECASE' (*note Built-in Variables::)
+controls whether the comparisons treat corresponding upper- and
+lowercase letters as equivalent or distinct.
+
+   Another point to keep in mind is that in the case of subarrays, the
+element values can themselves be arrays; a production comparison
+function should use the 'isarray()' function (*note Type Functions::) to
+check for this, and choose a defined sorting order for subarrays.
+
+   All sorting based on 'PROCINFO["sorted_in"]' is disabled in POSIX
+mode, because the 'PROCINFO' array is not special in that case.
+
+   As a side note, sorting the array indices before traversing the array
+has been reported to add a 15% to 20% overhead to the execution time of
+'awk' programs.  For this reason, sorted array traversal is not the
+default.
+
+   ---------- Footnotes ----------
+
+   (1) This is why the predefined sorting orders start with an '@'
+character, which cannot be part of an identifier.
+
+File: gawk.info,  Node: Array Sorting Functions,  Prev: Controlling Array Traversal,  Up: Array Sorting
+
+12.2.2 Sorting Array Values and Indices with 'gawk'
+---------------------------------------------------
+
+In most 'awk' implementations, sorting an array requires writing a
+'sort()' function.  This can be educational for exploring different
+sorting algorithms, but usually that's not the point of the program.
+'gawk' provides the built-in 'asort()' and 'asorti()' functions (*note
+String Functions::) for sorting arrays.  For example:
+
+     POPULATE THE ARRAY data
+     n = asort(data)
+     for (i = 1; i <= n; i++)
+         DO SOMETHING WITH data[i]
+
+   After the call to 'asort()', the array 'data' is indexed from 1 to
+some number N, the total number of elements in 'data'.  (This count is
+'asort()''s return value.)  'data[1]' <= 'data[2]' <= 'data[3]', and so
+on.  The default comparison is based on the type of the elements (*note
+Typing and Comparison::).  All numeric values come before all string
+values, which in turn come before all subarrays.
+
+   An important side effect of calling 'asort()' is that _the array's
+original indices are irrevocably lost_.  As this isn't always desirable,
+'asort()' accepts a second argument:
+
+     POPULATE THE ARRAY source
+     n = asort(source, dest)
+     for (i = 1; i <= n; i++)
+         DO SOMETHING WITH dest[i]
+
+   In this case, 'gawk' copies the 'source' array into the 'dest' array
+and then sorts 'dest', destroying its indices.  However, the 'source'
+array is not affected.
+
+   Often, what's needed is to sort on the values of the _indices_
+instead of the values of the elements.  To do that, use the 'asorti()'
+function.  The interface and behavior are identical to that of
+'asort()', except that the index values are used for sorting and become
+the values of the result array:
+
+     { source[$0] = some_func($0) }
+
+     END {
+         n = asorti(source, dest)
+         for (i = 1; i <= n; i++) {
+             Work with sorted indices directly:
+             DO SOMETHING WITH dest[i]
+             ...
+             Access original array via sorted indices:
+             DO SOMETHING WITH source[dest[i]]
+         }
+     }
+
+   So far, so good.  Now it starts to get interesting.  Both 'asort()'
+and 'asorti()' accept a third string argument to control comparison of
+array elements.  When we introduced 'asort()' and 'asorti()' in *note
+String Functions::, we ignored this third argument; however, now is the
+time to describe how this argument affects these two functions.
+
+   Basically, the third argument specifies how the array is to be
+sorted.  There are two possibilities.  As with 'PROCINFO["sorted_in"]',
+this argument may be one of the predefined names that 'gawk' provides
+(*note Controlling Scanning::), or it may be the name of a user-defined
+function (*note Controlling Array Traversal::).
+
+   In the latter case, _the function can compare elements in any way it
+chooses_, taking into account just the indices, just the values, or
+both.  This is extremely powerful.
+
+   Once the array is sorted, 'asort()' takes the _values_ in their final
+order and uses them to fill in the result array, whereas 'asorti()'
+takes the _indices_ in their final order and uses them to fill in the
+result array.
+
+     NOTE: Copying array indices and elements isn't expensive in terms
+     of memory.  Internally, 'gawk' maintains "reference counts" to
+     data.  For example, when 'asort()' copies the first array to the
+     second one, there is only one copy of the original array elements'
+     data, even though both arrays use the values.
+
+   Because 'IGNORECASE' affects string comparisons, the value of
+'IGNORECASE' also affects sorting for both 'asort()' and 'asorti()'.
+Note also that the locale's sorting order does _not_ come into play;
+comparisons are based on character values only.(1)
+
+   The following example demonstrates the use of a comparison function
+with 'asort()'.  The comparison function, 'case_fold_compare()', maps
+both values to lowercase in order to compare them ignoring case.
+
+     # case_fold_compare --- compare as strings, ignoring case
+
+     function case_fold_compare(i1, v1, i2, v2,    l, r)
+     {
+         l = tolower(v1)
+         r = tolower(v2)
+
+         if (l < r)
+             return -1
+         else if (l == r)
+             return 0
+         else
+             return 1
+     }
+
+   And here is the test program for it:
+
+     # Test program
+
+     BEGIN {
+         Letters = "abcdefghijklmnopqrstuvwxyz" \
+                   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+         split(Letters, data, "")
+
+         asort(data, result, "case_fold_compare")
+
+         j = length(result)
+         for (i = 1; i <= j; i++) {
+             printf("%s", result[i])
+             if (i % (j/2) == 0)
+                 printf("\n")
+             else
+                 printf(" ")
+         }
+     }
+
+   When run, we get the following:
+
+     $ gawk -f case_fold_compare.awk
+     -| A a B b c C D d e E F f g G H h i I J j k K l L M m
+     -| n N O o p P Q q r R S s t T u U V v w W X x y Y z Z
+
+   ---------- Footnotes ----------
+
+   (1) This is true because locale-based comparison occurs only when in
+POSIX-compatibility mode, and because 'asort()' and 'asorti()' are
+'gawk' extensions, they are not available in that case.
+
+File: gawk.info,  Node: Two-way I/O,  Next: TCP/IP Networking,  Prev: Array Sorting,  Up: Advanced Features
+

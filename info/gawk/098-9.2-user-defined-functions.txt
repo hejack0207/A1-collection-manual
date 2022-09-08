@@ -1,0 +1,594 @@
+9.2 User-Defined Functions
+==========================
+
+Complicated 'awk' programs can often be simplified by defining your own
+functions.  User-defined functions can be called just like built-in ones
+(*note Function Calls::), but it is up to you to define them (i.e., to
+tell 'awk' what they should do).
+
+* Menu:
+
+* Definition Syntax::           How to write definitions and what they mean.
+* Function Example::            An example function definition and what it
+                                does.
+* Function Caveats::            Things to watch out for.
+* Return Statement::            Specifying the value a function returns.
+* Dynamic Typing::              How variable types can change at runtime.
+
+File: gawk.info,  Node: Definition Syntax,  Next: Function Example,  Up: User-defined
+
+9.2.1 Function Definition Syntax
+--------------------------------
+
+     It's entirely fair to say that the awk syntax for local variable
+     definitions is appallingly awful.
+                         -- _Brian Kernighan_
+
+   Definitions of functions can appear anywhere between the rules of an
+'awk' program.  Thus, the general form of an 'awk' program is extended
+to include sequences of rules _and_ user-defined function definitions.
+There is no need to put the definition of a function before all uses of
+the function.  This is because 'awk' reads the entire program before
+starting to execute any of it.
+
+   The definition of a function named NAME looks like this:
+
+     'function' NAME'('[PARAMETER-LIST]')'
+     '{'
+          BODY-OF-FUNCTION
+     '}'
+
+Here, NAME is the name of the function to define.  A valid function name
+is like a valid variable name: a sequence of letters, digits, and
+underscores that doesn't start with a digit.  Here too, only the 52
+upper- and lowercase English letters may be used in a function name.
+Within a single 'awk' program, any particular name can only be used as a
+variable, array, or function.
+
+   PARAMETER-LIST is an optional list of the function's arguments and
+local variable names, separated by commas.  When the function is called,
+the argument names are used to hold the argument values given in the
+call.
+
+   A function cannot have two parameters with the same name, nor may it
+have a parameter with the same name as the function itself.
+
+     CAUTION: According to the POSIX standard, function parameters
+     cannot have the same name as one of the special predefined
+     variables (*note Built-in Variables::), nor may a function
+     parameter have the same name as another function.
+
+     Not all versions of 'awk' enforce these restrictions.  'gawk'
+     always enforces the first restriction.  With '--posix' (*note
+     Options::), it also enforces the second restriction.
+
+   Local variables act like the empty string if referenced where a
+string value is required, and like zero if referenced where a numeric
+value is required.  This is the same as the behavior of regular
+variables that have never been assigned a value.  (There is more to
+understand about local variables; *note Dynamic Typing::.)
+
+   The BODY-OF-FUNCTION consists of 'awk' statements.  It is the most
+important part of the definition, because it says what the function
+should actually _do_.  The argument names exist to give the body a way
+to talk about the arguments; local variables exist to give the body
+places to keep temporary values.
+
+   Argument names are not distinguished syntactically from local
+variable names.  Instead, the number of arguments supplied when the
+function is called determines how many argument variables there are.
+Thus, if three argument values are given, the first three names in
+PARAMETER-LIST are arguments and the rest are local variables.
+
+   It follows that if the number of arguments is not the same in all
+calls to the function, some of the names in PARAMETER-LIST may be
+arguments on some occasions and local variables on others.  Another way
+to think of this is that omitted arguments default to the null string.
+
+   Usually when you write a function, you know how many names you intend
+to use for arguments and how many you intend to use as local variables.
+It is conventional to place some extra space between the arguments and
+the local variables, in order to document how your function is supposed
+to be used.
+
+   During execution of the function body, the arguments and local
+variable values hide, or "shadow", any variables of the same names used
+in the rest of the program.  The shadowed variables are not accessible
+in the function definition, because there is no way to name them while
+their names have been taken away for the arguments and local variables.
+All other variables used in the 'awk' program can be referenced or set
+normally in the function's body.
+
+   The arguments and local variables last only as long as the function
+body is executing.  Once the body finishes, you can once again access
+the variables that were shadowed while the function was running.
+
+   The function body can contain expressions that call functions.  They
+can even call this function, either directly or by way of another
+function.  When this happens, we say the function is "recursive".  The
+act of a function calling itself is called "recursion".
+
+   All the built-in functions return a value to their caller.
+User-defined functions can do so also, using the 'return' statement,
+which is described in detail in *note Return Statement::.  Many of the
+subsequent examples in this minor node use the 'return' statement.
+
+   In many 'awk' implementations, including 'gawk', the keyword
+'function' may be abbreviated 'func'.  (c.e.)  However, POSIX only
+specifies the use of the keyword 'function'.  This actually has some
+practical implications.  If 'gawk' is in POSIX-compatibility mode (*note
+Options::), then the following statement does _not_ define a function:
+
+     func foo() { a = sqrt($1) ; print a }
+
+Instead, it defines a rule that, for each record, concatenates the value
+of the variable 'func' with the return value of the function 'foo'.  If
+the resulting string is non-null, the action is executed.  This is
+probably not what is desired.  ('awk' accepts this input as
+syntactically valid, because functions may be used before they are
+defined in 'awk' programs.(1))
+
+   To ensure that your 'awk' programs are portable, always use the
+keyword 'function' when defining a function.
+
+   ---------- Footnotes ----------
+
+   (1) This program won't actually run, because 'foo()' is undefined.
+
+File: gawk.info,  Node: Function Example,  Next: Function Caveats,  Prev: Definition Syntax,  Up: User-defined
+
+9.2.2 Function Definition Examples
+----------------------------------
+
+Here is an example of a user-defined function, called 'myprint()', that
+takes a number and prints it in a specific format:
+
+     function myprint(num)
+     {
+          printf "%6.3g\n", num
+     }
+
+To illustrate, here is an 'awk' rule that uses our 'myprint()' function:
+
+     $3 > 0     { myprint($3) }
+
+This program prints, in our special format, all the third fields that
+contain a positive number in our input.  Therefore, when given the
+following input:
+
+      1.2   3.4    5.6   7.8
+      9.10 11.12 -13.14 15.16
+     17.18 19.20  21.22 23.24
+
+this program, using our function to format the results, prints:
+
+        5.6
+       21.2
+
+   This function deletes all the elements in an array (recall that the
+extra whitespace signifies the start of the local variable list):
+
+     function delarray(a,    i)
+     {
+         for (i in a)
+             delete a[i]
+     }
+
+   When working with arrays, it is often necessary to delete all the
+elements in an array and start over with a new list of elements (*note
+Delete::).  Instead of having to repeat this loop everywhere that you
+need to clear out an array, your program can just call 'delarray()'.
+(This guarantees portability.  The use of 'delete ARRAY' to delete the
+contents of an entire array is a relatively recent(1) addition to the
+POSIX standard.)
+
+   The following is an example of a recursive function.  It takes a
+string as an input parameter and returns the string in reverse order.
+Recursive functions must always have a test that stops the recursion.
+In this case, the recursion terminates when the input string is already
+empty:
+
+     function rev(str)
+     {
+         if (str == "")
+             return ""
+
+         return (rev(substr(str, 2)) substr(str, 1, 1))
+     }
+
+   If this function is in a file named 'rev.awk', it can be tested this
+way:
+
+     $ echo "Don't Panic!" |
+     > gawk -e '{ print rev($0) }' -f rev.awk
+     -| !cinaP t'noD
+
+   The C 'ctime()' function takes a timestamp and returns it as a
+string, formatted in a well-known fashion.  The following example uses
+the built-in 'strftime()' function (*note Time Functions::) to create an
+'awk' version of 'ctime()':
+
+     # ctime.awk
+     #
+     # awk version of C ctime(3) function
+
+     function ctime(ts,    format)
+     {
+         format = "%a %b %e %H:%M:%S %Z %Y"
+
+         if (ts == 0)
+             ts = systime()       # use current time as default
+         return strftime(format, ts)
+     }
+
+   You might think that 'ctime()' could use 'PROCINFO["strftime"]' for
+its format string.  That would be a mistake, because 'ctime()' is
+supposed to return the time formatted in a standard fashion, and
+user-level code could have changed 'PROCINFO["strftime"]'.
+
+   ---------- Footnotes ----------
+
+   (1) Late in 2012.
+
+File: gawk.info,  Node: Function Caveats,  Next: Return Statement,  Prev: Function Example,  Up: User-defined
+
+9.2.3 Calling User-Defined Functions
+------------------------------------
+
+"Calling a function" means causing the function to run and do its job.
+A function call is an expression and its value is the value returned by
+the function.
+
+* Menu:
+
+* Calling A Function::          Don't use spaces.
+* Variable Scope::              Controlling variable scope.
+* Pass By Value/Reference::     Passing parameters.
+
+File: gawk.info,  Node: Calling A Function,  Next: Variable Scope,  Up: Function Caveats
+
+9.2.3.1 Writing a Function Call
+...............................
+
+A function call consists of the function name followed by the arguments
+in parentheses.  'awk' expressions are what you write in the call for
+the arguments.  Each time the call is executed, these expressions are
+evaluated, and the values become the actual arguments.  For example,
+here is a call to 'foo()' with three arguments (the first being a string
+concatenation):
+
+     foo(x y, "lose", 4 * z)
+
+     CAUTION: Whitespace characters (spaces and TABs) are not allowed
+     between the function name and the opening parenthesis of the
+     argument list.  If you write whitespace by mistake, 'awk' might
+     think that you mean to concatenate a variable with an expression in
+     parentheses.  However, it notices that you used a function name and
+     not a variable name, and reports an error.
+
+File: gawk.info,  Node: Variable Scope,  Next: Pass By Value/Reference,  Prev: Calling A Function,  Up: Function Caveats
+
+9.2.3.2 Controlling Variable Scope
+..................................
+
+Unlike in many languages, there is no way to make a variable local to a
+'{' ... '}' block in 'awk', but you can make a variable local to a
+function.  It is good practice to do so whenever a variable is needed
+only in that function.
+
+   To make a variable local to a function, simply declare the variable
+as an argument after the actual function arguments (*note Definition
+Syntax::).  Look at the following example, where variable 'i' is a
+global variable used by both functions 'foo()' and 'bar()':
+
+     function bar()
+     {
+         for (i = 0; i < 3; i++)
+             print "bar's i=" i
+     }
+
+     function foo(j)
+     {
+         i = j + 1
+         print "foo's i=" i
+         bar()
+         print "foo's i=" i
+     }
+
+     BEGIN {
+           i = 10
+           print "top's i=" i
+           foo(0)
+           print "top's i=" i
+     }
+
+   Running this script produces the following, because the 'i' in
+functions 'foo()' and 'bar()' and at the top level refer to the same
+variable instance:
+
+     top's i=10
+     foo's i=1
+     bar's i=0
+     bar's i=1
+     bar's i=2
+     foo's i=3
+     top's i=3
+
+   If you want 'i' to be local to both 'foo()' and 'bar()', do as
+follows (the extra space before 'i' is a coding convention to indicate
+that 'i' is a local variable, not an argument):
+
+     function bar(    i)
+     {
+         for (i = 0; i < 3; i++)
+             print "bar's i=" i
+     }
+
+     function foo(j,    i)
+     {
+         i = j + 1
+         print "foo's i=" i
+         bar()
+         print "foo's i=" i
+     }
+
+     BEGIN {
+           i = 10
+           print "top's i=" i
+           foo(0)
+           print "top's i=" i
+     }
+
+   Running the corrected script produces the following:
+
+     top's i=10
+     foo's i=1
+     bar's i=0
+     bar's i=1
+     bar's i=2
+     foo's i=1
+     top's i=10
+
+   Besides scalar values (strings and numbers), you may also have local
+arrays.  By using a parameter name as an array, 'awk' treats it as an
+array, and it is local to the function.  In addition, recursive calls
+create new arrays.  Consider this example:
+
+     function some_func(p1,      a)
+     {
+         if (p1++ > 3)
+             return
+
+         a[p1] = p1
+
+         some_func(p1)
+
+         printf("At level %d, index %d %s found in a\n",
+              p1, (p1 - 1), (p1 - 1) in a ? "is" : "is not")
+         printf("At level %d, index %d %s found in a\n",
+              p1, p1, p1 in a ? "is" : "is not")
+         print ""
+     }
+
+     BEGIN {
+         some_func(1)
+     }
+
+   When run, this program produces the following output:
+
+     At level 4, index 3 is not found in a
+     At level 4, index 4 is found in a
+
+     At level 3, index 2 is not found in a
+     At level 3, index 3 is found in a
+
+     At level 2, index 1 is not found in a
+     At level 2, index 2 is found in a
+
+File: gawk.info,  Node: Pass By Value/Reference,  Prev: Variable Scope,  Up: Function Caveats
+
+9.2.3.3 Passing Function Arguments by Value Or by Reference
+...........................................................
+
+In 'awk', when you declare a function, there is no way to declare
+explicitly whether the arguments are passed "by value" or "by
+reference".
+
+   Instead, the passing convention is determined at runtime when the
+function is called, according to the following rule: if the argument is
+an array variable, then it is passed by reference.  Otherwise, the
+argument is passed by value.
+
+   Passing an argument by value means that when a function is called, it
+is given a _copy_ of the value of this argument.  The caller may use a
+variable as the expression for the argument, but the called function
+does not know this--it only knows what value the argument had.  For
+example, if you write the following code:
+
+     foo = "bar"
+     z = myfunc(foo)
+
+then you should not think of the argument to 'myfunc()' as being "the
+variable 'foo'."  Instead, think of the argument as the string value
+'"bar"'.  If the function 'myfunc()' alters the values of its local
+variables, this has no effect on any other variables.  Thus, if
+'myfunc()' does this:
+
+     function myfunc(str)
+     {
+        print str
+        str = "zzz"
+        print str
+     }
+
+to change its first argument variable 'str', it does _not_ change the
+value of 'foo' in the caller.  The role of 'foo' in calling 'myfunc()'
+ended when its value ('"bar"') was computed.  If 'str' also exists
+outside of 'myfunc()', the function body cannot alter this outer value,
+because it is shadowed during the execution of 'myfunc()' and cannot be
+seen or changed from there.
+
+   However, when arrays are the parameters to functions, they are _not_
+copied.  Instead, the array itself is made available for direct
+manipulation by the function.  This is usually termed "call by
+reference".  Changes made to an array parameter inside the body of a
+function _are_ visible outside that function.
+
+     NOTE: Changing an array parameter inside a function can be very
+     dangerous if you do not watch what you are doing.  For example:
+
+          function changeit(array, ind, nvalue)
+          {
+               array[ind] = nvalue
+          }
+
+          BEGIN {
+              a[1] = 1; a[2] = 2; a[3] = 3
+              changeit(a, 2, "two")
+              printf "a[1] = %s, a[2] = %s, a[3] = %s\n",
+                      a[1], a[2], a[3]
+          }
+
+     prints 'a[1] = 1, a[2] = two, a[3] = 3', because 'changeit()'
+     stores '"two"' in the second element of 'a'.
+
+   Some 'awk' implementations allow you to call a function that has not
+been defined.  They only report a problem at runtime, when the program
+actually tries to call the function.  For example:
+
+     BEGIN {
+         if (0)
+             foo()
+         else
+             bar()
+     }
+     function bar() { ... }
+     # note that `foo' is not defined
+
+Because the 'if' statement will never be true, it is not really a
+problem that 'foo()' has not been defined.  Usually, though, it is a
+problem if a program calls an undefined function.
+
+   If '--lint' is specified (*note Options::), 'gawk' reports calls to
+undefined functions.
+
+   Some 'awk' implementations generate a runtime error if you use either
+the 'next' statement or the 'nextfile' statement (*note Next
+Statement::, and *note Nextfile Statement::) inside a user-defined
+function.  'gawk' does not have this limitation.
+
+File: gawk.info,  Node: Return Statement,  Next: Dynamic Typing,  Prev: Function Caveats,  Up: User-defined
+
+9.2.4 The 'return' Statement
+----------------------------
+
+As seen in several earlier examples, the body of a user-defined function
+can contain a 'return' statement.  This statement returns control to the
+calling part of the 'awk' program.  It can also be used to return a
+value for use in the rest of the 'awk' program.  It looks like this:
+
+     'return' [EXPRESSION]
+
+   The EXPRESSION part is optional.  Due most likely to an oversight,
+POSIX does not define what the return value is if you omit the
+EXPRESSION.  Technically speaking, this makes the returned value
+undefined, and therefore, unpredictable.  In practice, though, all
+versions of 'awk' simply return the null string, which acts like zero if
+used in a numeric context.
+
+   A 'return' statement without an EXPRESSION is assumed at the end of
+every function definition.  So, if control reaches the end of the
+function body, then technically the function returns an unpredictable
+value.  In practice, it returns the empty string.  'awk' does _not_ warn
+you if you use the return value of such a function.
+
+   Sometimes, you want to write a function for what it does, not for
+what it returns.  Such a function corresponds to a 'void' function in C,
+C++, or Java, or to a 'procedure' in Ada.  Thus, it may be appropriate
+to not return any value; simply bear in mind that you should not be
+using the return value of such a function.
+
+   The following is an example of a user-defined function that returns a
+value for the largest number among the elements of an array:
+
+     function maxelt(vec,   i, ret)
+     {
+          for (i in vec) {
+               if (ret == "" || vec[i] > ret)
+                    ret = vec[i]
+          }
+          return ret
+     }
+
+You call 'maxelt()' with one argument, which is an array name.  The
+local variables 'i' and 'ret' are not intended to be arguments; there is
+nothing to stop you from passing more than one argument to 'maxelt()'
+but the results would be strange.  The extra space before 'i' in the
+function parameter list indicates that 'i' and 'ret' are local
+variables.  You should follow this convention when defining functions.
+
+   The following program uses the 'maxelt()' function.  It loads an
+array, calls 'maxelt()', and then reports the maximum number in that
+array:
+
+     function maxelt(vec,   i, ret)
+     {
+          for (i in vec) {
+               if (ret == "" || vec[i] > ret)
+                    ret = vec[i]
+          }
+          return ret
+     }
+
+     # Load all fields of each record into nums.
+     {
+          for(i = 1; i <= NF; i++)
+               nums[NR, i] = $i
+     }
+
+     END {
+          print maxelt(nums)
+     }
+
+   Given the following input:
+
+      1 5 23 8 16
+     44 3 5 2 8 26
+     256 291 1396 2962 100
+     -6 467 998 1101
+     99385 11 0 225
+
+the program reports (predictably) that 99,385 is the largest value in
+the array.
+
+File: gawk.info,  Node: Dynamic Typing,  Prev: Return Statement,  Up: User-defined
+
+9.2.5 Functions and Their Effects on Variable Typing
+----------------------------------------------------
+
+'awk' is a very fluid language.  It is possible that 'awk' can't tell if
+an identifier represents a scalar variable or an array until runtime.
+Here is an annotated sample program:
+
+     function foo(a)
+     {
+         a[1] = 1   # parameter is an array
+     }
+
+     BEGIN {
+         b = 1
+         foo(b)  # invalid: fatal type mismatch
+
+         foo(x)  # x uninitialized, becomes an array dynamically
+         x = 1   # now not allowed, runtime error
+     }
+
+   In this example, the first call to 'foo()' generates a fatal error,
+so 'awk' will not report the second error.  If you comment out that
+call, though, then 'awk' does report the second error.
+
+   Usually, such things aren't a big issue, but it's worth being aware
+of them.
+
+File: gawk.info,  Node: Indirect Calls,  Next: Functions Summary,  Prev: User-defined,  Up: Functions
+

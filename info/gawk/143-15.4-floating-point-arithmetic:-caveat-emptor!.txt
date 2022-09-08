@@ -1,0 +1,409 @@
+15.4 Floating-Point Arithmetic: Caveat Emptor!
+==============================================
+
+     Math class is tough!
+                   -- _Teen Talk Barbie, July 1992_
+
+   This minor node provides a high-level overview of the issues involved
+when doing lots of floating-point arithmetic.(1)  The discussion applies
+to both hardware and arbitrary-precision floating-point arithmetic.
+
+     CAUTION: The material here is purposely general.  If you need to do
+     serious computer arithmetic, you should do some research first, and
+     not rely just on what we tell you.
+
+* Menu:
+
+* Inexactness of computations:: Floating point math is not exact.
+* Getting Accuracy::            Getting more accuracy takes some work.
+* Try To Round::                Add digits and round.
+* Setting precision::           How to set the precision.
+* Setting the rounding mode::   How to set the rounding mode.
+
+   ---------- Footnotes ----------
+
+   (1) There is a very nice paper on floating-point arithmetic
+(http://www.validlab.com/goldberg/paper.pdf) by David Goldberg, "What
+Every Computer Scientist Should Know About Floating-Point Arithmetic,"
+'ACM Computing Surveys' *23*, 1 (1991-03): 5-48.  This is worth reading
+if you are interested in the details, but it does require a background
+in computer science.
+
+File: gawk.info,  Node: Inexactness of computations,  Next: Getting Accuracy,  Up: FP Math Caution
+
+15.4.1 Floating-Point Arithmetic Is Not Exact
+---------------------------------------------
+
+Binary floating-point representations and arithmetic are inexact.
+Simple values like 0.1 cannot be precisely represented using binary
+floating-point numbers, and the limited precision of floating-point
+numbers means that slight changes in the order of operations or the
+precision of intermediate storage can change the result.  To make
+matters worse, with arbitrary-precision floating-point arithmetic, you
+can set the precision before starting a computation, but then you cannot
+be sure of the number of significant decimal places in the final result.
+
+* Menu:
+
+* Inexact representation::      Numbers are not exactly represented.
+* Comparing FP Values::         How to compare floating point values.
+* Errors accumulate::           Errors get bigger as they go.
+
+File: gawk.info,  Node: Inexact representation,  Next: Comparing FP Values,  Up: Inexactness of computations
+
+15.4.1.1 Many Numbers Cannot Be Represented Exactly
+...................................................
+
+So, before you start to write any code, you should think about what you
+really want and what's really happening.  Consider the two numbers in
+the following example:
+
+     x = 0.875             # 1/2 + 1/4 + 1/8
+     y = 0.425
+
+   Unlike the number in 'y', the number stored in 'x' is exactly
+representable in binary because it can be written as a finite sum of one
+or more fractions whose denominators are all powers of two.  When 'gawk'
+reads a floating-point number from program source, it automatically
+rounds that number to whatever precision your machine supports.  If you
+try to print the numeric content of a variable using an output format
+string of '"%.17g"', it may not produce the same number as you assigned
+to it:
+
+     $ gawk 'BEGIN { x = 0.875; y = 0.425
+     >               printf("%0.17g, %0.17g\n", x, y) }'
+     -| 0.875, 0.42499999999999999
+
+   Often the error is so small you do not even notice it, and if you do,
+you can always specify how much precision you would like in your output.
+Usually this is a format string like '"%.15g"', which, when used in the
+previous example, produces an output identical to the input.
+
+File: gawk.info,  Node: Comparing FP Values,  Next: Errors accumulate,  Prev: Inexact representation,  Up: Inexactness of computations
+
+15.4.1.2 Be Careful Comparing Values
+....................................
+
+Because the underlying representation can be a little bit off from the
+exact value, comparing floating-point values to see if they are exactly
+equal is generally a bad idea.  Here is an example where it does not
+work like you would expect:
+
+     $ gawk 'BEGIN { print (0.1 + 12.2 == 12.3) }'
+     -| 0
+
+   The general wisdom when comparing floating-point values is to see if
+they are within some small range of each other (called a "delta", or
+"tolerance").  You have to decide how small a delta is important to you.
+Code to do this looks something like the following:
+
+     delta = 0.00001                 # for example
+     difference = abs(a) - abs(b)    # subtract the two values
+     if (difference < delta)
+         # all ok
+     else
+         # not ok
+
+(We assume that you have a simple absolute value function named 'abs()'
+defined elsewhere in your program.)
+
+File: gawk.info,  Node: Errors accumulate,  Prev: Comparing FP Values,  Up: Inexactness of computations
+
+15.4.1.3 Errors Accumulate
+..........................
+
+The loss of accuracy during a single computation with floating-point
+numbers usually isn't enough to worry about.  However, if you compute a
+value that is the result of a sequence of floating-point operations, the
+error can accumulate and greatly affect the computation itself.  Here is
+an attempt to compute the value of pi using one of its many series
+representations:
+
+     BEGIN {
+         x = 1.0 / sqrt(3.0)
+         n = 6
+         for (i = 1; i < 30; i++) {
+             n = n * 2.0
+             x = (sqrt(x * x + 1) - 1) / x
+             printf("%.15f\n", n * x)
+         }
+     }
+
+   When run, the early errors propagate through later computations,
+causing the loop to terminate prematurely after attempting to divide by
+zero:
+
+     $ gawk -f pi.awk
+     -| 3.215390309173475
+     -| 3.159659942097510
+     -| 3.146086215131467
+     -| 3.142714599645573
+     ...
+     -| 3.224515243534819
+     -| 2.791117213058638
+     -| 0.000000000000000
+     error-> gawk: pi.awk:6: fatal: division by zero attempted
+
+   Here is an additional example where the inaccuracies in internal
+representations yield an unexpected result:
+
+     $ gawk 'BEGIN {
+     >   for (d = 1.1; d <= 1.5; d += 0.1)    # loop five times (?)
+     >       i++
+     >   print i
+     > }'
+     -| 4
+
+File: gawk.info,  Node: Getting Accuracy,  Next: Try To Round,  Prev: Inexactness of computations,  Up: FP Math Caution
+
+15.4.2 Getting the Accuracy You Need
+------------------------------------
+
+Can arbitrary-precision arithmetic give exact results?  There are no
+easy answers.  The standard rules of algebra often do not apply when
+using floating-point arithmetic.  Among other things, the distributive
+and associative laws do not hold completely, and order of operation may
+be important for your computation.  Rounding error, cumulative precision
+loss, and underflow are often troublesome.
+
+   When 'gawk' tests the expressions '0.1 + 12.2' and '12.3' for
+equality using the machine double-precision arithmetic, it decides that
+they are not equal!  (*Note Comparing FP Values::.)  You can get the
+result you want by increasing the precision; 56 bits in this case does
+the job:
+
+     $ gawk -M -v PREC=56 'BEGIN { print (0.1 + 12.2 == 12.3) }'
+     -| 1
+
+   If adding more bits is good, perhaps adding even more bits of
+precision is better?  Here is what happens if we use an even larger
+value of 'PREC':
+
+     $ gawk -M -v PREC=201 'BEGIN { print (0.1 + 12.2 == 12.3) }'
+     -| 0
+
+   This is not a bug in 'gawk' or in the MPFR library.  It is easy to
+forget that the finite number of bits used to store the value is often
+just an approximation after proper rounding.  The test for equality
+succeeds if and only if _all_ bits in the two operands are exactly the
+same.  Because this is not necessarily true after floating-point
+computations with a particular precision and effective rounding mode, a
+straight test for equality may not work.  Instead, compare the two
+numbers to see if they are within the desirable delta of each other.
+
+   In applications where 15 or fewer decimal places suffice, hardware
+double-precision arithmetic can be adequate, and is usually much faster.
+But you need to keep in mind that every floating-point operation can
+suffer a new rounding error with catastrophic consequences, as
+illustrated by our earlier attempt to compute the value of pi.  Extra
+precision can greatly enhance the stability and the accuracy of your
+computation in such cases.
+
+   Additionally, you should understand that repeated addition is not
+necessarily equivalent to multiplication in floating-point arithmetic.
+In the example in *note Errors accumulate:::
+
+     $ gawk 'BEGIN {
+     >   for (d = 1.1; d <= 1.5; d += 0.1)    # loop five times (?)
+     >       i++
+     >   print i
+     > }'
+     -| 4
+
+you may or may not succeed in getting the correct result by choosing an
+arbitrarily large value for 'PREC'.  Reformulation of the problem at
+hand is often the correct approach in such situations.
+
+File: gawk.info,  Node: Try To Round,  Next: Setting precision,  Prev: Getting Accuracy,  Up: FP Math Caution
+
+15.4.3 Try a Few Extra Bits of Precision and Rounding
+-----------------------------------------------------
+
+Instead of arbitrary-precision floating-point arithmetic, often all you
+need is an adjustment of your logic or a different order for the
+operations in your calculation.  The stability and the accuracy of the
+computation of pi in the earlier example can be enhanced by using the
+following simple algebraic transformation:
+
+     (sqrt(x * x + 1) - 1) / x == x / (sqrt(x * x + 1) + 1)
+
+After making this change, the program converges to pi in under 30
+iterations:
+
+     $ gawk -f pi2.awk
+     -| 3.215390309173473
+     -| 3.159659942097501
+     -| 3.146086215131436
+     -| 3.142714599645370
+     -| 3.141873049979825
+     ...
+     -| 3.141592653589797
+     -| 3.141592653589797
+
+File: gawk.info,  Node: Setting precision,  Next: Setting the rounding mode,  Prev: Try To Round,  Up: FP Math Caution
+
+15.4.4 Setting the Precision
+----------------------------
+
+'gawk' uses a global working precision; it does not keep track of the
+precision or accuracy of individual numbers.  Performing an arithmetic
+operation or calling a built-in function rounds the result to the
+current working precision.  The default working precision is 53 bits,
+which you can modify using the predefined variable 'PREC'.  You can also
+set the value to one of the predefined case-insensitive strings shown in
+*note Table 15.4: table-predefined-precision-strings, to emulate an IEEE
+754 binary format.
+
+'PREC'       IEEE 754 binary format
+---------------------------------------------------
+'"half"'     16-bit half-precision
+'"single"'   Basic 32-bit single precision
+'"double"'   Basic 64-bit double precision
+'"quad"'     Basic 128-bit quadruple precision
+'"oct"'      256-bit octuple precision
+
+Table 15.4: Predefined precision strings for 'PREC'
+
+   The following example illustrates the effects of changing precision
+on arithmetic operations:
+
+     $ gawk -M -v PREC=100 'BEGIN { x = 1.0e-400; print x + 0
+     >   PREC = "double"; print x + 0 }'
+     -| 1e-400
+     -| 0
+
+     CAUTION: Be wary of floating-point constants!  When reading a
+     floating-point constant from program source code, 'gawk' uses the
+     default precision (that of a C 'double'), unless overridden by an
+     assignment to the special variable 'PREC' on the command line, to
+     store it internally as an MPFR number.  Changing the precision
+     using 'PREC' in the program text does _not_ change the precision of
+     a constant.
+
+     If you need to represent a floating-point constant at a higher
+     precision than the default and cannot use a command-line assignment
+     to 'PREC', you should either specify the constant as a string, or
+     as a rational number, whenever possible.  The following example
+     illustrates the differences among various ways to print a
+     floating-point constant:
+
+          $ gawk -M 'BEGIN { PREC = 113; printf("%0.25f\n", 0.1) }'
+          -| 0.1000000000000000055511151
+          $ gawk -M -v PREC=113 'BEGIN { printf("%0.25f\n", 0.1) }'
+          -| 0.1000000000000000000000000
+          $ gawk -M 'BEGIN { PREC = 113; printf("%0.25f\n", "0.1") }'
+          -| 0.1000000000000000000000000
+          $ gawk -M 'BEGIN { PREC = 113; printf("%0.25f\n", 1/10) }'
+          -| 0.1000000000000000000000000
+
+File: gawk.info,  Node: Setting the rounding mode,  Prev: Setting precision,  Up: FP Math Caution
+
+15.4.5 Setting the Rounding Mode
+--------------------------------
+
+The 'ROUNDMODE' variable provides program-level control over the
+rounding mode.  The correspondence between 'ROUNDMODE' and the IEEE
+rounding modes is shown in *note Table 15.5: table-gawk-rounding-modes.
+
+Rounding mode                    IEEE name              'ROUNDMODE'
+---------------------------------------------------------------------------
+Round to nearest, ties to even   'roundTiesToEven'      '"N"' or '"n"'
+Round toward positive infinity   'roundTowardPositive'  '"U"' or '"u"'
+Round toward negative infinity   'roundTowardNegative'  '"D"' or '"d"'
+Round toward zero                'roundTowardZero'      '"Z"' or '"z"'
+Round away from zero                                    '"A"' or '"a"'
+
+Table 15.5: 'gawk' rounding modes
+
+   'ROUNDMODE' has the default value '"N"', which selects the IEEE 754
+rounding mode 'roundTiesToEven'.  In *note Table 15.5:
+table-gawk-rounding-modes, the value '"A"' selects rounding away from
+zero.  This is only available if your version of the MPFR library
+supports it; otherwise, setting 'ROUNDMODE' to '"A"' has no effect.
+
+   The default mode 'roundTiesToEven' is the most preferred, but the
+least intuitive.  This method does the obvious thing for most values, by
+rounding them up or down to the nearest digit.  For example, rounding
+1.132 to two digits yields 1.13, and rounding 1.157 yields 1.16.
+
+   However, when it comes to rounding a value that is exactly halfway
+between, things do not work the way you probably learned in school.  In
+this case, the number is rounded to the nearest even digit.  So rounding
+0.125 to two digits rounds down to 0.12, but rounding 0.6875 to three
+digits rounds up to 0.688.  You probably have already encountered this
+rounding mode when using 'printf' to format floating-point numbers.  For
+example:
+
+     BEGIN {
+         x = -4.5
+         for (i = 1; i < 10; i++) {
+             x += 1.0
+             printf("%4.1f => %2.0f\n", x, x)
+         }
+     }
+
+produces the following output when run on the author's system:(1)
+
+     -3.5 => -4
+     -2.5 => -2
+     -1.5 => -2
+     -0.5 => 0
+      0.5 => 0
+      1.5 => 2
+      2.5 => 2
+      3.5 => 4
+      4.5 => 4
+
+   The theory behind 'roundTiesToEven' is that it more or less evenly
+distributes upward and downward rounds of exact halves, which might
+cause any accumulating round-off error to cancel itself out.  This is
+the default rounding mode for IEEE 754 computing functions and
+operators.
+
+                     Rounding Modes and Conversion
+
+   It's important to understand that, along with 'CONVFMT' and 'OFMT',
+the rounding mode affects how numbers are converted to strings.  For
+example, consider the following program:
+
+     BEGIN {
+         pi = 3.1416
+         OFMT = "%.f"        # Print value as integer
+         print pi            # ROUNDMODE = "N" by default.
+         ROUNDMODE = "U"     # Now change ROUNDMODE
+         print pi
+     }
+
+Running this program produces this output:
+
+     $ gawk -M -f roundmode.awk
+     -| 3
+     -| 4
+
+   The other rounding modes are rarely used.  Rounding toward positive
+infinity ('roundTowardPositive') and toward negative infinity
+('roundTowardNegative') are often used to implement interval arithmetic,
+where you adjust the rounding mode to calculate upper and lower bounds
+for the range of output.  The 'roundTowardZero' mode can be used for
+converting floating-point numbers to integers.  When rounding away from
+zero, the nearest number with magnitude greater than or equal to the
+value is selected.
+
+   Some numerical analysts will tell you that your choice of rounding
+style has tremendous impact on the final outcome, and advise you to wait
+until final output for any rounding.  Instead, you can often avoid
+round-off error problems by setting the precision initially to some
+value sufficiently larger than the final desired precision, so that the
+accumulation of round-off error does not influence the outcome.  If you
+suspect that results from your computation are sensitive to accumulation
+of round-off error, look for a significant difference in output when you
+change the rounding mode to be sure.
+
+   ---------- Footnotes ----------
+
+   (1) It is possible for the output to be completely different if the C
+library in your system does not use the IEEE 754 even-rounding rule to
+round halfway cases for 'printf'.
+
+File: gawk.info,  Node: Arbitrary Precision Integers,  Next: Checking for MPFR,  Prev: FP Math Caution,  Up: Arbitrary Precision Arithmetic
+

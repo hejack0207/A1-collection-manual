@@ -1,0 +1,148 @@
+4.4 Changing the Contents of a Field
+====================================
+
+The contents of a field, as seen by 'awk', can be changed within an
+'awk' program; this changes what 'awk' perceives as the current input
+record.  (The actual input is untouched; 'awk' _never_ modifies the
+input file.)  Consider the following example and its output:
+
+     $ awk '{ nboxes = $3 ; $3 = $3 - 10
+     >        print nboxes, $3 }' inventory-shipped
+     -| 25 15
+     -| 32 22
+     -| 24 14
+     ...
+
+The program first saves the original value of field three in the
+variable 'nboxes'.  The '-' sign represents subtraction, so this program
+reassigns field three, '$3', as the original value of field three minus
+ten: '$3 - 10'.  (*Note Arithmetic Ops::.)  Then it prints the original
+and new values for field three.  (Someone in the warehouse made a
+consistent mistake while inventorying the red boxes.)
+
+   For this to work, the text in '$3' must make sense as a number; the
+string of characters must be converted to a number for the computer to
+do arithmetic on it.  The number resulting from the subtraction is
+converted back to a string of characters that then becomes field three.
+*Note Conversion::.
+
+   When the value of a field is changed (as perceived by 'awk'), the
+text of the input record is recalculated to contain the new field where
+the old one was.  In other words, '$0' changes to reflect the altered
+field.  Thus, this program prints a copy of the input file, with 10
+subtracted from the second field of each line:
+
+     $ awk '{ $2 = $2 - 10; print $0 }' inventory-shipped
+     -| Jan 3 25 15 115
+     -| Feb 5 32 24 226
+     -| Mar 5 24 34 228
+     ...
+
+   It is also possible to assign contents to fields that are out of
+range.  For example:
+
+     $ awk '{ $6 = ($5 + $4 + $3 + $2)
+     >        print $6 }' inventory-shipped
+     -| 168
+     -| 297
+     -| 301
+     ...
+
+We've just created '$6', whose value is the sum of fields '$2', '$3',
+'$4', and '$5'.  The '+' sign represents addition.  For the file
+'inventory-shipped', '$6' represents the total number of parcels shipped
+for a particular month.
+
+   Creating a new field changes 'awk''s internal copy of the current
+input record, which is the value of '$0'.  Thus, if you do 'print $0'
+after adding a field, the record printed includes the new field, with
+the appropriate number of field separators between it and the previously
+existing fields.
+
+   This recomputation affects and is affected by 'NF' (the number of
+fields; *note Fields::).  For example, the value of 'NF' is set to the
+number of the highest field you create.  The exact format of '$0' is
+also affected by a feature that has not been discussed yet: the "output
+field separator", 'OFS', used to separate the fields (*note Output
+Separators::).
+
+   Note, however, that merely _referencing_ an out-of-range field does
+_not_ change the value of either '$0' or 'NF'.  Referencing an
+out-of-range field only produces an empty string.  For example:
+
+     if ($(NF+1) != "")
+         print "can't happen"
+     else
+         print "everything is normal"
+
+should print 'everything is normal', because 'NF+1' is certain to be out
+of range.  (*Note If Statement:: for more information about 'awk''s
+'if-else' statements.  *Note Typing and Comparison:: for more
+information about the '!=' operator.)
+
+   It is important to note that making an assignment to an existing
+field changes the value of '$0' but does not change the value of 'NF',
+even when you assign the empty string to a field.  For example:
+
+     $ echo a b c d | awk '{ OFS = ":"; $2 = ""
+     >                       print $0; print NF }'
+     -| a::c:d
+     -| 4
+
+The field is still there; it just has an empty value, delimited by the
+two colons between 'a' and 'c'.  This example shows what happens if you
+create a new field:
+
+     $ echo a b c d | awk '{ OFS = ":"; $2 = ""; $6 = "new"
+     >                       print $0; print NF }'
+     -| a::c:d::new
+     -| 6
+
+The intervening field, '$5', is created with an empty value (indicated
+by the second pair of adjacent colons), and 'NF' is updated with the
+value six.
+
+   Decrementing 'NF' throws away the values of the fields after the new
+value of 'NF' and recomputes '$0'.  (d.c.)  Here is an example:
+
+     $ echo a b c d e f | awk '{ print "NF =", NF;
+     >                           NF = 3; print $0 }'
+     -| NF = 6
+     -| a b c
+
+     CAUTION: Some versions of 'awk' don't rebuild '$0' when 'NF' is
+     decremented.
+
+   Finally, there are times when it is convenient to force 'awk' to
+rebuild the entire record, using the current values of the fields and
+'OFS'.  To do this, use the seemingly innocuous assignment:
+
+     $1 = $1   # force record to be reconstituted
+     print $0  # or whatever else with $0
+
+This forces 'awk' to rebuild the record.  It does help to add a comment,
+as we've shown here.
+
+   There is a flip side to the relationship between '$0' and the fields.
+Any assignment to '$0' causes the record to be reparsed into fields
+using the _current_ value of 'FS'.  This also applies to any built-in
+function that updates '$0', such as 'sub()' and 'gsub()' (*note String
+Functions::).
+
+                          Understanding '$0'
+
+   It is important to remember that '$0' is the _full_ record, exactly
+as it was read from the input.  This includes any leading or trailing
+whitespace, and the exact whitespace (or other characters) that
+separates the fields.
+
+   It is a common error to try to change the field separators in a
+record simply by setting 'FS' and 'OFS', and then expecting a plain
+'print' or 'print $0' to print the modified record.
+
+   But this does not work, because nothing was done to change the record
+itself.  Instead, you must force the record to be rebuilt, typically
+with a statement such as '$1 = $1', as described earlier.
+
+File: gawk.info,  Node: Field Separators,  Next: Constant Size,  Prev: Changing Fields,  Up: Reading Files
+

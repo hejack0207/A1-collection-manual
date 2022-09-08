@@ -1,0 +1,600 @@
+10.2 General Programming
+========================
+
+This minor node presents a number of functions that are of general
+programming use.
+
+* Menu:
+
+* Strtonum Function::           A replacement for the built-in
+                                'strtonum()' function.
+* Assert Function::             A function for assertions in 'awk'
+                                programs.
+* Round Function::              A function for rounding if 'sprintf()'
+                                does not do it correctly.
+* Cliff Random Function::       The Cliff Random Number Generator.
+* Ordinal Functions::           Functions for using characters as numbers and
+                                vice versa.
+* Join Function::               A function to join an array into a string.
+* Getlocaltime Function::       A function to get formatted times.
+* Readfile Function::           A function to read an entire file at once.
+* Shell Quoting::               A function to quote strings for the shell.
+
+File: gawk.info,  Node: Strtonum Function,  Next: Assert Function,  Up: General Functions
+
+10.2.1 Converting Strings to Numbers
+------------------------------------
+
+The 'strtonum()' function (*note String Functions::) is a 'gawk'
+extension.  The following function provides an implementation for other
+versions of 'awk':
+
+     # mystrtonum --- convert string to number
+
+     function mystrtonum(str,        ret, n, i, k, c)
+     {
+         if (str ~ /^0[0-7]*$/) {
+             # octal
+             n = length(str)
+             ret = 0
+             for (i = 1; i <= n; i++) {
+                 c = substr(str, i, 1)
+                 # index() returns 0 if c not in string,
+                 # includes c == "0"
+                 k = index("1234567", c)
+
+                 ret = ret * 8 + k
+             }
+         } else if (str ~ /^0[xX][[:xdigit:]]+$/) {
+             # hexadecimal
+             str = substr(str, 3)    # lop off leading 0x
+             n = length(str)
+             ret = 0
+             for (i = 1; i <= n; i++) {
+                 c = substr(str, i, 1)
+                 c = tolower(c)
+                 # index() returns 0 if c not in string,
+                 # includes c == "0"
+                 k = index("123456789abcdef", c)
+
+                 ret = ret * 16 + k
+             }
+         } else if (str ~ \
+       /^[-+]?([0-9]+([.][0-9]*([Ee][0-9]+)?)?|([.][0-9]+([Ee][-+]?[0-9]+)?))$/) {
+             # decimal number, possibly floating point
+             ret = str + 0
+         } else
+             ret = "NOT-A-NUMBER"
+
+         return ret
+     }
+
+     # BEGIN {     # gawk test harness
+     #     a[1] = "25"
+     #     a[2] = ".31"
+     #     a[3] = "0123"
+     #     a[4] = "0xdeadBEEF"
+     #     a[5] = "123.45"
+     #     a[6] = "1.e3"
+     #     a[7] = "1.32"
+     #     a[8] = "1.32E2"
+     #
+     #     for (i = 1; i in a; i++)
+     #         print a[i], strtonum(a[i]), mystrtonum(a[i])
+     # }
+
+   The function first looks for C-style octal numbers (base 8).  If the
+input string matches a regular expression describing octal numbers, then
+'mystrtonum()' loops through each character in the string.  It sets 'k'
+to the index in '"1234567"' of the current octal digit.  The return
+value will either be the same number as the digit, or zero if the
+character is not there, which will be true for a '0'.  This is safe,
+because the regexp test in the 'if' ensures that only octal values are
+converted.
+
+   Similar logic applies to the code that checks for and converts a
+hexadecimal value, which starts with '0x' or '0X'.  The use of
+'tolower()' simplifies the computation for finding the correct numeric
+value for each hexadecimal digit.
+
+   Finally, if the string matches the (rather complicated) regexp for a
+regular decimal integer or floating-point number, the computation 'ret =
+str + 0' lets 'awk' convert the value to a number.
+
+   A commented-out test program is included, so that the function can be
+tested with 'gawk' and the results compared to the built-in 'strtonum()'
+function.
+
+File: gawk.info,  Node: Assert Function,  Next: Round Function,  Prev: Strtonum Function,  Up: General Functions
+
+10.2.2 Assertions
+-----------------
+
+When writing large programs, it is often useful to know that a condition
+or set of conditions is true.  Before proceeding with a particular
+computation, you make a statement about what you believe to be the case.
+Such a statement is known as an "assertion".  The C language provides an
+'<assert.h>' header file and corresponding 'assert()' macro that a
+programmer can use to make assertions.  If an assertion fails, the
+'assert()' macro arranges to print a diagnostic message describing the
+condition that should have been true but was not, and then it kills the
+program.  In C, using 'assert()' looks this:
+
+     #include <assert.h>
+
+     int myfunc(int a, double b)
+     {
+          assert(a <= 5 && b >= 17.1);
+          ...
+     }
+
+   If the assertion fails, the program prints a message similar to this:
+
+     prog.c:5: assertion failed: a <= 5 && b >= 17.1
+
+   The C language makes it possible to turn the condition into a string
+for use in printing the diagnostic message.  This is not possible in
+'awk', so this 'assert()' function also requires a string version of the
+condition that is being tested.  Following is the function:
+
+     # assert --- assert that a condition is true. Otherwise, exit.
+
+     function assert(condition, string)
+     {
+         if (! condition) {
+             printf("%s:%d: assertion failed: %s\n",
+                 FILENAME, FNR, string) > "/dev/stderr"
+             _assert_exit = 1
+             exit 1
+         }
+     }
+
+     END {
+         if (_assert_exit)
+             exit 1
+     }
+
+   The 'assert()' function tests the 'condition' parameter.  If it is
+false, it prints a message to standard error, using the 'string'
+parameter to describe the failed condition.  It then sets the variable
+'_assert_exit' to one and executes the 'exit' statement.  The 'exit'
+statement jumps to the 'END' rule.  If the 'END' rule finds
+'_assert_exit' to be true, it exits immediately.
+
+   The purpose of the test in the 'END' rule is to keep any other 'END'
+rules from running.  When an assertion fails, the program should exit
+immediately.  If no assertions fail, then '_assert_exit' is still false
+when the 'END' rule is run normally, and the rest of the program's 'END'
+rules execute.  For all of this to work correctly, 'assert.awk' must be
+the first source file read by 'awk'.  The function can be used in a
+program in the following way:
+
+     function myfunc(a, b)
+     {
+          assert(a <= 5 && b >= 17.1, "a <= 5 && b >= 17.1")
+          ...
+     }
+
+If the assertion fails, you see a message similar to the following:
+
+     mydata:1357: assertion failed: a <= 5 && b >= 17.1
+
+   There is a small problem with this version of 'assert()'.  An 'END'
+rule is automatically added to the program calling 'assert()'.
+Normally, if a program consists of just a 'BEGIN' rule, the input files
+and/or standard input are not read.  However, now that the program has
+an 'END' rule, 'awk' attempts to read the input data files or standard
+input (*note Using BEGIN/END::), most likely causing the program to hang
+as it waits for input.
+
+   There is a simple workaround to this: make sure that such a 'BEGIN'
+rule always ends with an 'exit' statement.
+
+File: gawk.info,  Node: Round Function,  Next: Cliff Random Function,  Prev: Assert Function,  Up: General Functions
+
+10.2.3 Rounding Numbers
+-----------------------
+
+The way 'printf' and 'sprintf()' (*note Printf::) perform rounding often
+depends upon the system's C 'sprintf()' subroutine.  On many machines,
+'sprintf()' rounding is "unbiased", which means it doesn't always round
+a trailing .5 up, contrary to naive expectations.  In unbiased rounding,
+.5 rounds to even, rather than always up, so 1.5 rounds to 2 but 4.5
+rounds to 4.  This means that if you are using a format that does
+rounding (e.g., '"%.0f"'), you should check what your system does.  The
+following function does traditional rounding; it might be useful if your
+'awk''s 'printf' does unbiased rounding:
+
+     # round.awk --- do normal rounding
+
+     function round(x,   ival, aval, fraction)
+     {
+        ival = int(x)    # integer part, int() truncates
+
+        # see if fractional part
+        if (ival == x)   # no fraction
+           return ival   # ensure no decimals
+
+        if (x < 0) {
+           aval = -x     # absolute value
+           ival = int(aval)
+           fraction = aval - ival
+           if (fraction >= .5)
+              return int(x) - 1   # -2.5 --> -3
+           else
+              return int(x)       # -2.3 --> -2
+        } else {
+           fraction = x - ival
+           if (fraction >= .5)
+              return ival + 1
+           else
+              return ival
+        }
+     }
+     # test harness
+     # { print $0, round($0) }
+
+File: gawk.info,  Node: Cliff Random Function,  Next: Ordinal Functions,  Prev: Round Function,  Up: General Functions
+
+10.2.4 The Cliff Random Number Generator
+----------------------------------------
+
+The Cliff random number generator
+(http://mathworld.wolfram.com/CliffRandomNumberGenerator.html) is a very
+simple random number generator that "passes the noise sphere test for
+randomness by showing no structure."  It is easily programmed, in less
+than 10 lines of 'awk' code:
+
+     # cliff_rand.awk --- generate Cliff random numbers
+
+     BEGIN { _cliff_seed = 0.1 }
+
+     function cliff_rand()
+     {
+         _cliff_seed = (100 * log(_cliff_seed)) % 1
+         if (_cliff_seed < 0)
+             _cliff_seed = - _cliff_seed
+         return _cliff_seed
+     }
+
+   This algorithm requires an initial "seed" of 0.1.  Each new value
+uses the current seed as input for the calculation.  If the built-in
+'rand()' function (*note Numeric Functions::) isn't random enough, you
+might try using this function instead.
+
+File: gawk.info,  Node: Ordinal Functions,  Next: Join Function,  Prev: Cliff Random Function,  Up: General Functions
+
+10.2.5 Translating Between Characters and Numbers
+-------------------------------------------------
+
+One commercial implementation of 'awk' supplies a built-in function,
+'ord()', which takes a character and returns the numeric value for that
+character in the machine's character set.  If the string passed to
+'ord()' has more than one character, only the first one is used.
+
+   The inverse of this function is 'chr()' (from the function of the
+same name in Pascal), which takes a number and returns the corresponding
+character.  Both functions are written very nicely in 'awk'; there is no
+real reason to build them into the 'awk' interpreter:
+
+     # ord.awk --- do ord and chr
+
+     # Global identifiers:
+     #    _ord_:        numerical values indexed by characters
+     #    _ord_init:    function to initialize _ord_
+
+     BEGIN    { _ord_init() }
+
+     function _ord_init(    low, high, i, t)
+     {
+         low = sprintf("%c", 7) # BEL is ascii 7
+         if (low == "\a") {    # regular ascii
+             low = 0
+             high = 127
+         } else if (sprintf("%c", 128 + 7) == "\a") {
+             # ascii, mark parity
+             low = 128
+             high = 255
+         } else {        # ebcdic(!)
+             low = 0
+             high = 255
+         }
+
+         for (i = low; i <= high; i++) {
+             t = sprintf("%c", i)
+             _ord_[t] = i
+         }
+     }
+
+   Some explanation of the numbers used by '_ord_init()' is worthwhile.
+The most prominent character set in use today is ASCII.(1) Although an
+8-bit byte can hold 256 distinct values (from 0 to 255), ASCII only
+defines characters that use the values from 0 to 127.(2)  In the now
+distant past, at least one minicomputer manufacturer used ASCII, but
+with mark parity, meaning that the leftmost bit in the byte is always 1.
+This means that on those systems, characters have numeric values from
+128 to 255.  Finally, large mainframe systems use the EBCDIC character
+set, which uses all 256 values.  There are other character sets in use
+on some older systems, but they are not really worth worrying about:
+
+     function ord(str,    c)
+     {
+         # only first character is of interest
+         c = substr(str, 1, 1)
+         return _ord_[c]
+     }
+
+     function chr(c)
+     {
+         # force c to be numeric by adding 0
+         return sprintf("%c", c + 0)
+     }
+
+     #### test code ####
+     # BEGIN {
+     #    for (;;) {
+     #        printf("enter a character: ")
+     #        if (getline var <= 0)
+     #            break
+     #        printf("ord(%s) = %d\n", var, ord(var))
+     #    }
+     # }
+
+   An obvious improvement to these functions is to move the code for the
+'_ord_init' function into the body of the 'BEGIN' rule.  It was written
+this way initially for ease of development.  There is a "test program"
+in a 'BEGIN' rule, to test the function.  It is commented out for
+production use.
+
+   ---------- Footnotes ----------
+
+   (1) This is changing; many systems use Unicode, a very large
+character set that includes ASCII as a subset.  On systems with full
+Unicode support, a character can occupy up to 32 bits, making simple
+tests such as used here prohibitively expensive.
+
+   (2) ASCII has been extended in many countries to use the values from
+128 to 255 for country-specific characters.  If your system uses these
+extensions, you can simplify '_ord_init()' to loop from 0 to 255.
+
+File: gawk.info,  Node: Join Function,  Next: Getlocaltime Function,  Prev: Ordinal Functions,  Up: General Functions
+
+10.2.6 Merging an Array into a String
+-------------------------------------
+
+When doing string processing, it is often useful to be able to join all
+the strings in an array into one long string.  The following function,
+'join()', accomplishes this task.  It is used later in several of the
+application programs (*note Sample Programs::).
+
+   Good function design is important; this function needs to be general,
+but it should also have a reasonable default behavior.  It is called
+with an array as well as the beginning and ending indices of the
+elements in the array to be merged.  This assumes that the array indices
+are numeric--a reasonable assumption, as the array was likely created
+with 'split()' (*note String Functions::):
+
+     # join.awk --- join an array into a string
+
+     function join(array, start, end, sep,    result, i)
+     {
+         if (sep == "")
+            sep = " "
+         else if (sep == SUBSEP) # magic value
+            sep = ""
+         result = array[start]
+         for (i = start + 1; i <= end; i++)
+             result = result sep array[i]
+         return result
+     }
+
+   An optional additional argument is the separator to use when joining
+the strings back together.  If the caller supplies a nonempty value,
+'join()' uses it; if it is not supplied, it has a null value.  In this
+case, 'join()' uses a single space as a default separator for the
+strings.  If the value is equal to 'SUBSEP', then 'join()' joins the
+strings with no separator between them.  'SUBSEP' serves as a "magic"
+value to indicate that there should be no separation between the
+component strings.(1)
+
+   ---------- Footnotes ----------
+
+   (1) It would be nice if 'awk' had an assignment operator for
+concatenation.  The lack of an explicit operator for concatenation makes
+string operations more difficult than they really need to be.
+
+File: gawk.info,  Node: Getlocaltime Function,  Next: Readfile Function,  Prev: Join Function,  Up: General Functions
+
+10.2.7 Managing the Time of Day
+-------------------------------
+
+The 'systime()' and 'strftime()' functions described in *note Time
+Functions:: provide the minimum functionality necessary for dealing with
+the time of day in human-readable form.  Although 'strftime()' is
+extensive, the control formats are not necessarily easy to remember or
+intuitively obvious when reading a program.
+
+   The following function, 'getlocaltime()', populates a user-supplied
+array with preformatted time information.  It returns a string with the
+current time formatted in the same way as the 'date' utility:
+
+     # getlocaltime.awk --- get the time of day in a usable format
+
+     # Returns a string in the format of output of date(1)
+     # Populates the array argument time with individual values:
+     #    time["second"]       -- seconds (0 - 59)
+     #    time["minute"]       -- minutes (0 - 59)
+     #    time["hour"]         -- hours (0 - 23)
+     #    time["althour"]      -- hours (0 - 12)
+     #    time["monthday"]     -- day of month (1 - 31)
+     #    time["month"]        -- month of year (1 - 12)
+     #    time["monthname"]    -- name of the month
+     #    time["shortmonth"]   -- short name of the month
+     #    time["year"]         -- year modulo 100 (0 - 99)
+     #    time["fullyear"]     -- full year
+     #    time["weekday"]      -- day of week (Sunday = 0)
+     #    time["altweekday"]   -- day of week (Monday = 0)
+     #    time["dayname"]      -- name of weekday
+     #    time["shortdayname"] -- short name of weekday
+     #    time["yearday"]      -- day of year (0 - 365)
+     #    time["timezone"]     -- abbreviation of timezone name
+     #    time["ampm"]         -- AM or PM designation
+     #    time["weeknum"]      -- week number, Sunday first day
+     #    time["altweeknum"]   -- week number, Monday first day
+
+     function getlocaltime(time,    ret, now, i)
+     {
+         # get time once, avoids unnecessary system calls
+         now = systime()
+
+         # return date(1)-style output
+         ret = strftime("%a %b %e %H:%M:%S %Z %Y", now)
+
+         # clear out target array
+         delete time
+
+         # fill in values, force numeric values to be
+         # numeric by adding 0
+         time["second"]       = strftime("%S", now) + 0
+         time["minute"]       = strftime("%M", now) + 0
+         time["hour"]         = strftime("%H", now) + 0
+         time["althour"]      = strftime("%I", now) + 0
+         time["monthday"]     = strftime("%d", now) + 0
+         time["month"]        = strftime("%m", now) + 0
+         time["monthname"]    = strftime("%B", now)
+         time["shortmonth"]   = strftime("%b", now)
+         time["year"]         = strftime("%y", now) + 0
+         time["fullyear"]     = strftime("%Y", now) + 0
+         time["weekday"]      = strftime("%w", now) + 0
+         time["altweekday"]   = strftime("%u", now) + 0
+         time["dayname"]      = strftime("%A", now)
+         time["shortdayname"] = strftime("%a", now)
+         time["yearday"]      = strftime("%j", now) + 0
+         time["timezone"]     = strftime("%Z", now)
+         time["ampm"]         = strftime("%p", now)
+         time["weeknum"]      = strftime("%U", now) + 0
+         time["altweeknum"]   = strftime("%W", now) + 0
+
+         return ret
+     }
+
+   The string indices are easier to use and read than the various
+formats required by 'strftime()'.  The 'alarm' program presented in
+*note Alarm Program:: uses this function.  A more general design for the
+'getlocaltime()' function would have allowed the user to supply an
+optional timestamp value to use instead of the current time.
+
+File: gawk.info,  Node: Readfile Function,  Next: Shell Quoting,  Prev: Getlocaltime Function,  Up: General Functions
+
+10.2.8 Reading a Whole File at Once
+-----------------------------------
+
+Often, it is convenient to have the entire contents of a file available
+in memory as a single string.  A straightforward but naive way to do
+that might be as follows:
+
+     function readfile1(file,    tmp, contents)
+     {
+         if ((getline tmp < file) < 0)
+             return
+
+         contents = tmp RT
+         while ((getline tmp < file) > 0)
+             contents = contents tmp RT
+
+         close(file)
+         return contents
+     }
+
+   This function reads from 'file' one record at a time, building up the
+full contents of the file in the local variable 'contents'.  It works,
+but is not necessarily efficient.
+
+   The following function, based on a suggestion by Denis Shirokov,
+reads the entire contents of the named file in one shot:
+
+     # readfile.awk --- read an entire file at once
+
+     function readfile(file,     tmp, save_rs)
+     {
+         save_rs = RS
+         RS = "^$"
+         getline tmp < file
+         close(file)
+         RS = save_rs
+
+         return tmp
+     }
+
+   It works by setting 'RS' to '^$', a regular expression that will
+never match if the file has contents.  'gawk' reads data from the file
+into 'tmp', attempting to match 'RS'.  The match fails after each read,
+but fails quickly, such that 'gawk' fills 'tmp' with the entire contents
+of the file.  (*Note Records:: for information on 'RT' and 'RS'.)
+
+   In the case that 'file' is empty, the return value is the null
+string.  Thus, calling code may use something like:
+
+     contents = readfile("/some/path")
+     if (length(contents) == 0)
+         # file was empty ...
+
+   This tests the result to see if it is empty or not.  An equivalent
+test would be 'contents == ""'.
+
+   *Note Extension Sample Readfile:: for an extension function that also
+reads an entire file into memory.
+
+File: gawk.info,  Node: Shell Quoting,  Prev: Readfile Function,  Up: General Functions
+
+10.2.9 Quoting Strings to Pass to the Shell
+-------------------------------------------
+
+Michael Brennan offers the following programming pattern, which he uses
+frequently:
+
+     #! /bin/sh
+
+     awkp='
+        ...
+        '
+
+     INPUT_PROGRAM | awk "$awkp" | /bin/sh
+
+   For example, a program of his named 'flac-edit' has this form:
+
+     $ flac-edit -song="Whoope! That's Great" file.flac
+
+   It generates the following output, which is to be piped to the shell
+('/bin/sh'):
+
+     chmod +w file.flac
+     metaflac --remove-tag=TITLE file.flac
+     LANG=en_US.88591 metaflac --set-tag=TITLE='Whoope! That'"'"'s Great' file.flac
+     chmod -w file.flac
+
+   Note the need for shell quoting.  The function 'shell_quote()' does
+it.  'SINGLE' is the one-character string '"'"' and 'QSINGLE' is the
+three-character string '"\"'\""':
+
+     # shell_quote --- quote an argument for passing to the shell
+
+     function shell_quote(s,             # parameter
+         SINGLE, QSINGLE, i, X, n, ret)  # locals
+     {
+         if (s == "")
+             return "\"\""
+
+         SINGLE = "\x27"  # single quote
+         QSINGLE = "\"\x27\""
+         n = split(s, X, SINGLE)
+
+         ret = SINGLE X[1] SINGLE
+         for (i = 2; i <= n; i++)
+             ret = ret QSINGLE SINGLE X[i] SINGLE
+
+         return ret
+     }
+
+File: gawk.info,  Node: Data File Management,  Next: Getopt Function,  Prev: General Functions,  Up: Library Functions
+

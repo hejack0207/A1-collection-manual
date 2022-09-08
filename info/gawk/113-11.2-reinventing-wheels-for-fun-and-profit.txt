@@ -1,0 +1,1155 @@
+11.2 Reinventing Wheels for Fun and Profit
+==========================================
+
+This minor node presents a number of POSIX utilities implemented in
+'awk'.  Reinventing these programs in 'awk' is often enjoyable, because
+the algorithms can be very clearly expressed, and the code is usually
+very concise and simple.  This is true because 'awk' does so much for
+you.
+
+   It should be noted that these programs are not necessarily intended
+to replace the installed versions on your system.  Nor may all of these
+programs be fully compliant with the most recent POSIX standard.  This
+is not a problem; their purpose is to illustrate 'awk' language
+programming for "real-world" tasks.
+
+   The programs are presented in alphabetical order.
+
+* Menu:
+
+* Cut Program::                 The 'cut' utility.
+* Egrep Program::               The 'egrep' utility.
+* Id Program::                  The 'id' utility.
+* Split Program::               The 'split' utility.
+* Tee Program::                 The 'tee' utility.
+* Uniq Program::                The 'uniq' utility.
+* Wc Program::                  The 'wc' utility.
+
+File: gawk.info,  Node: Cut Program,  Next: Egrep Program,  Up: Clones
+
+11.2.1 Cutting Out Fields and Columns
+-------------------------------------
+
+The 'cut' utility selects, or "cuts," characters or fields from its
+standard input and sends them to its standard output.  Fields are
+separated by TABs by default, but you may supply a command-line option
+to change the field "delimiter" (i.e., the field-separator character).
+'cut''s definition of fields is less general than 'awk''s.
+
+   A common use of 'cut' might be to pull out just the login names of
+logged-on users from the output of 'who'.  For example, the following
+pipeline generates a sorted, unique list of the logged-on users:
+
+     who | cut -c1-8 | sort | uniq
+
+   The options for 'cut' are:
+
+'-c LIST'
+     Use LIST as the list of characters to cut out.  Items within the
+     list may be separated by commas, and ranges of characters can be
+     separated with dashes.  The list '1-8,15,22-35' specifies
+     characters 1 through 8, 15, and 22 through 35.
+
+'-f LIST'
+     Use LIST as the list of fields to cut out.
+
+'-d DELIM'
+     Use DELIM as the field-separator character instead of the TAB
+     character.
+
+'-s'
+     Suppress printing of lines that do not contain the field delimiter.
+
+   The 'awk' implementation of 'cut' uses the 'getopt()' library
+function (*note Getopt Function::) and the 'join()' library function
+(*note Join Function::).
+
+   The program begins with a comment describing the options, the library
+functions needed, and a 'usage()' function that prints out a usage
+message and exits.  'usage()' is called if invalid arguments are
+supplied:
+
+     # cut.awk --- implement cut in awk
+
+     # Options:
+     #    -f list     Cut fields
+     #    -d c        Field delimiter character
+     #    -c list     Cut characters
+     #
+     #    -s          Suppress lines without the delimiter
+     #
+     # Requires getopt() and join() library functions
+
+     function usage()
+     {
+         print("usage: cut [-f list] [-d c] [-s] [files...]") > "/dev/stderr"
+         print("usage: cut [-c list] [files...]") > "/dev/stderr"
+         exit 1
+     }
+
+   Next comes a 'BEGIN' rule that parses the command-line options.  It
+sets 'FS' to a single TAB character, because that is 'cut''s default
+field separator.  The rule then sets the output field separator to be
+the same as the input field separator.  A loop using 'getopt()' steps
+through the command-line options.  Exactly one of the variables
+'by_fields' or 'by_chars' is set to true, to indicate that processing
+should be done by fields or by characters, respectively.  When cutting
+by characters, the output field separator is set to the null string:
+
+     BEGIN {
+         FS = "\t"    # default
+         OFS = FS
+         while ((c = getopt(ARGC, ARGV, "sf:c:d:")) != -1) {
+             if (c == "f") {
+                 by_fields = 1
+                 fieldlist = Optarg
+             } else if (c == "c") {
+                 by_chars = 1
+                 fieldlist = Optarg
+                 OFS = ""
+             } else if (c == "d") {
+                 if (length(Optarg) > 1) {
+                     printf("cut: using first character of %s" \
+                            " for delimiter\n", Optarg) > "/dev/stderr"
+                     Optarg = substr(Optarg, 1, 1)
+                 }
+                 fs = FS = Optarg
+                 OFS = FS
+                 if (FS == " ")    # defeat awk semantics
+                     FS = "[ ]"
+             } else if (c == "s")
+                 suppress = 1
+             else
+                 usage()
+         }
+
+         # Clear out options
+         for (i = 1; i < Optind; i++)
+             ARGV[i] = ""
+
+   The code must take special care when the field delimiter is a space.
+Using a single space ('" "') for the value of 'FS' is incorrect--'awk'
+would separate fields with runs of spaces, TABs, and/or newlines, and we
+want them to be separated with individual spaces.  To this end, we save
+the original space character in the variable 'fs' for later use; after
+setting 'FS' to '"[ ]"' we can't use it directly to see if the field
+delimiter character is in the string.
+
+   Also remember that after 'getopt()' is through (as described in *note
+Getopt Function::), we have to clear out all the elements of 'ARGV' from
+1 to 'Optind', so that 'awk' does not try to process the command-line
+options as file names.
+
+   After dealing with the command-line options, the program verifies
+that the options make sense.  Only one or the other of '-c' and '-f'
+should be used, and both require a field list.  Then the program calls
+either 'set_fieldlist()' or 'set_charlist()' to pull apart the list of
+fields or characters:
+
+         if (by_fields && by_chars)
+             usage()
+
+         if (by_fields == 0 && by_chars == 0)
+             by_fields = 1    # default
+
+         if (fieldlist == "") {
+             print "cut: needs list for -c or -f" > "/dev/stderr"
+             exit 1
+         }
+
+         if (by_fields)
+             set_fieldlist()
+         else
+             set_charlist()
+     }
+
+   'set_fieldlist()' splits the field list apart at the commas into an
+array.  Then, for each element of the array, it looks to see if the
+element is actually a range, and if so, splits it apart.  The function
+checks the range to make sure that the first number is smaller than the
+second.  Each number in the list is added to the 'flist' array, which
+simply lists the fields that will be printed.  Normal field splitting is
+used.  The program lets 'awk' handle the job of doing the field
+splitting:
+
+     function set_fieldlist(        n, m, i, j, k, f, g)
+     {
+         n = split(fieldlist, f, ",")
+         j = 1    # index in flist
+         for (i = 1; i <= n; i++) {
+             if (index(f[i], "-") != 0) { # a range
+                 m = split(f[i], g, "-")
+                 if (m != 2 || g[1] >= g[2]) {
+                     printf("cut: bad field list: %s\n",
+                                       f[i]) > "/dev/stderr"
+                     exit 1
+                 }
+                 for (k = g[1]; k <= g[2]; k++)
+                     flist[j++] = k
+             } else
+                 flist[j++] = f[i]
+         }
+         nfields = j - 1
+     }
+
+   The 'set_charlist()' function is more complicated than
+'set_fieldlist()'.  The idea here is to use 'gawk''s 'FIELDWIDTHS'
+variable (*note Constant Size::), which describes constant-width input.
+When using a character list, that is exactly what we have.
+
+   Setting up 'FIELDWIDTHS' is more complicated than simply listing the
+fields that need to be printed.  We have to keep track of the fields to
+print and also the intervening characters that have to be skipped.  For
+example, suppose you wanted characters 1 through 8, 15, and 22 through
+35.  You would use '-c 1-8,15,22-35'.  The necessary value for
+'FIELDWIDTHS' is '"8 6 1 6 14"'.  This yields five fields, and the
+fields to print are '$1', '$3', and '$5'.  The intermediate fields are
+"filler", which is stuff in between the desired data.  'flist' lists the
+fields to print, and 't' tracks the complete field list, including
+filler fields:
+
+     function set_charlist(    field, i, j, f, g, n, m, t,
+                               filler, last, len)
+     {
+         field = 1   # count total fields
+         n = split(fieldlist, f, ",")
+         j = 1       # index in flist
+         for (i = 1; i <= n; i++) {
+             if (index(f[i], "-") != 0) { # range
+                 m = split(f[i], g, "-")
+                 if (m != 2 || g[1] >= g[2]) {
+                     printf("cut: bad character list: %s\n",
+                                    f[i]) > "/dev/stderr"
+                     exit 1
+                 }
+                 len = g[2] - g[1] + 1
+                 if (g[1] > 1)  # compute length of filler
+                     filler = g[1] - last - 1
+                 else
+                     filler = 0
+                 if (filler)
+                     t[field++] = filler
+                 t[field++] = len  # length of field
+                 last = g[2]
+                 flist[j++] = field - 1
+             } else {
+                 if (f[i] > 1)
+                     filler = f[i] - last - 1
+                 else
+                     filler = 0
+                 if (filler)
+                     t[field++] = filler
+                 t[field++] = 1
+                 last = f[i]
+                 flist[j++] = field - 1
+             }
+         }
+         FIELDWIDTHS = join(t, 1, field - 1)
+         nfields = j - 1
+     }
+
+   Next is the rule that processes the data.  If the '-s' option is
+given, then 'suppress' is true.  The first 'if' statement makes sure
+that the input record does have the field separator.  If 'cut' is
+processing fields, 'suppress' is true, and the field separator character
+is not in the record, then the record is skipped.
+
+   If the record is valid, then 'gawk' has split the data into fields,
+either using the character in 'FS' or using fixed-length fields and
+'FIELDWIDTHS'.  The loop goes through the list of fields that should be
+printed.  The corresponding field is printed if it contains data.  If
+the next field also has data, then the separator character is written
+out between the fields:
+
+     {
+         if (by_fields && suppress && index($0, fs) == 0)
+             next
+
+         for (i = 1; i <= nfields; i++) {
+             if ($flist[i] != "") {
+                 printf "%s", $flist[i]
+                 if (i < nfields && $flist[i+1] != "")
+                     printf "%s", OFS
+             }
+         }
+         print ""
+     }
+
+   This version of 'cut' relies on 'gawk''s 'FIELDWIDTHS' variable to do
+the character-based cutting.  It is possible in other 'awk'
+implementations to use 'substr()' (*note String Functions::), but it is
+also extremely painful.  The 'FIELDWIDTHS' variable supplies an elegant
+solution to the problem of picking the input line apart by characters.
+
+File: gawk.info,  Node: Egrep Program,  Next: Id Program,  Prev: Cut Program,  Up: Clones
+
+11.2.2 Searching for Regular Expressions in Files
+-------------------------------------------------
+
+The 'egrep' utility searches files for patterns.  It uses regular
+expressions that are almost identical to those available in 'awk' (*note
+Regexp::).  You invoke it as follows:
+
+     'egrep' [OPTIONS] ''PATTERN'' FILES ...
+
+   The PATTERN is a regular expression.  In typical usage, the regular
+expression is quoted to prevent the shell from expanding any of the
+special characters as file name wildcards.  Normally, 'egrep' prints the
+lines that matched.  If multiple file names are provided on the command
+line, each output line is preceded by the name of the file and a colon.
+
+   The options to 'egrep' are as follows:
+
+'-c'
+     Print out a count of the lines that matched the pattern, instead of
+     the lines themselves.
+
+'-s'
+     Be silent.  No output is produced and the exit value indicates
+     whether the pattern was matched.
+
+'-v'
+     Invert the sense of the test.  'egrep' prints the lines that do
+     _not_ match the pattern and exits successfully if the pattern is
+     not matched.
+
+'-i'
+     Ignore case distinctions in both the pattern and the input data.
+
+'-l'
+     Only print (list) the names of the files that matched, not the
+     lines that matched.
+
+'-e PATTERN'
+     Use PATTERN as the regexp to match.  The purpose of the '-e' option
+     is to allow patterns that start with a '-'.
+
+   This version uses the 'getopt()' library function (*note Getopt
+Function::) and the file transition library program (*note Filetrans
+Function::).
+
+   The program begins with a descriptive comment and then a 'BEGIN' rule
+that processes the command-line arguments with 'getopt()'.  The '-i'
+(ignore case) option is particularly easy with 'gawk'; we just use the
+'IGNORECASE' predefined variable (*note Built-in Variables::):
+
+     # egrep.awk --- simulate egrep in awk
+     #
+     # Options:
+     #    -c    count of lines
+     #    -s    silent - use exit value
+     #    -v    invert test, success if no match
+     #    -i    ignore case
+     #    -l    print filenames only
+     #    -e    argument is pattern
+     #
+     # Requires getopt and file transition library functions
+
+     BEGIN {
+         while ((c = getopt(ARGC, ARGV, "ce:svil")) != -1) {
+             if (c == "c")
+                 count_only++
+             else if (c == "s")
+                 no_print++
+             else if (c == "v")
+                 invert++
+             else if (c == "i")
+                 IGNORECASE = 1
+             else if (c == "l")
+                 filenames_only++
+             else if (c == "e")
+                 pattern = Optarg
+             else
+                 usage()
+         }
+
+   Next comes the code that handles the 'egrep'-specific behavior.  If
+no pattern is supplied with '-e', the first nonoption on the command
+line is used.  The 'awk' command-line arguments up to 'ARGV[Optind]' are
+cleared, so that 'awk' won't try to process them as files.  If no files
+are specified, the standard input is used, and if multiple files are
+specified, we make sure to note this so that the file names can precede
+the matched lines in the output:
+
+         if (pattern == "")
+             pattern = ARGV[Optind++]
+
+         for (i = 1; i < Optind; i++)
+             ARGV[i] = ""
+         if (Optind >= ARGC) {
+             ARGV[1] = "-"
+             ARGC = 2
+         } else if (ARGC - Optind > 1)
+             do_filenames++
+
+     #    if (IGNORECASE)
+     #        pattern = tolower(pattern)
+     }
+
+   The last two lines are commented out, as they are not needed in
+'gawk'.  They should be uncommented if you have to use another version
+of 'awk'.
+
+   The next set of lines should be uncommented if you are not using
+'gawk'.  This rule translates all the characters in the input line into
+lowercase if the '-i' option is specified.(1)  The rule is commented out
+as it is not necessary with 'gawk':
+
+     #{
+     #    if (IGNORECASE)
+     #        $0 = tolower($0)
+     #}
+
+   The 'beginfile()' function is called by the rule in 'ftrans.awk' when
+each new file is processed.  In this case, it is very simple; all it
+does is initialize a variable 'fcount' to zero.  'fcount' tracks how
+many lines in the current file matched the pattern.  Naming the
+parameter 'junk' shows we know that 'beginfile()' is called with a
+parameter, but that we're not interested in its value:
+
+     function beginfile(junk)
+     {
+         fcount = 0
+     }
+
+   The 'endfile()' function is called after each file has been
+processed.  It affects the output only when the user wants a count of
+the number of lines that matched.  'no_print' is true only if the exit
+status is desired.  'count_only' is true if line counts are desired.
+'egrep' therefore only prints line counts if printing and counting are
+enabled.  The output format must be adjusted depending upon the number
+of files to process.  Finally, 'fcount' is added to 'total', so that we
+know the total number of lines that matched the pattern:
+
+     function endfile(file)
+     {
+         if (! no_print && count_only) {
+             if (do_filenames)
+                 print file ":" fcount
+             else
+                 print fcount
+         }
+
+         total += fcount
+     }
+
+   The 'BEGINFILE' and 'ENDFILE' special patterns (*note
+BEGINFILE/ENDFILE::) could be used, but then the program would be
+'gawk'-specific.  Additionally, this example was written before 'gawk'
+acquired 'BEGINFILE' and 'ENDFILE'.
+
+   The following rule does most of the work of matching lines.  The
+variable 'matches' is true if the line matched the pattern.  If the user
+wants lines that did not match, the sense of 'matches' is inverted using
+the '!' operator.  'fcount' is incremented with the value of 'matches',
+which is either one or zero, depending upon a successful or unsuccessful
+match.  If the line does not match, the 'next' statement just moves on
+to the next record.
+
+   A number of additional tests are made, but they are only done if we
+are not counting lines.  First, if the user only wants the exit status
+('no_print' is true), then it is enough to know that _one_ line in this
+file matched, and we can skip on to the next file with 'nextfile'.
+Similarly, if we are only printing file names, we can print the file
+name, and then skip to the next file with 'nextfile'.  Finally, each
+line is printed, with a leading file name and colon if necessary:
+
+     {
+         matches = ($0 ~ pattern)
+         if (invert)
+             matches = ! matches
+
+         fcount += matches    # 1 or 0
+
+         if (! matches)
+             next
+
+         if (! count_only) {
+             if (no_print)
+                 nextfile
+
+             if (filenames_only) {
+                 print FILENAME
+                 nextfile
+             }
+
+             if (do_filenames)
+                 print FILENAME ":" $0
+             else
+                 print
+         }
+     }
+
+   The 'END' rule takes care of producing the correct exit status.  If
+there are no matches, the exit status is one; otherwise, it is zero:
+
+     END {
+         exit (total == 0)
+     }
+
+   The 'usage()' function prints a usage message in case of invalid
+options, and then exits:
+
+     function usage()
+     {
+         print("Usage: egrep [-csvil] [-e pat] [files ...]") > "/dev/stderr"
+         print("\n\tegrep [-csvil] pat [files ...]") > "/dev/stderr"
+         exit 1
+     }
+
+   ---------- Footnotes ----------
+
+   (1) It also introduces a subtle bug; if a match happens, we output
+the translated line, not the original.
+
+File: gawk.info,  Node: Id Program,  Next: Split Program,  Prev: Egrep Program,  Up: Clones
+
+11.2.3 Printing Out User Information
+------------------------------------
+
+The 'id' utility lists a user's real and effective user ID numbers, real
+and effective group ID numbers, and the user's group set, if any.  'id'
+only prints the effective user ID and group ID if they are different
+from the real ones.  If possible, 'id' also supplies the corresponding
+user and group names.  The output might look like this:
+
+     $ id
+     -| uid=1000(arnold) gid=1000(arnold) groups=1000(arnold),4(adm),7(lp),27(sudo)
+
+   This information is part of what is provided by 'gawk''s 'PROCINFO'
+array (*note Built-in Variables::).  However, the 'id' utility provides
+a more palatable output than just individual numbers.
+
+   Here is a simple version of 'id' written in 'awk'.  It uses the user
+database library functions (*note Passwd Functions::) and the group
+database library functions (*note Group Functions::) from *note Library
+Functions::.
+
+   The program is fairly straightforward.  All the work is done in the
+'BEGIN' rule.  The user and group ID numbers are obtained from
+'PROCINFO'.  The code is repetitive.  The entry in the user database for
+the real user ID number is split into parts at the ':'.  The name is the
+first field.  Similar code is used for the effective user ID number and
+the group numbers:
+
+     # id.awk --- implement id in awk
+     #
+     # Requires user and group library functions
+     # output is:
+     # uid=12(foo) euid=34(bar) gid=3(baz) \
+     #             egid=5(blat) groups=9(nine),2(two),1(one)
+
+     BEGIN {
+         uid = PROCINFO["uid"]
+         euid = PROCINFO["euid"]
+         gid = PROCINFO["gid"]
+         egid = PROCINFO["egid"]
+
+         printf("uid=%d", uid)
+         pw = getpwuid(uid)
+         pr_first_field(pw)
+
+         if (euid != uid) {
+             printf(" euid=%d", euid)
+             pw = getpwuid(euid)
+             pr_first_field(pw)
+         }
+
+         printf(" gid=%d", gid)
+         pw = getgrgid(gid)
+         pr_first_field(pw)
+
+         if (egid != gid) {
+             printf(" egid=%d", egid)
+             pw = getgrgid(egid)
+             pr_first_field(pw)
+         }
+
+         for (i = 1; ("group" i) in PROCINFO; i++) {
+             if (i == 1)
+                 printf(" groups=")
+             group = PROCINFO["group" i]
+             printf("%d", group)
+             pw = getgrgid(group)
+             pr_first_field(pw)
+             if (("group" (i+1)) in PROCINFO)
+                 printf(",")
+         }
+
+         print ""
+     }
+
+     function pr_first_field(str,  a)
+     {
+         if (str != "") {
+             split(str, a, ":")
+             printf("(%s)", a[1])
+         }
+     }
+
+   The test in the 'for' loop is worth noting.  Any supplementary groups
+in the 'PROCINFO' array have the indices '"group1"' through '"groupN"'
+for some N (i.e., the total number of supplementary groups).  However,
+we don't know in advance how many of these groups there are.
+
+   This loop works by starting at one, concatenating the value with
+'"group"', and then using 'in' to see if that value is in the array
+(*note Reference to Elements::).  Eventually, 'i' is incremented past
+the last group in the array and the loop exits.
+
+   The loop is also correct if there are _no_ supplementary groups; then
+the condition is false the first time it's tested, and the loop body
+never executes.
+
+   The 'pr_first_field()' function simply isolates out some code that is
+used repeatedly, making the whole program shorter and cleaner.  In
+particular, moving the check for the empty string into this function
+saves several lines of code.
+
+File: gawk.info,  Node: Split Program,  Next: Tee Program,  Prev: Id Program,  Up: Clones
+
+11.2.4 Splitting a Large File into Pieces
+-----------------------------------------
+
+The 'split' program splits large text files into smaller pieces.  Usage
+is as follows:(1)
+
+     'split' ['-COUNT'] [FILE] [PREFIX]
+
+   By default, the output files are named 'xaa', 'xab', and so on.  Each
+file has 1,000 lines in it, with the likely exception of the last file.
+To change the number of lines in each file, supply a number on the
+command line preceded with a minus sign (e.g., '-500' for files with 500
+lines in them instead of 1,000).  To change the names of the output
+files to something like 'myfileaa', 'myfileab', and so on, supply an
+additional argument that specifies the file name prefix.
+
+   Here is a version of 'split' in 'awk'.  It uses the 'ord()' and
+'chr()' functions presented in *note Ordinal Functions::.
+
+   The program first sets its defaults, and then tests to make sure
+there are not too many arguments.  It then looks at each argument in
+turn.  The first argument could be a minus sign followed by a number.
+If it is, this happens to look like a negative number, so it is made
+positive, and that is the count of lines.  The data file name is skipped
+over and the final argument is used as the prefix for the output file
+names:
+
+     # split.awk --- do split in awk
+     #
+     # Requires ord() and chr() library functions
+     # usage: split [-count] [file] [outname]
+
+     BEGIN {
+         outfile = "x"    # default
+         count = 1000
+         if (ARGC > 4)
+             usage()
+
+         i = 1
+         if (i in ARGV && ARGV[i] ~ /^-[[:digit:]]+$/) {
+             count = -ARGV[i]
+             ARGV[i] = ""
+             i++
+         }
+         # test argv in case reading from stdin instead of file
+         if (i in ARGV)
+             i++    # skip datafile name
+         if (i in ARGV) {
+             outfile = ARGV[i]
+             ARGV[i] = ""
+         }
+         s1 = s2 = "a"
+         out = (outfile s1 s2)
+     }
+
+   The next rule does most of the work.  'tcount' (temporary count)
+tracks how many lines have been printed to the output file so far.  If
+it is greater than 'count', it is time to close the current file and
+start a new one.  's1' and 's2' track the current suffixes for the file
+name.  If they are both 'z', the file is just too big.  Otherwise, 's1'
+moves to the next letter in the alphabet and 's2' starts over again at
+'a':
+
+     {
+         if (++tcount > count) {
+             close(out)
+             if (s2 == "z") {
+                 if (s1 == "z") {
+                     printf("split: %s is too large to split\n",
+                            FILENAME) > "/dev/stderr"
+                     exit 1
+                 }
+                 s1 = chr(ord(s1) + 1)
+                 s2 = "a"
+             }
+             else
+                 s2 = chr(ord(s2) + 1)
+             out = (outfile s1 s2)
+             tcount = 1
+         }
+         print > out
+     }
+
+The 'usage()' function simply prints an error message and exits:
+
+     function usage()
+     {
+         print("usage: split [-num] [file] [outname]") > "/dev/stderr"
+         exit 1
+     }
+
+   This program is a bit sloppy; it relies on 'awk' to automatically
+close the last file instead of doing it in an 'END' rule.  It also
+assumes that letters are contiguous in the character set, which isn't
+true for EBCDIC systems.
+
+   ---------- Footnotes ----------
+
+   (1) This is the traditional usage.  The POSIX usage is different, but
+not relevant for what the program aims to demonstrate.
+
+File: gawk.info,  Node: Tee Program,  Next: Uniq Program,  Prev: Split Program,  Up: Clones
+
+11.2.5 Duplicating Output into Multiple Files
+---------------------------------------------
+
+The 'tee' program is known as a "pipe fitting."  'tee' copies its
+standard input to its standard output and also duplicates it to the
+files named on the command line.  Its usage is as follows:
+
+     'tee' ['-a'] FILE ...
+
+   The '-a' option tells 'tee' to append to the named files, instead of
+truncating them and starting over.
+
+   The 'BEGIN' rule first makes a copy of all the command-line arguments
+into an array named 'copy'.  'ARGV[0]' is not needed, so it is not
+copied.  'tee' cannot use 'ARGV' directly, because 'awk' attempts to
+process each file name in 'ARGV' as input data.
+
+   If the first argument is '-a', then the flag variable 'append' is set
+to true, and both 'ARGV[1]' and 'copy[1]' are deleted.  If 'ARGC' is
+less than two, then no file names were supplied and 'tee' prints a usage
+message and exits.  Finally, 'awk' is forced to read the standard input
+by setting 'ARGV[1]' to '"-"' and 'ARGC' to two:
+
+     # tee.awk --- tee in awk
+     #
+     # Copy standard input to all named output files.
+     # Append content if -a option is supplied.
+     #
+     BEGIN {
+         for (i = 1; i < ARGC; i++)
+             copy[i] = ARGV[i]
+
+         if (ARGV[1] == "-a") {
+             append = 1
+             delete ARGV[1]
+             delete copy[1]
+             ARGC--
+         }
+         if (ARGC < 2) {
+             print "usage: tee [-a] file ..." > "/dev/stderr"
+             exit 1
+         }
+         ARGV[1] = "-"
+         ARGC = 2
+     }
+
+   The following single rule does all the work.  Because there is no
+pattern, it is executed for each line of input.  The body of the rule
+simply prints the line into each file on the command line, and then to
+the standard output:
+
+     {
+         # moving the if outside the loop makes it run faster
+         if (append)
+             for (i in copy)
+                 print >> copy[i]
+         else
+             for (i in copy)
+                 print > copy[i]
+         print
+     }
+
+It is also possible to write the loop this way:
+
+     for (i in copy)
+         if (append)
+             print >> copy[i]
+         else
+             print > copy[i]
+
+This is more concise, but it is also less efficient.  The 'if' is tested
+for each record and for each output file.  By duplicating the loop body,
+the 'if' is only tested once for each input record.  If there are N
+input records and M output files, the first method only executes N 'if'
+statements, while the second executes N'*'M 'if' statements.
+
+   Finally, the 'END' rule cleans up by closing all the output files:
+
+     END {
+         for (i in copy)
+             close(copy[i])
+     }
+
+File: gawk.info,  Node: Uniq Program,  Next: Wc Program,  Prev: Tee Program,  Up: Clones
+
+11.2.6 Printing Nonduplicated Lines of Text
+-------------------------------------------
+
+The 'uniq' utility reads sorted lines of data on its standard input, and
+by default removes duplicate lines.  In other words, it only prints
+unique lines--hence the name.  'uniq' has a number of options.  The
+usage is as follows:
+
+     'uniq' ['-udc' ['-N']] ['+N'] [INPUTFILE [OUTPUTFILE]]
+
+   The options for 'uniq' are:
+
+'-d'
+     Print only repeated (duplicated) lines.
+
+'-u'
+     Print only nonrepeated (unique) lines.
+
+'-c'
+     Count lines.  This option overrides '-d' and '-u'.  Both repeated
+     and nonrepeated lines are counted.
+
+'-N'
+     Skip N fields before comparing lines.  The definition of fields is
+     similar to 'awk''s default: nonwhitespace characters separated by
+     runs of spaces and/or TABs.
+
+'+N'
+     Skip N characters before comparing lines.  Any fields specified
+     with '-N' are skipped first.
+
+'INPUTFILE'
+     Data is read from the input file named on the command line, instead
+     of from the standard input.
+
+'OUTPUTFILE'
+     The generated output is sent to the named output file, instead of
+     to the standard output.
+
+   Normally 'uniq' behaves as if both the '-d' and '-u' options are
+provided.
+
+   'uniq' uses the 'getopt()' library function (*note Getopt Function::)
+and the 'join()' library function (*note Join Function::).
+
+   The program begins with a 'usage()' function and then a brief outline
+of the options and their meanings in comments.  The 'BEGIN' rule deals
+with the command-line arguments and options.  It uses a trick to get
+'getopt()' to handle options of the form '-25', treating such an option
+as the option letter '2' with an argument of '5'.  If indeed two or more
+digits are supplied ('Optarg' looks like a number), 'Optarg' is
+concatenated with the option digit and then the result is added to zero
+to make it into a number.  If there is only one digit in the option,
+then 'Optarg' is not needed.  In this case, 'Optind' must be decremented
+so that 'getopt()' processes it next time.  This code is admittedly a
+bit tricky.
+
+   If no options are supplied, then the default is taken, to print both
+repeated and nonrepeated lines.  The output file, if provided, is
+assigned to 'outputfile'.  Early on, 'outputfile' is initialized to the
+standard output, '/dev/stdout':
+
+     # uniq.awk --- do uniq in awk
+     #
+     # Requires getopt() and join() library functions
+
+     function usage()
+     {
+         print("Usage: uniq [-udc [-n]] [+n] [ in [ out ]]") > "/dev/stderr"
+         exit 1
+     }
+
+     # -c    count lines. overrides -d and -u
+     # -d    only repeated lines
+     # -u    only nonrepeated lines
+     # -n    skip n fields
+     # +n    skip n characters, skip fields first
+
+     BEGIN {
+         count = 1
+         outputfile = "/dev/stdout"
+         opts = "udc0:1:2:3:4:5:6:7:8:9:"
+         while ((c = getopt(ARGC, ARGV, opts)) != -1) {
+             if (c == "u")
+                 non_repeated_only++
+             else if (c == "d")
+                 repeated_only++
+             else if (c == "c")
+                 do_count++
+             else if (index("0123456789", c) != 0) {
+                 # getopt() requires args to options
+                 # this messes us up for things like -5
+                 if (Optarg ~ /^[[:digit:]]+$/)
+                     fcount = (c Optarg) + 0
+                 else {
+                     fcount = c + 0
+                     Optind--
+                 }
+             } else
+                 usage()
+         }
+
+         if (ARGV[Optind] ~ /^\+[[:digit:]]+$/) {
+             charcount = substr(ARGV[Optind], 2) + 0
+             Optind++
+         }
+
+         for (i = 1; i < Optind; i++)
+             ARGV[i] = ""
+
+         if (repeated_only == 0 && non_repeated_only == 0)
+             repeated_only = non_repeated_only = 1
+
+         if (ARGC - Optind == 2) {
+             outputfile = ARGV[ARGC - 1]
+             ARGV[ARGC - 1] = ""
+         }
+     }
+
+   The following function, 'are_equal()', compares the current line,
+'$0', to the previous line, 'last'.  It handles skipping fields and
+characters.  If no field count and no character count are specified,
+'are_equal()' returns one or zero depending upon the result of a simple
+string comparison of 'last' and '$0'.
+
+   Otherwise, things get more complicated.  If fields have to be
+skipped, each line is broken into an array using 'split()' (*note String
+Functions::); the desired fields are then joined back into a line using
+'join()'.  The joined lines are stored in 'clast' and 'cline'.  If no
+fields are skipped, 'clast' and 'cline' are set to 'last' and '$0',
+respectively.  Finally, if characters are skipped, 'substr()' is used to
+strip off the leading 'charcount' characters in 'clast' and 'cline'.
+The two strings are then compared and 'are_equal()' returns the result:
+
+     function are_equal(    n, m, clast, cline, alast, aline)
+     {
+         if (fcount == 0 && charcount == 0)
+             return (last == $0)
+
+         if (fcount > 0) {
+             n = split(last, alast)
+             m = split($0, aline)
+             clast = join(alast, fcount+1, n)
+             cline = join(aline, fcount+1, m)
+         } else {
+             clast = last
+             cline = $0
+         }
+         if (charcount) {
+             clast = substr(clast, charcount + 1)
+             cline = substr(cline, charcount + 1)
+         }
+
+         return (clast == cline)
+     }
+
+   The following two rules are the body of the program.  The first one
+is executed only for the very first line of data.  It sets 'last' equal
+to '$0', so that subsequent lines of text have something to be compared
+to.
+
+   The second rule does the work.  The variable 'equal' is one or zero,
+depending upon the results of 'are_equal()''s comparison.  If 'uniq' is
+counting repeated lines, and the lines are equal, then it increments the
+'count' variable.  Otherwise, it prints the line and resets 'count',
+because the two lines are not equal.
+
+   If 'uniq' is not counting, and if the lines are equal, 'count' is
+incremented.  Nothing is printed, as the point is to remove duplicates.
+Otherwise, if 'uniq' is counting repeated lines and more than one line
+is seen, or if 'uniq' is counting nonrepeated lines and only one line is
+seen, then the line is printed, and 'count' is reset.
+
+   Finally, similar logic is used in the 'END' rule to print the final
+line of input data:
+
+     NR == 1 {
+         last = $0
+         next
+     }
+
+     {
+         equal = are_equal()
+
+         if (do_count) {    # overrides -d and -u
+             if (equal)
+                 count++
+             else {
+                 printf("%4d %s\n", count, last) > outputfile
+                 last = $0
+                 count = 1    # reset
+             }
+             next
+         }
+
+         if (equal)
+             count++
+         else {
+             if ((repeated_only && count > 1) ||
+                 (non_repeated_only && count == 1))
+                     print last > outputfile
+             last = $0
+             count = 1
+         }
+     }
+
+     END {
+         if (do_count)
+             printf("%4d %s\n", count, last) > outputfile
+         else if ((repeated_only && count > 1) ||
+                 (non_repeated_only && count == 1))
+             print last > outputfile
+         close(outputfile)
+     }
+
+File: gawk.info,  Node: Wc Program,  Prev: Uniq Program,  Up: Clones
+
+11.2.7 Counting Things
+----------------------
+
+The 'wc' (word count) utility counts lines, words, and characters in one
+or more input files.  Its usage is as follows:
+
+     'wc' ['-lwc'] [FILES ...]
+
+   If no files are specified on the command line, 'wc' reads its
+standard input.  If there are multiple files, it also prints total
+counts for all the files.  The options and their meanings are as
+follows:
+
+'-l'
+     Count only lines.
+
+'-w'
+     Count only words.  A "word" is a contiguous sequence of
+     nonwhitespace characters, separated by spaces and/or TABs.
+     Luckily, this is the normal way 'awk' separates fields in its input
+     data.
+
+'-c'
+     Count only characters.
+
+   Implementing 'wc' in 'awk' is particularly elegant, because 'awk'
+does a lot of the work for us; it splits lines into words (i.e., fields)
+and counts them, it counts lines (i.e., records), and it can easily tell
+us how long a line is.
+
+   This program uses the 'getopt()' library function (*note Getopt
+Function::) and the file-transition functions (*note Filetrans
+Function::).
+
+   This version has one notable difference from traditional versions of
+'wc': it always prints the counts in the order lines, words, and
+characters.  Traditional versions note the order of the '-l', '-w', and
+'-c' options on the command line, and print the counts in that order.
+
+   The 'BEGIN' rule does the argument processing.  The variable
+'print_total' is true if more than one file is named on the command
+line:
+
+     # wc.awk --- count lines, words, characters
+
+     # Options:
+     #    -l    only count lines
+     #    -w    only count words
+     #    -c    only count characters
+     #
+     # Default is to count lines, words, characters
+     #
+     # Requires getopt() and file transition library functions
+
+     BEGIN {
+         # let getopt() print a message about
+         # invalid options. we ignore them
+         while ((c = getopt(ARGC, ARGV, "lwc")) != -1) {
+             if (c == "l")
+                 do_lines = 1
+             else if (c == "w")
+                 do_words = 1
+             else if (c == "c")
+                 do_chars = 1
+         }
+         for (i = 1; i < Optind; i++)
+             ARGV[i] = ""
+
+         # if no options, do all
+         if (! do_lines && ! do_words && ! do_chars)
+             do_lines = do_words = do_chars = 1
+
+         print_total = (ARGC - i > 1)
+     }
+
+   The 'beginfile()' function is simple; it just resets the counts of
+lines, words, and characters to zero, and saves the current file name in
+'fname':
+
+     function beginfile(file)
+     {
+         lines = words = chars = 0
+         fname = FILENAME
+     }
+
+   The 'endfile()' function adds the current file's numbers to the
+running totals of lines, words, and characters.  It then prints out
+those numbers for the file that was just read.  It relies on
+'beginfile()' to reset the numbers for the following data file:
+
+     function endfile(file)
+     {
+         tlines += lines
+         twords += words
+         tchars += chars
+         if (do_lines)
+             printf "\t%d", lines
+         if (do_words)
+             printf "\t%d", words
+         if (do_chars)
+             printf "\t%d", chars
+         printf "\t%s\n", fname
+     }
+
+   There is one rule that is executed for each line.  It adds the length
+of the record, plus one, to 'chars'.(1)  Adding one plus the record
+length is needed because the newline character separating records (the
+value of 'RS') is not part of the record itself, and thus not included
+in its length.  Next, 'lines' is incremented for each line read, and
+'words' is incremented by the value of 'NF', which is the number of
+"words" on this line:
+
+     # do per line
+     {
+         chars += length($0) + 1    # get newline
+         lines++
+         words += NF
+     }
+
+   Finally, the 'END' rule simply prints the totals for all the files:
+
+     END {
+         if (print_total) {
+             if (do_lines)
+                 printf "\t%d", tlines
+             if (do_words)
+                 printf "\t%d", twords
+             if (do_chars)
+                 printf "\t%d", tchars
+             print "\ttotal"
+         }
+     }
+
+   ---------- Footnotes ----------
+
+   (1) Because 'gawk' understands multibyte locales, this code counts
+characters, not bytes.
+
+File: gawk.info,  Node: Miscellaneous Programs,  Next: Programs Summary,  Prev: Clones,  Up: Sample Programs
+

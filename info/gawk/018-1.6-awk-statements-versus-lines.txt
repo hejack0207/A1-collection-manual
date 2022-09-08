@@ -1,0 +1,109 @@
+1.6 'awk' Statements Versus Lines
+=================================
+
+Most often, each line in an 'awk' program is a separate statement or
+separate rule, like this:
+
+     awk '/12/  { print $0 }
+          /21/  { print $0 }' mail-list inventory-shipped
+
+   However, 'gawk' ignores newlines after any of the following symbols
+and keywords:
+
+     ,    {    ?    :    ||    &&    do    else
+
+A newline at any other point is considered the end of the statement.(1)
+
+   If you would like to split a single statement into two lines at a
+point where a newline would terminate it, you can "continue" it by
+ending the first line with a backslash character ('\').  The backslash
+must be the final character on the line in order to be recognized as a
+continuation character.  A backslash is allowed anywhere in the
+statement, even in the middle of a string or regular expression.  For
+example:
+
+     awk '/This regular expression is too long, so continue it\
+      on the next line/ { print $1 }'
+
+We have generally not used backslash continuation in our sample
+programs.  'gawk' places no limit on the length of a line, so backslash
+continuation is never strictly necessary; it just makes programs more
+readable.  For this same reason, as well as for clarity, we have kept
+most statements short in the programs presented throughout the Info
+file.  Backslash continuation is most useful when your 'awk' program is
+in a separate source file instead of entered from the command line.  You
+should also note that many 'awk' implementations are more particular
+about where you may use backslash continuation.  For example, they may
+not allow you to split a string constant using backslash continuation.
+Thus, for maximum portability of your 'awk' programs, it is best not to
+split your lines in the middle of a regular expression or a string.
+
+     CAUTION: _Backslash continuation does not work as described with
+     the C shell._  It works for 'awk' programs in files and for
+     one-shot programs, _provided_ you are using a POSIX-compliant
+     shell, such as the Unix Bourne shell or Bash.  But the C shell
+     behaves differently!  There you must use two backslashes in a row,
+     followed by a newline.  Note also that when using the C shell,
+     _every_ newline in your 'awk' program must be escaped with a
+     backslash.  To illustrate:
+
+          % awk 'BEGIN { \
+          ?   print \\
+          ?       "hello, world" \
+          ? }'
+          -| hello, world
+
+     Here, the '%' and '?' are the C shell's primary and secondary
+     prompts, analogous to the standard shell's '$' and '>'.
+
+     Compare the previous example to how it is done with a
+     POSIX-compliant shell:
+
+          $ awk 'BEGIN {
+          >   print \
+          >       "hello, world"
+          > }'
+          -| hello, world
+
+   'awk' is a line-oriented language.  Each rule's action has to begin
+on the same line as the pattern.  To have the pattern and action on
+separate lines, you _must_ use backslash continuation; there is no other
+option.
+
+   Another thing to keep in mind is that backslash continuation and
+comments do not mix.  As soon as 'awk' sees the '#' that starts a
+comment, it ignores _everything_ on the rest of the line.  For example:
+
+     $ gawk 'BEGIN { print "dont panic" # a friendly \
+     >                                    BEGIN rule
+     > }'
+     error-> gawk: cmd. line:2:                BEGIN rule
+     error-> gawk: cmd. line:2:                ^ syntax error
+
+In this case, it looks like the backslash would continue the comment
+onto the next line.  However, the backslash-newline combination is never
+even noticed because it is "hidden" inside the comment.  Thus, the
+'BEGIN' is noted as a syntax error.
+
+   When 'awk' statements within one rule are short, you might want to
+put more than one of them on a line.  This is accomplished by separating
+the statements with a semicolon (';').  This also applies to the rules
+themselves.  Thus, the program shown at the start of this minor node
+could also be written this way:
+
+     /12/ { print $0 } ; /21/ { print $0 }
+
+     NOTE: The requirement that states that rules on the same line must
+     be separated with a semicolon was not in the original 'awk'
+     language; it was added for consistency with the treatment of
+     statements within an action.
+
+   ---------- Footnotes ----------
+
+   (1) The '?' and ':' referred to here is the three-operand conditional
+expression described in *note Conditional Exp::.  Splitting lines after
+'?' and ':' is a minor 'gawk' extension; if '--posix' is specified
+(*note Options::), then this extension is disabled.
+
+File: gawk.info,  Node: Other Features,  Next: When,  Prev: Statements/Lines,  Up: Getting Started
+

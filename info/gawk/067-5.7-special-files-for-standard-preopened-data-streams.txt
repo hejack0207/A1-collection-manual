@@ -1,0 +1,74 @@
+5.7 Special Files for Standard Preopened Data Streams
+=====================================================
+
+Running programs conventionally have three input and output streams
+already available to them for reading and writing.  These are known as
+the "standard input", "standard output", and "standard error output".
+These open streams (and any other open files or pipes) are often
+referred to by the technical term "file descriptors".
+
+   These streams are, by default, connected to your keyboard and screen,
+but they are often redirected with the shell, via the '<', '<<', '>',
+'>>', '>&', and '|' operators.  Standard error is typically used for
+writing error messages; the reason there are two separate streams,
+standard output and standard error, is so that they can be redirected
+separately.
+
+   In traditional implementations of 'awk', the only way to write an
+error message to standard error in an 'awk' program is as follows:
+
+     print "Serious error detected!" | "cat 1>&2"
+
+This works by opening a pipeline to a shell command that can access the
+standard error stream that it inherits from the 'awk' process.  This is
+far from elegant, and it also requires a separate process.  So people
+writing 'awk' programs often don't do this.  Instead, they send the
+error messages to the screen, like this:
+
+     print "Serious error detected!" > "/dev/tty"
+
+('/dev/tty' is a special file supplied by the operating system that is
+connected to your keyboard and screen.  It represents the "terminal,"(1)
+which on modern systems is a keyboard and screen, not a serial console.)
+This generally has the same effect, but not always: although the
+standard error stream is usually the screen, it can be redirected; when
+that happens, writing to the screen is not correct.  In fact, if 'awk'
+is run from a background job, it may not have a terminal at all.  Then
+opening '/dev/tty' fails.
+
+   'gawk', BWK 'awk', and 'mawk' provide special file names for
+accessing the three standard streams.  If the file name matches one of
+these special names when 'gawk' (or one of the others) redirects input
+or output, then it directly uses the descriptor that the file name
+stands for.  These special file names work for all operating systems
+that 'gawk' has been ported to, not just those that are POSIX-compliant:
+
+'/dev/stdin'
+     The standard input (file descriptor 0).
+
+'/dev/stdout'
+     The standard output (file descriptor 1).
+
+'/dev/stderr'
+     The standard error output (file descriptor 2).
+
+   With these facilities, the proper way to write an error message then
+becomes:
+
+     print "Serious error detected!" > "/dev/stderr"
+
+   Note the use of quotes around the file name.  Like with any other
+redirection, the value must be a string.  It is a common error to omit
+the quotes, which leads to confusing results.
+
+   'gawk' does not treat these file names as special when in
+POSIX-compatibility mode.  However, because BWK 'awk' supports them,
+'gawk' does support them even when invoked with the '--traditional'
+option (*note Options::).
+
+   ---------- Footnotes ----------
+
+   (1) The "tty" in '/dev/tty' stands for "Teletype," a serial terminal.
+
+File: gawk.info,  Node: Special Files,  Next: Close Files And Pipes,  Prev: Special FD,  Up: Printing
+

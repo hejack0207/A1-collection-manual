@@ -1,0 +1,86 @@
+15.7 Standards Versus Existing Practice
+=======================================
+
+Historically, 'awk' has converted any nonnumeric-looking string to the
+numeric value zero, when required.  Furthermore, the original definition
+of the language and the original POSIX standards specified that 'awk'
+only understands decimal numbers (base 10), and not octal (base 8) or
+hexadecimal numbers (base 16).
+
+   Changes in the language of the 2001 and 2004 POSIX standards can be
+interpreted to imply that 'awk' should support additional features.
+These features are:
+
+   * Interpretation of floating-point data values specified in
+     hexadecimal notation (e.g., '0xDEADBEEF').  (Note: data values,
+     _not_ source code constants.)
+
+   * Support for the special IEEE 754 floating-point values "not a
+     number" (NaN), positive infinity ("inf"), and negative infinity
+     ("-inf").  In particular, the format for these values is as
+     specified by the ISO 1999 C standard, which ignores case and can
+     allow implementation-dependent additional characters after the
+     'nan' and allow either 'inf' or 'infinity'.
+
+   The first problem is that both of these are clear changes to
+historical practice:
+
+   * The 'gawk' maintainer feels that supporting hexadecimal
+     floating-point values, in particular, is ugly, and was never
+     intended by the original designers to be part of the language.
+
+   * Allowing completely alphabetic strings to have valid numeric values
+     is also a very severe departure from historical practice.
+
+   The second problem is that the 'gawk' maintainer feels that this
+interpretation of the standard, which required a certain amount of
+"language lawyering" to arrive at in the first place, was not even
+intended by the standard developers.  In other words, "We see how you
+got where you are, but we don't think that that's where you want to be."
+
+   Recognizing these issues, but attempting to provide compatibility
+with the earlier versions of the standard, the 2008 POSIX standard added
+explicit wording to allow, but not require, that 'awk' support
+hexadecimal floating-point values and special values for "not a number"
+and infinity.
+
+   Although the 'gawk' maintainer continues to feel that providing those
+features is inadvisable, nevertheless, on systems that support IEEE
+floating point, it seems reasonable to provide _some_ way to support NaN
+and infinity values.  The solution implemented in 'gawk' is as follows:
+
+   * With the '--posix' command-line option, 'gawk' becomes "hands off."
+     String values are passed directly to the system library's
+     'strtod()' function, and if it successfully returns a numeric
+     value, that is what's used.(1)  By definition, the results are not
+     portable across different systems.  They are also a little
+     surprising:
+
+          $ echo nanny | gawk --posix '{ print $1 + 0 }'
+          -| nan
+          $ echo 0xDeadBeef | gawk --posix '{ print $1 + 0 }'
+          -| 3735928559
+
+   * Without '--posix', 'gawk' interprets the four string values '+inf',
+     '-inf', '+nan', and '-nan' specially, producing the corresponding
+     special numeric values.  The leading sign acts a signal to 'gawk'
+     (and the user) that the value is really numeric.  Hexadecimal
+     floating point is not supported (unless you also use
+     '--non-decimal-data', which is _not_ recommended).  For example:
+
+          $ echo nanny | gawk '{ print $1 + 0 }'
+          -| 0
+          $ echo +nan | gawk '{ print $1 + 0 }'
+          -| nan
+          $ echo 0xDeadBeef | gawk '{ print $1 + 0 }'
+          -| 0
+
+     'gawk' ignores case in the four special values.  Thus, '+nan' and
+     '+NaN' are the same.
+
+   ---------- Footnotes ----------
+
+   (1) You asked for it, you got it.
+
+File: gawk.info,  Node: Floating point summary,  Prev: POSIX Floating Point Problems,  Up: Arbitrary Precision Arithmetic
+

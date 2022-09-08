@@ -1,0 +1,1714 @@
+9.1 Built-in Functions
+======================
+
+"Built-in" functions are always available for your 'awk' program to
+call.  This minor node defines all the built-in functions in 'awk'; some
+of these are mentioned in other minor nodes but are summarized here for
+your convenience.
+
+* Menu:
+
+* Calling Built-in::            How to call built-in functions.
+* Numeric Functions::           Functions that work with numbers, including
+                                'int()', 'sin()' and 'rand()'.
+* String Functions::            Functions for string manipulation, such as
+                                'split()', 'match()' and
+                                'sprintf()'.
+* I/O Functions::               Functions for files and shell commands.
+* Time Functions::              Functions for dealing with timestamps.
+* Bitwise Functions::           Functions for bitwise operations.
+* Type Functions::              Functions for type information.
+* I18N Functions::              Functions for string translation.
+
+File: gawk.info,  Node: Calling Built-in,  Next: Numeric Functions,  Up: Built-in
+
+9.1.1 Calling Built-in Functions
+--------------------------------
+
+To call one of 'awk''s built-in functions, write the name of the
+function followed by arguments in parentheses.  For example, 'atan2(y +
+z, 1)' is a call to the function 'atan2()' and has two arguments.
+
+   Whitespace is ignored between the built-in function name and the
+opening parenthesis, but nonetheless it is good practice to avoid using
+whitespace there.  User-defined functions do not permit whitespace in
+this way, and it is easier to avoid mistakes by following a simple
+convention that always works--no whitespace after a function name.
+
+   Each built-in function accepts a certain number of arguments.  In
+some cases, arguments can be omitted.  The defaults for omitted
+arguments vary from function to function and are described under the
+individual functions.  In some 'awk' implementations, extra arguments
+given to built-in functions are ignored.  However, in 'gawk', it is a
+fatal error to give extra arguments to a built-in function.
+
+   When a function is called, expressions that create the function's
+actual parameters are evaluated completely before the call is performed.
+For example, in the following code fragment:
+
+     i = 4
+     j = sqrt(i++)
+
+the variable 'i' is incremented to the value five before 'sqrt()' is
+called with a value of four for its actual parameter.  The order of
+evaluation of the expressions used for the function's parameters is
+undefined.  Thus, avoid writing programs that assume that parameters are
+evaluated from left to right or from right to left.  For example:
+
+     i = 5
+     j = atan2(++i, i *= 2)
+
+   If the order of evaluation is left to right, then 'i' first becomes
+six, and then 12, and 'atan2()' is called with the two arguments six and
+12.  But if the order of evaluation is right to left, 'i' first becomes
+10, then 11, and 'atan2()' is called with the two arguments 11 and 10.
+
+File: gawk.info,  Node: Numeric Functions,  Next: String Functions,  Prev: Calling Built-in,  Up: Built-in
+
+9.1.2 Numeric Functions
+-----------------------
+
+The following list describes all of the built-in functions that work
+with numbers.  Optional parameters are enclosed in square
+brackets ([ ]):
+
+'atan2(Y, X)'
+     Return the arctangent of 'Y / X' in radians.  You can use 'pi =
+     atan2(0, -1)' to retrieve the value of pi.
+
+'cos(X)'
+     Return the cosine of X, with X in radians.
+
+'exp(X)'
+     Return the exponential of X ('e ^ X') or report an error if X is
+     out of range.  The range of values X can have depends on your
+     machine's floating-point representation.
+
+'int(X)'
+     Return the nearest integer to X, located between X and zero and
+     truncated toward zero.  For example, 'int(3)' is 3, 'int(3.9)' is
+     3, 'int(-3.9)' is -3, and 'int(-3)' is -3 as well.
+
+'log(X)'
+     Return the natural logarithm of X, if X is positive; otherwise,
+     return 'NaN' ("not a number") on IEEE 754 systems.  Additionally,
+     'gawk' prints a warning message when 'x' is negative.
+
+'rand()'
+     Return a random number.  The values of 'rand()' are uniformly
+     distributed between zero and one.  The value could be zero but is
+     never one.(1)
+
+     Often random integers are needed instead.  Following is a
+     user-defined function that can be used to obtain a random
+     nonnegative integer less than N:
+
+          function randint(n)
+          {
+              return int(n * rand())
+          }
+
+     The multiplication produces a random number greater than or equal
+     to zero and less than 'n'.  Using 'int()', this result is made into
+     an integer between zero and 'n' - 1, inclusive.
+
+     The following example uses a similar function to produce random
+     integers between one and N.  This program prints a new random
+     number for each input record:
+
+          # Function to roll a simulated die.
+          function roll(n) { return 1 + int(rand() * n) }
+
+          # Roll 3 six-sided dice and
+          # print total number of points.
+          {
+              printf("%d points\n", roll(6) + roll(6) + roll(6))
+          }
+
+          CAUTION: In most 'awk' implementations, including 'gawk',
+          'rand()' starts generating numbers from the same starting
+          number, or "seed", each time you run 'awk'.(2)  Thus, a
+          program generates the same results each time you run it.  The
+          numbers are random within one 'awk' run but predictable from
+          run to run.  This is convenient for debugging, but if you want
+          a program to do different things each time it is used, you
+          must change the seed to a value that is different in each run.
+          To do this, use 'srand()'.
+
+'sin(X)'
+     Return the sine of X, with X in radians.
+
+'sqrt(X)'
+     Return the positive square root of X.  'gawk' prints a warning
+     message if X is negative.  Thus, 'sqrt(4)' is 2.
+
+'srand('[X]')'
+     Set the starting point, or seed, for generating random numbers to
+     the value X.
+
+     Each seed value leads to a particular sequence of random
+     numbers.(3)  Thus, if the seed is set to the same value a second
+     time, the same sequence of random numbers is produced again.
+
+          CAUTION: Different 'awk' implementations use different
+          random-number generators internally.  Don't expect the same
+          'awk' program to produce the same series of random numbers
+          when executed by different versions of 'awk'.
+
+     If the argument X is omitted, as in 'srand()', then the current
+     date and time of day are used for a seed.  This is the way to get
+     random numbers that are truly unpredictable.
+
+     The return value of 'srand()' is the previous seed.  This makes it
+     easy to keep track of the seeds in case you need to consistently
+     reproduce sequences of random numbers.
+
+     POSIX does not specify the initial seed; it differs among 'awk'
+     implementations.
+
+   ---------- Footnotes ----------
+
+   (1) The C version of 'rand()' on many Unix systems is known to
+produce fairly poor sequences of random numbers.  However, nothing
+requires that an 'awk' implementation use the C 'rand()' to implement
+the 'awk' version of 'rand()'.  In fact, 'gawk' uses the BSD 'random()'
+function, which is considerably better than 'rand()', to produce random
+numbers.
+
+   (2) 'mawk' uses a different seed each time.
+
+   (3) Computer-generated random numbers really are not truly random.
+They are technically known as "pseudorandom".  This means that although
+the numbers in a sequence appear to be random, you can in fact generate
+the same sequence of random numbers over and over again.
+
+File: gawk.info,  Node: String Functions,  Next: I/O Functions,  Prev: Numeric Functions,  Up: Built-in
+
+9.1.3 String-Manipulation Functions
+-----------------------------------
+
+The functions in this minor node look at or change the text of one or
+more strings.
+
+   'gawk' understands locales (*note Locales::) and does all string
+processing in terms of _characters_, not _bytes_.  This distinction is
+particularly important to understand for locales where one character may
+be represented by multiple bytes.  Thus, for example, 'length()' returns
+the number of characters in a string, and not the number of bytes used
+to represent those characters.  Similarly, 'index()' works with
+character indices, and not byte indices.
+
+     CAUTION: A number of functions deal with indices into strings.  For
+     these functions, the first character of a string is at position
+     (index) one.  This is different from C and the languages descended
+     from it, where the first character is at position zero.  You need
+     to remember this when doing index calculations, particularly if you
+     are used to C.
+
+   In the following list, optional parameters are enclosed in square
+brackets ([ ]).  Several functions perform string substitution; the full
+discussion is provided in the description of the 'sub()' function, which
+comes toward the end, because the list is presented alphabetically.
+
+   Those functions that are specific to 'gawk' are marked with a pound
+sign ('#').  They are not available in compatibility mode (*note
+Options::):
+
+* Menu:
+
+* Gory Details::                More than you want to know about '\' and
+                                '&' with 'sub()', 'gsub()', and
+                                'gensub()'.
+
+'asort('SOURCE [',' DEST [',' HOW ] ]') #'
+'asorti('SOURCE [',' DEST [',' HOW ] ]') #'
+     These two functions are similar in behavior, so they are described
+     together.
+
+          NOTE: The following description ignores the third argument,
+          HOW, as it requires understanding features that we have not
+          discussed yet.  Thus, the discussion here is a deliberate
+          simplification.  (We do provide all the details later on; see
+          *note Array Sorting Functions:: for the full story.)
+
+     Both functions return the number of elements in the array SOURCE.
+     For 'asort()', 'gawk' sorts the values of SOURCE and replaces the
+     indices of the sorted values of SOURCE with sequential integers
+     starting with one.  If the optional array DEST is specified, then
+     SOURCE is duplicated into DEST.  DEST is then sorted, leaving the
+     indices of SOURCE unchanged.
+
+     When comparing strings, 'IGNORECASE' affects the sorting (*note
+     Array Sorting Functions::).  If the SOURCE array contains subarrays
+     as values (*note Arrays of Arrays::), they will come last, after
+     all scalar values.  Subarrays are _not_ recursively sorted.
+
+     For example, if the contents of 'a' are as follows:
+
+          a["last"] = "de"
+          a["first"] = "sac"
+          a["middle"] = "cul"
+
+     A call to 'asort()':
+
+          asort(a)
+
+     results in the following contents of 'a':
+
+          a[1] = "cul"
+          a[2] = "de"
+          a[3] = "sac"
+
+     The 'asorti()' function works similarly to 'asort()'; however, the
+     _indices_ are sorted, instead of the values.  Thus, in the previous
+     example, starting with the same initial set of indices and values
+     in 'a', calling 'asorti(a)' would yield:
+
+          a[1] = "first"
+          a[2] = "last"
+          a[3] = "middle"
+
+'gensub(REGEXP, REPLACEMENT, HOW' [', TARGET']') #'
+     Search the target string TARGET for matches of the regular
+     expression REGEXP.  If HOW is a string beginning with 'g' or 'G'
+     (short for "global"), then replace all matches of REGEXP with
+     REPLACEMENT.  Otherwise, HOW is treated as a number indicating
+     which match of REGEXP to replace.  If no TARGET is supplied, use
+     '$0'.  It returns the modified string as the result of the function
+     and the original target string is _not_ changed.
+
+     'gensub()' is a general substitution function.  Its purpose is to
+     provide more features than the standard 'sub()' and 'gsub()'
+     functions.
+
+     'gensub()' provides an additional feature that is not available in
+     'sub()' or 'gsub()': the ability to specify components of a regexp
+     in the replacement text.  This is done by using parentheses in the
+     regexp to mark the components and then specifying '\N' in the
+     replacement text, where N is a digit from 1 to 9.  For example:
+
+          $ gawk '
+          > BEGIN {
+          >      a = "abc def"
+          >      b = gensub(/(.+) (.+)/, "\\2 \\1", "g", a)
+          >      print b
+          > }'
+          -| def abc
+
+     As with 'sub()', you must type two backslashes in order to get one
+     into the string.  In the replacement text, the sequence '\0'
+     represents the entire matched text, as does the character '&'.
+
+     The following example shows how you can use the third argument to
+     control which match of the regexp should be changed:
+
+          $ echo a b c a b c |
+          > gawk '{ print gensub(/a/, "AA", 2) }'
+          -| a b c AA b c
+
+     In this case, '$0' is the default target string.  'gensub()'
+     returns the new string as its result, which is passed directly to
+     'print' for printing.
+
+     If the HOW argument is a string that does not begin with 'g' or
+     'G', or if it is a number that is less than or equal to zero, only
+     one substitution is performed.  If HOW is zero, 'gawk' issues a
+     warning message.
+
+     If REGEXP does not match TARGET, 'gensub()''s return value is the
+     original unchanged value of TARGET.
+
+'gsub(REGEXP, REPLACEMENT' [', TARGET']')'
+     Search TARGET for _all_ of the longest, leftmost, _nonoverlapping_
+     matching substrings it can find and replace them with REPLACEMENT.
+     The 'g' in 'gsub()' stands for "global," which means replace
+     everywhere.  For example:
+
+          { gsub(/Britain/, "United Kingdom"); print }
+
+     replaces all occurrences of the string 'Britain' with 'United
+     Kingdom' for all input records.
+
+     The 'gsub()' function returns the number of substitutions made.  If
+     the variable to search and alter (TARGET) is omitted, then the
+     entire input record ('$0') is used.  As in 'sub()', the characters
+     '&' and '\' are special, and the third argument must be assignable.
+
+'index(IN, FIND)'
+     Search the string IN for the first occurrence of the string FIND,
+     and return the position in characters where that occurrence begins
+     in the string IN.  Consider the following example:
+
+          $ awk 'BEGIN { print index("peanut", "an") }'
+          -| 3
+
+     If FIND is not found, 'index()' returns zero.
+
+     With BWK 'awk' and 'gawk', it is a fatal error to use a regexp
+     constant for FIND.  Other implementations allow it, simply treating
+     the regexp constant as an expression meaning '$0 ~ /regexp/'.
+     (d.c.)
+
+'length('[STRING]')'
+     Return the number of characters in STRING.  If STRING is a number,
+     the length of the digit string representing that number is
+     returned.  For example, 'length("abcde")' is five.  By contrast,
+     'length(15 * 35)' works out to three.  In this example, 15 * 35 =
+     525, and 525 is then converted to the string '"525"', which has
+     three characters.
+
+     If no argument is supplied, 'length()' returns the length of '$0'.
+
+          NOTE: In older versions of 'awk', the 'length()' function
+          could be called without any parentheses.  Doing so is
+          considered poor practice, although the 2008 POSIX standard
+          explicitly allows it, to support historical practice.  For
+          programs to be maximally portable, always supply the
+          parentheses.
+
+     If 'length()' is called with a variable that has not been used,
+     'gawk' forces the variable to be a scalar.  Other implementations
+     of 'awk' leave the variable without a type.  (d.c.)  Consider:
+
+          $ gawk 'BEGIN { print length(x) ; x[1] = 1 }'
+          -| 0
+          error-> gawk: fatal: attempt to use scalar `x' as array
+
+          $ nawk 'BEGIN { print length(x) ; x[1] = 1 }'
+          -| 0
+
+     If '--lint' has been specified on the command line, 'gawk' issues a
+     warning about this.
+
+     With 'gawk' and several other 'awk' implementations, when given an
+     array argument, the 'length()' function returns the number of
+     elements in the array.  (c.e.)  This is less useful than it might
+     seem at first, as the array is not guaranteed to be indexed from
+     one to the number of elements in it.  If '--lint' is provided on
+     the command line (*note Options::), 'gawk' warns that passing an
+     array argument is not portable.  If '--posix' is supplied, using an
+     array argument is a fatal error (*note Arrays::).
+
+'match(STRING, REGEXP' [', ARRAY']')'
+     Search STRING for the longest, leftmost substring matched by the
+     regular expression REGEXP and return the character position (index)
+     at which that substring begins (one, if it starts at the beginning
+     of STRING).  If no match is found, return zero.
+
+     The REGEXP argument may be either a regexp constant ('/'...'/') or
+     a string constant ('"'...'"').  In the latter case, the string is
+     treated as a regexp to be matched.  *Note Computed Regexps:: for a
+     discussion of the difference between the two forms, and the
+     implications for writing your program correctly.
+
+     The order of the first two arguments is the opposite of most other
+     string functions that work with regular expressions, such as
+     'sub()' and 'gsub()'.  It might help to remember that for
+     'match()', the order is the same as for the '~' operator: 'STRING ~
+     REGEXP'.
+
+     The 'match()' function sets the predefined variable 'RSTART' to the
+     index.  It also sets the predefined variable 'RLENGTH' to the
+     length in characters of the matched substring.  If no match is
+     found, 'RSTART' is set to zero, and 'RLENGTH' to -1.
+
+     For example:
+
+          {
+              if ($1 == "FIND")
+                  regex = $2
+              else {
+                  where = match($0, regex)
+                  if (where != 0)
+                      print "Match of", regex, "found at", where, "in", $0
+                 }
+          }
+
+     This program looks for lines that match the regular expression
+     stored in the variable 'regex'.  This regular expression can be
+     changed.  If the first word on a line is 'FIND', 'regex' is changed
+     to be the second word on that line.  Therefore, if given:
+
+          FIND ru+n
+          My program runs
+          but not very quickly
+          FIND Melvin
+          JF+KM
+          This line is property of Reality Engineering Co.
+          Melvin was here.
+
+     'awk' prints:
+
+          Match of ru+n found at 12 in My program runs
+          Match of Melvin found at 1 in Melvin was here.
+
+     If ARRAY is present, it is cleared, and then the zeroth element of
+     ARRAY is set to the entire portion of STRING matched by REGEXP.  If
+     REGEXP contains parentheses, the integer-indexed elements of ARRAY
+     are set to contain the portion of STRING matching the corresponding
+     parenthesized subexpression.  For example:
+
+          $ echo foooobazbarrrrr |
+          > gawk '{ match($0, /(fo+).+(bar*)/, arr)
+          >         print arr[1], arr[2] }'
+          -| foooo barrrrr
+
+     In addition, multidimensional subscripts are available providing
+     the start index and length of each matched subexpression:
+
+          $ echo foooobazbarrrrr |
+          > gawk '{ match($0, /(fo+).+(bar*)/, arr)
+          >           print arr[1], arr[2]
+          >           print arr[1, "start"], arr[1, "length"]
+          >           print arr[2, "start"], arr[2, "length"]
+          > }'
+          -| foooo barrrrr
+          -| 1 5
+          -| 9 7
+
+     There may not be subscripts for the start and index for every
+     parenthesized subexpression, because they may not all have matched
+     text; thus, they should be tested for with the 'in' operator (*note
+     Reference to Elements::).
+
+     The ARRAY argument to 'match()' is a 'gawk' extension.  In
+     compatibility mode (*note Options::), using a third argument is a
+     fatal error.
+
+'patsplit(STRING, ARRAY' [', FIELDPAT' [', SEPS' ] ]') #'
+     Divide STRING into pieces (or "fields") defined by FIELDPAT and
+     store the pieces in ARRAY and the separator strings in the SEPS
+     array.  The first piece is stored in 'ARRAY[1]', the second piece
+     in 'ARRAY[2]', and so forth.  The third argument, FIELDPAT, is a
+     regexp describing the fields in STRING (just as 'FPAT' is a regexp
+     describing the fields in input records).  It may be either a regexp
+     constant or a string.  If FIELDPAT is omitted, the value of 'FPAT'
+     is used.  'patsplit()' returns the number of elements created.
+     'SEPS[I]' is the possibly null separator string after 'ARRAY[I]'.
+     The possibly null leading separator will be in 'SEPS[0]'.  So a
+     non-null STRING with N fields will have N+1 separators.  A null
+     STRING will not have neither fields nor separators.
+
+     The 'patsplit()' function splits strings into pieces in a manner
+     similar to the way input lines are split into fields using 'FPAT'
+     (*note Splitting By Content::).
+
+     Before splitting the string, 'patsplit()' deletes any previously
+     existing elements in the arrays ARRAY and SEPS.
+
+'split(STRING, ARRAY' [', FIELDSEP' [', SEPS' ] ]')'
+     Divide STRING into pieces separated by FIELDSEP and store the
+     pieces in ARRAY and the separator strings in the SEPS array.  The
+     first piece is stored in 'ARRAY[1]', the second piece in
+     'ARRAY[2]', and so forth.  The string value of the third argument,
+     FIELDSEP, is a regexp describing where to split STRING (much as
+     'FS' can be a regexp describing where to split input records).  If
+     FIELDSEP is omitted, the value of 'FS' is used.  'split()' returns
+     the number of elements created.  SEPS is a 'gawk' extension, with
+     'SEPS[I]' being the separator string between 'ARRAY[I]' and
+     'ARRAY[I+1]'.  If FIELDSEP is a single space, then any leading
+     whitespace goes into 'SEPS[0]' and any trailing whitespace goes
+     into 'SEPS[N]', where N is the return value of 'split()' (i.e., the
+     number of elements in ARRAY).
+
+     The 'split()' function splits strings into pieces in a manner
+     similar to the way input lines are split into fields.  For example:
+
+          split("cul-de-sac", a, "-", seps)
+
+     splits the string '"cul-de-sac"' into three fields using '-' as the
+     separator.  It sets the contents of the array 'a' as follows:
+
+          a[1] = "cul"
+          a[2] = "de"
+          a[3] = "sac"
+
+     and sets the contents of the array 'seps' as follows:
+
+          seps[1] = "-"
+          seps[2] = "-"
+
+     The value returned by this call to 'split()' is three.
+
+     As with input field-splitting, when the value of FIELDSEP is '" "',
+     leading and trailing whitespace is ignored in values assigned to
+     the elements of ARRAY but not in SEPS, and the elements are
+     separated by runs of whitespace.  Also, as with input field
+     splitting, if FIELDSEP is the null string, each individual
+     character in the string is split into its own array element.
+     (c.e.)
+
+     Note, however, that 'RS' has no effect on the way 'split()' works.
+     Even though 'RS = ""' causes the newline character to also be an
+     input field separator, this does not affect how 'split()' splits
+     strings.
+
+     Modern implementations of 'awk', including 'gawk', allow the third
+     argument to be a regexp constant ('/'...'/') as well as a string.
+     (d.c.)  The POSIX standard allows this as well.  *Note Computed
+     Regexps:: for a discussion of the difference between using a string
+     constant or a regexp constant, and the implications for writing
+     your program correctly.
+
+     Before splitting the string, 'split()' deletes any previously
+     existing elements in the arrays ARRAY and SEPS.
+
+     If STRING is null, the array has no elements.  (So this is a
+     portable way to delete an entire array with one statement.  *Note
+     Delete::.)
+
+     If STRING does not match FIELDSEP at all (but is not null), ARRAY
+     has one element only.  The value of that element is the original
+     STRING.
+
+     In POSIX mode (*note Options::), the fourth argument is not
+     allowed.
+
+'sprintf(FORMAT, EXPRESSION1, ...)'
+     Return (without printing) the string that 'printf' would have
+     printed out with the same arguments (*note Printf::).  For example:
+
+          pival = sprintf("pi = %.2f (approx.)", 22/7)
+
+     assigns the string 'pi = 3.14 (approx.)' to the variable 'pival'.
+
+'strtonum(STR) #'
+     Examine STR and return its numeric value.  If STR begins with a
+     leading '0', 'strtonum()' assumes that STR is an octal number.  If
+     STR begins with a leading '0x' or '0X', 'strtonum()' assumes that
+     STR is a hexadecimal number.  For example:
+
+          $ echo 0x11 |
+          > gawk '{ printf "%d\n", strtonum($1) }'
+          -| 17
+
+     Using the 'strtonum()' function is _not_ the same as adding zero to
+     a string value; the automatic coercion of strings to numbers works
+     only for decimal data, not for octal or hexadecimal.(1)
+
+     Note also that 'strtonum()' uses the current locale's decimal point
+     for recognizing numbers (*note Locales::).
+
+'sub(REGEXP, REPLACEMENT' [', TARGET']')'
+     Search TARGET, which is treated as a string, for the leftmost,
+     longest substring matched by the regular expression REGEXP.  Modify
+     the entire string by replacing the matched text with REPLACEMENT.
+     The modified string becomes the new value of TARGET.  Return the
+     number of substitutions made (zero or one).
+
+     The REGEXP argument may be either a regexp constant ('/'...'/') or
+     a string constant ('"'...'"').  In the latter case, the string is
+     treated as a regexp to be matched.  *Note Computed Regexps:: for a
+     discussion of the difference between the two forms, and the
+     implications for writing your program correctly.
+
+     This function is peculiar because TARGET is not simply used to
+     compute a value, and not just any expression will do--it must be a
+     variable, field, or array element so that 'sub()' can store a
+     modified value there.  If this argument is omitted, then the
+     default is to use and alter '$0'.(2)  For example:
+
+          str = "water, water, everywhere"
+          sub(/at/, "ith", str)
+
+     sets 'str' to 'wither, water, everywhere', by replacing the
+     leftmost longest occurrence of 'at' with 'ith'.
+
+     If the special character '&' appears in REPLACEMENT, it stands for
+     the precise substring that was matched by REGEXP.  (If the regexp
+     can match more than one string, then this precise substring may
+     vary.)  For example:
+
+          { sub(/candidate/, "& and his wife"); print }
+
+     changes the first occurrence of 'candidate' to 'candidate and his
+     wife' on each input line.  Here is another example:
+
+          $ awk 'BEGIN {
+          >         str = "daabaaa"
+          >         sub(/a+/, "C&C", str)
+          >         print str
+          > }'
+          -| dCaaCbaaa
+
+     This shows how '&' can represent a nonconstant string and also
+     illustrates the "leftmost, longest" rule in regexp matching (*note
+     Leftmost Longest::).
+
+     The effect of this special character ('&') can be turned off by
+     putting a backslash before it in the string.  As usual, to insert
+     one backslash in the string, you must write two backslashes.
+     Therefore, write '\\&' in a string constant to include a literal
+     '&' in the replacement.  For example, the following shows how to
+     replace the first '|' on each line with an '&':
+
+          { sub(/\|/, "\\&"); print }
+
+     As mentioned, the third argument to 'sub()' must be a variable,
+     field, or array element.  Some versions of 'awk' allow the third
+     argument to be an expression that is not an lvalue.  In such a
+     case, 'sub()' still searches for the pattern and returns zero or
+     one, but the result of the substitution (if any) is thrown away
+     because there is no place to put it.  Such versions of 'awk' accept
+     expressions like the following:
+
+          sub(/USA/, "United States", "the USA and Canada")
+
+     For historical compatibility, 'gawk' accepts such erroneous code.
+     However, using any other nonchangeable object as the third
+     parameter causes a fatal error and your program will not run.
+
+     Finally, if the REGEXP is not a regexp constant, it is converted
+     into a string, and then the value of that string is treated as the
+     regexp to match.
+
+'substr(STRING, START' [', LENGTH' ]')'
+     Return a LENGTH-character-long substring of STRING, starting at
+     character number START.  The first character of a string is
+     character number one.(3)  For example, 'substr("washington", 5, 3)'
+     returns '"ing"'.
+
+     If LENGTH is not present, 'substr()' returns the whole suffix of
+     STRING that begins at character number START.  For example,
+     'substr("washington", 5)' returns '"ington"'.  The whole suffix is
+     also returned if LENGTH is greater than the number of characters
+     remaining in the string, counting from character START.
+
+     If START is less than one, 'substr()' treats it as if it was one.
+     (POSIX doesn't specify what to do in this case: BWK 'awk' acts this
+     way, and therefore 'gawk' does too.)  If START is greater than the
+     number of characters in the string, 'substr()' returns the null
+     string.  Similarly, if LENGTH is present but less than or equal to
+     zero, the null string is returned.
+
+     The string returned by 'substr()' _cannot_ be assigned.  Thus, it
+     is a mistake to attempt to change a portion of a string, as shown
+     in the following example:
+
+          string = "abcdef"
+          # try to get "abCDEf", won't work
+          substr(string, 3, 3) = "CDE"
+
+     It is also a mistake to use 'substr()' as the third argument of
+     'sub()' or 'gsub()':
+
+          gsub(/xyz/, "pdq", substr($0, 5, 20))  # WRONG
+
+     (Some commercial versions of 'awk' treat 'substr()' as assignable,
+     but doing so is not portable.)
+
+     If you need to replace bits and pieces of a string, combine
+     'substr()' with string concatenation, in the following manner:
+
+          string = "abcdef"
+          ...
+          string = substr(string, 1, 2) "CDE" substr(string, 6)
+
+'tolower(STRING)'
+     Return a copy of STRING, with each uppercase character in the
+     string replaced with its corresponding lowercase character.
+     Nonalphabetic characters are left unchanged.  For example,
+     'tolower("MiXeD cAsE 123")' returns '"mixed case 123"'.
+
+'toupper(STRING)'
+     Return a copy of STRING, with each lowercase character in the
+     string replaced with its corresponding uppercase character.
+     Nonalphabetic characters are left unchanged.  For example,
+     'toupper("MiXeD cAsE 123")' returns '"MIXED CASE 123"'.
+
+                       Matching the Null String
+
+   In 'awk', the '*' operator can match the null string.  This is
+particularly important for the 'sub()', 'gsub()', and 'gensub()'
+functions.  For example:
+
+     $ echo abc | awk '{ gsub(/m*/, "X"); print }'
+     -| XaXbXcX
+
+Although this makes a certain amount of sense, it can be surprising.
+
+   ---------- Footnotes ----------
+
+   (1) Unless you use the '--non-decimal-data' option, which isn't
+recommended.  *Note Nondecimal Data:: for more information.
+
+   (2) Note that this means that the record will first be regenerated
+using the value of 'OFS' if any fields have been changed, and that the
+fields will be updated after the substitution, even if the operation is
+a "no-op" such as 'sub(/^/, "")'.
+
+   (3) This is different from C and C++, in which the first character is
+number zero.
+
+File: gawk.info,  Node: Gory Details,  Up: String Functions
+
+9.1.3.1 More about '\' and '&' with 'sub()', 'gsub()', and 'gensub()'
+.....................................................................
+
+     CAUTION: This subsubsection has been reported to cause headaches.
+     You might want to skip it upon first reading.
+
+   When using 'sub()', 'gsub()', or 'gensub()', and trying to get
+literal backslashes and ampersands into the replacement text, you need
+to remember that there are several levels of "escape processing" going
+on.
+
+   First, there is the "lexical" level, which is when 'awk' reads your
+program and builds an internal copy of it to execute.  Then there is the
+runtime level, which is when 'awk' actually scans the replacement string
+to determine what to generate.
+
+   At both levels, 'awk' looks for a defined set of characters that can
+come after a backslash.  At the lexical level, it looks for the escape
+sequences listed in *note Escape Sequences::.  Thus, for every '\' that
+'awk' processes at the runtime level, you must type two backslashes at
+the lexical level.  When a character that is not valid for an escape
+sequence follows the '\', BWK 'awk' and 'gawk' both simply remove the
+initial '\' and put the next character into the string.  Thus, for
+example, '"a\qb"' is treated as '"aqb"'.
+
+   At the runtime level, the various functions handle sequences of '\'
+and '&' differently.  The situation is (sadly) somewhat complex.
+Historically, the 'sub()' and 'gsub()' functions treated the
+two-character sequence '\&' specially; this sequence was replaced in the
+generated text with a single '&'.  Any other '\' within the REPLACEMENT
+string that did not precede an '&' was passed through unchanged.  This
+is illustrated in *note Table 9.1: table-sub-escapes.
+
+      You type         'sub()' sees          'sub()' generates
+      -----         -------          ----------
+          '\&'              '&'            The matched text
+         '\\&'             '\&'            A literal '&'
+        '\\\&'             '\&'            A literal '&'
+       '\\\\&'            '\\&'            A literal '\&'
+      '\\\\\&'            '\\&'            A literal '\&'
+     '\\\\\\&'           '\\\&'            A literal '\\&'
+         '\\q'             '\q'            A literal '\q'
+
+Table 9.1: Historical escape sequence processing for 'sub()' and
+'gsub()'
+
+This table shows the lexical-level processing, where an odd number of
+backslashes becomes an even number at the runtime level, as well as the
+runtime processing done by 'sub()'.  (For the sake of simplicity, the
+rest of the following tables only show the case of even numbers of
+backslashes entered at the lexical level.)
+
+   The problem with the historical approach is that there is no way to
+get a literal '\' followed by the matched text.
+
+   Several editions of the POSIX standard attempted to fix this problem
+but weren't successful.  The details are irrelevant at this point in
+time.
+
+   At one point, the 'gawk' maintainer submitted proposed text for a
+revised standard that reverts to rules that correspond more closely to
+the original existing practice.  The proposed rules have special cases
+that make it possible to produce a '\' preceding the matched text.  This
+is shown in *note Table 9.2: table-sub-proposed.
+
+      You type         'sub()' sees         'sub()' generates
+      -----         -------         ----------
+     '\\\\\\&'           '\\\&'            A literal '\&'
+       '\\\\&'            '\\&'            A literal '\', followed by the matched text
+         '\\&'             '\&'            A literal '&'
+         '\\q'             '\q'            A literal '\q'
+        '\\\\'             '\\'            '\\'
+
+Table 9.2: 'gawk' rules for 'sub()' and backslash
+
+   In a nutshell, at the runtime level, there are now three special
+sequences of characters ('\\\&', '\\&', and '\&') whereas historically
+there was only one.  However, as in the historical case, any '\' that is
+not part of one of these three sequences is not special and appears in
+the output literally.
+
+   'gawk' 3.0 and 3.1 follow these rules for 'sub()' and 'gsub()'.  The
+POSIX standard took much longer to be revised than was expected.  In
+addition, the 'gawk' maintainer's proposal was lost during the
+standardization process.  The final rules are somewhat simpler.  The
+results are similar except for one case.
+
+   The POSIX rules state that '\&' in the replacement string produces a
+literal '&', '\\' produces a literal '\', and '\' followed by anything
+else is not special; the '\' is placed straight into the output.  These
+rules are presented in *note Table 9.3: table-posix-sub.
+
+      You type         'sub()' sees         'sub()' generates
+      -----         -------         ----------
+     '\\\\\\&'           '\\\&'            A literal '\&'
+       '\\\\&'            '\\&'            A literal '\', followed by the matched text
+         '\\&'             '\&'            A literal '&'
+         '\\q'             '\q'            A literal '\q'
+        '\\\\'             '\\'            '\'
+
+Table 9.3: POSIX rules for 'sub()' and 'gsub()'
+
+   The only case where the difference is noticeable is the last one:
+'\\\\' is seen as '\\' and produces '\' instead of '\\'.
+
+   Starting with version 3.1.4, 'gawk' followed the POSIX rules when
+'--posix' was specified (*note Options::).  Otherwise, it continued to
+follow the proposed rules, as that had been its behavior for many years.
+
+   When version 4.0.0 was released, the 'gawk' maintainer made the POSIX
+rules the default, breaking well over a decade's worth of backward
+compatibility.(1)  Needless to say, this was a bad idea, and as of
+version 4.0.1, 'gawk' resumed its historical behavior, and only follows
+the POSIX rules when '--posix' is given.
+
+   The rules for 'gensub()' are considerably simpler.  At the runtime
+level, whenever 'gawk' sees a '\', if the following character is a
+digit, then the text that matched the corresponding parenthesized
+subexpression is placed in the generated output.  Otherwise, no matter
+what character follows the '\', it appears in the generated text and the
+'\' does not, as shown in *note Table 9.4: table-gensub-escapes.
+
+       You type          'gensub()' sees         'gensub()' generates
+       -----          ---------         ------------
+           '&'                    '&'            The matched text
+         '\\&'                   '\&'            A literal '&'
+        '\\\\'                   '\\'            A literal '\'
+       '\\\\&'                  '\\&'            A literal '\', then the matched text
+     '\\\\\\&'                 '\\\&'            A literal '\&'
+         '\\q'                   '\q'            A literal 'q'
+
+Table 9.4: Escape sequence processing for 'gensub()'
+
+   Because of the complexity of the lexical- and runtime-level
+processing and the special cases for 'sub()' and 'gsub()', we recommend
+the use of 'gawk' and 'gensub()' when you have to do substitutions.
+
+   ---------- Footnotes ----------
+
+   (1) This was rather naive of him, despite there being a note in this
+minor node indicating that the next major version would move to the
+POSIX rules.
+
+File: gawk.info,  Node: I/O Functions,  Next: Time Functions,  Prev: String Functions,  Up: Built-in
+
+9.1.4 Input/Output Functions
+----------------------------
+
+The following functions relate to input/output (I/O). Optional
+parameters are enclosed in square brackets ([ ]):
+
+'close('FILENAME [',' HOW]')'
+     Close the file FILENAME for input or output.  Alternatively, the
+     argument may be a shell command that was used for creating a
+     coprocess, or for redirecting to or from a pipe; then the coprocess
+     or pipe is closed.  *Note Close Files And Pipes:: for more
+     information.
+
+     When closing a coprocess, it is occasionally useful to first close
+     one end of the two-way pipe and then to close the other.  This is
+     done by providing a second argument to 'close()'.  This second
+     argument (HOW) should be one of the two string values '"to"' or
+     '"from"', indicating which end of the pipe to close.  Case in the
+     string does not matter.  *Note Two-way I/O::, which discusses this
+     feature in more detail and gives an example.
+
+     Note that the second argument to 'close()' is a 'gawk' extension;
+     it is not available in compatibility mode (*note Options::).
+
+'fflush('[FILENAME]')'
+     Flush any buffered output associated with FILENAME, which is either
+     a file opened for writing or a shell command for redirecting output
+     to a pipe or coprocess.
+
+     Many utility programs "buffer" their output (i.e., they save
+     information to write to a disk file or the screen in memory until
+     there is enough for it to be worthwhile to send the data to the
+     output device).  This is often more efficient than writing every
+     little bit of information as soon as it is ready.  However,
+     sometimes it is necessary to force a program to "flush" its buffers
+     (i.e., write the information to its destination, even if a buffer
+     is not full).  This is the purpose of the 'fflush()'
+     function--'gawk' also buffers its output, and the 'fflush()'
+     function forces 'gawk' to flush its buffers.
+
+     Brian Kernighan added 'fflush()' to his 'awk' in April 1992.  For
+     two decades, it was a common extension.  In December 2012, it was
+     accepted for inclusion into the POSIX standard.  See the Austin
+     Group website (http://austingroupbugs.net/view.php?id=634).
+
+     POSIX standardizes 'fflush()' as follows: if there is no argument,
+     or if the argument is the null string ('""'), then 'awk' flushes
+     the buffers for _all_ open output files and pipes.
+
+          NOTE: Prior to version 4.0.2, 'gawk' would flush only the
+          standard output if there was no argument, and flush all output
+          files and pipes if the argument was the null string.  This was
+          changed in order to be compatible with Brian Kernighan's
+          'awk', in the hope that standardizing this feature in POSIX
+          would then be easier (which indeed proved to be the case).
+
+          With 'gawk', you can use 'fflush("/dev/stdout")' if you wish
+          to flush only the standard output.
+
+     'fflush()' returns zero if the buffer is successfully flushed;
+     otherwise, it returns a nonzero value.  ('gawk' returns -1.)  In
+     the case where all buffers are flushed, the return value is zero
+     only if all buffers were flushed successfully.  Otherwise, it is
+     -1, and 'gawk' warns about the problem FILENAME.
+
+     'gawk' also issues a warning message if you attempt to flush a file
+     or pipe that was opened for reading (such as with 'getline'), or if
+     FILENAME is not an open file, pipe, or coprocess.  In such a case,
+     'fflush()' returns -1, as well.
+
+              Interactive Versus Noninteractive Buffering
+
+   As a side point, buffering issues can be even more confusing if your
+program is "interactive" (i.e., communicating with a user sitting at a
+keyboard).(1)
+
+   Interactive programs generally "line buffer" their output (i.e., they
+write out every line).  Noninteractive programs wait until they have a
+full buffer, which may be many lines of output.  Here is an example of
+the difference:
+
+     $ awk '{ print $1 + $2 }'
+     1 1
+     -| 2
+     2 3
+     -| 5
+     Ctrl-d
+
+Each line of output is printed immediately.  Compare that behavior with
+this example:
+
+     $ awk '{ print $1 + $2 }' | cat
+     1 1
+     2 3
+     Ctrl-d
+     -| 2
+     -| 5
+
+Here, no output is printed until after the 'Ctrl-d' is typed, because it
+is all buffered and sent down the pipe to 'cat' in one shot.
+
+'system(COMMAND)'
+     Execute the operating system command COMMAND and then return to the
+     'awk' program.  Return COMMAND's exit status (see further on).
+
+     For example, if the following fragment of code is put in your 'awk'
+     program:
+
+          END {
+               system("date | mail -s 'awk run done' root")
+          }
+
+     the system administrator is sent mail when the 'awk' program
+     finishes processing input and begins its end-of-input processing.
+
+     Note that redirecting 'print' or 'printf' into a pipe is often
+     enough to accomplish your task.  If you need to run many commands,
+     it is more efficient to simply print them down a pipeline to the
+     shell:
+
+          while (MORE STUFF TO DO)
+              print COMMAND | "/bin/sh"
+          close("/bin/sh")
+
+     However, if your 'awk' program is interactive, 'system()' is useful
+     for running large self-contained programs, such as a shell or an
+     editor.  Some operating systems cannot implement the 'system()'
+     function.  'system()' causes a fatal error if it is not supported.
+
+          NOTE: When '--sandbox' is specified, the 'system()' function
+          is disabled (*note Options::).
+
+     On POSIX systems, a command's exit status is a 16-bit number.  The
+     exit value passed to the C 'exit()' function is held in the
+     high-order eight bits.  The low-order bits indicate if the process
+     was killed by a signal (bit 7) and if so, the guilty signal number
+     (bits 0-6).
+
+     Traditionally, 'awk''s 'system()' function has simply returned the
+     exit status value divided by 256.  In the normal case this gives
+     the exit status but in the case of death-by-signal it yields a
+     fractional floating-point value.(2)  POSIX states that 'awk''s
+     'system()' should return the full 16-bit value.
+
+     'gawk' steers a middle ground.  The return values are summarized in
+     *note Table 9.5: table-system-return-values.
+
+     Situation                     Return value from 'system()'
+     --------------------------------------------------------------------------
+     '--traditional'               C 'system()''s value divided by 256
+     '--posix'                     C 'system()''s value
+     Normal exit of command        Command's exit status
+     Death by signal of command    256 + number of murderous signal
+     Death by signal of command    512 + number of murderous signal
+     with core dump
+     Some kind of error            -1
+
+     Table 9.5: Return values from 'system()'
+
+             Controlling Output Buffering with 'system()'
+
+   The 'fflush()' function provides explicit control over output
+buffering for individual files and pipes.  However, its use is not
+portable to many older 'awk' implementations.  An alternative method to
+flush output buffers is to call 'system()' with a null string as its
+argument:
+
+     system("")   # flush output
+
+'gawk' treats this use of the 'system()' function as a special case and
+is smart enough not to run a shell (or other command interpreter) with
+the empty command.  Therefore, with 'gawk', this idiom is not only
+useful, it is also efficient.  Although this method should work with
+other 'awk' implementations, it does not necessarily avoid starting an
+unnecessary shell.  (Other implementations may only flush the buffer
+associated with the standard output and not necessarily all buffered
+output.)
+
+   If you think about what a programmer expects, it makes sense that
+'system()' should flush any pending output.  The following program:
+
+     BEGIN {
+          print "first print"
+          system("echo system echo")
+          print "second print"
+     }
+
+must print:
+
+     first print
+     system echo
+     second print
+
+and not:
+
+     system echo
+     first print
+     second print
+
+   If 'awk' did not flush its buffers before calling 'system()', you
+would see the latter (undesirable) output.
+
+   ---------- Footnotes ----------
+
+   (1) A program is interactive if the standard output is connected to a
+terminal device.  On modern systems, this means your keyboard and
+screen.
+
+   (2) In private correspondence, Dr. Kernighan has indicated to me that
+the way this was done was probably a mistake.
+
+File: gawk.info,  Node: Time Functions,  Next: Bitwise Functions,  Prev: I/O Functions,  Up: Built-in
+
+9.1.5 Time Functions
+--------------------
+
+'awk' programs are commonly used to process log files containing
+timestamp information, indicating when a particular log record was
+written.  Many programs log their timestamps in the form returned by the
+'time()' system call, which is the number of seconds since a particular
+epoch.  On POSIX-compliant systems, it is the number of seconds since
+1970-01-01 00:00:00 UTC, not counting leap seconds.(1)  All known
+POSIX-compliant systems support timestamps from 0 through 2^31 - 1,
+which is sufficient to represent times through 2038-01-19 03:14:07 UTC.
+Many systems support a wider range of timestamps, including negative
+timestamps that represent times before the epoch.
+
+   In order to make it easier to process such log files and to produce
+useful reports, 'gawk' provides the following functions for working with
+timestamps.  They are 'gawk' extensions; they are not specified in the
+POSIX standard.(2)  However, recent versions of 'mawk' (*note Other
+Versions::) also support these functions.  Optional parameters are
+enclosed in square brackets ([ ]):
+
+'mktime(DATESPEC' [', UTC-FLAG' ]')'
+     Turn DATESPEC into a timestamp in the same form as is returned by
+     'systime()'.  It is similar to the function of the same name in ISO
+     C. The argument, DATESPEC, is a string of the form
+     '"YYYY MM DD HH MM SS [DST]"'.  The string consists of six or seven
+     numbers representing, respectively, the full year including
+     century, the month from 1 to 12, the day of the month from 1 to 31,
+     the hour of the day from 0 to 23, the minute from 0 to 59, the
+     second from 0 to 60,(3) and an optional daylight-savings flag.
+
+     The values of these numbers need not be within the ranges
+     specified; for example, an hour of -1 means 1 hour before midnight.
+     The origin-zero Gregorian calendar is assumed, with year 0
+     preceding year 1 and year -1 preceding year 0.  If UTC-FLAG is
+     present and is either nonzero or non-null, the time is assumed to
+     be in the UTC time zone; otherwise, the time is assumed to be in
+     the local time zone.  If the DST daylight-savings flag is positive,
+     the time is assumed to be daylight savings time; if zero, the time
+     is assumed to be standard time; and if negative (the default),
+     'mktime()' attempts to determine whether daylight savings time is
+     in effect for the specified time.
+
+     If DATESPEC does not contain enough elements or if the resulting
+     time is out of range, 'mktime()' returns -1.
+
+'strftime('[FORMAT [',' TIMESTAMP [',' UTC-FLAG] ] ]')'
+     Format the time specified by TIMESTAMP based on the contents of the
+     FORMAT string and return the result.  It is similar to the function
+     of the same name in ISO C. If UTC-FLAG is present and is either
+     nonzero or non-null, the value is formatted as UTC (Coordinated
+     Universal Time, formerly GMT or Greenwich Mean Time).  Otherwise,
+     the value is formatted for the local time zone.  The TIMESTAMP is
+     in the same format as the value returned by the 'systime()'
+     function.  If no TIMESTAMP argument is supplied, 'gawk' uses the
+     current time of day as the timestamp.  Without a FORMAT argument,
+     'strftime()' uses the value of 'PROCINFO["strftime"]' as the format
+     string (*note Built-in Variables::).  The default string value is
+     '"%a %b %e %H:%M:%S %Z %Y"'.  This format string produces output
+     that is equivalent to that of the 'date' utility.  You can assign a
+     new value to 'PROCINFO["strftime"]' to change the default format;
+     see the following list for the various format directives.
+
+'systime()'
+     Return the current time as the number of seconds since the system
+     epoch.  On POSIX systems, this is the number of seconds since
+     1970-01-01 00:00:00 UTC, not counting leap seconds.  It may be a
+     different number on other systems.
+
+   The 'systime()' function allows you to compare a timestamp from a log
+file with the current time of day.  In particular, it is easy to
+determine how long ago a particular record was logged.  It also allows
+you to produce log records using the "seconds since the epoch" format.
+
+   The 'mktime()' function allows you to convert a textual
+representation of a date and time into a timestamp.  This makes it easy
+to do before/after comparisons of dates and times, particularly when
+dealing with date and time data coming from an external source, such as
+a log file.
+
+   The 'strftime()' function allows you to easily turn a timestamp into
+human-readable information.  It is similar in nature to the 'sprintf()'
+function (*note String Functions::), in that it copies nonformat
+specification characters verbatim to the returned string, while
+substituting date and time values for format specifications in the
+FORMAT string.
+
+   'strftime()' is guaranteed by the 1999 ISO C standard(4) to support
+the following date format specifications:
+
+'%a'
+     The locale's abbreviated weekday name.
+
+'%A'
+     The locale's full weekday name.
+
+'%b'
+     The locale's abbreviated month name.
+
+'%B'
+     The locale's full month name.
+
+'%c'
+     The locale's "appropriate" date and time representation.  (This is
+     '%A %B %d %T %Y' in the '"C"' locale.)
+
+'%C'
+     The century part of the current year.  This is the year divided by
+     100 and truncated to the next lower integer.
+
+'%d'
+     The day of the month as a decimal number (01-31).
+
+'%D'
+     Equivalent to specifying '%m/%d/%y'.
+
+'%e'
+     The day of the month, padded with a space if it is only one digit.
+
+'%F'
+     Equivalent to specifying '%Y-%m-%d'.  This is the ISO 8601 date
+     format.
+
+'%g'
+     The year modulo 100 of the ISO 8601 week number, as a decimal
+     number (00-99).  For example, January 1, 2012, is in week 53 of
+     2011.  Thus, the year of its ISO 8601 week number is 2011, even
+     though its year is 2012.  Similarly, December 31, 2012, is in week
+     1 of 2013.  Thus, the year of its ISO week number is 2013, even
+     though its year is 2012.
+
+'%G'
+     The full year of the ISO week number, as a decimal number.
+
+'%h'
+     Equivalent to '%b'.
+
+'%H'
+     The hour (24-hour clock) as a decimal number (00-23).
+
+'%I'
+     The hour (12-hour clock) as a decimal number (01-12).
+
+'%j'
+     The day of the year as a decimal number (001-366).
+
+'%m'
+     The month as a decimal number (01-12).
+
+'%M'
+     The minute as a decimal number (00-59).
+
+'%n'
+     A newline character (ASCII LF).
+
+'%p'
+     The locale's equivalent of the AM/PM designations associated with a
+     12-hour clock.
+
+'%r'
+     The locale's 12-hour clock time.  (This is '%I:%M:%S %p' in the
+     '"C"' locale.)
+
+'%R'
+     Equivalent to specifying '%H:%M'.
+
+'%S'
+     The second as a decimal number (00-60).
+
+'%t'
+     A TAB character.
+
+'%T'
+     Equivalent to specifying '%H:%M:%S'.
+
+'%u'
+     The weekday as a decimal number (1-7).  Monday is day one.
+
+'%U'
+     The week number of the year (with the first Sunday as the first day
+     of week one) as a decimal number (00-53).
+
+'%V'
+     The week number of the year (with the first Monday as the first day
+     of week one) as a decimal number (01-53).  The method for
+     determining the week number is as specified by ISO 8601.  (To wit:
+     if the week containing January 1 has four or more days in the new
+     year, then it is week one; otherwise it is the last week [52 or 53]
+     of the previous year and the next week is week one.)
+
+'%w'
+     The weekday as a decimal number (0-6).  Sunday is day zero.
+
+'%W'
+     The week number of the year (with the first Monday as the first day
+     of week one) as a decimal number (00-53).
+
+'%x'
+     The locale's "appropriate" date representation.  (This is '%A %B %d
+     %Y' in the '"C"' locale.)
+
+'%X'
+     The locale's "appropriate" time representation.  (This is '%T' in
+     the '"C"' locale.)
+
+'%y'
+     The year modulo 100 as a decimal number (00-99).
+
+'%Y'
+     The full year as a decimal number (e.g., 2015).
+
+'%z'
+     The time zone offset in a '+HHMM' format (e.g., the format
+     necessary to produce RFC 822/RFC 1036 date headers).
+
+'%Z'
+     The time zone name or abbreviation; no characters if no time zone
+     is determinable.
+
+'%Ec %EC %Ex %EX %Ey %EY %Od %Oe %OH'
+'%OI %Om %OM %OS %Ou %OU %OV %Ow %OW %Oy'
+     "Alternative representations" for the specifications that use only
+     the second letter ('%c', '%C', and so on).(5)  (These facilitate
+     compliance with the POSIX 'date' utility.)
+
+'%%'
+     A literal '%'.
+
+   If a conversion specifier is not one of those just listed, the
+behavior is undefined.(6)
+
+   For systems that are not yet fully standards-compliant, 'gawk'
+supplies a copy of 'strftime()' from the GNU C Library.  It supports all
+of the just-listed format specifications.  If that version is used to
+compile 'gawk' (*note Installation::), then the following additional
+format specifications are available:
+
+'%k'
+     The hour (24-hour clock) as a decimal number (0-23).  Single-digit
+     numbers are padded with a space.
+
+'%l'
+     The hour (12-hour clock) as a decimal number (1-12).  Single-digit
+     numbers are padded with a space.
+
+'%s'
+     The time as a decimal timestamp in seconds since the epoch.
+
+   Additionally, the alternative representations are recognized but
+their normal representations are used.
+
+   The following example is an 'awk' implementation of the POSIX 'date'
+utility.  Normally, the 'date' utility prints the current date and time
+of day in a well-known format.  However, if you provide an argument to
+it that begins with a '+', 'date' copies nonformat specifier characters
+to the standard output and interprets the current time according to the
+format specifiers in the string.  For example:
+
+     $ date '+Today is %A, %B %d, %Y.'
+     -| Today is Monday, September 22, 2014.
+
+   Here is the 'gawk' version of the 'date' utility.  It has a shell
+"wrapper" to handle the '-u' option, which requires that 'date' run as
+if the time zone is set to UTC:
+
+     #! /bin/sh
+     #
+     # date --- approximate the POSIX 'date' command
+
+     case $1 in
+     -u)  TZ=UTC0     # use UTC
+          export TZ
+          shift ;;
+     esac
+
+     gawk 'BEGIN  {
+         format = PROCINFO["strftime"]
+         exitval = 0
+
+         if (ARGC > 2)
+             exitval = 1
+         else if (ARGC == 2) {
+             format = ARGV[1]
+             if (format ~ /^\+/)
+                 format = substr(format, 2)   # remove leading +
+         }
+         print strftime(format)
+         exit exitval
+     }' "$@"
+
+   ---------- Footnotes ----------
+
+   (1) *Note Glossary::, especially the entries "Epoch" and "UTC."
+
+   (2) The GNU 'date' utility can also do many of the things described
+here.  Its use may be preferable for simple time-related operations in
+shell scripts.
+
+   (3) Occasionally there are minutes in a year with a leap second,
+which is why the seconds can go up to 60.
+
+   (4) Unfortunately, not every system's 'strftime()' necessarily
+supports all of the conversions listed here.
+
+   (5) If you don't understand any of this, don't worry about it; these
+facilities are meant to make it easier to "internationalize" programs.
+Other internationalization features are described in *note
+Internationalization::.
+
+   (6) This is because ISO C leaves the behavior of the C version of
+'strftime()' undefined and 'gawk' uses the system's version of
+'strftime()' if it's there.  Typically, the conversion specifier either
+does not appear in the returned string or appears literally.
+
+File: gawk.info,  Node: Bitwise Functions,  Next: Type Functions,  Prev: Time Functions,  Up: Built-in
+
+9.1.6 Bit-Manipulation Functions
+--------------------------------
+
+     I can explain it for you, but I can't understand it for you.
+                            -- _Anonymous_
+
+   Many languages provide the ability to perform "bitwise" operations on
+two integer numbers.  In other words, the operation is performed on each
+successive pair of bits in the operands.  Three common operations are
+bitwise AND, OR, and XOR. The operations are described in *note Table
+9.6: table-bitwise-ops.
+
+                Bit operator
+          |  AND  |   OR  |  XOR
+          |---+---+---+---+---+---
+Operands  | 0 | 1 | 0 | 1 | 0 | 1
+----------+---+---+---+---+---+---
+    0     | 0   0 | 0   1 | 0   1
+    1     | 0   1 | 1   1 | 1   0
+
+Table 9.6: Bitwise operations
+
+   As you can see, the result of an AND operation is 1 only when _both_
+bits are 1.  The result of an OR operation is 1 if _either_ bit is 1.
+The result of an XOR operation is 1 if either bit is 1, but not both.
+The next operation is the "complement"; the complement of 1 is 0 and the
+complement of 0 is 1.  Thus, this operation "flips" all the bits of a
+given value.
+
+   Finally, two other common operations are to shift the bits left or
+right.  For example, if you have a bit string '10111001' and you shift
+it right by three bits, you end up with '00010111'.(1)  If you start
+over again with '10111001' and shift it left by three bits, you end up
+with '11001000'.  The following list describes 'gawk''s built-in
+functions that implement the bitwise operations.  Optional parameters
+are enclosed in square brackets ([ ]):
+
+'and(V1, V2 [, ...])'
+     Return the bitwise AND of the arguments.  There must be at least
+     two.
+
+'compl(VAL)'
+     Return the bitwise complement of VAL.
+
+'lshift(VAL, COUNT)'
+     Return the value of VAL, shifted left by COUNT bits.
+
+'or(V1, V2 [, ...])'
+     Return the bitwise OR of the arguments.  There must be at least
+     two.
+
+'rshift(VAL, COUNT)'
+     Return the value of VAL, shifted right by COUNT bits.
+
+'xor(V1, V2 [, ...])'
+     Return the bitwise XOR of the arguments.  There must be at least
+     two.
+
+     CAUTION: Beginning with 'gawk' version 4.2, negative operands are
+     not allowed for any of these functions.  A negative operand
+     produces a fatal error.  See the sidebar "Beware The Smoke and
+     Mirrors!"  for more information as to why.
+
+   Here is a user-defined function (*note User-defined::) that
+illustrates the use of these functions:
+
+     # bits2str --- turn an integer into readable ones and zeros
+
+     function bits2str(bits,        data, mask)
+     {
+         if (bits == 0)
+             return "0"
+
+         mask = 1
+         for (; bits != 0; bits = rshift(bits, 1))
+             data = (and(bits, mask) ? "1" : "0") data
+
+         while ((length(data) % 8) != 0)
+             data = "0" data
+
+         return data
+     }
+
+     BEGIN {
+         printf "123 = %s\n", bits2str(123)
+         printf "0123 = %s\n", bits2str(0123)
+         printf "0x99 = %s\n", bits2str(0x99)
+         comp = compl(0x99)
+         printf "compl(0x99) = %#x = %s\n", comp, bits2str(comp)
+         shift = lshift(0x99, 2)
+         printf "lshift(0x99, 2) = %#x = %s\n", shift, bits2str(shift)
+         shift = rshift(0x99, 2)
+         printf "rshift(0x99, 2) = %#x = %s\n", shift, bits2str(shift)
+     }
+
+This program produces the following output when run:
+
+     $ gawk -f testbits.awk
+     -| 123 = 01111011
+     -| 0123 = 01010011
+     -| 0x99 = 10011001
+     -| compl(0x99) = 0x3fffffffffff66 =
+     -| 00111111111111111111111111111111111111111111111101100110
+     -| lshift(0x99, 2) = 0x264 = 0000001001100100
+     -| rshift(0x99, 2) = 0x26 = 00100110
+
+   The 'bits2str()' function turns a binary number into a string.
+Initializing 'mask' to one creates a binary value where the rightmost
+bit is set to one.  Using this mask, the function repeatedly checks the
+rightmost bit.  ANDing the mask with the value indicates whether the
+rightmost bit is one or not.  If so, a '"1"' is concatenated onto the
+front of the string.  Otherwise, a '"0"' is added.  The value is then
+shifted right by one bit and the loop continues until there are no more
+one bits.
+
+   If the initial value is zero, it returns a simple '"0"'.  Otherwise,
+at the end, it pads the value with zeros to represent multiples of 8-bit
+quantities.  This is typical in modern computers.
+
+   The main code in the 'BEGIN' rule shows the difference between the
+decimal and octal values for the same numbers (*note
+Nondecimal-numbers::), and then demonstrates the results of the
+'compl()', 'lshift()', and 'rshift()' functions.
+
+                     Beware The Smoke and Mirrors!
+
+   It other languages, bitwise operations are performed on integer
+values, not floating-point values.  As a general statement, such
+operations work best when performed on unsigned integers.
+
+   'gawk' attempts to treat the arguments to the bitwise functions as
+unsigned integers.  For this reason, negative arguments produce a fatal
+error.
+
+   In normal operation, for all of these functions, first the
+double-precision floating-point value is converted to the widest C
+unsigned integer type, then the bitwise operation is performed.  If the
+result cannot be represented exactly as a C 'double', leading nonzero
+bits are removed one by one until it can be represented exactly.  The
+result is then converted back into a C 'double'.(2)
+
+   However, when using arbitrary precision arithmetic with the '-M'
+option (*note Arbitrary Precision Arithmetic::), the results may differ.
+This is particularly noticeable with the 'compl()' function:
+
+     $ gawk 'BEGIN { print compl(42) }'
+     -| 9007199254740949
+     $ gawk -M 'BEGIN { print compl(42) }'
+     -| -43
+
+   What's going on becomes clear when printing the results in
+hexadecimal:
+
+     $ gawk 'BEGIN { printf "%#x\n", compl(42) }'
+     -| 0x1fffffffffffd5
+     $ gawk -M 'BEGIN { printf "%#x\n", compl(42) }'
+     -| 0xffffffffffffffd5
+
+   When using the '-M' option, under the hood, 'gawk' uses GNU MP
+arbitrary precision integers which have at least 64 bits of precision.
+When not using '-M', 'gawk' stores integral values in regular
+double-precision floating point, which only maintain 53 bits of
+precision.  Furthermore, the GNU MP library treats (or at least seems to
+treat) the leading bit as a sign bit; thus the result with '-M' in this
+case is a negative number.
+
+   In short, using 'gawk' for any but the simplest kind of bitwise
+operations is probably a bad idea; caveat emptor!
+
+   ---------- Footnotes ----------
+
+   (1) This example shows that zeros come in on the left side.  For
+'gawk', this is always true, but in some languages, it's possible to
+have the left side fill with ones.
+
+   (2) If you don't understand this paragraph, the upshot is that 'gawk'
+can only store a particular range of integer values; numbers outside
+that range are reduced to fit within the range.
+
+File: gawk.info,  Node: Type Functions,  Next: I18N Functions,  Prev: Bitwise Functions,  Up: Built-in
+
+9.1.7 Getting Type Information
+------------------------------
+
+'gawk' provides two functions that let you distinguish the type of a
+variable.  This is necessary for writing code that traverses every
+element of an array of arrays (*note Arrays of Arrays::), and in other
+contexts.
+
+'isarray(X)'
+     Return a true value if X is an array.  Otherwise, return false.
+
+'typeof(X)'
+     Return one of the following strings, depending upon the type of X:
+
+     '"array"'
+          X is an array.
+
+     '"regexp"'
+          X is a strongly typed regexp (*note Strong Regexp
+          Constants::).
+
+     '"number"'
+          X is a number.
+
+     '"string"'
+          X is a string.
+
+     '"strnum"'
+          X is a number that started life as user input, such as a field
+          or the result of calling 'split()'.  (I.e., X has the strnum
+          attribute; *note Variable Typing::.)
+
+     '"unassigned"'
+          X is a scalar variable that has not been assigned a value yet.
+          For example:
+
+               BEGIN {
+                   # creates a[1] but it has no assigned value
+                   a[1]
+                   print typeof(a[1])  # unassigned
+               }
+
+     '"untyped"'
+          X has not yet been used yet at all; it can become a scalar or
+          an array.  The typing could even conceivably differ from run
+          to run of the same program!  For example:
+
+               BEGIN {
+                   print "initially, typeof(v) = ", typeof(v)
+
+                   if ("FOO" in ENVIRON)
+                       make_scalar(v)
+                   else
+                       make_array(v)
+
+                   print "typeof(v) =", typeof(v)
+               }
+
+               function make_scalar(p,    l) { l = p }
+
+               function make_array(p) { p[1] = 1 }
+
+   'isarray()' is meant for use in two circumstances.  The first is when
+traversing a multidimensional array: you can test if an element is
+itself an array or not.  The second is inside the body of a user-defined
+function (not discussed yet; *note User-defined::), to test if a
+parameter is an array or not.
+
+     NOTE: Using 'isarray()' at the global level to test variables makes
+     no sense.  Because you are the one writing the program, you are
+     supposed to know if your variables are arrays or not.  And in fact,
+     due to the way 'gawk' works, if you pass the name of a variable
+     that has not been previously used to 'isarray()', 'gawk' ends up
+     turning it into a scalar.
+
+   The 'typeof()' function is general; it allows you to determine if a
+variable or function parameter is a scalar, an array, or a strongly
+typed regexp.
+
+File: gawk.info,  Node: I18N Functions,  Prev: Type Functions,  Up: Built-in
+
+9.1.8 String-Translation Functions
+----------------------------------
+
+'gawk' provides facilities for internationalizing 'awk' programs.  These
+include the functions described in the following list.  The descriptions
+here are purposely brief.  *Note Internationalization::, for the full
+story.  Optional parameters are enclosed in square brackets ([ ]):
+
+'bindtextdomain(DIRECTORY' [',' DOMAIN]')'
+     Set the directory in which 'gawk' will look for message translation
+     files, in case they will not or cannot be placed in the "standard"
+     locations (e.g., during testing).  It returns the directory in
+     which DOMAIN is "bound."
+
+     The default DOMAIN is the value of 'TEXTDOMAIN'.  If DIRECTORY is
+     the null string ('""'), then 'bindtextdomain()' returns the current
+     binding for the given DOMAIN.
+
+'dcgettext(STRING' [',' DOMAIN [',' CATEGORY] ]')'
+     Return the translation of STRING in text domain DOMAIN for locale
+     category CATEGORY.  The default value for DOMAIN is the current
+     value of 'TEXTDOMAIN'.  The default value for CATEGORY is
+     '"LC_MESSAGES"'.
+
+'dcngettext(STRING1, STRING2, NUMBER' [',' DOMAIN [',' CATEGORY] ]')'
+     Return the plural form used for NUMBER of the translation of
+     STRING1 and STRING2 in text domain DOMAIN for locale category
+     CATEGORY.  STRING1 is the English singular variant of a message,
+     and STRING2 is the English plural variant of the same message.  The
+     default value for DOMAIN is the current value of 'TEXTDOMAIN'.  The
+     default value for CATEGORY is '"LC_MESSAGES"'.
+
+File: gawk.info,  Node: User-defined,  Next: Indirect Calls,  Prev: Built-in,  Up: Functions
+

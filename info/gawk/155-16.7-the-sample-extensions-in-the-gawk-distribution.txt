@@ -1,0 +1,600 @@
+16.7 The Sample Extensions in the 'gawk' Distribution
+=====================================================
+
+This minor node provides a brief overview of the sample extensions that
+come in the 'gawk' distribution.  Some of them are intended for
+production use (e.g., the 'filefuncs', 'readdir', and 'inplace'
+extensions).  Others mainly provide example code that shows how to use
+the extension API.
+
+* Menu:
+
+* Extension Sample File Functions::   The file functions sample.
+* Extension Sample Fnmatch::          An interface to 'fnmatch()'.
+* Extension Sample Fork::             An interface to 'fork()' and other
+                                      process functions.
+* Extension Sample Inplace::          Enabling in-place file editing.
+* Extension Sample Ord::              Character to value to character
+                                      conversions.
+* Extension Sample Readdir::          An interface to 'readdir()'.
+* Extension Sample Revout::           Reversing output sample output wrapper.
+* Extension Sample Rev2way::          Reversing data sample two-way processor.
+* Extension Sample Read write array:: Serializing an array to a file.
+* Extension Sample Readfile::         Reading an entire file into a string.
+* Extension Sample Time::             An interface to 'gettimeofday()'
+                                      and 'sleep()'.
+* Extension Sample API Tests::        Tests for the API.
+
+File: gawk.info,  Node: Extension Sample File Functions,  Next: Extension Sample Fnmatch,  Up: Extension Samples
+
+16.7.1 File-Related Functions
+-----------------------------
+
+The 'filefuncs' extension provides three different functions, as
+follows.  The usage is:
+
+'@load "filefuncs"'
+     This is how you load the extension.
+
+'result = chdir("/some/directory")'
+     The 'chdir()' function is a direct hook to the 'chdir()' system
+     call to change the current directory.  It returns zero upon success
+     or a value less than zero upon error.  In the latter case, it
+     updates 'ERRNO'.
+
+'result = stat("/some/path", statdata' [', follow']')'
+     The 'stat()' function provides a hook into the 'stat()' system
+     call.  It returns zero upon success or a value less than zero upon
+     error.  In the latter case, it updates 'ERRNO'.
+
+     By default, it uses the 'lstat()' system call.  However, if passed
+     a third argument, it uses 'stat()' instead.
+
+     In all cases, it clears the 'statdata' array.  When the call is
+     successful, 'stat()' fills the 'statdata' array with information
+     retrieved from the filesystem, as follows:
+
+     Subscript   Field in 'struct stat'               File type
+     ----------------------------------------------------------------
+     '"name"'    The file name                        All
+     '"dev"'     'st_dev'                             All
+     '"ino"'     'st_ino'                             All
+     '"mode"'    'st_mode'                            All
+     '"nlink"'   'st_nlink'                           All
+     '"uid"'     'st_uid'                             All
+     '"gid"'     'st_gid'                             All
+     '"size"'    'st_size'                            All
+     '"atime"'   'st_atime'                           All
+     '"mtime"'   'st_mtime'                           All
+     '"ctime"'   'st_ctime'                           All
+     '"rdev"'    'st_rdev'                            Device files
+     '"major"'   'st_major'                           Device files
+     '"minor"'   'st_minor'                           Device files
+     '"blksize"' 'st_blksize'                         All
+     '"pmode"'   A human-readable version of the      All
+                 mode value, like that printed by
+                 'ls' (for example, '"-rwxr-xr-x"')
+     '"linkval"' The value of the symbolic link       Symbolic
+                                                      links
+     '"type"'    The type of the file as a            All
+                 string--one of '"file"',
+                 '"blockdev"', '"chardev"',
+                 '"directory"', '"socket"',
+                 '"fifo"', '"symlink"', '"door"',
+                 or '"unknown"' (not all systems
+                 support all file types)
+
+'flags = or(FTS_PHYSICAL, ...)'
+'result = fts(pathlist, flags, filedata)'
+     Walk the file trees provided in 'pathlist' and fill in the
+     'filedata' array, as described next.  'flags' is the bitwise OR of
+     several predefined values, also described in a moment.  Return zero
+     if there were no errors, otherwise return -1.
+
+   The 'fts()' function provides a hook to the C library 'fts()'
+routines for traversing file hierarchies.  Instead of returning data
+about one file at a time in a stream, it fills in a multidimensional
+array with data about each file and directory encountered in the
+requested hierarchies.
+
+   The arguments are as follows:
+
+'pathlist'
+     An array of file names.  The element values are used; the index
+     values are ignored.
+
+'flags'
+     This should be the bitwise OR of one or more of the following
+     predefined constant flag values.  At least one of 'FTS_LOGICAL' or
+     'FTS_PHYSICAL' must be provided; otherwise 'fts()' returns an error
+     value and sets 'ERRNO'.  The flags are:
+
+     'FTS_LOGICAL'
+          Do a "logical" file traversal, where the information returned
+          for a symbolic link refers to the linked-to file, and not to
+          the symbolic link itself.  This flag is mutually exclusive
+          with 'FTS_PHYSICAL'.
+
+     'FTS_PHYSICAL'
+          Do a "physical" file traversal, where the information returned
+          for a symbolic link refers to the symbolic link itself.  This
+          flag is mutually exclusive with 'FTS_LOGICAL'.
+
+     'FTS_NOCHDIR'
+          As a performance optimization, the C library 'fts()' routines
+          change directory as they traverse a file hierarchy.  This flag
+          disables that optimization.
+
+     'FTS_COMFOLLOW'
+          Immediately follow a symbolic link named in 'pathlist',
+          whether or not 'FTS_LOGICAL' is set.
+
+     'FTS_SEEDOT'
+          By default, the C library 'fts()' routines do not return
+          entries for '.' (dot) and '..' (dot-dot).  This option causes
+          entries for dot-dot to also be included.  (The extension
+          always includes an entry for dot; more on this in a moment.)
+
+     'FTS_XDEV'
+          During a traversal, do not cross onto a different mounted
+          filesystem.
+
+'filedata'
+     The 'filedata' array holds the results.  'fts()' first clears it.
+     Then it creates an element in 'filedata' for every element in
+     'pathlist'.  The index is the name of the directory or file given
+     in 'pathlist'.  The element for this index is itself an array.
+     There are two cases:
+
+     _The path is a file_
+          In this case, the array contains two or three elements:
+
+          '"path"'
+               The full path to this file, starting from the "root" that
+               was given in the 'pathlist' array.
+
+          '"stat"'
+               This element is itself an array, containing the same
+               information as provided by the 'stat()' function
+               described earlier for its 'statdata' argument.  The
+               element may not be present if the 'stat()' system call
+               for the file failed.
+
+          '"error"'
+               If some kind of error was encountered, the array will
+               also contain an element named '"error"', which is a
+               string describing the error.
+
+     _The path is a directory_
+          In this case, the array contains one element for each entry in
+          the directory.  If an entry is a file, that element is the
+          same as for files, just described.  If the entry is a
+          directory, that element is (recursively) an array describing
+          the subdirectory.  If 'FTS_SEEDOT' was provided in the flags,
+          then there will also be an element named '".."'.  This element
+          will be an array containing the data as provided by 'stat()'.
+
+          In addition, there will be an element whose index is '"."'.
+          This element is an array containing the same two or three
+          elements as for a file: '"path"', '"stat"', and '"error"'.
+
+   The 'fts()' function returns zero if there were no errors.
+Otherwise, it returns -1.
+
+     NOTE: The 'fts()' extension does not exactly mimic the interface of
+     the C library 'fts()' routines, choosing instead to provide an
+     interface that is based on associative arrays, which is more
+     comfortable to use from an 'awk' program.  This includes the lack
+     of a comparison function, because 'gawk' already provides powerful
+     array sorting facilities.  Although an 'fts_read()'-like interface
+     could have been provided, this felt less natural than simply
+     creating a multidimensional array to represent the file hierarchy
+     and its information.
+
+   See 'test/fts.awk' in the 'gawk' distribution for an example use of
+the 'fts()' extension function.
+
+File: gawk.info,  Node: Extension Sample Fnmatch,  Next: Extension Sample Fork,  Prev: Extension Sample File Functions,  Up: Extension Samples
+
+16.7.2 Interface to 'fnmatch()'
+-------------------------------
+
+This extension provides an interface to the C library 'fnmatch()'
+function.  The usage is:
+
+'@load "fnmatch"'
+     This is how you load the extension.
+
+'result = fnmatch(pattern, string, flags)'
+     The return value is zero on success, 'FNM_NOMATCH' if the string
+     did not match the pattern, or a different nonzero value if an error
+     occurred.
+
+   In addition to the 'fnmatch()' function, the 'fnmatch' extension adds
+one constant ('FNM_NOMATCH'), and an array of flag values named 'FNM'.
+
+   The arguments to 'fnmatch()' are:
+
+'pattern'
+     The file name wildcard to match
+
+'string'
+     The file name string
+
+'flag'
+     Either zero, or the bitwise OR of one or more of the flags in the
+     'FNM' array
+
+   The flags are as follows:
+
+Array element      Corresponding flag defined by 'fnmatch()'
+--------------------------------------------------------------------------
+'FNM["CASEFOLD"]'  'FNM_CASEFOLD'
+'FNM["FILE_NAME"]' 'FNM_FILE_NAME'
+'FNM["LEADING_DIR"]''FNM_LEADING_DIR'
+'FNM["NOESCAPE"]'  'FNM_NOESCAPE'
+'FNM["PATHNAME"]'  'FNM_PATHNAME'
+'FNM["PERIOD"]'    'FNM_PERIOD'
+
+   Here is an example:
+
+     @load "fnmatch"
+     ...
+     flags = or(FNM["PERIOD"], FNM["NOESCAPE"])
+     if (fnmatch("*.a", "foo.c", flags) == FNM_NOMATCH)
+         print "no match"
+
+File: gawk.info,  Node: Extension Sample Fork,  Next: Extension Sample Inplace,  Prev: Extension Sample Fnmatch,  Up: Extension Samples
+
+16.7.3 Interface to 'fork()', 'wait()', and 'waitpid()'
+-------------------------------------------------------
+
+The 'fork' extension adds three functions, as follows:
+
+'@load "fork"'
+     This is how you load the extension.
+
+'pid = fork()'
+     This function creates a new process.  The return value is zero in
+     the child and the process ID number of the child in the parent, or
+     -1 upon error.  In the latter case, 'ERRNO' indicates the problem.
+     In the child, 'PROCINFO["pid"]' and 'PROCINFO["ppid"]' are updated
+     to reflect the correct values.
+
+'ret = waitpid(pid)'
+     This function takes a numeric argument, which is the process ID to
+     wait for.  The return value is that of the 'waitpid()' system call.
+
+'ret = wait()'
+     This function waits for the first child to die.  The return value
+     is that of the 'wait()' system call.
+
+   There is no corresponding 'exec()' function.
+
+   Here is an example:
+
+     @load "fork"
+     ...
+     if ((pid = fork()) == 0)
+         print "hello from the child"
+     else
+         print "hello from the parent"
+
+File: gawk.info,  Node: Extension Sample Inplace,  Next: Extension Sample Ord,  Prev: Extension Sample Fork,  Up: Extension Samples
+
+16.7.4 Enabling In-Place File Editing
+-------------------------------------
+
+The 'inplace' extension emulates GNU 'sed''s '-i' option, which performs
+"in-place" editing of each input file.  It uses the bundled
+'inplace.awk' include file to invoke the extension properly:
+
+     # inplace --- load and invoke the inplace extension.
+
+     @load "inplace"
+
+     # Please set INPLACE_SUFFIX to make a backup copy.  For example, you may
+     # want to set INPLACE_SUFFIX to .bak on the command line or in a BEGIN rule.
+
+     # By default, each filename on the command line will be edited inplace.
+     # But you can selectively disable this by adding an inplace=0 argument
+     # prior to files that you do not want to process this way.  You can then
+     # reenable it later on the commandline by putting inplace=1 before files
+     # that you wish to be subject to inplace editing.
+
+     # N.B. We call inplace_end() in the BEGINFILE and END rules so that any
+     # actions in an ENDFILE rule will be redirected as expected.
+
+     BEGIN {
+         inplace = 1         # enabled by default
+     }
+
+     BEGINFILE {
+         if (_inplace_filename != "")
+             inplace_end(_inplace_filename, INPLACE_SUFFIX)
+         if (inplace)
+             inplace_begin(_inplace_filename = FILENAME, INPLACE_SUFFIX)
+         else
+             _inplace_filename = ""
+     }
+
+     END {
+         if (_inplace_filename != "")
+             inplace_end(_inplace_filename, INPLACE_SUFFIX)
+     }
+
+   For each regular file that is processed, the extension redirects
+standard output to a temporary file configured to have the same owner
+and permissions as the original.  After the file has been processed, the
+extension restores standard output to its original destination.  If
+'INPLACE_SUFFIX' is not an empty string, the original file is linked to
+a backup file name created by appending that suffix.  Finally, the
+temporary file is renamed to the original file name.
+
+   Note that the use of this feature can be controlled by placing
+'inplace=0' on the command-line prior to listing files that should not
+be processed this way.  You can reenable inplace editing by adding an
+'inplace=1' argument prior to files that should be subject to inplace
+editing.
+
+   The '_inplace_filename' variable serves to keep track of the current
+filename so as to not invoke 'inplace_end()' before processing the first
+file.
+
+   If any error occurs, the extension issues a fatal error to terminate
+processing immediately without damaging the original file.
+
+   Here are some simple examples:
+
+     $ gawk -i inplace '{ gsub(/foo/, "bar") }; { print }' file1 file2 file3
+
+   To keep a backup copy of the original files, try this:
+
+     $ gawk -i inplace -v INPLACE_SUFFIX=.bak '{ gsub(/foo/, "bar") }
+     > { print }' file1 file2 file3
+
+   Please note that, while the extension does attempt to preserve
+ownership and permissions, it makes no attempt to copy the ACLs from the
+original file.
+
+   If the program dies prematurely, as might happen if an unhandled
+signal is received, a temporary file may be left behind.
+
+File: gawk.info,  Node: Extension Sample Ord,  Next: Extension Sample Readdir,  Prev: Extension Sample Inplace,  Up: Extension Samples
+
+16.7.5 Character and Numeric values: 'ord()' and 'chr()'
+--------------------------------------------------------
+
+The 'ordchr' extension adds two functions, named 'ord()' and 'chr()', as
+follows:
+
+'@load "ordchr"'
+     This is how you load the extension.
+
+'number = ord(string)'
+     Return the numeric value of the first character in 'string'.
+
+'char = chr(number)'
+     Return a string whose first character is that represented by
+     'number'.
+
+   These functions are inspired by the Pascal language functions of the
+same name.  Here is an example:
+
+     @load "ordchr"
+     ...
+     printf("The numeric value of 'A' is %d\n", ord("A"))
+     printf("The string value of 65 is %s\n", chr(65))
+
+File: gawk.info,  Node: Extension Sample Readdir,  Next: Extension Sample Revout,  Prev: Extension Sample Ord,  Up: Extension Samples
+
+16.7.6 Reading Directories
+--------------------------
+
+The 'readdir' extension adds an input parser for directories.  The usage
+is as follows:
+
+     @load "readdir"
+
+   When this extension is in use, instead of skipping directories named
+on the command line (or with 'getline'), they are read, with each entry
+returned as a record.
+
+   The record consists of three fields.  The first two are the inode
+number and the file name, separated by a forward slash character.  On
+systems where the directory entry contains the file type, the record has
+a third field (also separated by a slash), which is a single letter
+indicating the type of the file.  The letters and their corresponding
+file types are shown in *note Table 16.3: table-readdir-file-types.
+
+Letter  File type
+--------------------------------------------------------------------------
+'b'     Block device
+'c'     Character device
+'d'     Directory
+'f'     Regular file
+'l'     Symbolic link
+'p'     Named pipe (FIFO)
+'s'     Socket
+'u'     Anything else (unknown)
+
+Table 16.3: File types returned by the 'readdir' extension
+
+   On systems without the file type information, the third field is
+always 'u'.
+
+     NOTE: On GNU/Linux systems, there are filesystems that don't
+     support the 'd_type' entry (see the readdir(3) manual page), and so
+     the file type is always 'u'.  You can use the 'filefuncs' extension
+     to call 'stat()' in order to get correct type information.
+
+   Here is an example:
+
+     @load "readdir"
+     ...
+     BEGIN { FS = "/" }
+     { print "file name is", $2 }
+
+File: gawk.info,  Node: Extension Sample Revout,  Next: Extension Sample Rev2way,  Prev: Extension Sample Readdir,  Up: Extension Samples
+
+16.7.7 Reversing Output
+-----------------------
+
+The 'revoutput' extension adds a simple output wrapper that reverses the
+characters in each output line.  Its main purpose is to show how to
+write an output wrapper, although it may be mildly amusing for the
+unwary.  Here is an example:
+
+     @load "revoutput"
+
+     BEGIN {
+         REVOUT = 1
+         print "don't panic" > "/dev/stdout"
+     }
+
+   The output from this program is 'cinap t'nod'.
+
+File: gawk.info,  Node: Extension Sample Rev2way,  Next: Extension Sample Read write array,  Prev: Extension Sample Revout,  Up: Extension Samples
+
+16.7.8 Two-Way I/O Example
+--------------------------
+
+The 'revtwoway' extension adds a simple two-way processor that reverses
+the characters in each line sent to it for reading back by the 'awk'
+program.  Its main purpose is to show how to write a two-way processor,
+although it may also be mildly amusing.  The following example shows how
+to use it:
+
+     @load "revtwoway"
+
+     BEGIN {
+         cmd = "/magic/mirror"
+         print "don't panic" |& cmd
+         cmd |& getline result
+         print result
+         close(cmd)
+     }
+
+   The output from this program is: 'cinap t'nod'.
+
+File: gawk.info,  Node: Extension Sample Read write array,  Next: Extension Sample Readfile,  Prev: Extension Sample Rev2way,  Up: Extension Samples
+
+16.7.9 Dumping and Restoring an Array
+-------------------------------------
+
+The 'rwarray' extension adds two functions, named 'writea()' and
+'reada()', as follows:
+
+'@load "rwarray"'
+     This is how you load the extension.
+
+'ret = writea(file, array)'
+     This function takes a string argument, which is the name of the
+     file to which to dump the array, and the array itself as the second
+     argument.  'writea()' understands arrays of arrays.  It returns one
+     on success, or zero upon failure.
+
+'ret = reada(file, array)'
+     'reada()' is the inverse of 'writea()'; it reads the file named as
+     its first argument, filling in the array named as the second
+     argument.  It clears the array first.  Here too, the return value
+     is one on success, or zero upon failure.
+
+   The array created by 'reada()' is identical to that written by
+'writea()' in the sense that the contents are the same.  However, due to
+implementation issues, the array traversal order of the re-created array
+is likely to be different from that of the original array.  As array
+traversal order in 'awk' is by default undefined, this is (technically)
+not a problem.  If you need to guarantee a particular traversal order,
+use the array sorting features in 'gawk' to do so (*note Array
+Sorting::).
+
+   The file contains binary data.  All integral values are written in
+network byte order.  However, double-precision floating-point values are
+written as native binary data.  Thus, arrays containing only string data
+can theoretically be dumped on systems with one byte order and restored
+on systems with a different one, but this has not been tried.
+
+   Here is an example:
+
+     @load "rwarray"
+     ...
+     ret = writea("arraydump.bin", array)
+     ...
+     ret = reada("arraydump.bin", array)
+
+File: gawk.info,  Node: Extension Sample Readfile,  Next: Extension Sample Time,  Prev: Extension Sample Read write array,  Up: Extension Samples
+
+16.7.10 Reading an Entire File
+------------------------------
+
+The 'readfile' extension adds a single function named 'readfile()', and
+an input parser:
+
+'@load "readfile"'
+     This is how you load the extension.
+
+'result = readfile("/some/path")'
+     The argument is the name of the file to read.  The return value is
+     a string containing the entire contents of the requested file.
+     Upon error, the function returns the empty string and sets 'ERRNO'.
+
+'BEGIN { PROCINFO["readfile"] = 1 }'
+     In addition, the extension adds an input parser that is activated
+     if 'PROCINFO["readfile"]' exists.  When activated, each input file
+     is returned in its entirety as '$0'.  'RT' is set to the null
+     string.
+
+   Here is an example:
+
+     @load "readfile"
+     ...
+     contents = readfile("/path/to/file");
+     if (contents == "" && ERRNO != "") {
+         print("problem reading file", ERRNO) > "/dev/stderr"
+         ...
+     }
+
+File: gawk.info,  Node: Extension Sample Time,  Next: Extension Sample API Tests,  Prev: Extension Sample Readfile,  Up: Extension Samples
+
+16.7.11 Extension Time Functions
+--------------------------------
+
+The 'time' extension adds two functions, named 'gettimeofday()' and
+'sleep()', as follows:
+
+'@load "time"'
+     This is how you load the extension.
+
+'the_time = gettimeofday()'
+     Return the time in seconds that has elapsed since 1970-01-01 UTC as
+     a floating-point value.  If the time is unavailable on this
+     platform, return -1 and set 'ERRNO'.  The returned time should have
+     sub-second precision, but the actual precision may vary based on
+     the platform.  If the standard C 'gettimeofday()' system call is
+     available on this platform, then it simply returns the value.
+     Otherwise, if on MS-Windows, it tries to use
+     'GetSystemTimeAsFileTime()'.
+
+'result = sleep(SECONDS)'
+     Attempt to sleep for SECONDS seconds.  If SECONDS is negative, or
+     the attempt to sleep fails, return -1 and set 'ERRNO'.  Otherwise,
+     return zero after sleeping for the indicated amount of time.  Note
+     that SECONDS may be a floating-point (nonintegral) value.
+     Implementation details: depending on platform availability, this
+     function tries to use 'nanosleep()' or 'select()' to implement the
+     delay.
+
+File: gawk.info,  Node: Extension Sample API Tests,  Prev: Extension Sample Time,  Up: Extension Samples
+
+16.7.12 API Tests
+-----------------
+
+The 'testext' extension exercises parts of the extension API that are
+not tested by the other samples.  The 'extension/testext.c' file
+contains both the C code for the extension and 'awk' test code inside C
+comments that run the tests.  The testing framework extracts the 'awk'
+code and runs the tests.  See the source file for more information.
+
+File: gawk.info,  Node: gawkextlib,  Next: Extension summary,  Prev: Extension Samples,  Up: Dynamic Extensions
+

@@ -1,0 +1,570 @@
+14.3 Main Debugger Commands
+===========================
+
+The 'gawk' debugger command set can be divided into the following
+categories:
+
+   * Breakpoint control
+
+   * Execution control
+
+   * Viewing and changing data
+
+   * Working with the stack
+
+   * Getting information
+
+   * Miscellaneous
+
+   Each of these are discussed in the following subsections.  In the
+following descriptions, commands that may be abbreviated show the
+abbreviation on a second description line.  A debugger command name may
+also be truncated if that partial name is unambiguous.  The debugger has
+the built-in capability to automatically repeat the previous command
+just by hitting 'Enter'.  This works for the commands 'list', 'next',
+'nexti', 'step', 'stepi', and 'continue' executed without any argument.
+
+* Menu:
+
+* Breakpoint Control::          Control of Breakpoints.
+* Debugger Execution Control::  Control of Execution.
+* Viewing And Changing Data::   Viewing and Changing Data.
+* Execution Stack::             Dealing with the Stack.
+* Debugger Info::               Obtaining Information about the Program and
+                                the Debugger State.
+* Miscellaneous Debugger Commands:: Miscellaneous Commands.
+
+File: gawk.info,  Node: Breakpoint Control,  Next: Debugger Execution Control,  Up: List of Debugger Commands
+
+14.3.1 Control of Breakpoints
+-----------------------------
+
+As we saw earlier, the first thing you probably want to do in a
+debugging session is to get your breakpoints set up, because your
+program will otherwise just run as if it was not under the debugger.
+The commands for controlling breakpoints are:
+
+'break' [[FILENAME':']N | FUNCTION] ['"EXPRESSION"']
+'b' [[FILENAME':']N | FUNCTION] ['"EXPRESSION"']
+     Without any argument, set a breakpoint at the next instruction to
+     be executed in the selected stack frame.  Arguments can be one of
+     the following:
+
+     N
+          Set a breakpoint at line number N in the current source file.
+
+     FILENAME':'N
+          Set a breakpoint at line number N in source file FILENAME.
+
+     FUNCTION
+          Set a breakpoint at entry to (the first instruction of)
+          function FUNCTION.
+
+     Each breakpoint is assigned a number that can be used to delete it
+     from the breakpoint list using the 'delete' command.
+
+     With a breakpoint, you may also supply a condition.  This is an
+     'awk' expression (enclosed in double quotes) that the debugger
+     evaluates whenever the breakpoint is reached.  If the condition is
+     true, then the debugger stops execution and prompts for a command.
+     Otherwise, it continues executing the program.
+
+'clear' [[FILENAME':']N | FUNCTION]
+     Without any argument, delete any breakpoint at the next instruction
+     to be executed in the selected stack frame.  If the program stops
+     at a breakpoint, this deletes that breakpoint so that the program
+     does not stop at that location again.  Arguments can be one of the
+     following:
+
+     N
+          Delete breakpoint(s) set at line number N in the current
+          source file.
+
+     FILENAME':'N
+          Delete breakpoint(s) set at line number N in source file
+          FILENAME.
+
+     FUNCTION
+          Delete breakpoint(s) set at entry to function FUNCTION.
+
+'condition' N '"EXPRESSION"'
+     Add a condition to existing breakpoint or watchpoint N.  The
+     condition is an 'awk' expression _enclosed in double quotes_ that
+     the debugger evaluates whenever the breakpoint or watchpoint is
+     reached.  If the condition is true, then the debugger stops
+     execution and prompts for a command.  Otherwise, the debugger
+     continues executing the program.  If the condition expression is
+     not specified, any existing condition is removed (i.e., the
+     breakpoint or watchpoint is made unconditional).
+
+'delete' [N1 N2 ...] [N-M]
+'d' [N1 N2 ...] [N-M]
+     Delete specified breakpoints or a range of breakpoints.  Delete all
+     defined breakpoints if no argument is supplied.
+
+'disable' [N1 N2 ... | N-M]
+     Disable specified breakpoints or a range of breakpoints.  Without
+     any argument, disable all breakpoints.
+
+'enable' ['del' | 'once'] [N1 N2 ...] [N-M]
+'e' ['del' | 'once'] [N1 N2 ...] [N-M]
+     Enable specified breakpoints or a range of breakpoints.  Without
+     any argument, enable all breakpoints.  Optionally, you can specify
+     how to enable the breakpoints:
+
+     'del'
+          Enable the breakpoints temporarily, then delete each one when
+          the program stops at it.
+
+     'once'
+          Enable the breakpoints temporarily, then disable each one when
+          the program stops at it.
+
+'ignore' N COUNT
+     Ignore breakpoint number N the next COUNT times it is hit.
+
+'tbreak' [[FILENAME':']N | FUNCTION]
+'t' [[FILENAME':']N | FUNCTION]
+     Set a temporary breakpoint (enabled for only one stop).  The
+     arguments are the same as for 'break'.
+
+File: gawk.info,  Node: Debugger Execution Control,  Next: Viewing And Changing Data,  Prev: Breakpoint Control,  Up: List of Debugger Commands
+
+14.3.2 Control of Execution
+---------------------------
+
+Now that your breakpoints are ready, you can start running the program
+and observing its behavior.  There are more commands for controlling
+execution of the program than we saw in our earlier example:
+
+'commands' [N]
+'silent'
+...
+'end'
+     Set a list of commands to be executed upon stopping at a breakpoint
+     or watchpoint.  N is the breakpoint or watchpoint number.  Without
+     a number, the last one set is used.  The actual commands follow,
+     starting on the next line, and terminated by the 'end' command.  If
+     the command 'silent' is in the list, the usual messages about
+     stopping at a breakpoint and the source line are not printed.  Any
+     command in the list that resumes execution (e.g., 'continue')
+     terminates the list (an implicit 'end'), and subsequent commands
+     are ignored.  For example:
+
+          gawk> commands
+          > silent
+          > printf "A silent breakpoint; i = %d\n", i
+          > info locals
+          > set i = 10
+          > continue
+          > end
+          gawk>
+
+'continue' [COUNT]
+'c' [COUNT]
+     Resume program execution.  If continued from a breakpoint and COUNT
+     is specified, ignore the breakpoint at that location the next COUNT
+     times before stopping.
+
+'finish'
+     Execute until the selected stack frame returns.  Print the returned
+     value.
+
+'next' [COUNT]
+'n' [COUNT]
+     Continue execution to the next source line, stepping over function
+     calls.  The argument COUNT controls how many times to repeat the
+     action, as in 'step'.
+
+'nexti' [COUNT]
+'ni' [COUNT]
+     Execute one (or COUNT) instruction(s), stepping over function
+     calls.
+
+'return' [VALUE]
+     Cancel execution of a function call.  If VALUE (either a string or
+     a number) is specified, it is used as the function's return value.
+     If used in a frame other than the innermost one (the currently
+     executing function; i.e., frame number 0), discard all inner frames
+     in addition to the selected one, and the caller of that frame
+     becomes the innermost frame.
+
+'run'
+'r'
+     Start/restart execution of the program.  When restarting, the
+     debugger retains the current breakpoints, watchpoints, command
+     history, automatic display variables, and debugger options.
+
+'step' [COUNT]
+'s' [COUNT]
+     Continue execution until control reaches a different source line in
+     the current stack frame, stepping inside any function called within
+     the line.  If the argument COUNT is supplied, steps that many times
+     before stopping, unless it encounters a breakpoint or watchpoint.
+
+'stepi' [COUNT]
+'si' [COUNT]
+     Execute one (or COUNT) instruction(s), stepping inside function
+     calls.  (For illustration of what is meant by an "instruction" in
+     'gawk', see the output shown under 'dump' in *note Miscellaneous
+     Debugger Commands::.)
+
+'until' [[FILENAME':']N | FUNCTION]
+'u' [[FILENAME':']N | FUNCTION]
+     Without any argument, continue execution until a line past the
+     current line in the current stack frame is reached.  With an
+     argument, continue execution until the specified location is
+     reached, or the current stack frame returns.
+
+File: gawk.info,  Node: Viewing And Changing Data,  Next: Execution Stack,  Prev: Debugger Execution Control,  Up: List of Debugger Commands
+
+14.3.3 Viewing and Changing Data
+--------------------------------
+
+The commands for viewing and changing variables inside of 'gawk' are:
+
+'display' [VAR | '$'N]
+     Add variable VAR (or field '$N') to the display list.  The value of
+     the variable or field is displayed each time the program stops.
+     Each variable added to the list is identified by a unique number:
+
+          gawk> display x
+          -| 10: x = 1
+
+     This displays the assigned item number, the variable name, and its
+     current value.  If the display variable refers to a function
+     parameter, it is silently deleted from the list as soon as the
+     execution reaches a context where no such variable of the given
+     name exists.  Without argument, 'display' displays the current
+     values of items on the list.
+
+'eval "AWK STATEMENTS"'
+     Evaluate AWK STATEMENTS in the context of the running program.  You
+     can do anything that an 'awk' program would do: assign values to
+     variables, call functions, and so on.
+
+'eval' PARAM, ...
+AWK STATEMENTS
+'end'
+     This form of 'eval' is similar, but it allows you to define "local
+     variables" that exist in the context of the AWK STATEMENTS, instead
+     of using variables or function parameters defined by the program.
+
+'print' VAR1[',' VAR2 ...]
+'p' VAR1[',' VAR2 ...]
+     Print the value of a 'gawk' variable or field.  Fields must be
+     referenced by constants:
+
+          gawk> print $3
+
+     This prints the third field in the input record (if the specified
+     field does not exist, it prints 'Null field').  A variable can be
+     an array element, with the subscripts being constant string values.
+     To print the contents of an array, prefix the name of the array
+     with the '@' symbol:
+
+          gawk> print @a
+
+     This prints the indices and the corresponding values for all
+     elements in the array 'a'.
+
+'printf' FORMAT [',' ARG ...]
+     Print formatted text.  The FORMAT may include escape sequences,
+     such as '\n' (*note Escape Sequences::).  No newline is printed
+     unless one is specified.
+
+'set' VAR'='VALUE
+     Assign a constant (number or string) value to an 'awk' variable or
+     field.  String values must be enclosed between double quotes
+     ('"'...'"').
+
+     You can also set special 'awk' variables, such as 'FS', 'NF', 'NR',
+     and so on.
+
+'watch' VAR | '$'N ['"EXPRESSION"']
+'w' VAR | '$'N ['"EXPRESSION"']
+     Add variable VAR (or field '$N') to the watch list.  The debugger
+     then stops whenever the value of the variable or field changes.
+     Each watched item is assigned a number that can be used to delete
+     it from the watch list using the 'unwatch' command.
+
+     With a watchpoint, you may also supply a condition.  This is an
+     'awk' expression (enclosed in double quotes) that the debugger
+     evaluates whenever the watchpoint is reached.  If the condition is
+     true, then the debugger stops execution and prompts for a command.
+     Otherwise, 'gawk' continues executing the program.
+
+'undisplay' [N]
+     Remove item number N (or all items, if no argument) from the
+     automatic display list.
+
+'unwatch' [N]
+     Remove item number N (or all items, if no argument) from the watch
+     list.
+
+File: gawk.info,  Node: Execution Stack,  Next: Debugger Info,  Prev: Viewing And Changing Data,  Up: List of Debugger Commands
+
+14.3.4 Working with the Stack
+-----------------------------
+
+Whenever you run a program that contains any function calls, 'gawk'
+maintains a stack of all of the function calls leading up to where the
+program is right now.  You can see how you got to where you are, and
+also move around in the stack to see what the state of things was in the
+functions that called the one you are in.  The commands for doing this
+are:
+
+'backtrace' [COUNT]
+'bt' [COUNT]
+'where' [COUNT]
+     Print a backtrace of all function calls (stack frames), or
+     innermost COUNT frames if COUNT > 0.  Print the outermost COUNT
+     frames if COUNT < 0.  The backtrace displays the name and arguments
+     to each function, the source file name, and the line number.  The
+     alias 'where' for 'backtrace' is provided for longtime GDB users
+     who may be used to that command.
+
+'down' [COUNT]
+     Move COUNT (default 1) frames down the stack toward the innermost
+     frame.  Then select and print the frame.
+
+'frame' [N]
+'f' [N]
+     Select and print stack frame N.  Frame 0 is the currently
+     executing, or "innermost", frame (function call); frame 1 is the
+     frame that called the innermost one.  The highest-numbered frame is
+     the one for the main program.  The printed information consists of
+     the frame number, function and argument names, source file, and the
+     source line.
+
+'up' [COUNT]
+     Move COUNT (default 1) frames up the stack toward the outermost
+     frame.  Then select and print the frame.
+
+File: gawk.info,  Node: Debugger Info,  Next: Miscellaneous Debugger Commands,  Prev: Execution Stack,  Up: List of Debugger Commands
+
+14.3.5 Obtaining Information About the Program and the Debugger State
+---------------------------------------------------------------------
+
+Besides looking at the values of variables, there is often a need to get
+other sorts of information about the state of your program and of the
+debugging environment itself.  The 'gawk' debugger has one command that
+provides this information, appropriately called 'info'.  'info' is used
+with one of a number of arguments that tell it exactly what you want to
+know:
+
+'info' WHAT
+'i' WHAT
+     The value for WHAT should be one of the following:
+
+     'args'
+          List arguments of the selected frame.
+
+     'break'
+          List all currently set breakpoints.
+
+     'display'
+          List all items in the automatic display list.
+
+     'frame'
+          Give a description of the selected stack frame.
+
+     'functions'
+          List all function definitions including source file names and
+          line numbers.
+
+     'locals'
+          List local variables of the selected frame.
+
+     'source'
+          Print the name of the current source file.  Each time the
+          program stops, the current source file is the file containing
+          the current instruction.  When the debugger first starts, the
+          current source file is the first file included via the '-f'
+          option.  The 'list FILENAME:LINENO' command can be used at any
+          time to change the current source.
+
+     'sources'
+          List all program sources.
+
+     'variables'
+          List all global variables.
+
+     'watch'
+          List all items in the watch list.
+
+   Additional commands give you control over the debugger, the ability
+to save the debugger's state, and the ability to run debugger commands
+from a file.  The commands are:
+
+'option' [NAME['='VALUE]]
+'o' [NAME['='VALUE]]
+     Without an argument, display the available debugger options and
+     their current values.  'option NAME' shows the current value of the
+     named option.  'option NAME=VALUE' assigns a new value to the named
+     option.  The available options are:
+
+     'history_size'
+          Set the maximum number of lines to keep in the history file
+          './.gawk_history'.  The default is 100.
+
+     'listsize'
+          Specify the number of lines that 'list' prints.  The default
+          is 15.
+
+     'outfile'
+          Send 'gawk' output to a file; debugger output still goes to
+          standard output.  An empty string ('""') resets output to
+          standard output.
+
+     'prompt'
+          Change the debugger prompt.  The default is 'gawk> '.
+
+     'save_history' ['on' | 'off']
+          Save command history to file './.gawk_history'.  The default
+          is 'on'.
+
+     'save_options' ['on' | 'off']
+          Save current options to file './.gawkrc' upon exit.  The
+          default is 'on'.  Options are read back into the next session
+          upon startup.
+
+     'trace' ['on' | 'off']
+          Turn instruction tracing on or off.  The default is 'off'.
+
+'save' FILENAME
+     Save the commands from the current session to the given file name,
+     so that they can be replayed using the 'source' command.
+
+'source' FILENAME
+     Run command(s) from a file; an error in any command does not
+     terminate execution of subsequent commands.  Comments (lines
+     starting with '#') are allowed in a command file.  Empty lines are
+     ignored; they do _not_ repeat the last command.  You can't restart
+     the program by having more than one 'run' command in the file.
+     Also, the list of commands may include additional 'source'
+     commands; however, the 'gawk' debugger will not source the same
+     file more than once in order to avoid infinite recursion.
+
+     In addition to, or instead of, the 'source' command, you can use
+     the '-D FILE' or '--debug=FILE' command-line options to execute
+     commands from a file non-interactively (*note Options::).
+
+File: gawk.info,  Node: Miscellaneous Debugger Commands,  Prev: Debugger Info,  Up: List of Debugger Commands
+
+14.3.6 Miscellaneous Commands
+-----------------------------
+
+There are a few more commands that do not fit into the previous
+categories, as follows:
+
+'dump' [FILENAME]
+     Dump byte code of the program to standard output or to the file
+     named in FILENAME.  This prints a representation of the internal
+     instructions that 'gawk' executes to implement the 'awk' commands
+     in a program.  This can be very enlightening, as the following
+     partial dump of Davide Brini's obfuscated code (*note Signature
+     Program::) demonstrates:
+
+          gawk> dump
+          -|        # BEGIN
+          -|
+          -| [  1:0xfcd340] Op_rule           : [in_rule = BEGIN] [source_file = brini.awk]
+          -| [  1:0xfcc240] Op_push_i         : "~" [MALLOC|STRING|STRCUR]
+          -| [  1:0xfcc2a0] Op_push_i         : "~" [MALLOC|STRING|STRCUR]
+          -| [  1:0xfcc280] Op_match          :
+          -| [  1:0xfcc1e0] Op_store_var      : O
+          -| [  1:0xfcc2e0] Op_push_i         : "==" [MALLOC|STRING|STRCUR]
+          -| [  1:0xfcc340] Op_push_i         : "==" [MALLOC|STRING|STRCUR]
+          -| [  1:0xfcc320] Op_equal          :
+          -| [  1:0xfcc200] Op_store_var      : o
+          -| [  1:0xfcc380] Op_push           : o
+          -| [  1:0xfcc360] Op_plus_i         : 0 [MALLOC|NUMCUR|NUMBER]
+          -| [  1:0xfcc220] Op_push_lhs       : o [do_reference = true]
+          -| [  1:0xfcc300] Op_assign_plus    :
+          -| [   :0xfcc2c0] Op_pop            :
+          -| [  1:0xfcc400] Op_push           : O
+          -| [  1:0xfcc420] Op_push_i         : "" [MALLOC|STRING|STRCUR]
+          -| [   :0xfcc4a0] Op_no_op          :
+          -| [  1:0xfcc480] Op_push           : O
+          -| [   :0xfcc4c0] Op_concat         : [expr_count = 3] [concat_flag = 0]
+          -| [  1:0xfcc3c0] Op_store_var      : x
+          -| [  1:0xfcc440] Op_push_lhs       : X [do_reference = true]
+          -| [  1:0xfcc3a0] Op_postincrement  :
+          -| [  1:0xfcc4e0] Op_push           : x
+          -| [  1:0xfcc540] Op_push           : o
+          -| [  1:0xfcc500] Op_plus           :
+          -| [  1:0xfcc580] Op_push           : o
+          -| [  1:0xfcc560] Op_plus           :
+          -| [  1:0xfcc460] Op_leq            :
+          -| [   :0xfcc5c0] Op_jmp_false      : [target_jmp = 0xfcc5e0]
+          -| [  1:0xfcc600] Op_push_i         : "%c" [MALLOC|STRING|STRCUR]
+          -| [   :0xfcc660] Op_no_op          :
+          -| [  1:0xfcc520] Op_assign_concat  : c
+          -| [   :0xfcc620] Op_jmp            : [target_jmp = 0xfcc440]
+          ...
+          -| [     2:0xfcc5a0] Op_K_printf         : [expr_count = 17] [redir_type = ""]
+          -| [      :0xfcc140] Op_no_op            :
+          -| [      :0xfcc1c0] Op_atexit           :
+          -| [      :0xfcc640] Op_stop             :
+          -| [      :0xfcc180] Op_no_op            :
+          -| [      :0xfcd150] Op_after_beginfile  :
+          -| [      :0xfcc160] Op_no_op            :
+          -| [      :0xfcc1a0] Op_after_endfile    :
+          gawk>
+
+'exit'
+     Exit the debugger.  See the entry for 'quit', later in this list.
+
+'help'
+'h'
+     Print a list of all of the 'gawk' debugger commands with a short
+     summary of their usage.  'help COMMAND' prints the information
+     about the command COMMAND.
+
+'list' ['-' | '+' | N | FILENAME':'N | N-M | FUNCTION]
+'l' ['-' | '+' | N | FILENAME':'N | N-M | FUNCTION]
+     Print the specified lines (default 15) from the current source file
+     or the file named FILENAME.  The possible arguments to 'list' are
+     as follows:
+
+     '-' (Minus)
+          Print lines before the lines last printed.
+
+     '+'
+          Print lines after the lines last printed.  'list' without any
+          argument does the same thing.
+
+     N
+          Print lines centered around line number N.
+
+     N-M
+          Print lines from N to M.
+
+     FILENAME':'N
+          Print lines centered around line number N in source file
+          FILENAME.  This command may change the current source file.
+
+     FUNCTION
+          Print lines centered around the beginning of the function
+          FUNCTION.  This command may change the current source file.
+
+'quit'
+'q'
+     Exit the debugger.  Debugging is great fun, but sometimes we all
+     have to tend to other obligations in life, and sometimes we find
+     the bug and are free to go on to the next one!  As we saw earlier,
+     if you are running a program, the debugger warns you when you type
+     'q' or 'quit', to make sure you really want to quit.
+
+'trace' ['on' | 'off']
+     Turn on or off continuous printing of the instructions that are
+     about to be executed, along with the 'awk' lines they implement.
+     The default is 'off'.
+
+     It is to be hoped that most of the "opcodes" in these instructions
+     are fairly self-explanatory, and using 'stepi' and 'nexti' while
+     'trace' is on will make them into familiar friends.
+
+File: gawk.info,  Node: Readline Support,  Next: Limitations,  Prev: List of Debugger Commands,  Up: Debugger
+

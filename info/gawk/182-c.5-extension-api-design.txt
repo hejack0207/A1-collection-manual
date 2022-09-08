@@ -1,0 +1,209 @@
+C.5 Extension API Design
+========================
+
+This minor node documents the design of the extension API, including a
+discussion of some of the history and problems that needed to be solved.
+
+   The first version of extensions for 'gawk' was developed in the
+mid-1990s and released with 'gawk' 3.1 in the late 1990s.  The basic
+mechanisms and design remained unchanged for close to 15 years, until
+2012.
+
+   The old extension mechanism used data types and functions from 'gawk'
+itself, with a "clever hack" to install extension functions.
+
+   'gawk' included some sample extensions, of which a few were really
+useful.  However, it was clear from the outset that the extension
+mechanism was bolted onto the side and was not really well thought out.
+
+* Menu:
+
+* Old Extension Problems::           Problems with the old mechanism.
+* Extension New Mechanism Goals::    Goals for the new mechanism.
+* Extension Other Design Decisions:: Some other design decisions.
+* Extension Future Growth::          Some room for future growth.
+
+File: gawk.info,  Node: Old Extension Problems,  Next: Extension New Mechanism Goals,  Up: Extension Design
+
+C.5.1 Problems With The Old Mechanism
+-------------------------------------
+
+The old extension mechanism had several problems:
+
+   * It depended heavily upon 'gawk' internals.  Any time the 'NODE'
+     structure(1) changed, an extension would have to be recompiled.
+     Furthermore, to really write extensions required understanding
+     something about 'gawk''s internal functions.  There was some
+     documentation in this Info file, but it was quite minimal.
+
+   * Being able to call into 'gawk' from an extension required linker
+     facilities that are common on Unix-derived systems but that did not
+     work on MS-Windows systems; users wanting extensions on MS-Windows
+     had to statically link them into 'gawk', even though MS-Windows
+     supports dynamic loading of shared objects.
+
+   * The API would change occasionally as 'gawk' changed; no
+     compatibility between versions was ever offered or planned for.
+
+   Despite the drawbacks, the 'xgawk' project developers forked 'gawk'
+and developed several significant extensions.  They also enhanced
+'gawk''s facilities relating to file inclusion and shared object access.
+
+   A new API was desired for a long time, but only in 2012 did the
+'gawk' maintainer and the 'xgawk' developers finally start working on it
+together.  More information about the 'xgawk' project is provided in
+*note gawkextlib::.
+
+   ---------- Footnotes ----------
+
+   (1) A critical central data structure inside 'gawk'.
+
+File: gawk.info,  Node: Extension New Mechanism Goals,  Next: Extension Other Design Decisions,  Prev: Old Extension Problems,  Up: Extension Design
+
+C.5.2 Goals For A New Mechanism
+-------------------------------
+
+Some goals for the new API were:
+
+   * The API should be independent of 'gawk' internals.  Changes in
+     'gawk' internals should not be visible to the writer of an
+     extension function.
+
+   * The API should provide _binary_ compatibility across 'gawk'
+     releases as long as the API itself does not change.
+
+   * The API should enable extensions written in C or C++ to have
+     roughly the same "appearance" to 'awk'-level code as 'awk'
+     functions do.  This means that extensions should have:
+
+        - The ability to access function parameters.
+
+        - The ability to turn an undefined parameter into an array (call
+          by reference).
+
+        - The ability to create, access and update global variables.
+
+        - Easy access to all the elements of an array at once ("array
+          flattening") in order to loop over all the element in an easy
+          fashion for C code.
+
+        - The ability to create arrays (including 'gawk''s true arrays
+          of arrays).
+
+   Some additional important goals were:
+
+   * The API should use only features in ISO C 90, so that extensions
+     can be written using the widest range of C and C++ compilers.  The
+     header should include the appropriate '#ifdef __cplusplus' and
+     'extern "C"' magic so that a C++ compiler could be used.  (If using
+     C++, the runtime system has to be smart enough to call any
+     constructors and destructors, as 'gawk' is a C program.  As of this
+     writing, this has not been tested.)
+
+   * The API mechanism should not require access to 'gawk''s symbols(1)
+     by the compile-time or dynamic linker, in order to enable creation
+     of extensions that also work on MS-Windows.
+
+   During development, it became clear that there were other features
+that should be available to extensions, which were also subsequently
+provided:
+
+   * Extensions should have the ability to hook into 'gawk''s I/O
+     redirection mechanism.  In particular, the 'xgawk' developers
+     provided a so-called "open hook" to take over reading records.
+     During development, this was generalized to allow extensions to
+     hook into input processing, output processing, and two-way I/O.
+
+   * An extension should be able to provide a "call back" function to
+     perform cleanup actions when 'gawk' exits.
+
+   * An extension should be able to provide a version string so that
+     'gawk''s '--version' option can provide information about
+     extensions as well.
+
+   The requirement to avoid access to 'gawk''s symbols is, at first
+glance, a difficult one to meet.
+
+   One design, apparently used by Perl and Ruby and maybe others, would
+be to make the mainline 'gawk' code into a library, with the 'gawk'
+utility a small C 'main()' function linked against the library.
+
+   This seemed like the tail wagging the dog, complicating build and
+installation and making a simple copy of the 'gawk' executable from one
+system to another (or one place to another on the same system!)  into a
+chancy operation.
+
+   Pat Rankin suggested the solution that was adopted.  *Note Extension
+Mechanism Outline::, for the details.
+
+   ---------- Footnotes ----------
+
+   (1) The "symbols" are the variables and functions defined inside
+'gawk'.  Access to these symbols by code external to 'gawk' loaded
+dynamically at runtime is problematic on MS-Windows.
+
+File: gawk.info,  Node: Extension Other Design Decisions,  Next: Extension Future Growth,  Prev: Extension New Mechanism Goals,  Up: Extension Design
+
+C.5.3 Other Design Decisions
+----------------------------
+
+As an arbitrary design decision, extensions can read the values of
+predefined variables and arrays (such as 'ARGV' and 'FS'), but cannot
+change them, with the exception of 'PROCINFO'.
+
+   The reason for this is to prevent an extension function from
+affecting the flow of an 'awk' program outside its control.  While a
+real 'awk' function can do what it likes, that is at the discretion of
+the programmer.  An extension function should provide a service or make
+a C API available for use within 'awk', and not mess with 'FS' or 'ARGC'
+and 'ARGV'.
+
+   In addition, it becomes easy to start down a slippery slope.  How
+much access to 'gawk' facilities do extensions need?  Do they need
+'getline'?  What about calling 'gsub()' or compiling regular
+expressions?  What about calling into 'awk' functions?  (_That_ would be
+messy.)
+
+   In order to avoid these issues, the 'gawk' developers chose to start
+with the simplest, most basic features that are still truly useful.
+
+   Another decision is that although 'gawk' provides nice things like
+MPFR, and arrays indexed internally by integers, these features are not
+being brought out to the API in order to keep things simple and close to
+traditional 'awk' semantics.  (In fact, arrays indexed internally by
+integers are so transparent that they aren't even documented!)
+
+   Additionally, all functions in the API check that their pointer input
+parameters are not 'NULL'.  If they are, they return an error.  (It is a
+good idea for extension code to verify that pointers received from
+'gawk' are not 'NULL'.  Such a thing should not happen, but the 'gawk'
+developers are only human, and they have been known to occasionally make
+mistakes.)
+
+   With time, the API will undoubtedly evolve; the 'gawk' developers
+expect this to be driven by user needs.  For now, the current API seems
+to provide a minimal yet powerful set of features for creating
+extensions.
+
+File: gawk.info,  Node: Extension Future Growth,  Prev: Extension Other Design Decisions,  Up: Extension Design
+
+C.5.4 Room For Future Growth
+----------------------------
+
+The API can later be expanded, in two ways:
+
+   * 'gawk' passes an "extension id" into the extension when it first
+     loads the extension.  The extension then passes this id back to
+     'gawk' with each function call.  This mechanism allows 'gawk' to
+     identify the extension calling into it, should it need to know.
+
+   * Similarly, the extension passes a "name space" into 'gawk' when it
+     registers each extension function.  This accommodates a possible
+     future mechanism for grouping extension functions and possibly
+     avoiding name conflicts.
+
+   Of course, as of this writing, no decisions have been made with
+respect to any of the above.
+
+File: gawk.info,  Node: Old Extension Mechanism,  Next: Notes summary,  Prev: Extension Design,  Up: Notes
+

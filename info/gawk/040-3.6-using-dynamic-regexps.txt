@@ -1,0 +1,79 @@
+3.6 Using Dynamic Regexps
+=========================
+
+The righthand side of a '~' or '!~' operator need not be a regexp
+constant (i.e., a string of characters between slashes).  It may be any
+expression.  The expression is evaluated and converted to a string if
+necessary; the contents of the string are then used as the regexp.  A
+regexp computed in this way is called a "dynamic regexp" or a "computed
+regexp":
+
+     BEGIN { digits_regexp = "[[:digit:]]+" }
+     $0 ~ digits_regexp    { print }
+
+This sets 'digits_regexp' to a regexp that describes one or more digits,
+and tests whether the input record matches this regexp.
+
+     NOTE: When using the '~' and '!~' operators, be aware that there is
+     a difference between a regexp constant enclosed in slashes and a
+     string constant enclosed in double quotes.  If you are going to use
+     a string constant, you have to understand that the string is, in
+     essence, scanned _twice_: the first time when 'awk' reads your
+     program, and the second time when it goes to match the string on
+     the lefthand side of the operator with the pattern on the right.
+     This is true of any string-valued expression (such as
+     'digits_regexp', shown in the previous example), not just string
+     constants.
+
+   What difference does it make if the string is scanned twice?  The
+answer has to do with escape sequences, and particularly with
+backslashes.  To get a backslash into a regular expression inside a
+string, you have to type two backslashes.
+
+   For example, '/\*/' is a regexp constant for a literal '*'.  Only one
+backslash is needed.  To do the same thing with a string, you have to
+type '"\\*"'.  The first backslash escapes the second one so that the
+string actually contains the two characters '\' and '*'.
+
+   Given that you can use both regexp and string constants to describe
+regular expressions, which should you use?  The answer is "regexp
+constants," for several reasons:
+
+   * String constants are more complicated to write and more difficult
+     to read.  Using regexp constants makes your programs less
+     error-prone.  Not understanding the difference between the two
+     kinds of constants is a common source of errors.
+
+   * It is more efficient to use regexp constants.  'awk' can note that
+     you have supplied a regexp and store it internally in a form that
+     makes pattern matching more efficient.  When using a string
+     constant, 'awk' must first convert the string into this internal
+     form and then perform the pattern matching.
+
+   * Using regexp constants is better form; it shows clearly that you
+     intend a regexp match.
+
+         Using '\n' in Bracket Expressions of Dynamic Regexps
+
+   Some older versions of 'awk' do not allow the newline character to be
+used inside a bracket expression for a dynamic regexp:
+
+     $ awk '$0 ~ "[ \t\n]"'
+     error-> awk: newline in character class [
+     error-> ]...
+     error->  source line number 1
+     error->  context is
+     error->        $0 ~ "[ >>>  \t\n]" <<<
+
+   But a newline in a regexp constant works with no problem:
+
+     $ awk '$0 ~ /[ \t\n]/'
+     here is a sample line
+     -| here is a sample line
+     Ctrl-d
+
+   'gawk' does not have this problem, and it isn't likely to occur often
+in practice, but it's worth noting for future reference.
+
+File: gawk.info,  Node: GNU Regexp Operators,  Next: Case-sensitivity,  Prev: Computed Regexps,  Up: Regexp
+

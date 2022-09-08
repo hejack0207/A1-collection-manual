@@ -1,0 +1,239 @@
+10.5 Reading the User Database
+==============================
+
+The 'PROCINFO' array (*note Built-in Variables::) provides access to the
+current user's real and effective user and group ID numbers, and, if
+available, the user's supplementary group set.  However, because these
+are numbers, they do not provide very useful information to the average
+user.  There needs to be some way to find the user information
+associated with the user and group ID numbers.  This minor node presents
+a suite of functions for retrieving information from the user database.
+*Note Group Functions:: for a similar suite that retrieves information
+from the group database.
+
+   The POSIX standard does not define the file where user information is
+kept.  Instead, it provides the '<pwd.h>' header file and several C
+language subroutines for obtaining user information.  The primary
+function is 'getpwent()', for "get password entry."  The "password"
+comes from the original user database file, '/etc/passwd', which stores
+user information along with the encrypted passwords (hence the name).
+
+   Although an 'awk' program could simply read '/etc/passwd' directly,
+this file may not contain complete information about the system's set of
+users.(1)  To be sure you are able to produce a readable and complete
+version of the user database, it is necessary to write a small C program
+that calls 'getpwent()'.  'getpwent()' is defined as returning a pointer
+to a 'struct passwd'.  Each time it is called, it returns the next entry
+in the database.  When there are no more entries, it returns 'NULL', the
+null pointer.  When this happens, the C program should call 'endpwent()'
+to close the database.  Following is 'pwcat', a C program that "cats"
+the password database:
+
+     /*
+      * pwcat.c
+      *
+      * Generate a printable version of the password database.
+      */
+     #include <stdio.h>
+     #include <pwd.h>
+
+     int
+     main(int argc, char **argv)
+     {
+         struct passwd *p;
+
+         while ((p = getpwent()) != NULL)
+             printf("%s:%s:%ld:%ld:%s:%s:%s\n",
+                 p->pw_name, p->pw_passwd, (long) p->pw_uid,
+                 (long) p->pw_gid, p->pw_gecos, p->pw_dir, p->pw_shell);
+
+         endpwent();
+         return 0;
+     }
+
+   If you don't understand C, don't worry about it.  The output from
+'pwcat' is the user database, in the traditional '/etc/passwd' format of
+colon-separated fields.  The fields are:
+
+Login name
+     The user's login name.
+
+Encrypted password
+     The user's encrypted password.  This may not be available on some
+     systems.
+
+User-ID
+     The user's numeric user ID number.  (On some systems, it's a C
+     'long', and not an 'int'.  Thus, we cast it to 'long' for all
+     cases.)
+
+Group-ID
+     The user's numeric group ID number.  (Similar comments about 'long'
+     versus 'int' apply here.)
+
+Full name
+     The user's full name, and perhaps other information associated with
+     the user.
+
+Home directory
+     The user's login (or "home") directory (familiar to shell
+     programmers as '$HOME').
+
+Login shell
+     The program that is run when the user logs in.  This is usually a
+     shell, such as Bash.
+
+   A few lines representative of 'pwcat''s output are as follows:
+
+     $ pwcat
+     -| root:x:0:1:Operator:/:/bin/sh
+     -| nobody:*:65534:65534::/:
+     -| daemon:*:1:1::/:
+     -| sys:*:2:2::/:/bin/csh
+     -| bin:*:3:3::/bin:
+     -| arnold:xyzzy:2076:10:Arnold Robbins:/home/arnold:/bin/sh
+     -| miriam:yxaay:112:10:Miriam Robbins:/home/miriam:/bin/sh
+     -| andy:abcca2:113:10:Andy Jacobs:/home/andy:/bin/sh
+     ...
+
+   With that introduction, following is a group of functions for getting
+user information.  There are several functions here, corresponding to
+the C functions of the same names:
+
+     # passwd.awk --- access password file information
+
+     BEGIN {
+         # tailor this to suit your system
+         _pw_awklib = "/usr/local/libexec/awk/"
+     }
+
+     function _pw_init(    oldfs, oldrs, olddol0, pwcat, using_fw, using_fpat)
+     {
+         if (_pw_inited)
+             return
+
+         oldfs = FS
+         oldrs = RS
+         olddol0 = $0
+         using_fw = (PROCINFO["FS"] == "FIELDWIDTHS")
+         using_fpat = (PROCINFO["FS"] == "FPAT")
+         FS = ":"
+         RS = "\n"
+
+         pwcat = _pw_awklib "pwcat"
+         while ((pwcat | getline) > 0) {
+             _pw_byname[$1] = $0
+             _pw_byuid[$3] = $0
+             _pw_bycount[++_pw_total] = $0
+         }
+         close(pwcat)
+         _pw_count = 0
+         _pw_inited = 1
+         FS = oldfs
+         if (using_fw)
+             FIELDWIDTHS = FIELDWIDTHS
+         else if (using_fpat)
+             FPAT = FPAT
+         RS = oldrs
+         $0 = olddol0
+     }
+
+   The 'BEGIN' rule sets a private variable to the directory where
+'pwcat' is stored.  Because it is used to help out an 'awk' library
+routine, we have chosen to put it in '/usr/local/libexec/awk'; however,
+you might want it to be in a different directory on your system.
+
+   The function '_pw_init()' fills three copies of the user information
+into three associative arrays.  The arrays are indexed by username
+('_pw_byname'), by user ID number ('_pw_byuid'), and by order of
+occurrence ('_pw_bycount').  The variable '_pw_inited' is used for
+efficiency, as '_pw_init()' needs to be called only once.
+
+   Because this function uses 'getline' to read information from
+'pwcat', it first saves the values of 'FS', 'RS', and '$0'.  It notes in
+the variable 'using_fw' whether field splitting with 'FIELDWIDTHS' is in
+effect or not.  Doing so is necessary, as these functions could be
+called from anywhere within a user's program, and the user may have his
+or her own way of splitting records and fields.  This makes it possible
+to restore the correct field-splitting mechanism later.  The test can
+only be true for 'gawk'.  It is false if using 'FS' or 'FPAT', or on
+some other 'awk' implementation.
+
+   The code that checks for using 'FPAT', using 'using_fpat' and
+'PROCINFO["FS"]', is similar.
+
+   The main part of the function uses a loop to read database lines,
+split the lines into fields, and then store the lines into each array as
+necessary.  When the loop is done, '_pw_init()' cleans up by closing the
+pipeline, setting '_pw_inited' to one, and restoring 'FS' (and
+'FIELDWIDTHS' or 'FPAT' if necessary), 'RS', and '$0'.  The use of
+'_pw_count' is explained shortly.
+
+   The 'getpwnam()' function takes a username as a string argument.  If
+that user is in the database, it returns the appropriate line.
+Otherwise, it relies on the array reference to a nonexistent element to
+create the element with the null string as its value:
+
+     function getpwnam(name)
+     {
+         _pw_init()
+         return _pw_byname[name]
+     }
+
+   Similarly, the 'getpwuid()' function takes a user ID number argument.
+If that user number is in the database, it returns the appropriate line.
+Otherwise, it returns the null string:
+
+     function getpwuid(uid)
+     {
+         _pw_init()
+         return _pw_byuid[uid]
+     }
+
+   The 'getpwent()' function simply steps through the database, one
+entry at a time.  It uses '_pw_count' to track its current position in
+the '_pw_bycount' array:
+
+     function getpwent()
+     {
+         _pw_init()
+         if (_pw_count < _pw_total)
+             return _pw_bycount[++_pw_count]
+         return ""
+     }
+
+   The 'endpwent()' function resets '_pw_count' to zero, so that
+subsequent calls to 'getpwent()' start over again:
+
+     function endpwent()
+     {
+         _pw_count = 0
+     }
+
+   A conscious design decision in this suite is that each subroutine
+calls '_pw_init()' to initialize the database arrays.  The overhead of
+running a separate process to generate the user database, and the I/O to
+scan it, are only incurred if the user's main program actually calls one
+of these functions.  If this library file is loaded along with a user's
+program, but none of the routines are ever called, then there is no
+extra runtime overhead.  (The alternative is move the body of
+'_pw_init()' into a 'BEGIN' rule, which always runs 'pwcat'.  This
+simplifies the code but runs an extra process that may never be needed.)
+
+   In turn, calling '_pw_init()' is not too expensive, because the
+'_pw_inited' variable keeps the program from reading the data more than
+once.  If you are worried about squeezing every last cycle out of your
+'awk' program, the check of '_pw_inited' could be moved out of
+'_pw_init()' and duplicated in all the other functions.  In practice,
+this is not necessary, as most 'awk' programs are I/O-bound, and such a
+change would clutter up the code.
+
+   The 'id' program in *note Id Program:: uses these functions.
+
+   ---------- Footnotes ----------
+
+   (1) It is often the case that password information is stored in a
+network database.
+
+File: gawk.info,  Node: Group Functions,  Next: Walking Arrays,  Prev: Passwd Functions,  Up: Library Functions
+

@@ -1,0 +1,47 @@
+8.3 Using Uninitialized Variables as Subscripts
+===============================================
+
+Suppose it's necessary to write a program to print the input data in
+reverse order.  A reasonable attempt to do so (with some test data)
+might look like this:
+
+     $ echo 'line 1
+     > line 2
+     > line 3' | awk '{ l[lines] = $0; ++lines }
+     > END {
+     >     for (i = lines - 1; i >= 0; i--)
+     >        print l[i]
+     > }'
+     -| line 3
+     -| line 2
+
+   Unfortunately, the very first line of input data did not appear in
+the output!
+
+   Upon first glance, we would think that this program should have
+worked.  The variable 'lines' is uninitialized, and uninitialized
+variables have the numeric value zero.  So, 'awk' should have printed
+the value of 'l[0]'.
+
+   The issue here is that subscripts for 'awk' arrays are _always_
+strings.  Uninitialized variables, when used as strings, have the value
+'""', not zero.  Thus, 'line 1' ends up stored in 'l[""]'.  The
+following version of the program works correctly:
+
+     { l[lines++] = $0 }
+     END {
+         for (i = lines - 1; i >= 0; i--)
+            print l[i]
+     }
+
+   Here, the '++' forces 'lines' to be numeric, thus making the "old
+value" numeric zero.  This is then converted to '"0"' as the array
+subscript.
+
+   Even though it is somewhat unusual, the null string ('""') is a valid
+array subscript.  (d.c.)  'gawk' warns about the use of the null string
+as a subscript if '--lint' is provided on the command line (*note
+Options::).
+
+File: gawk.info,  Node: Delete,  Next: Multidimensional,  Prev: Uninitialized Subscripts,  Up: Arrays
+

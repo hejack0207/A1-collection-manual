@@ -1,0 +1,536 @@
+6.3 Truth Values and Conditions
+===============================
+
+In certain contexts, expression values also serve as "truth values";
+i.e., they determine what should happen next as the program runs.  This
+minor node describes how 'awk' defines "true" and "false" and how values
+are compared.
+
+* Menu:
+
+* Truth Values::                What is "true" and what is "false".
+* Typing and Comparison::       How variables acquire types and how this
+                                affects comparison of numbers and strings with
+                                '<', etc.
+* Boolean Ops::                 Combining comparison expressions using boolean
+                                operators '||' ("or"), '&&'
+                                ("and") and '!' ("not").
+* Conditional Exp::             Conditional expressions select between two
+                                subexpressions under control of a third
+                                subexpression.
+
+File: gawk.info,  Node: Truth Values,  Next: Typing and Comparison,  Up: Truth Values and Conditions
+
+6.3.1 True and False in 'awk'
+-----------------------------
+
+Many programming languages have a special representation for the
+concepts of "true" and "false."  Such languages usually use the special
+constants 'true' and 'false', or perhaps their uppercase equivalents.
+However, 'awk' is different.  It borrows a very simple concept of true
+and false from C. In 'awk', any nonzero numeric value _or_ any nonempty
+string value is true.  Any other value (zero or the null string, '""')
+is false.  The following program prints 'A strange truth value' three
+times:
+
+     BEGIN {
+        if (3.1415927)
+            print "A strange truth value"
+        if ("Four Score And Seven Years Ago")
+            print "A strange truth value"
+        if (j = 57)
+            print "A strange truth value"
+     }
+
+   There is a surprising consequence of the "nonzero or non-null" rule:
+the string constant '"0"' is actually true, because it is non-null.
+(d.c.)
+
+File: gawk.info,  Node: Typing and Comparison,  Next: Boolean Ops,  Prev: Truth Values,  Up: Truth Values and Conditions
+
+6.3.2 Variable Typing and Comparison Expressions
+------------------------------------------------
+
+     The Guide is definitive.  Reality is frequently inaccurate.
+      -- _Douglas Adams, 'The Hitchhiker's Guide to the Galaxy'_
+
+   Unlike in other programming languages, in 'awk' variables do not have
+a fixed type.  Instead, they can be either a number or a string,
+depending upon the value that is assigned to them.  We look now at how
+variables are typed, and how 'awk' compares variables.
+
+* Menu:
+
+* Variable Typing::             String type versus numeric type.
+* Comparison Operators::        The comparison operators.
+* POSIX String Comparison::     String comparison with POSIX rules.
+
+File: gawk.info,  Node: Variable Typing,  Next: Comparison Operators,  Up: Typing and Comparison
+
+6.3.2.1 String Type versus Numeric Type
+.......................................
+
+Scalar objects in 'awk' (variables, array elements, and fields) are
+_dynamically_ typed.  This means their type can change as the program
+runs, from "untyped" before any use,(1) to string or number, and then
+from string to number or number to string, as the program progresses.
+('gawk' also provides regexp-typed scalars, but let's ignore that for
+now; *note Strong Regexp Constants::.)
+
+   You can't do much with untyped variables, other than tell that they
+are untyped.  The following program tests 'a' against '""' and '0'; the
+test succeeds when 'a' has never been assigned a value.  It also uses
+the built-in 'typeof()' function (not presented yet; *note Type
+Functions::) to show 'a''s type:
+
+     $ gawk 'BEGIN { print (a == "" && a == 0 ?
+     > "a is untyped" : "a has a type!") ; print typeof(a) }'
+     -| a is untyped
+     -| unassigned
+
+   A scalar has numeric type when assigned a numeric value, such as from
+a numeric constant, or from another scalar with numeric type:
+
+     $ gawk 'BEGIN { a = 42 ; print typeof(a)
+     > b = a ; print typeof(b) }'
+     number
+     number
+
+   Similarly, a scalar has string type when assigned a string value,
+such as from a string constant, or from another scalar with string type:
+
+     $ gawk 'BEGIN { a = "forty two" ; print typeof(a)
+     > b = a ; print typeof(b) }'
+     string
+     string
+
+   So far, this is all simple and straightforward.  What happens,
+though, when 'awk' has to process data from a user?  Let's start with
+field data.  What should the following command produce as output?
+
+     echo hello | awk '{ printf("%s %s < 42\n", $1,
+                                ($1 < 42 ? "is" : "is not")) }'
+
+Since 'hello' is alphabetic data, 'awk' can only do a string comparison.
+Internally, it converts '42' into '"42"' and compares the two string
+values '"hello"' and '"42"'.  Here's the result:
+
+     $ echo hello | awk '{ printf("%s %s < 42\n", $1,
+     >                            ($1 < 42 ? "is" : "is not")) }'
+     -| hello is not < 42
+
+   However, what happens when data from a user _looks like_ a number?
+On the one hand, in reality, the input data consists of characters, not
+binary numeric values.  But, on the other hand, the data looks numeric,
+and 'awk' really ought to treat it as such.  And indeed, it does:
+
+     $ echo 37 | awk '{ printf("%s %s < 42\n", $1,
+     >                         ($1 < 42 ? "is" : "is not")) }'
+     -| 37 is < 42
+
+   Here are the rules for when 'awk' treats data as a number, and for
+when it treats data as a string.
+
+   The POSIX standard uses the term "numeric string" for input data that
+looks numeric.  The '37' in the previous example is a numeric string.
+So what is the type of a numeric string?  Answer: numeric.
+
+   The type of a variable is important because the types of two
+variables determine how they are compared.  Variable typing follows
+these definitions and rules:
+
+   * A numeric constant or the result of a numeric operation has the
+     "numeric" attribute.
+
+   * A string constant or the result of a string operation has the
+     "string" attribute.
+
+   * Fields, 'getline' input, 'FILENAME', 'ARGV' elements, 'ENVIRON'
+     elements, and the elements of an array created by 'match()',
+     'split()', and 'patsplit()' that are numeric strings have the
+     "strnum" attribute.(2)  Otherwise, they have the "string"
+     attribute.  Uninitialized variables also have the "strnum"
+     attribute.
+
+   * Attributes propagate across assignments but are not changed by any
+     use.
+
+   The last rule is particularly important.  In the following program,
+'a' has numeric type, even though it is later used in a string
+operation:
+
+     BEGIN {
+          a = 12.345
+          b = a " is a cute number"
+          print b
+     }
+
+   When two operands are compared, either string comparison or numeric
+comparison may be used.  This depends upon the attributes of the
+operands, according to the following symmetric matrix:
+
+        +----------------------------------------------
+        |       STRING          NUMERIC         STRNUM
+--------+----------------------------------------------
+        |
+STRING  |       string          string          string
+        |
+NUMERIC |       string          numeric         numeric
+        |
+STRNUM  |       string          numeric         numeric
+--------+----------------------------------------------
+
+   The basic idea is that user input that looks numeric--and _only_ user
+input--should be treated as numeric, even though it is actually made of
+characters and is therefore also a string.  Thus, for example, the
+string constant '" +3.14"', when it appears in program source code, is a
+string--even though it looks numeric--and is _never_ treated as a number
+for comparison purposes.
+
+   In short, when one operand is a "pure" string, such as a string
+constant, then a string comparison is performed.  Otherwise, a numeric
+comparison is performed.  (The primary difference between a number and a
+strnum is that for strnums 'gawk' preserves the original string value
+that the scalar had when it came in.)
+
+   This point bears additional emphasis: Input that looks numeric _is_
+numeric.  All other input is treated as strings.
+
+   Thus, the six-character input string ' +3.14' receives the strnum
+attribute.  In contrast, the eight characters '" +3.14"' appearing in
+program text comprise a string constant.  The following examples print
+'1' when the comparison between the two different constants is true, and
+'0' otherwise:
+
+     $ echo ' +3.14' | awk '{ print($0 == " +3.14") }'    True
+     -| 1
+     $ echo ' +3.14' | awk '{ print($0 == "+3.14") }'     False
+     -| 0
+     $ echo ' +3.14' | awk '{ print($0 == "3.14") }'      False
+     -| 0
+     $ echo ' +3.14' | awk '{ print($0 == 3.14) }'        True
+     -| 1
+     $ echo ' +3.14' | awk '{ print($1 == " +3.14") }'    False
+     -| 0
+     $ echo ' +3.14' | awk '{ print($1 == "+3.14") }'     True
+     -| 1
+     $ echo ' +3.14' | awk '{ print($1 == "3.14") }'      False
+     -| 0
+     $ echo ' +3.14' | awk '{ print($1 == 3.14) }'        True
+     -| 1
+
+   You can see the type of an input field (or other user input) using
+'typeof()':
+
+     $ echo hello 37 | gawk '{ print typeof($1), typeof($2) }'
+     -| string strnum
+
+   ---------- Footnotes ----------
+
+   (1) 'gawk' calls this "unassigned", as the following example shows.
+
+   (2) Thus, a POSIX numeric string and 'gawk''s strnum are the same
+thing.
+
+File: gawk.info,  Node: Comparison Operators,  Next: POSIX String Comparison,  Prev: Variable Typing,  Up: Typing and Comparison
+
+6.3.2.2 Comparison Operators
+............................
+
+"Comparison expressions" compare strings or numbers for relationships
+such as equality.  They are written using "relational operators", which
+are a superset of those in C. *note Table 6.3: table-relational-ops.
+describes them.
+
+Expression         Result
+--------------------------------------------------------------------------
+X '<' Y            True if X is less than Y
+X '<=' Y           True if X is less than or equal to Y
+X '>' Y            True if X is greater than Y
+X '>=' Y           True if X is greater than or equal to Y
+X '==' Y           True if X is equal to Y
+X '!=' Y           True if X is not equal to Y
+X '~' Y            True if the string X matches the regexp denoted by Y
+X '!~' Y           True if the string X does not match the regexp
+                   denoted by Y
+SUBSCRIPT 'in'     True if the array ARRAY has an element with the
+ARRAY              subscript SUBSCRIPT
+
+Table 6.3: Relational operators
+
+   Comparison expressions have the value one if true and zero if false.
+When comparing operands of mixed types, numeric operands are converted
+to strings using the value of 'CONVFMT' (*note Conversion::).
+
+   Strings are compared by comparing the first character of each, then
+the second character of each, and so on.  Thus, '"10"' is less than
+'"9"'.  If there are two strings where one is a prefix of the other, the
+shorter string is less than the longer one.  Thus, '"abc"' is less than
+'"abcd"'.
+
+   It is very easy to accidentally mistype the '==' operator and leave
+off one of the '=' characters.  The result is still valid 'awk' code,
+but the program does not do what is intended:
+
+     if (a = b)   # oops! should be a == b
+        ...
+     else
+        ...
+
+Unless 'b' happens to be zero or the null string, the 'if' part of the
+test always succeeds.  Because the operators are so similar, this kind
+of error is very difficult to spot when scanning the source code.
+
+   The following list of expressions illustrates the kinds of
+comparisons 'awk' performs, as well as what the result of each
+comparison is:
+
+'1.5 <= 2.0'
+     Numeric comparison (true)
+
+'"abc" >= "xyz"'
+     String comparison (false)
+
+'1.5 != " +2"'
+     String comparison (true)
+
+'"1e2" < "3"'
+     String comparison (true)
+
+'a = 2; b = "2"'
+'a == b'
+     String comparison (true)
+
+'a = 2; b = " +2"'
+'a == b'
+     String comparison (false)
+
+   In this example:
+
+     $ echo 1e2 3 | awk '{ print ($1 < $2) ? "true" : "false" }'
+     -| false
+
+the result is 'false' because both '$1' and '$2' are user input.  They
+are numeric strings--therefore both have the strnum attribute, dictating
+a numeric comparison.  The purpose of the comparison rules and the use
+of numeric strings is to attempt to produce the behavior that is "least
+surprising," while still "doing the right thing."
+
+   String comparisons and regular expression comparisons are very
+different.  For example:
+
+     x == "foo"
+
+has the value one, or is true if the variable 'x' is precisely 'foo'.
+By contrast:
+
+     x ~ /foo/
+
+has the value one if 'x' contains 'foo', such as '"Oh, what a fool am
+I!"'.
+
+   The righthand operand of the '~' and '!~' operators may be either a
+regexp constant ('/'...'/') or an ordinary expression.  In the latter
+case, the value of the expression as a string is used as a dynamic
+regexp (*note Regexp Usage::; also *note Computed Regexps::).
+
+   A constant regular expression in slashes by itself is also an
+expression.  '/REGEXP/' is an abbreviation for the following comparison
+expression:
+
+     $0 ~ /REGEXP/
+
+   One special place where '/foo/' is _not_ an abbreviation for '$0 ~
+/foo/' is when it is the righthand operand of '~' or '!~'.  *Note Using
+Constant Regexps::, where this is discussed in more detail.
+
+File: gawk.info,  Node: POSIX String Comparison,  Prev: Comparison Operators,  Up: Typing and Comparison
+
+6.3.2.3 String Comparison Based on Locale Collating Order
+.........................................................
+
+The POSIX standard used to say that all string comparisons are performed
+based on the locale's "collating order".  This is the order in which
+characters sort, as defined by the locale (for more discussion, *note
+Locales::).  This order is usually very different from the results
+obtained when doing straight byte-by-byte comparison.(1)
+
+   Because this behavior differs considerably from existing practice,
+'gawk' only implemented it when in POSIX mode (*note Options::).  Here
+is an example to illustrate the difference, in an 'en_US.UTF-8' locale:
+
+     $ gawk 'BEGIN { printf("ABC < abc = %s\n",
+     >                     ("ABC" < "abc" ? "TRUE" : "FALSE")) }'
+     -| ABC < abc = TRUE
+     $ gawk --posix 'BEGIN { printf("ABC < abc = %s\n",
+     >                             ("ABC" < "abc" ? "TRUE" : "FALSE")) }'
+     -| ABC < abc = FALSE
+
+   Fortunately, as of August 2016, comparison based on locale collating
+order is no longer required for the '==' and '!=' operators.(2)
+However, comparison based on locales is still required for '<', '<=',
+'>', and '>='.  POSIX thus recommends as follows:
+
+     Since the '==' operator checks whether strings are identical, not
+     whether they collate equally, applications needing to check whether
+     strings collate equally can use:
+
+          a <= b && a >= b
+
+   As of version 4.2, 'gawk' continues to use locale collating order for
+'<', '<=', '>', and '>=' only in POSIX mode.
+
+   ---------- Footnotes ----------
+
+   (1) Technically, string comparison is supposed to behave the same way
+as if the strings were compared with the C 'strcoll()' function.
+
+   (2) See the Austin Group website
+(http://austingroupbugs.net/view.php?id=1070).
+
+File: gawk.info,  Node: Boolean Ops,  Next: Conditional Exp,  Prev: Typing and Comparison,  Up: Truth Values and Conditions
+
+6.3.3 Boolean Expressions
+-------------------------
+
+A "Boolean expression" is a combination of comparison expressions or
+matching expressions, using the Boolean operators "or" ('||'), "and"
+('&&'), and "not" ('!'), along with parentheses to control nesting.  The
+truth value of the Boolean expression is computed by combining the truth
+values of the component expressions.  Boolean expressions are also
+referred to as "logical expressions".  The terms are equivalent.
+
+   Boolean expressions can be used wherever comparison and matching
+expressions can be used.  They can be used in 'if', 'while', 'do', and
+'for' statements (*note Statements::).  They have numeric values (one if
+true, zero if false) that come into play if the result of the Boolean
+expression is stored in a variable or used in arithmetic.
+
+   In addition, every Boolean expression is also a valid pattern, so you
+can use one as a pattern to control the execution of rules.  The Boolean
+operators are:
+
+'BOOLEAN1 && BOOLEAN2'
+     True if both BOOLEAN1 and BOOLEAN2 are true.  For example, the
+     following statement prints the current input record if it contains
+     both 'edu' and 'li':
+
+          if ($0 ~ /edu/ && $0 ~ /li/) print
+
+     The subexpression BOOLEAN2 is evaluated only if BOOLEAN1 is true.
+     This can make a difference when BOOLEAN2 contains expressions that
+     have side effects.  In the case of '$0 ~ /foo/ && ($2 == bar++)',
+     the variable 'bar' is not incremented if there is no substring
+     'foo' in the record.
+
+'BOOLEAN1 || BOOLEAN2'
+     True if at least one of BOOLEAN1 or BOOLEAN2 is true.  For example,
+     the following statement prints all records in the input that
+     contain _either_ 'edu' or 'li':
+
+          if ($0 ~ /edu/ || $0 ~ /li/) print
+
+     The subexpression BOOLEAN2 is evaluated only if BOOLEAN1 is false.
+     This can make a difference when BOOLEAN2 contains expressions that
+     have side effects.  (Thus, this test never really distinguishes
+     records that contain both 'edu' and 'li'--as soon as 'edu' is
+     matched, the full test succeeds.)
+
+'! BOOLEAN'
+     True if BOOLEAN is false.  For example, the following program
+     prints 'no home!' in the unusual event that the 'HOME' environment
+     variable is not defined:
+
+          BEGIN { if (! ("HOME" in ENVIRON))
+                      print "no home!" }
+
+     (The 'in' operator is described in *note Reference to Elements::.)
+
+   The '&&' and '||' operators are called "short-circuit" operators
+because of the way they work.  Evaluation of the full expression is
+"short-circuited" if the result can be determined partway through its
+evaluation.
+
+   Statements that end with '&&' or '||' can be continued simply by
+putting a newline after them.  But you cannot put a newline in front of
+either of these operators without using backslash continuation (*note
+Statements/Lines::).
+
+   The actual value of an expression using the '!' operator is either
+one or zero, depending upon the truth value of the expression it is
+applied to.  The '!' operator is often useful for changing the sense of
+a flag variable from false to true and back again.  For example, the
+following program is one way to print lines in between special
+bracketing lines:
+
+     $1 == "START"   { interested = ! interested; next }
+     interested      { print }
+     $1 == "END"     { interested = ! interested; next }
+
+The variable 'interested', as with all 'awk' variables, starts out
+initialized to zero, which is also false.  When a line is seen whose
+first field is 'START', the value of 'interested' is toggled to true,
+using '!'.  The next rule prints lines as long as 'interested' is true.
+When a line is seen whose first field is 'END', 'interested' is toggled
+back to false.(1)
+
+   Most commonly, the '!' operator is used in the conditions of 'if' and
+'while' statements, where it often makes more sense to phrase the logic
+in the negative:
+
+     if (! SOME CONDITION || SOME OTHER CONDITION) {
+         ... DO WHATEVER PROCESSING ...
+     }
+
+     NOTE: The 'next' statement is discussed in *note Next Statement::.
+     'next' tells 'awk' to skip the rest of the rules, get the next
+     record, and start processing the rules over again at the top.  The
+     reason it's there is to avoid printing the bracketing 'START' and
+     'END' lines.
+
+   ---------- Footnotes ----------
+
+   (1) This program has a bug; it prints lines starting with 'END'.  How
+would you fix it?
+
+File: gawk.info,  Node: Conditional Exp,  Prev: Boolean Ops,  Up: Truth Values and Conditions
+
+6.3.4 Conditional Expressions
+-----------------------------
+
+A "conditional expression" is a special kind of expression that has
+three operands.  It allows you to use one expression's value to select
+one of two other expressions.  The conditional expression in 'awk' is
+the same as in the C language, as shown here:
+
+     SELECTOR ? IF-TRUE-EXP : IF-FALSE-EXP
+
+There are three subexpressions.  The first, SELECTOR, is always computed
+first.  If it is "true" (not zero or not null), then IF-TRUE-EXP is
+computed next, and its value becomes the value of the whole expression.
+Otherwise, IF-FALSE-EXP is computed next, and its value becomes the
+value of the whole expression.  For example, the following expression
+produces the absolute value of 'x':
+
+     x >= 0 ? x : -x
+
+   Each time the conditional expression is computed, only one of
+IF-TRUE-EXP and IF-FALSE-EXP is used; the other is ignored.  This is
+important when the expressions have side effects.  For example, this
+conditional expression examines element 'i' of either array 'a' or array
+'b', and increments 'i':
+
+     x == y ? a[i++] : b[i++]
+
+This is guaranteed to increment 'i' exactly once, because each time only
+one of the two increment expressions is executed and the other is not.
+*Note Arrays::, for more information about arrays.
+
+   As a minor 'gawk' extension, a statement that uses '?:' can be
+continued simply by putting a newline after either character.  However,
+putting a newline in front of either character does not work without
+using backslash continuation (*note Statements/Lines::).  If '--posix'
+is specified (*note Options::), this extension is disabled.
+
+File: gawk.info,  Node: Function Calls,  Next: Precedence,  Prev: Truth Values and Conditions,  Up: Expressions
+

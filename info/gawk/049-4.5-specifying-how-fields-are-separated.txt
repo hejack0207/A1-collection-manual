@@ -1,0 +1,362 @@
+4.5 Specifying How Fields Are Separated
+=======================================
+
+* Menu:
+
+* Default Field Splitting::      How fields are normally separated.
+* Regexp Field Splitting::       Using regexps as the field separator.
+* Single Character Fields::      Making each character a separate field.
+* Command Line Field Separator:: Setting 'FS' from the command line.
+* Full Line Fields::             Making the full line be a single field.
+* Field Splitting Summary::      Some final points and a summary table.
+
+The "field separator", which is either a single character or a regular
+expression, controls the way 'awk' splits an input record into fields.
+'awk' scans the input record for character sequences that match the
+separator; the fields themselves are the text between the matches.
+
+   In the examples that follow, we use the bullet symbol (*) to
+represent spaces in the output.  If the field separator is 'oo', then
+the following line:
+
+     moo goo gai pan
+
+is split into three fields: 'm', '*g', and '*gai*pan'.  Note the leading
+spaces in the values of the second and third fields.
+
+   The field separator is represented by the predefined variable 'FS'.
+Shell programmers take note: 'awk' does _not_ use the name 'IFS' that is
+used by the POSIX-compliant shells (such as the Unix Bourne shell, 'sh',
+or Bash).
+
+   The value of 'FS' can be changed in the 'awk' program with the
+assignment operator, '=' (*note Assignment Ops::).  Often, the right
+time to do this is at the beginning of execution before any input has
+been processed, so that the very first record is read with the proper
+separator.  To do this, use the special 'BEGIN' pattern (*note
+BEGIN/END::).  For example, here we set the value of 'FS' to the string
+'","':
+
+     awk 'BEGIN { FS = "," } ; { print $2 }'
+
+Given the input line:
+
+     John Q. Smith, 29 Oak St., Walamazoo, MI 42139
+
+this 'awk' program extracts and prints the string '*29*Oak*St.'.
+
+   Sometimes the input data contains separator characters that don't
+separate fields the way you thought they would.  For instance, the
+person's name in the example we just used might have a title or suffix
+attached, such as:
+
+     John Q. Smith, LXIX, 29 Oak St., Walamazoo, MI 42139
+
+The same program would extract '*LXIX' instead of '*29*Oak*St.'.  If you
+were expecting the program to print the address, you would be surprised.
+The moral is to choose your data layout and separator characters
+carefully to prevent such problems.  (If the data is not in a form that
+is easy to process, perhaps you can massage it first with a separate
+'awk' program.)
+
+File: gawk.info,  Node: Default Field Splitting,  Next: Regexp Field Splitting,  Up: Field Separators
+
+4.5.1 Whitespace Normally Separates Fields
+------------------------------------------
+
+Fields are normally separated by whitespace sequences (spaces, TABs, and
+newlines), not by single spaces.  Two spaces in a row do not delimit an
+empty field.  The default value of the field separator 'FS' is a string
+containing a single space, '" "'.  If 'awk' interpreted this value in
+the usual way, each space character would separate fields, so two spaces
+in a row would make an empty field between them.  The reason this does
+not happen is that a single space as the value of 'FS' is a special
+case--it is taken to specify the default manner of delimiting fields.
+
+   If 'FS' is any other single character, such as '","', then each
+occurrence of that character separates two fields.  Two consecutive
+occurrences delimit an empty field.  If the character occurs at the
+beginning or the end of the line, that too delimits an empty field.  The
+space character is the only single character that does not follow these
+rules.
+
+File: gawk.info,  Node: Regexp Field Splitting,  Next: Single Character Fields,  Prev: Default Field Splitting,  Up: Field Separators
+
+4.5.2 Using Regular Expressions to Separate Fields
+--------------------------------------------------
+
+The previous node discussed the use of single characters or simple
+strings as the value of 'FS'.  More generally, the value of 'FS' may be
+a string containing any regular expression.  In this case, each match in
+the record for the regular expression separates fields.  For example,
+the assignment:
+
+     FS = ", \t"
+
+makes every area of an input line that consists of a comma followed by a
+space and a TAB into a field separator.  ('\t' is an "escape sequence"
+that stands for a TAB; *note Escape Sequences::, for the complete list
+of similar escape sequences.)
+
+   For a less trivial example of a regular expression, try using single
+spaces to separate fields the way single commas are used.  'FS' can be
+set to '"[ ]"' (left bracket, space, right bracket).  This regular
+expression matches a single space and nothing else (*note Regexp::).
+
+   There is an important difference between the two cases of 'FS = " "'
+(a single space) and 'FS = "[ \t\n]+"' (a regular expression matching
+one or more spaces, TABs, or newlines).  For both values of 'FS', fields
+are separated by "runs" (multiple adjacent occurrences) of spaces, TABs,
+and/or newlines.  However, when the value of 'FS' is '" "', 'awk' first
+strips leading and trailing whitespace from the record and then decides
+where the fields are.  For example, the following pipeline prints 'b':
+
+     $ echo ' a b c d ' | awk '{ print $2 }'
+     -| b
+
+However, this pipeline prints 'a' (note the extra spaces around each
+letter):
+
+     $ echo ' a  b  c  d ' | awk 'BEGIN { FS = "[ \t\n]+" }
+     >                                  { print $2 }'
+     -| a
+
+In this case, the first field is null, or empty.
+
+   The stripping of leading and trailing whitespace also comes into play
+whenever '$0' is recomputed.  For instance, study this pipeline:
+
+     $ echo '   a b c d' | awk '{ print; $2 = $2; print }'
+     -|    a b c d
+     -| a b c d
+
+The first 'print' statement prints the record as it was read, with
+leading whitespace intact.  The assignment to '$2' rebuilds '$0' by
+concatenating '$1' through '$NF' together, separated by the value of
+'OFS' (which is a space by default).  Because the leading whitespace was
+ignored when finding '$1', it is not part of the new '$0'.  Finally, the
+last 'print' statement prints the new '$0'.
+
+   There is an additional subtlety to be aware of when using regular
+expressions for field splitting.  It is not well specified in the POSIX
+standard, or anywhere else, what '^' means when splitting fields.  Does
+the '^' match only at the beginning of the entire record?  Or is each
+field separator a new string?  It turns out that different 'awk'
+versions answer this question differently, and you should not rely on
+any specific behavior in your programs.  (d.c.)
+
+   As a point of information, BWK 'awk' allows '^' to match only at the
+beginning of the record.  'gawk' also works this way.  For example:
+
+     $ echo 'xxAA  xxBxx  C' |
+     > gawk -F '(^x+)|( +)' '{ for (i = 1; i <= NF; i++)
+     >                             printf "-->%s<--\n", $i }'
+     -| --><--
+     -| -->AA<--
+     -| -->xxBxx<--
+     -| -->C<--
+
+File: gawk.info,  Node: Single Character Fields,  Next: Command Line Field Separator,  Prev: Regexp Field Splitting,  Up: Field Separators
+
+4.5.3 Making Each Character a Separate Field
+--------------------------------------------
+
+There are times when you may want to examine each character of a record
+separately.  This can be done in 'gawk' by simply assigning the null
+string ('""') to 'FS'.  (c.e.)  In this case, each individual character
+in the record becomes a separate field.  For example:
+
+     $ echo a b | gawk 'BEGIN { FS = "" }
+     >                  {
+     >                      for (i = 1; i <= NF; i = i + 1)
+     >                          print "Field", i, "is", $i
+     >                  }'
+     -| Field 1 is a
+     -| Field 2 is
+     -| Field 3 is b
+
+   Traditionally, the behavior of 'FS' equal to '""' was not defined.
+In this case, most versions of Unix 'awk' simply treat the entire record
+as only having one field.  (d.c.)  In compatibility mode (*note
+Options::), if 'FS' is the null string, then 'gawk' also behaves this
+way.
+
+File: gawk.info,  Node: Command Line Field Separator,  Next: Full Line Fields,  Prev: Single Character Fields,  Up: Field Separators
+
+4.5.4 Setting 'FS' from the Command Line
+----------------------------------------
+
+'FS' can be set on the command line.  Use the '-F' option to do so.  For
+example:
+
+     awk -F, 'PROGRAM' INPUT-FILES
+
+sets 'FS' to the ',' character.  Notice that the option uses an
+uppercase 'F' instead of a lowercase 'f'.  The latter option ('-f')
+specifies a file containing an 'awk' program.
+
+   The value used for the argument to '-F' is processed in exactly the
+same way as assignments to the predefined variable 'FS'.  Any special
+characters in the field separator must be escaped appropriately.  For
+example, to use a '\' as the field separator on the command line, you
+would have to type:
+
+     # same as FS = "\\"
+     awk -F\\\\ '...' files ...
+
+Because '\' is used for quoting in the shell, 'awk' sees '-F\\'.  Then
+'awk' processes the '\\' for escape characters (*note Escape
+Sequences::), finally yielding a single '\' to use for the field
+separator.
+
+   As a special case, in compatibility mode (*note Options::), if the
+argument to '-F' is 't', then 'FS' is set to the TAB character.  If you
+type '-F\t' at the shell, without any quotes, the '\' gets deleted, so
+'awk' figures that you really want your fields to be separated with TABs
+and not 't's.  Use '-v FS="t"' or '-F"[t]"' on the command line if you
+really do want to separate your fields with 't's.  Use '-F '\t'' when
+not in compatibility mode to specify that TABs separate fields.
+
+   As an example, let's use an 'awk' program file called 'edu.awk' that
+contains the pattern '/edu/' and the action 'print $1':
+
+     /edu/   { print $1 }
+
+   Let's also set 'FS' to be the '-' character and run the program on
+the file 'mail-list'.  The following command prints a list of the names
+of the people that work at or attend a university, and the first three
+digits of their phone numbers:
+
+     $ awk -F- -f edu.awk mail-list
+     -| Fabius       555
+     -| Samuel       555
+     -| Jean
+
+Note the third line of output.  The third line in the original file
+looked like this:
+
+     Jean-Paul    555-2127     jeanpaul.campanorum@nyu.edu     R
+
+   The '-' as part of the person's name was used as the field separator,
+instead of the '-' in the phone number that was originally intended.
+This demonstrates why you have to be careful in choosing your field and
+record separators.
+
+   Perhaps the most common use of a single character as the field
+separator occurs when processing the Unix system password file.  On many
+Unix systems, each user has a separate entry in the system password
+file, with one line per user.  The information in these lines is
+separated by colons.  The first field is the user's login name and the
+second is the user's encrypted or shadow password.  (A shadow password
+is indicated by the presence of a single 'x' in the second field.)  A
+password file entry might look like this:
+
+     arnold:x:2076:10:Arnold Robbins:/home/arnold:/bin/bash
+
+   The following program searches the system password file and prints
+the entries for users whose full name is not indicated:
+
+     awk -F: '$5 == ""' /etc/passwd
+
+File: gawk.info,  Node: Full Line Fields,  Next: Field Splitting Summary,  Prev: Command Line Field Separator,  Up: Field Separators
+
+4.5.5 Making the Full Line Be a Single Field
+--------------------------------------------
+
+Occasionally, it's useful to treat the whole input line as a single
+field.  This can be done easily and portably simply by setting 'FS' to
+'"\n"' (a newline):(1)
+
+     awk -F'\n' 'PROGRAM' FILES ...
+
+When you do this, '$1' is the same as '$0'.
+
+               Changing 'FS' Does Not Affect the Fields
+
+   According to the POSIX standard, 'awk' is supposed to behave as if
+each record is split into fields at the time it is read.  In particular,
+this means that if you change the value of 'FS' after a record is read,
+the values of the fields (i.e., how they were split) should reflect the
+old value of 'FS', not the new one.
+
+   However, many older implementations of 'awk' do not work this way.
+Instead, they defer splitting the fields until a field is actually
+referenced.  The fields are split using the _current_ value of 'FS'!
+(d.c.)  This behavior can be difficult to diagnose.  The following
+example illustrates the difference between the two methods:
+
+     sed 1q /etc/passwd | awk '{ FS = ":" ; print $1 }'
+
+which usually prints:
+
+     root
+
+on an incorrect implementation of 'awk', while 'gawk' prints the full
+first line of the file, something like:
+
+     root:x:0:0:Root:/:
+
+   (The 'sed'(2) command prints just the first line of '/etc/passwd'.)
+
+   ---------- Footnotes ----------
+
+   (1) Thanks to Andrew Schorr for this tip.
+
+   (2) The 'sed' utility is a "stream editor."  Its behavior is also
+defined by the POSIX standard.
+
+File: gawk.info,  Node: Field Splitting Summary,  Prev: Full Line Fields,  Up: Field Separators
+
+4.5.6 Field-Splitting Summary
+-----------------------------
+
+It is important to remember that when you assign a string constant as
+the value of 'FS', it undergoes normal 'awk' string processing.  For
+example, with Unix 'awk' and 'gawk', the assignment 'FS = "\.."' assigns
+the character string '".."' to 'FS' (the backslash is stripped).  This
+creates a regexp meaning "fields are separated by occurrences of any two
+characters."  If instead you want fields to be separated by a literal
+period followed by any single character, use 'FS = "\\.."'.
+
+   The following list summarizes how fields are split, based on the
+value of 'FS' ('==' means "is equal to"):
+
+'FS == " "'
+     Fields are separated by runs of whitespace.  Leading and trailing
+     whitespace are ignored.  This is the default.
+
+'FS == ANY OTHER SINGLE CHARACTER'
+     Fields are separated by each occurrence of the character.  Multiple
+     successive occurrences delimit empty fields, as do leading and
+     trailing occurrences.  The character can even be a regexp
+     metacharacter; it does not need to be escaped.
+
+'FS == REGEXP'
+     Fields are separated by occurrences of characters that match
+     REGEXP.  Leading and trailing matches of REGEXP delimit empty
+     fields.
+
+'FS == ""'
+     Each individual character in the record becomes a separate field.
+     (This is a common extension; it is not specified by the POSIX
+     standard.)
+
+                         'FS' and 'IGNORECASE'
+
+   The 'IGNORECASE' variable (*note User-modified::) affects field
+splitting _only_ when the value of 'FS' is a regexp.  It has no effect
+when 'FS' is a single character, even if that character is a letter.
+Thus, in the following code:
+
+     FS = "c"
+     IGNORECASE = 1
+     $0 = "aCa"
+     print $1
+
+The output is 'aCa'.  If you really want to split fields on an
+alphabetic character while ignoring case, use a regexp that will do it
+for you (e.g., 'FS = "[c]"').  In this case, 'IGNORECASE' will take
+effect.
+
+File: gawk.info,  Node: Constant Size,  Next: Splitting By Content,  Prev: Field Separators,  Up: Reading Files
+

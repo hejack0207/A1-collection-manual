@@ -1,0 +1,569 @@
+7.4 Control Statements in Actions
+=================================
+
+"Control statements", such as 'if', 'while', and so on, control the flow
+of execution in 'awk' programs.  Most of 'awk''s control statements are
+patterned after similar statements in C.
+
+   All the control statements start with special keywords, such as 'if'
+and 'while', to distinguish them from simple expressions.  Many control
+statements contain other statements.  For example, the 'if' statement
+contains another statement that may or may not be executed.  The
+contained statement is called the "body".  To include more than one
+statement in the body, group them into a single "compound statement"
+with braces, separating them with newlines or semicolons.
+
+* Menu:
+
+* If Statement::                Conditionally execute some 'awk'
+                                statements.
+* While Statement::             Loop until some condition is satisfied.
+* Do Statement::                Do specified action while looping until some
+                                condition is satisfied.
+* For Statement::               Another looping statement, that provides
+                                initialization and increment clauses.
+* Switch Statement::            Switch/case evaluation for conditional
+                                execution of statements based on a value.
+* Break Statement::             Immediately exit the innermost enclosing loop.
+* Continue Statement::          Skip to the end of the innermost enclosing
+                                loop.
+* Next Statement::              Stop processing the current input record.
+* Nextfile Statement::          Stop processing the current file.
+* Exit Statement::              Stop execution of 'awk'.
+
+File: gawk.info,  Node: If Statement,  Next: While Statement,  Up: Statements
+
+7.4.1 The 'if'-'else' Statement
+-------------------------------
+
+The 'if'-'else' statement is 'awk''s decision-making statement.  It
+looks like this:
+
+     'if (CONDITION) THEN-BODY' ['else ELSE-BODY']
+
+The CONDITION is an expression that controls what the rest of the
+statement does.  If the CONDITION is true, THEN-BODY is executed;
+otherwise, ELSE-BODY is executed.  The 'else' part of the statement is
+optional.  The condition is considered false if its value is zero or the
+null string; otherwise, the condition is true.  Refer to the following:
+
+     if (x % 2 == 0)
+         print "x is even"
+     else
+         print "x is odd"
+
+   In this example, if the expression 'x % 2 == 0' is true (i.e., if the
+value of 'x' is evenly divisible by two), then the first 'print'
+statement is executed; otherwise, the second 'print' statement is
+executed.  If the 'else' keyword appears on the same line as THEN-BODY
+and THEN-BODY is not a compound statement (i.e., not surrounded by
+braces), then a semicolon must separate THEN-BODY from the 'else'.  To
+illustrate this, the previous example can be rewritten as:
+
+     if (x % 2 == 0) print "x is even"; else
+             print "x is odd"
+
+If the ';' is left out, 'awk' can't interpret the statement and it
+produces a syntax error.  Don't actually write programs this way,
+because a human reader might fail to see the 'else' if it is not the
+first thing on its line.
+
+File: gawk.info,  Node: While Statement,  Next: Do Statement,  Prev: If Statement,  Up: Statements
+
+7.4.2 The 'while' Statement
+---------------------------
+
+In programming, a "loop" is a part of a program that can be executed two
+or more times in succession.  The 'while' statement is the simplest
+looping statement in 'awk'.  It repeatedly executes a statement as long
+as a condition is true.  For example:
+
+     while (CONDITION)
+       BODY
+
+BODY is a statement called the "body" of the loop, and CONDITION is an
+expression that controls how long the loop keeps running.  The first
+thing the 'while' statement does is test the CONDITION.  If the
+CONDITION is true, it executes the statement BODY.  (The CONDITION is
+true when the value is not zero and not a null string.)  After BODY has
+been executed, CONDITION is tested again, and if it is still true, BODY
+executes again.  This process repeats until the CONDITION is no longer
+true.  If the CONDITION is initially false, the body of the loop never
+executes and 'awk' continues with the statement following the loop.
+This example prints the first three fields of each record, one per line:
+
+     awk '
+     {
+         i = 1
+         while (i <= 3) {
+             print $i
+             i++
+         }
+     }' inventory-shipped
+
+The body of this loop is a compound statement enclosed in braces,
+containing two statements.  The loop works in the following manner:
+first, the value of 'i' is set to one.  Then, the 'while' statement
+tests whether 'i' is less than or equal to three.  This is true when 'i'
+equals one, so the 'i'th field is printed.  Then the 'i++' increments
+the value of 'i' and the loop repeats.  The loop terminates when 'i'
+reaches four.
+
+   A newline is not required between the condition and the body;
+however, using one makes the program clearer unless the body is a
+compound statement or else is very simple.  The newline after the open
+brace that begins the compound statement is not required either, but the
+program is harder to read without it.
+
+File: gawk.info,  Node: Do Statement,  Next: For Statement,  Prev: While Statement,  Up: Statements
+
+7.4.3 The 'do'-'while' Statement
+--------------------------------
+
+The 'do' loop is a variation of the 'while' looping statement.  The 'do'
+loop executes the BODY once and then repeats the BODY as long as the
+CONDITION is true.  It looks like this:
+
+     do
+       BODY
+     while (CONDITION)
+
+   Even if the CONDITION is false at the start, the BODY executes at
+least once (and only once, unless executing BODY makes CONDITION true).
+Contrast this with the corresponding 'while' statement:
+
+     while (CONDITION)
+         BODY
+
+This statement does not execute the BODY even once if the CONDITION is
+false to begin with.  The following is an example of a 'do' statement:
+
+     {
+         i = 1
+         do {
+             print $0
+             i++
+         } while (i <= 10)
+     }
+
+This program prints each input record 10 times.  However, it isn't a
+very realistic example, because in this case an ordinary 'while' would
+do just as well.  This situation reflects actual experience; only
+occasionally is there a real use for a 'do' statement.
+
+File: gawk.info,  Node: For Statement,  Next: Switch Statement,  Prev: Do Statement,  Up: Statements
+
+7.4.4 The 'for' Statement
+-------------------------
+
+The 'for' statement makes it more convenient to count iterations of a
+loop.  The general form of the 'for' statement looks like this:
+
+     for (INITIALIZATION; CONDITION; INCREMENT)
+       BODY
+
+The INITIALIZATION, CONDITION, and INCREMENT parts are arbitrary 'awk'
+expressions, and BODY stands for any 'awk' statement.
+
+   The 'for' statement starts by executing INITIALIZATION.  Then, as
+long as the CONDITION is true, it repeatedly executes BODY and then
+INCREMENT.  Typically, INITIALIZATION sets a variable to either zero or
+one, INCREMENT adds one to it, and CONDITION compares it against the
+desired number of iterations.  For example:
+
+     awk '
+     {
+         for (i = 1; i <= 3; i++)
+             print $i
+     }' inventory-shipped
+
+This prints the first three fields of each input record, with one input
+field per output line.
+
+   It isn't possible to set more than one variable in the INITIALIZATION
+part without using a multiple assignment statement such as 'x = y = 0'.
+This makes sense only if all the initial values are equal.  (But it is
+possible to initialize additional variables by writing their assignments
+as separate statements preceding the 'for' loop.)
+
+   The same is true of the INCREMENT part.  Incrementing additional
+variables requires separate statements at the end of the loop.  The C
+compound expression, using C's comma operator, is useful in this
+context, but it is not supported in 'awk'.
+
+   Most often, INCREMENT is an increment expression, as in the previous
+example.  But this is not required; it can be any expression whatsoever.
+For example, the following statement prints all the powers of two
+between 1 and 100:
+
+     for (i = 1; i <= 100; i *= 2)
+         print i
+
+   If there is nothing to be done, any of the three expressions in the
+parentheses following the 'for' keyword may be omitted.  Thus,
+'for (; x > 0;)' is equivalent to 'while (x > 0)'.  If the CONDITION is
+omitted, it is treated as true, effectively yielding an "infinite loop"
+(i.e., a loop that never terminates).
+
+   In most cases, a 'for' loop is an abbreviation for a 'while' loop, as
+shown here:
+
+     INITIALIZATION
+     while (CONDITION) {
+       BODY
+       INCREMENT
+     }
+
+The only exception is when the 'continue' statement (*note Continue
+Statement::) is used inside the loop.  Changing a 'for' statement to a
+'while' statement in this way can change the effect of the 'continue'
+statement inside the loop.
+
+   The 'awk' language has a 'for' statement in addition to a 'while'
+statement because a 'for' loop is often both less work to type and more
+natural to think of.  Counting the number of iterations is very common
+in loops.  It can be easier to think of this counting as part of looping
+rather than as something to do inside the loop.
+
+   There is an alternative version of the 'for' loop, for iterating over
+all the indices of an array:
+
+     for (i in array)
+         DO SOMETHING WITH array[i]
+
+*Note Scanning an Array:: for more information on this version of the
+'for' loop.
+
+File: gawk.info,  Node: Switch Statement,  Next: Break Statement,  Prev: For Statement,  Up: Statements
+
+7.4.5 The 'switch' Statement
+----------------------------
+
+This minor node describes a 'gawk'-specific feature.  If 'gawk' is in
+compatibility mode (*note Options::), it is not available.
+
+   The 'switch' statement allows the evaluation of an expression and the
+execution of statements based on a 'case' match.  Case statements are
+checked for a match in the order they are defined.  If no suitable
+'case' is found, the 'default' section is executed, if supplied.
+
+   Each 'case' contains a single constant, be it numeric, string, or
+regexp.  The 'switch' expression is evaluated, and then each 'case''s
+constant is compared against the result in turn.  The type of constant
+determines the comparison: numeric or string do the usual comparisons.
+A regexp constant does a regular expression match against the string
+value of the original expression.  The general form of the 'switch'
+statement looks like this:
+
+     switch (EXPRESSION) {
+     case VALUE OR REGULAR EXPRESSION:
+         CASE-BODY
+     default:
+         DEFAULT-BODY
+     }
+
+   Control flow in the 'switch' statement works as it does in C. Once a
+match to a given case is made, the case statement bodies execute until a
+'break', 'continue', 'next', 'nextfile', or 'exit' is encountered, or
+the end of the 'switch' statement itself.  For example:
+
+     while ((c = getopt(ARGC, ARGV, "aksx")) != -1) {
+         switch (c) {
+         case "a":
+             # report size of all files
+             all_files = TRUE;
+             break
+         case "k":
+             BLOCK_SIZE = 1024       # 1K block size
+             break
+         case "s":
+             # do sums only
+             sum_only = TRUE
+             break
+         case "x":
+             # don't cross filesystems
+             fts_flags = or(fts_flags, FTS_XDEV)
+             break
+         case "?":
+         default:
+             usage()
+             break
+         }
+     }
+
+   Note that if none of the statements specified here halt execution of
+a matched 'case' statement, execution falls through to the next 'case'
+until execution halts.  In this example, the 'case' for '"?"' falls
+through to the 'default' case, which is to call a function named
+'usage()'.  (The 'getopt()' function being called here is described in
+*note Getopt Function::.)
+
+File: gawk.info,  Node: Break Statement,  Next: Continue Statement,  Prev: Switch Statement,  Up: Statements
+
+7.4.6 The 'break' Statement
+---------------------------
+
+The 'break' statement jumps out of the innermost 'for', 'while', or 'do'
+loop that encloses it.  The following example finds the smallest divisor
+of any integer, and also identifies prime numbers:
+
+     # find smallest divisor of num
+     {
+         num = $1
+         for (divisor = 2; divisor * divisor <= num; divisor++) {
+             if (num % divisor == 0)
+                 break
+         }
+         if (num % divisor == 0)
+             printf "Smallest divisor of %d is %d\n", num, divisor
+         else
+             printf "%d is prime\n", num
+     }
+
+   When the remainder is zero in the first 'if' statement, 'awk'
+immediately "breaks out" of the containing 'for' loop.  This means that
+'awk' proceeds immediately to the statement following the loop and
+continues processing.  (This is very different from the 'exit'
+statement, which stops the entire 'awk' program.  *Note Exit
+Statement::.)
+
+   The following program illustrates how the CONDITION of a 'for' or
+'while' statement could be replaced with a 'break' inside an 'if':
+
+     # find smallest divisor of num
+     {
+         num = $1
+         for (divisor = 2; ; divisor++) {
+             if (num % divisor == 0) {
+                 printf "Smallest divisor of %d is %d\n", num, divisor
+                 break
+             }
+             if (divisor * divisor > num) {
+                 printf "%d is prime\n", num
+                 break
+             }
+         }
+     }
+
+   The 'break' statement is also used to break out of the 'switch'
+statement.  This is discussed in *note Switch Statement::.
+
+   The 'break' statement has no meaning when used outside the body of a
+loop or 'switch'.  However, although it was never documented, historical
+implementations of 'awk' treated the 'break' statement outside of a loop
+as if it were a 'next' statement (*note Next Statement::).  (d.c.)
+Recent versions of BWK 'awk' no longer allow this usage, nor does
+'gawk'.
+
+File: gawk.info,  Node: Continue Statement,  Next: Next Statement,  Prev: Break Statement,  Up: Statements
+
+7.4.7 The 'continue' Statement
+------------------------------
+
+Similar to 'break', the 'continue' statement is used only inside 'for',
+'while', and 'do' loops.  It skips over the rest of the loop body,
+causing the next cycle around the loop to begin immediately.  Contrast
+this with 'break', which jumps out of the loop altogether.
+
+   The 'continue' statement in a 'for' loop directs 'awk' to skip the
+rest of the body of the loop and resume execution with the
+increment-expression of the 'for' statement.  The following program
+illustrates this fact:
+
+     BEGIN {
+          for (x = 0; x <= 20; x++) {
+              if (x == 5)
+                  continue
+              printf "%d ", x
+          }
+          print ""
+     }
+
+This program prints all the numbers from 0 to 20--except for 5, for
+which the 'printf' is skipped.  Because the increment 'x++' is not
+skipped, 'x' does not remain stuck at 5.  Contrast the 'for' loop from
+the previous example with the following 'while' loop:
+
+     BEGIN {
+          x = 0
+          while (x <= 20) {
+              if (x == 5)
+                  continue
+              printf "%d ", x
+              x++
+          }
+          print ""
+     }
+
+This program loops forever once 'x' reaches 5, because the increment
+('x++') is never reached.
+
+   The 'continue' statement has no special meaning with respect to the
+'switch' statement, nor does it have any meaning when used outside the
+body of a loop.  Historical versions of 'awk' treated a 'continue'
+statement outside a loop the same way they treated a 'break' statement
+outside a loop: as if it were a 'next' statement (*note Next
+Statement::).  (d.c.)  Recent versions of BWK 'awk' no longer work this
+way, nor does 'gawk'.
+
+File: gawk.info,  Node: Next Statement,  Next: Nextfile Statement,  Prev: Continue Statement,  Up: Statements
+
+7.4.8 The 'next' Statement
+--------------------------
+
+The 'next' statement forces 'awk' to immediately stop processing the
+current record and go on to the next record.  This means that no further
+rules are executed for the current record, and the rest of the current
+rule's action isn't executed.
+
+   Contrast this with the effect of the 'getline' function (*note
+Getline::).  That also causes 'awk' to read the next record immediately,
+but it does not alter the flow of control in any way (i.e., the rest of
+the current action executes with a new input record).
+
+   At the highest level, 'awk' program execution is a loop that reads an
+input record and then tests each rule's pattern against it.  If you
+think of this loop as a 'for' statement whose body contains the rules,
+then the 'next' statement is analogous to a 'continue' statement.  It
+skips to the end of the body of this implicit loop and executes the
+increment (which reads another record).
+
+   For example, suppose an 'awk' program works only on records with four
+fields, and it shouldn't fail when given bad input.  To avoid
+complicating the rest of the program, write a "weed out" rule near the
+beginning, in the following manner:
+
+     NF != 4 {
+         printf("%s:%d: skipped: NF != 4\n", FILENAME, FNR) > "/dev/stderr"
+         next
+     }
+
+Because of the 'next' statement, the program's subsequent rules won't
+see the bad record.  The error message is redirected to the standard
+error output stream, as error messages should be.  For more detail, see
+*note Special Files::.
+
+   If the 'next' statement causes the end of the input to be reached,
+then the code in any 'END' rules is executed.  *Note BEGIN/END::.
+
+   The 'next' statement is not allowed inside 'BEGINFILE' and 'ENDFILE'
+rules.  *Note BEGINFILE/ENDFILE::.
+
+   According to the POSIX standard, the behavior is undefined if the
+'next' statement is used in a 'BEGIN' or 'END' rule.  'gawk' treats it
+as a syntax error.  Although POSIX does not disallow it, most other
+'awk' implementations don't allow the 'next' statement inside function
+bodies (*note User-defined::).  Just as with any other 'next' statement,
+a 'next' statement inside a function body reads the next record and
+starts processing it with the first rule in the program.
+
+File: gawk.info,  Node: Nextfile Statement,  Next: Exit Statement,  Prev: Next Statement,  Up: Statements
+
+7.4.9 The 'nextfile' Statement
+------------------------------
+
+The 'nextfile' statement is similar to the 'next' statement.  However,
+instead of abandoning processing of the current record, the 'nextfile'
+statement instructs 'awk' to stop processing the current data file.
+
+   Upon execution of the 'nextfile' statement, 'FILENAME' is updated to
+the name of the next data file listed on the command line, 'FNR' is
+reset to one, and processing starts over with the first rule in the
+program.  If the 'nextfile' statement causes the end of the input to be
+reached, then the code in any 'END' rules is executed.  An exception to
+this is when 'nextfile' is invoked during execution of any statement in
+an 'END' rule; in this case, it causes the program to stop immediately.
+*Note BEGIN/END::.
+
+   The 'nextfile' statement is useful when there are many data files to
+process but it isn't necessary to process every record in every file.
+Without 'nextfile', in order to move on to the next data file, a program
+would have to continue scanning the unwanted records.  The 'nextfile'
+statement accomplishes this much more efficiently.
+
+   In 'gawk', execution of 'nextfile' causes additional things to
+happen: any 'ENDFILE' rules are executed if 'gawk' is not currently in
+an 'END' or 'BEGINFILE' rule, 'ARGIND' is incremented, and any
+'BEGINFILE' rules are executed.  ('ARGIND' hasn't been introduced yet.
+*Note Built-in Variables::.)
+
+   With 'gawk', 'nextfile' is useful inside a 'BEGINFILE' rule to skip
+over a file that would otherwise cause 'gawk' to exit with a fatal
+error.  In this case, 'ENDFILE' rules are not executed.  *Note
+BEGINFILE/ENDFILE::.
+
+   Although it might seem that 'close(FILENAME)' would accomplish the
+same as 'nextfile', this isn't true.  'close()' is reserved for closing
+files, pipes, and coprocesses that are opened with redirections.  It is
+not related to the main processing that 'awk' does with the files listed
+in 'ARGV'.
+
+     NOTE: For many years, 'nextfile' was a common extension.  In
+     September 2012, it was accepted for inclusion into the POSIX
+     standard.  See the Austin Group website
+     (http://austingroupbugs.net/view.php?id=607).
+
+   The current version of BWK 'awk' and 'mawk' also support 'nextfile'.
+However, they don't allow the 'nextfile' statement inside function
+bodies (*note User-defined::).  'gawk' does; a 'nextfile' inside a
+function body reads the first record from the next file and starts
+processing it with the first rule in the program, just as any other
+'nextfile' statement.
+
+File: gawk.info,  Node: Exit Statement,  Prev: Nextfile Statement,  Up: Statements
+
+7.4.10 The 'exit' Statement
+---------------------------
+
+The 'exit' statement causes 'awk' to immediately stop executing the
+current rule and to stop processing input; any remaining input is
+ignored.  The 'exit' statement is written as follows:
+
+     'exit' [RETURN CODE]
+
+   When an 'exit' statement is executed from a 'BEGIN' rule, the program
+stops processing everything immediately.  No input records are read.
+However, if an 'END' rule is present, as part of executing the 'exit'
+statement, the 'END' rule is executed (*note BEGIN/END::).  If 'exit' is
+used in the body of an 'END' rule, it causes the program to stop
+immediately.
+
+   An 'exit' statement that is not part of a 'BEGIN' or 'END' rule stops
+the execution of any further automatic rules for the current record,
+skips reading any remaining input records, and executes the 'END' rule
+if there is one.  'gawk' also skips any 'ENDFILE' rules; they do not
+execute.
+
+   In such a case, if you don't want the 'END' rule to do its job, set a
+variable to a nonzero value before the 'exit' statement and check that
+variable in the 'END' rule.  *Note Assert Function:: for an example that
+does this.
+
+   If an argument is supplied to 'exit', its value is used as the exit
+status code for the 'awk' process.  If no argument is supplied, 'exit'
+causes 'awk' to return a "success" status.  In the case where an
+argument is supplied to a first 'exit' statement, and then 'exit' is
+called a second time from an 'END' rule with no argument, 'awk' uses the
+previously supplied exit value.  (d.c.)  *Note Exit Status:: for more
+information.
+
+   For example, suppose an error condition occurs that is difficult or
+impossible to handle.  Conventionally, programs report this by exiting
+with a nonzero status.  An 'awk' program can do this using an 'exit'
+statement with a nonzero argument, as shown in the following example:
+
+     BEGIN {
+         if (("date" | getline date_now) <= 0) {
+             print "Can't get system date" > "/dev/stderr"
+             exit 1
+         }
+         print "current date is", date_now
+         close("date")
+     }
+
+     NOTE: For full portability, exit values should be between zero and
+     126, inclusive.  Negative values, and values of 127 or greater, may
+     not produce consistent results across different operating systems.
+
+File: gawk.info,  Node: Built-in Variables,  Next: Pattern Action Summary,  Prev: Statements,  Up: Patterns and Actions
+

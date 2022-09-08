@@ -1,0 +1,235 @@
+10.6 Reading the Group Database
+===============================
+
+Much of the discussion presented in *note Passwd Functions:: applies to
+the group database as well.  Although there has traditionally been a
+well-known file ('/etc/group') in a well-known format, the POSIX
+standard only provides a set of C library routines ('<grp.h>' and
+'getgrent()') for accessing the information.  Even though this file may
+exist, it may not have complete information.  Therefore, as with the
+user database, it is necessary to have a small C program that generates
+the group database as its output.  'grcat', a C program that "cats" the
+group database, is as follows:
+
+     /*
+      * grcat.c
+      *
+      * Generate a printable version of the group database.
+      */
+     #include <stdio.h>
+     #include <grp.h>
+
+     int
+     main(int argc, char **argv)
+     {
+         struct group *g;
+         int i;
+
+         while ((g = getgrent()) != NULL) {
+             printf("%s:%s:%ld:", g->gr_name, g->gr_passwd,
+                                          (long) g->gr_gid);
+             for (i = 0; g->gr_mem[i] != NULL; i++) {
+                 printf("%s", g->gr_mem[i]);
+                 if (g->gr_mem[i+1] != NULL)
+                     putchar(',');
+             }
+             putchar('\n');
+         }
+         endgrent();
+         return 0;
+     }
+
+   Each line in the group database represents one group.  The fields are
+separated with colons and represent the following information:
+
+Group Name
+     The group's name.
+
+Group Password
+     The group's encrypted password.  In practice, this field is never
+     used; it is usually empty or set to '*'.
+
+Group ID Number
+     The group's numeric group ID number; the association of name to
+     number must be unique within the file.  (On some systems it's a C
+     'long', and not an 'int'.  Thus, we cast it to 'long' for all
+     cases.)
+
+Group Member List
+     A comma-separated list of usernames.  These users are members of
+     the group.  Modern Unix systems allow users to be members of
+     several groups simultaneously.  If your system does, then there are
+     elements '"group1"' through '"groupN"' in 'PROCINFO' for those
+     group ID numbers.  (Note that 'PROCINFO' is a 'gawk' extension;
+     *note Built-in Variables::.)
+
+   Here is what running 'grcat' might produce:
+
+     $ grcat
+     -| wheel:*:0:arnold
+     -| nogroup:*:65534:
+     -| daemon:*:1:
+     -| kmem:*:2:
+     -| staff:*:10:arnold,miriam,andy
+     -| other:*:20:
+     ...
+
+   Here are the functions for obtaining information from the group
+database.  There are several, modeled after the C library functions of
+the same names:
+
+     # group.awk --- functions for dealing with the group file
+
+     BEGIN {
+         # Change to suit your system
+         _gr_awklib = "/usr/local/libexec/awk/"
+     }
+
+     function _gr_init(    oldfs, oldrs, olddol0, grcat,
+                                  using_fw, using_fpat, n, a, i)
+     {
+         if (_gr_inited)
+             return
+
+         oldfs = FS
+         oldrs = RS
+         olddol0 = $0
+         using_fw = (PROCINFO["FS"] == "FIELDWIDTHS")
+         using_fpat = (PROCINFO["FS"] == "FPAT")
+         FS = ":"
+         RS = "\n"
+
+         grcat = _gr_awklib "grcat"
+         while ((grcat | getline) > 0) {
+             if ($1 in _gr_byname)
+                 _gr_byname[$1] = _gr_byname[$1] "," $4
+             else
+                 _gr_byname[$1] = $0
+             if ($3 in _gr_bygid)
+                 _gr_bygid[$3] = _gr_bygid[$3] "," $4
+             else
+                 _gr_bygid[$3] = $0
+
+             n = split($4, a, "[ \t]*,[ \t]*")
+             for (i = 1; i <= n; i++)
+                 if (a[i] in _gr_groupsbyuser)
+                     _gr_groupsbyuser[a[i]] = _gr_groupsbyuser[a[i]] " " $1
+                 else
+                     _gr_groupsbyuser[a[i]] = $1
+
+             _gr_bycount[++_gr_count] = $0
+         }
+         close(grcat)
+         _gr_count = 0
+         _gr_inited++
+         FS = oldfs
+         if (using_fw)
+             FIELDWIDTHS = FIELDWIDTHS
+         else if (using_fpat)
+             FPAT = FPAT
+         RS = oldrs
+         $0 = olddol0
+     }
+
+   The 'BEGIN' rule sets a private variable to the directory where
+'grcat' is stored.  Because it is used to help out an 'awk' library
+routine, we have chosen to put it in '/usr/local/libexec/awk'.  You
+might want it to be in a different directory on your system.
+
+   These routines follow the same general outline as the user database
+routines (*note Passwd Functions::).  The '_gr_inited' variable is used
+to ensure that the database is scanned no more than once.  The
+'_gr_init()' function first saves 'FS', 'RS', and '$0', and then sets
+'FS' and 'RS' to the correct values for scanning the group information.
+It also takes care to note whether 'FIELDWIDTHS' or 'FPAT' is being
+used, and to restore the appropriate field-splitting mechanism.
+
+   The group information is stored in several associative arrays.  The
+arrays are indexed by group name ('_gr_byname'), by group ID number
+('_gr_bygid'), and by position in the database ('_gr_bycount').  There
+is an additional array indexed by username ('_gr_groupsbyuser'), which
+is a space-separated list of groups to which each user belongs.
+
+   Unlike in the user database, it is possible to have multiple records
+in the database for the same group.  This is common when a group has a
+large number of members.  A pair of such entries might look like the
+following:
+
+     tvpeople:*:101:johnny,jay,arsenio
+     tvpeople:*:101:david,conan,tom,joan
+
+   For this reason, '_gr_init()' looks to see if a group name or group
+ID number is already seen.  If so, the usernames are simply concatenated
+onto the previous list of users.(1)
+
+   Finally, '_gr_init()' closes the pipeline to 'grcat', restores 'FS'
+(and 'FIELDWIDTHS' or 'FPAT', if necessary), 'RS', and '$0', initializes
+'_gr_count' to zero (it is used later), and makes '_gr_inited' nonzero.
+
+   The 'getgrnam()' function takes a group name as its argument, and if
+that group exists, it is returned.  Otherwise, it relies on the array
+reference to a nonexistent element to create the element with the null
+string as its value:
+
+     function getgrnam(group)
+     {
+         _gr_init()
+         return _gr_byname[group]
+     }
+
+   The 'getgrgid()' function is similar; it takes a numeric group ID and
+looks up the information associated with that group ID:
+
+     function getgrgid(gid)
+     {
+         _gr_init()
+         return _gr_bygid[gid]
+     }
+
+   The 'getgruser()' function does not have a C counterpart.  It takes a
+username and returns the list of groups that have the user as a member:
+
+     function getgruser(user)
+     {
+         _gr_init()
+         return _gr_groupsbyuser[user]
+     }
+
+   The 'getgrent()' function steps through the database one entry at a
+time.  It uses '_gr_count' to track its position in the list:
+
+     function getgrent()
+     {
+         _gr_init()
+         if (++_gr_count in _gr_bycount)
+             return _gr_bycount[_gr_count]
+         return ""
+     }
+
+   The 'endgrent()' function resets '_gr_count' to zero so that
+'getgrent()' can start over again:
+
+     function endgrent()
+     {
+         _gr_count = 0
+     }
+
+   As with the user database routines, each function calls '_gr_init()'
+to initialize the arrays.  Doing so only incurs the extra overhead of
+running 'grcat' if these functions are used (as opposed to moving the
+body of '_gr_init()' into a 'BEGIN' rule).
+
+   Most of the work is in scanning the database and building the various
+associative arrays.  The functions that the user calls are themselves
+very simple, relying on 'awk''s associative arrays to do work.
+
+   The 'id' program in *note Id Program:: uses these functions.
+
+   ---------- Footnotes ----------
+
+   (1) There is a subtle problem with the code just presented.  Suppose
+that the first time there were no names.  This code adds the names with
+a leading comma.  It also doesn't check that there is a '$4'.
+
+File: gawk.info,  Node: Walking Arrays,  Next: Library Functions Summary,  Prev: Group Functions,  Up: Library Functions
+

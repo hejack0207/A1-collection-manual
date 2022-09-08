@@ -1,0 +1,182 @@
+4.6 Reading Fixed-Width Data
+============================
+
+This minor node discusses an advanced feature of 'gawk'.  If you are a
+novice 'awk' user, you might want to skip it on the first reading.
+
+   'gawk' provides a facility for dealing with fixed-width fields with
+no distinctive field separator.  We discuss this feature in the
+following nodes.
+
+* Menu:
+
+* Fixed width data::            Processing fixed-width data.
+* Skipping intervening::        Skipping intervening fields.
+* Allowing trailing data::      Capturing optional trailing data.
+* Fields with fixed data::      Field values with fixed-width data.
+
+File: gawk.info,  Node: Fixed width data,  Next: Skipping intervening,  Up: Constant Size
+
+4.6.1 Processing Fixed-Width Data
+---------------------------------
+
+An example of fixed-width data would be the input for old Fortran
+programs where numbers are run together, or the output of programs that
+did not anticipate the use of their output as input for other programs.
+
+   An example of the latter is a table where all the columns are lined
+up by the use of a variable number of spaces and _empty fields are just
+spaces_.  Clearly, 'awk''s normal field splitting based on 'FS' does not
+work well in this case.  Although a portable 'awk' program can use a
+series of 'substr()' calls on '$0' (*note String Functions::), this is
+awkward and inefficient for a large number of fields.
+
+   The splitting of an input record into fixed-width fields is specified
+by assigning a string containing space-separated numbers to the built-in
+variable 'FIELDWIDTHS'.  Each number specifies the width of the field,
+_including_ columns between fields.  If you want to ignore the columns
+between fields, you can specify the width as a separate field that is
+subsequently ignored.  It is a fatal error to supply a field width that
+has a negative value.
+
+   The following data is the output of the Unix 'w' utility.  It is
+useful to illustrate the use of 'FIELDWIDTHS':
+
+      10:06pm  up 21 days, 14:04,  23 users
+     User     tty       login  idle   JCPU   PCPU  what
+     hzuo     ttyV0     8:58pm            9      5  vi p24.tex
+     hzang    ttyV3     6:37pm    50                -csh
+     eklye    ttyV5     9:53pm            7      1  em thes.tex
+     dportein ttyV6     8:17pm  1:47                -csh
+     gierd    ttyD3    10:00pm     1                elm
+     dave     ttyD4     9:47pm            4      4  w
+     brent    ttyp0    26Jun91  4:46  26:46   4:41  bash
+     dave     ttyq4    26Jun9115days     46     46  wnewmail
+
+   The following program takes this input, converts the idle time to
+number of seconds, and prints out the first two fields and the
+calculated idle time:
+
+     BEGIN  { FIELDWIDTHS = "9 6 10 6 7 7 35" }
+     NR > 2 {
+         idle = $4
+         sub(/^ +/, "", idle)   # strip leading spaces
+         if (idle == "")
+             idle = 0
+         if (idle ~ /:/) {      # hh:mm
+             split(idle, t, ":")
+             idle = t[1] * 60 + t[2]
+         }
+         if (idle ~ /days/)
+             idle *= 24 * 60 * 60
+
+         print $1, $2, idle
+     }
+
+     NOTE: The preceding program uses a number of 'awk' features that
+     haven't been introduced yet.
+
+   Running the program on the data produces the following results:
+
+     hzuo      ttyV0  0
+     hzang     ttyV3  50
+     eklye     ttyV5  0
+     dportein  ttyV6  107
+     gierd     ttyD3  1
+     dave      ttyD4  0
+     brent     ttyp0  286
+     dave      ttyq4  1296000
+
+   Another (possibly more practical) example of fixed-width input data
+is the input from a deck of balloting cards.  In some parts of the
+United States, voters mark their choices by punching holes in computer
+cards.  These cards are then processed to count the votes for any
+particular candidate or on any particular issue.  Because a voter may
+choose not to vote on some issue, any column on the card may be empty.
+An 'awk' program for processing such data could use the 'FIELDWIDTHS'
+feature to simplify reading the data.  (Of course, getting 'gawk' to run
+on a system with card readers is another story!)
+
+File: gawk.info,  Node: Skipping intervening,  Next: Allowing trailing data,  Prev: Fixed width data,  Up: Constant Size
+
+4.6.2 Skipping Intervening Fields
+---------------------------------
+
+Starting in version 4.2, each field width may optionally be preceded by
+a colon-separated value specifying the number of characters to skip
+before the field starts.  Thus, the preceding program could be rewritten
+to specify 'FIELDWIDTHS' like so:
+
+     BEGIN  { FIELDWIDTHS = "8 1:5 4:7 6 1:6 1:6 2:33" }
+
+   This strips away some of the white space separating the fields.  With
+such a change, the program produces the following results:
+
+     hzang    ttyV3 50
+     eklye    ttyV5 0
+     dportein ttyV6 107
+     gierd    ttyD3 1
+     dave     ttyD4 0
+     brent    ttyp0 286
+     dave     ttyq4 1296000
+
+File: gawk.info,  Node: Allowing trailing data,  Next: Fields with fixed data,  Prev: Skipping intervening,  Up: Constant Size
+
+4.6.3 Capturing Optional Trailing Data
+--------------------------------------
+
+There are times when fixed-width data may be followed by additional data
+that has no fixed length.  Such data may or may not be present, but if
+it is, it should be possible to get at it from an 'awk' program.
+
+   Starting with version 4.2, in order to provide a way to say "anything
+else in the record after the defined fields," 'gawk' allows you to add a
+final '*' character to the value of 'FIELDWIDTHS'.  There can only be
+one such character, and it must be the final non-whitespace character in
+'FIELDWIDTHS'.  For example:
+
+     $ cat fw.awk                         Show the program
+     -| BEGIN { FIELDWIDTHS = "2 2 *" }
+     -| { print NF, $1, $2, $3 }
+     $ cat fw.in                          Show sample input
+     -| 1234abcdefghi
+     $ gawk -f fw.awk fw.in               Run the program
+     -| 3 12 34 abcdefghi
+
+File: gawk.info,  Node: Fields with fixed data,  Prev: Allowing trailing data,  Up: Constant Size
+
+4.6.4 Field Values With Fixed-Width Data
+----------------------------------------
+
+So far, so good.  But what happens if there isn't as much data as there
+should be based on the contents of 'FIELDWIDTHS'?  Or, what happens if
+there is more data than expected?
+
+   For many years, what happens in these cases was not well defined.
+Starting with version 4.2, the rules are as follows:
+
+Enough data for some fields
+     For example, if 'FIELDWIDTHS' is set to '"2 3 4"' and the input
+     record is 'aabbb'.  In this case, 'NF' is set to two.
+
+Not enough data for a field
+     For example, if 'FIELDWIDTHS' is set to '"2 3 4"' and the input
+     record is 'aab'.  In this case, 'NF' is set to two and '$2' has the
+     value '"b"'.  The idea is that even though there aren't as many
+     characters as were expected, there are some, so the data should be
+     made available to the program.
+
+Too much data
+     For example, if 'FIELDWIDTHS' is set to '"2 3 4"' and the input
+     record is 'aabbbccccddd'.  In this case, 'NF' is set to three and
+     the extra characters ('ddd') are ignored.  If you want 'gawk' to
+     capture the extra characters, supply a final '*' in the value of
+     'FIELDWIDTHS'.
+
+Too much data, but with '*' supplied
+     For example, if 'FIELDWIDTHS' is set to '"2 3 4 *"' and the input
+     record is 'aabbbccccddd'.  In this case, 'NF' is set to four, and
+     '$4' has the value '"ddd"'.
+
+File: gawk.info,  Node: Splitting By Content,  Next: Testing field creation,  Prev: Constant Size,  Up: Reading Files
+

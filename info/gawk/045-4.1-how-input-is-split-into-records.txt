@@ -1,0 +1,243 @@
+4.1 How Input Is Split into Records
+===================================
+
+'awk' divides the input for your program into records and fields.  It
+keeps track of the number of records that have been read so far from the
+current input file.  This value is stored in a predefined variable
+called 'FNR', which is reset to zero every time a new file is started.
+Another predefined variable, 'NR', records the total number of input
+records read so far from all data files.  It starts at zero, but is
+never automatically reset to zero.
+
+* Menu:
+
+* awk split records::           How standard 'awk' splits records.
+* gawk split records::          How 'gawk' splits records.
+
+File: gawk.info,  Node: awk split records,  Next: gawk split records,  Up: Records
+
+4.1.1 Record Splitting with Standard 'awk'
+------------------------------------------
+
+Records are separated by a character called the "record separator".  By
+default, the record separator is the newline character.  This is why
+records are, by default, single lines.  To use a different character for
+the record separator, simply assign that character to the predefined
+variable 'RS'.
+
+   Like any other variable, the value of 'RS' can be changed in the
+'awk' program with the assignment operator, '=' (*note Assignment
+Ops::).  The new record-separator character should be enclosed in
+quotation marks, which indicate a string constant.  Often, the right
+time to do this is at the beginning of execution, before any input is
+processed, so that the very first record is read with the proper
+separator.  To do this, use the special 'BEGIN' pattern (*note
+BEGIN/END::).  For example:
+
+     awk 'BEGIN { RS = "u" }
+          { print $0 }' mail-list
+
+changes the value of 'RS' to 'u', before reading any input.  The new
+value is a string whose first character is the letter "u"; as a result,
+records are separated by the letter "u".  Then the input file is read,
+and the second rule in the 'awk' program (the action with no pattern)
+prints each record.  Because each 'print' statement adds a newline at
+the end of its output, this 'awk' program copies the input with each 'u'
+changed to a newline.  Here are the results of running the program on
+'mail-list':
+
+     $ awk 'BEGIN { RS = "u" }
+     >      { print $0 }' mail-list
+     -| Amelia       555-5553     amelia.zodiac
+     -| sq
+     -| e@gmail.com    F
+     -| Anthony      555-3412     anthony.assert
+     -| ro@hotmail.com   A
+     -| Becky        555-7685     becky.algebrar
+     -| m@gmail.com      A
+     -| Bill         555-1675     bill.drowning@hotmail.com       A
+     -| Broderick    555-0542     broderick.aliq
+     -| otiens@yahoo.com R
+     -| Camilla      555-2912     camilla.inf
+     -| sar
+     -| m@skynet.be     R
+     -| Fabi
+     -| s       555-1234     fabi
+     -| s.
+     -| ndevicesim
+     -| s@
+     -| cb.ed
+     -|     F
+     -| J
+     -| lie        555-6699     j
+     -| lie.perscr
+     -| tabor@skeeve.com   F
+     -| Martin       555-6480     martin.codicib
+     -| s@hotmail.com    A
+     -| Sam
+     -| el       555-3430     sam
+     -| el.lanceolis@sh
+     -| .ed
+     -|         A
+     -| Jean-Pa
+     -| l    555-2127     jeanpa
+     -| l.campanor
+     -| m@ny
+     -| .ed
+     -|      R
+     -|
+
+Note that the entry for the name 'Bill' is not split.  In the original
+data file (*note Sample Data Files::), the line looks like this:
+
+     Bill         555-1675     bill.drowning@hotmail.com       A
+
+It contains no 'u', so there is no reason to split the record, unlike
+the others, which each have one or more occurrences of the 'u'.  In
+fact, this record is treated as part of the previous record; the newline
+separating them in the output is the original newline in the data file,
+not the one added by 'awk' when it printed the record!
+
+   Another way to change the record separator is on the command line,
+using the variable-assignment feature (*note Other Arguments::):
+
+     awk '{ print $0 }' RS="u" mail-list
+
+This sets 'RS' to 'u' before processing 'mail-list'.
+
+   Using an alphabetic character such as 'u' for the record separator is
+highly likely to produce strange results.  Using an unusual character
+such as '/' is more likely to produce correct behavior in the majority
+of cases, but there are no guarantees.  The moral is: Know Your Data.
+
+   When using regular characters as the record separator, there is one
+unusual case that occurs when 'gawk' is being fully POSIX-compliant
+(*note Options::).  Then, the following (extreme) pipeline prints a
+surprising '1':
+
+     $ echo | gawk --posix 'BEGIN { RS = "a" } ; { print NF }'
+     -| 1
+
+   There is one field, consisting of a newline.  The value of the
+built-in variable 'NF' is the number of fields in the current record.
+(In the normal case, 'gawk' treats the newline as whitespace, printing
+'0' as the result.  Most other versions of 'awk' also act this way.)
+
+   Reaching the end of an input file terminates the current input
+record, even if the last character in the file is not the character in
+'RS'.  (d.c.)
+
+   The empty string '""' (a string without any characters) has a special
+meaning as the value of 'RS'.  It means that records are separated by
+one or more blank lines and nothing else.  *Note Multiple Line:: for
+more details.
+
+   If you change the value of 'RS' in the middle of an 'awk' run, the
+new value is used to delimit subsequent records, but the record
+currently being processed, as well as records already processed, are not
+affected.
+
+   After the end of the record has been determined, 'gawk' sets the
+variable 'RT' to the text in the input that matched 'RS'.
+
+File: gawk.info,  Node: gawk split records,  Prev: awk split records,  Up: Records
+
+4.1.2 Record Splitting with 'gawk'
+----------------------------------
+
+When using 'gawk', the value of 'RS' is not limited to a one-character
+string.  It can be any regular expression (*note Regexp::).  (c.e.)  In
+general, each record ends at the next string that matches the regular
+expression; the next record starts at the end of the matching string.
+This general rule is actually at work in the usual case, where 'RS'
+contains just a newline: a record ends at the beginning of the next
+matching string (the next newline in the input), and the following
+record starts just after the end of this string (at the first character
+of the following line).  The newline, because it matches 'RS', is not
+part of either record.
+
+   When 'RS' is a single character, 'RT' contains the same single
+character.  However, when 'RS' is a regular expression, 'RT' contains
+the actual input text that matched the regular expression.
+
+   If the input file ends without any text matching 'RS', 'gawk' sets
+'RT' to the null string.
+
+   The following example illustrates both of these features.  It sets
+'RS' equal to a regular expression that matches either a newline or a
+series of one or more uppercase letters with optional leading and/or
+trailing whitespace:
+
+     $ echo record 1 AAAA record 2 BBBB record 3 |
+     > gawk 'BEGIN { RS = "\n|( *[[:upper:]]+ *)" }
+     >             { print "Record =", $0,"and RT = [" RT "]" }'
+     -| Record = record 1 and RT = [ AAAA ]
+     -| Record = record 2 and RT = [ BBBB ]
+     -| Record = record 3 and RT = [
+     -| ]
+
+The square brackets delineate the contents of 'RT', letting you see the
+leading and trailing whitespace.  The final value of 'RT' is a newline.
+*Note Simple Sed:: for a more useful example of 'RS' as a regexp and
+'RT'.
+
+   If you set 'RS' to a regular expression that allows optional trailing
+text, such as 'RS = "abc(XYZ)?"', it is possible, due to implementation
+constraints, that 'gawk' may match the leading part of the regular
+expression, but not the trailing part, particularly if the input text
+that could match the trailing part is fairly long.  'gawk' attempts to
+avoid this problem, but currently, there's no guarantee that this will
+never happen.
+
+     NOTE: Remember that in 'awk', the '^' and '$' anchor metacharacters
+     match the beginning and end of a _string_, and not the beginning
+     and end of a _line_.  As a result, something like 'RS =
+     "^[[:upper:]]"' can only match at the beginning of a file.  This is
+     because 'gawk' views the input file as one long string that happens
+     to contain newline characters.  It is thus best to avoid anchor
+     metacharacters in the value of 'RS'.
+
+   The use of 'RS' as a regular expression and the 'RT' variable are
+'gawk' extensions; they are not available in compatibility mode (*note
+Options::).  In compatibility mode, only the first character of the
+value of 'RS' determines the end of the record.
+
+                      'RS = "\0"' Is Not Portable
+
+   There are times when you might want to treat an entire data file as a
+single record.  The only way to make this happen is to give 'RS' a value
+that you know doesn't occur in the input file.  This is hard to do in a
+general way, such that a program always works for arbitrary input files.
+
+   You might think that for text files, the NUL character, which
+consists of a character with all bits equal to zero, is a good value to
+use for 'RS' in this case:
+
+     BEGIN { RS = "\0" }  # whole file becomes one record?
+
+   'gawk' in fact accepts this, and uses the NUL character for the
+record separator.  This works for certain special files, such as
+'/proc/environ' on GNU/Linux systems, where the NUL character is in fact
+the record separator.  However, this usage is _not_ portable to most
+other 'awk' implementations.
+
+   Almost all other 'awk' implementations(1) store strings internally as
+C-style strings.  C strings use the NUL character as the string
+terminator.  In effect, this means that 'RS = "\0"' is the same as 'RS =
+""'.  (d.c.)
+
+   It happens that recent versions of 'mawk' can use the NUL character
+as a record separator.  However, this is a special case: 'mawk' does not
+allow embedded NUL characters in strings.  (This may change in a future
+version of 'mawk'.)
+
+   *Note Readfile Function:: for an interesting way to read whole files.
+If you are using 'gawk', see *note Extension Sample Readfile:: for
+another option.
+
+   ---------- Footnotes ----------
+
+   (1) At least that we know about.
+
+File: gawk.info,  Node: Fields,  Next: Nonconstant Fields,  Prev: Records,  Up: Reading Files
+

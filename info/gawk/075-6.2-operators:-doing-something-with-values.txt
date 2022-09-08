@@ -1,0 +1,433 @@
+6.2 Operators: Doing Something with Values
+==========================================
+
+This minor node introduces the "operators" that make use of the values
+provided by constants and variables.
+
+* Menu:
+
+* Arithmetic Ops::              Arithmetic operations ('+', '-',
+                                etc.)
+* Concatenation::               Concatenating strings.
+* Assignment Ops::              Changing the value of a variable or a field.
+* Increment Ops::               Incrementing the numeric value of a variable.
+
+File: gawk.info,  Node: Arithmetic Ops,  Next: Concatenation,  Up: All Operators
+
+6.2.1 Arithmetic Operators
+--------------------------
+
+The 'awk' language uses the common arithmetic operators when evaluating
+expressions.  All of these arithmetic operators follow normal precedence
+rules and work as you would expect them to.
+
+   The following example uses a file named 'grades', which contains a
+list of student names as well as three test scores per student (it's a
+small class):
+
+     Pat   100 97 58
+     Sandy  84 72 93
+     Chris  72 92 89
+
+This program takes the file 'grades' and prints the average of the
+scores:
+
+     $ awk '{ sum = $2 + $3 + $4 ; avg = sum / 3
+     >        print $1, avg }' grades
+     -| Pat 85
+     -| Sandy 83
+     -| Chris 84.3333
+
+   The following list provides the arithmetic operators in 'awk', in
+order from the highest precedence to the lowest:
+
+'X ^ Y'
+'X ** Y'
+     Exponentiation; X raised to the Y power.  '2 ^ 3' has the value
+     eight; the character sequence '**' is equivalent to '^'.  (c.e.)
+
+'- X'
+     Negation.
+
+'+ X'
+     Unary plus; the expression is converted to a number.
+
+'X * Y'
+     Multiplication.
+
+'X / Y'
+     Division; because all numbers in 'awk' are floating-point numbers,
+     the result is _not_ rounded to an integer--'3 / 4' has the value
+     0.75.  (It is a common mistake, especially for C programmers, to
+     forget that _all_ numbers in 'awk' are floating point, and that
+     division of integer-looking constants produces a real number, not
+     an integer.)
+
+'X % Y'
+     Remainder; further discussion is provided in the text, just after
+     this list.
+
+'X + Y'
+     Addition.
+
+'X - Y'
+     Subtraction.
+
+   Unary plus and minus have the same precedence, the multiplication
+operators all have the same precedence, and addition and subtraction
+have the same precedence.
+
+   When computing the remainder of 'X % Y', the quotient is rounded
+toward zero to an integer and multiplied by Y.  This result is
+subtracted from X; this operation is sometimes known as "trunc-mod."
+The following relation always holds:
+
+     b * int(a / b) + (a % b) == a
+
+   One possibly undesirable effect of this definition of remainder is
+that 'X % Y' is negative if X is negative.  Thus:
+
+     -17 % 8 = -1
+
+   In other 'awk' implementations, the signedness of the remainder may
+be machine-dependent.
+
+     NOTE: The POSIX standard only specifies the use of '^' for
+     exponentiation.  For maximum portability, do not use the '**'
+     operator.
+
+File: gawk.info,  Node: Concatenation,  Next: Assignment Ops,  Prev: Arithmetic Ops,  Up: All Operators
+
+6.2.2 String Concatenation
+--------------------------
+
+     It seemed like a good idea at the time.
+                         -- _Brian Kernighan_
+
+   There is only one string operation: concatenation.  It does not have
+a specific operator to represent it.  Instead, concatenation is
+performed by writing expressions next to one another, with no operator.
+For example:
+
+     $ awk '{ print "Field number one: " $1 }' mail-list
+     -| Field number one: Amelia
+     -| Field number one: Anthony
+     ...
+
+   Without the space in the string constant after the ':', the line runs
+together.  For example:
+
+     $ awk '{ print "Field number one:" $1 }' mail-list
+     -| Field number one:Amelia
+     -| Field number one:Anthony
+     ...
+
+   Because string concatenation does not have an explicit operator, it
+is often necessary to ensure that it happens at the right time by using
+parentheses to enclose the items to concatenate.  For example, you might
+expect that the following code fragment concatenates 'file' and 'name':
+
+     file = "file"
+     name = "name"
+     print "something meaningful" > file name
+
+This produces a syntax error with some versions of Unix 'awk'.(1)  It is
+necessary to use the following:
+
+     print "something meaningful" > (file name)
+
+   Parentheses should be used around concatenation in all but the most
+common contexts, such as on the righthand side of '='.  Be careful about
+the kinds of expressions used in string concatenation.  In particular,
+the order of evaluation of expressions used for concatenation is
+undefined in the 'awk' language.  Consider this example:
+
+     BEGIN {
+         a = "don't"
+         print (a " " (a = "panic"))
+     }
+
+It is not defined whether the second assignment to 'a' happens before or
+after the value of 'a' is retrieved for producing the concatenated
+value.  The result could be either 'don't panic', or 'panic panic'.
+
+   The precedence of concatenation, when mixed with other operators, is
+often counter-intuitive.  Consider this example:
+
+     $ awk 'BEGIN { print -12 " " -24 }'
+     -| -12-24
+
+   This "obviously" is concatenating -12, a space, and -24.  But where
+did the space disappear to?  The answer lies in the combination of
+operator precedences and 'awk''s automatic conversion rules.  To get the
+desired result, write the program this way:
+
+     $ awk 'BEGIN { print -12 " " (-24) }'
+     -| -12 -24
+
+   This forces 'awk' to treat the '-' on the '-24' as unary.  Otherwise,
+it's parsed as follows:
+
+         -12 ('" "' - 24)
+     => -12 (0 - 24)
+     => -12 (-24)
+     => -12-24
+
+   As mentioned earlier, when mixing concatenation with other operators,
+_parenthesize_.  Otherwise, you're never quite sure what you'll get.
+
+   ---------- Footnotes ----------
+
+   (1) It happens that BWK 'awk', 'gawk', and 'mawk' all "get it right,"
+but you should not rely on this.
+
+File: gawk.info,  Node: Assignment Ops,  Next: Increment Ops,  Prev: Concatenation,  Up: All Operators
+
+6.2.3 Assignment Expressions
+----------------------------
+
+An "assignment" is an expression that stores a (usually different) value
+into a variable.  For example, let's assign the value one to the
+variable 'z':
+
+     z = 1
+
+   After this expression is executed, the variable 'z' has the value
+one.  Whatever old value 'z' had before the assignment is forgotten.
+
+   Assignments can also store string values.  For example, the following
+stores the value '"this food is good"' in the variable 'message':
+
+     thing = "food"
+     predicate = "good"
+     message = "this " thing " is " predicate
+
+This also illustrates string concatenation.  The '=' sign is called an
+"assignment operator".  It is the simplest assignment operator because
+the value of the righthand operand is stored unchanged.  Most operators
+(addition, concatenation, and so on) have no effect except to compute a
+value.  If the value isn't used, there's no reason to use the operator.
+An assignment operator is different; it does produce a value, but even
+if you ignore it, the assignment still makes itself felt through the
+alteration of the variable.  We call this a "side effect".
+
+   The lefthand operand of an assignment need not be a variable (*note
+Variables::); it can also be a field (*note Changing Fields::) or an
+array element (*note Arrays::).  These are all called "lvalues", which
+means they can appear on the lefthand side of an assignment operator.
+The righthand operand may be any expression; it produces the new value
+that the assignment stores in the specified variable, field, or array
+element.  (Such values are called "rvalues".)
+
+   It is important to note that variables do _not_ have permanent types.
+A variable's type is simply the type of whatever value was last assigned
+to it.  In the following program fragment, the variable 'foo' has a
+numeric value at first, and a string value later on:
+
+     foo = 1
+     print foo
+     foo = "bar"
+     print foo
+
+When the second assignment gives 'foo' a string value, the fact that it
+previously had a numeric value is forgotten.
+
+   String values that do not begin with a digit have a numeric value of
+zero.  After executing the following code, the value of 'foo' is five:
+
+     foo = "a string"
+     foo = foo + 5
+
+     NOTE: Using a variable as a number and then later as a string can
+     be confusing and is poor programming style.  The previous two
+     examples illustrate how 'awk' works, _not_ how you should write
+     your programs!
+
+   An assignment is an expression, so it has a value--the same value
+that is assigned.  Thus, 'z = 1' is an expression with the value one.
+One consequence of this is that you can write multiple assignments
+together, such as:
+
+     x = y = z = 5
+
+This example stores the value five in all three variables ('x', 'y', and
+'z').  It does so because the value of 'z = 5', which is five, is stored
+into 'y' and then the value of 'y = z = 5', which is five, is stored
+into 'x'.
+
+   Assignments may be used anywhere an expression is called for.  For
+example, it is valid to write 'x != (y = 1)' to set 'y' to one, and then
+test whether 'x' equals one.  But this style tends to make programs hard
+to read; such nesting of assignments should be avoided, except perhaps
+in a one-shot program.
+
+   Aside from '=', there are several other assignment operators that do
+arithmetic with the old value of the variable.  For example, the
+operator '+=' computes a new value by adding the righthand value to the
+old value of the variable.  Thus, the following assignment adds five to
+the value of 'foo':
+
+     foo += 5
+
+This is equivalent to the following:
+
+     foo = foo + 5
+
+Use whichever makes the meaning of your program clearer.
+
+   There are situations where using '+=' (or any assignment operator) is
+_not_ the same as simply repeating the lefthand operand in the righthand
+expression.  For example:
+
+     # Thanks to Pat Rankin for this example
+     BEGIN  {
+         foo[rand()] += 5
+         for (x in foo)
+            print x, foo[x]
+
+         bar[rand()] = bar[rand()] + 5
+         for (x in bar)
+            print x, bar[x]
+     }
+
+The indices of 'bar' are practically guaranteed to be different, because
+'rand()' returns different values each time it is called.  (Arrays and
+the 'rand()' function haven't been covered yet.  *Note Arrays::, and
+*note Numeric Functions:: for more information.)  This example
+illustrates an important fact about assignment operators: the lefthand
+expression is only evaluated _once_.
+
+   It is up to the implementation as to which expression is evaluated
+first, the lefthand or the righthand.  Consider this example:
+
+     i = 1
+     a[i += 2] = i + 1
+
+The value of 'a[3]' could be either two or four.
+
+   *note Table 6.2: table-assign-ops. lists the arithmetic assignment
+operators.  In each case, the righthand operand is an expression whose
+value is converted to a number.
+
+Operator               Effect
+--------------------------------------------------------------------------
+LVALUE '+='            Add INCREMENT to the value of LVALUE.
+INCREMENT
+LVALUE '-='            Subtract DECREMENT from the value of LVALUE.
+DECREMENT
+LVALUE '*='            Multiply the value of LVALUE by COEFFICIENT.
+COEFFICIENT
+LVALUE '/=' DIVISOR    Divide the value of LVALUE by DIVISOR.
+LVALUE '%=' MODULUS    Set LVALUE to its remainder by MODULUS.
+LVALUE '^=' POWER      Raise LVALUE to the power POWER.
+LVALUE '**=' POWER     Raise LVALUE to the power POWER.  (c.e.)
+
+Table 6.2: Arithmetic assignment operators
+
+     NOTE: Only the '^=' operator is specified by POSIX. For maximum
+     portability, do not use the '**=' operator.
+
+      Syntactic Ambiguities Between '/=' and Regular Expressions
+
+   There is a syntactic ambiguity between the '/=' assignment operator
+and regexp constants whose first character is an '='.  (d.c.)  This is
+most notable in some commercial 'awk' versions.  For example:
+
+     $ awk /==/ /dev/null
+     error-> awk: syntax error at source line 1
+     error->  context is
+     error->         >>> /= <<<
+     error-> awk: bailing out at source line 1
+
+A workaround is:
+
+     awk '/[=]=/' /dev/null
+
+   'gawk' does not have this problem; BWK 'awk' and 'mawk' also do not.
+
+File: gawk.info,  Node: Increment Ops,  Prev: Assignment Ops,  Up: All Operators
+
+6.2.4 Increment and Decrement Operators
+---------------------------------------
+
+"Increment" and "decrement operators" increase or decrease the value of
+a variable by one.  An assignment operator can do the same thing, so the
+increment operators add no power to the 'awk' language; however, they
+are convenient abbreviations for very common operations.
+
+   The operator used for adding one is written '++'.  It can be used to
+increment a variable either before or after taking its value.  To
+"pre-increment" a variable 'v', write '++v'.  This adds one to the value
+of 'v'--that new value is also the value of the expression.  (The
+assignment expression 'v += 1' is completely equivalent.)  Writing the
+'++' after the variable specifies "post-increment".  This increments the
+variable value just the same; the difference is that the value of the
+increment expression itself is the variable's _old_ value.  Thus, if
+'foo' has the value four, then the expression 'foo++' has the value
+four, but it changes the value of 'foo' to five.  In other words, the
+operator returns the old value of the variable, but with the side effect
+of incrementing it.
+
+   The post-increment 'foo++' is nearly the same as writing '(foo += 1)
+- 1'.  It is not perfectly equivalent because all numbers in 'awk' are
+floating point--in floating point, 'foo + 1 - 1' does not necessarily
+equal 'foo'.  But the difference is minute as long as you stick to
+numbers that are fairly small (less than 10e12).
+
+   Fields and array elements are incremented just like variables.  (Use
+'$(i++)' when you want to do a field reference and a variable increment
+at the same time.  The parentheses are necessary because of the
+precedence of the field reference operator '$'.)
+
+   The decrement operator '--' works just like '++', except that it
+subtracts one instead of adding it.  As with '++', it can be used before
+the lvalue to pre-decrement or after it to post-decrement.  Following is
+a summary of increment and decrement expressions:
+
+'++LVALUE'
+     Increment LVALUE, returning the new value as the value of the
+     expression.
+
+'LVALUE++'
+     Increment LVALUE, returning the _old_ value of LVALUE as the value
+     of the expression.
+
+'--LVALUE'
+     Decrement LVALUE, returning the new value as the value of the
+     expression.  (This expression is like '++LVALUE', but instead of
+     adding, it subtracts.)
+
+'LVALUE--'
+     Decrement LVALUE, returning the _old_ value of LVALUE as the value
+     of the expression.  (This expression is like 'LVALUE++', but
+     instead of adding, it subtracts.)
+
+                       Operator Evaluation Order
+
+     Doctor, it hurts when I do this!
+     Then don't do that!
+                           -- _Groucho Marx_
+
+What happens for something like the following?
+
+     b = 6
+     print b += b++
+
+Or something even stranger?
+
+     b = 6
+     b += ++b + b++
+     print b
+
+   In other words, when do the various side effects prescribed by the
+postfix operators ('b++') take effect?  When side effects happen is
+"implementation-defined".  In other words, it is up to the particular
+version of 'awk'.  The result for the first example may be 12 or 13, and
+for the second, it may be 22 or 23.
+
+   In short, doing things like this is not recommended and definitely
+not anything that you can rely upon for portability.  You should avoid
+such things in your own programs.
+
+File: gawk.info,  Node: Truth Values and Conditions,  Next: Function Calls,  Prev: All Operators,  Up: Expressions
+

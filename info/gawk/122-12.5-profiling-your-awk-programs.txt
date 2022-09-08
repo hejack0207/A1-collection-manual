@@ -1,0 +1,258 @@
+12.5 Profiling Your 'awk' Programs
+==================================
+
+You may produce execution traces of your 'awk' programs.  This is done
+by passing the option '--profile' to 'gawk'.  When 'gawk' has finished
+running, it creates a profile of your program in a file named
+'awkprof.out'.  Because it is profiling, it also executes up to 45%
+slower than 'gawk' normally does.
+
+   As shown in the following example, the '--profile' option can be used
+to change the name of the file where 'gawk' will write the profile:
+
+     gawk --profile=myprog.prof -f myprog.awk data1 data2
+
+In the preceding example, 'gawk' places the profile in 'myprog.prof'
+instead of in 'awkprof.out'.
+
+   Here is a sample session showing a simple 'awk' program, its input
+data, and the results from running 'gawk' with the '--profile' option.
+First, the 'awk' program:
+
+     BEGIN { print "First BEGIN rule" }
+
+     END { print "First END rule" }
+
+     /foo/ {
+         print "matched /foo/, gosh"
+         for (i = 1; i <= 3; i++)
+             sing()
+     }
+
+     {
+         if (/foo/)
+             print "if is true"
+         else
+             print "else is true"
+     }
+
+     BEGIN { print "Second BEGIN rule" }
+
+     END { print "Second END rule" }
+
+     function sing(    dummy)
+     {
+         print "I gotta be me!"
+     }
+
+   Following is the input data:
+
+     foo
+     bar
+     baz
+     foo
+     junk
+
+   Here is the 'awkprof.out' that results from running the 'gawk'
+profiler on this program and data (this example also illustrates that
+'awk' programmers sometimes get up very early in the morning to work):
+
+         # gawk profile, created Mon Sep 29 05:16:21 2014
+
+         # BEGIN rule(s)
+
+         BEGIN {
+      1          print "First BEGIN rule"
+         }
+
+         BEGIN {
+      1          print "Second BEGIN rule"
+         }
+
+         # Rule(s)
+
+      5  /foo/ { # 2
+      2          print "matched /foo/, gosh"
+      6          for (i = 1; i <= 3; i++) {
+      6                  sing()
+                 }
+         }
+
+      5  {
+      5          if (/foo/) { # 2
+      2                  print "if is true"
+      3          } else {
+      3                  print "else is true"
+                 }
+         }
+
+         # END rule(s)
+
+         END {
+      1          print "First END rule"
+         }
+
+         END {
+      1          print "Second END rule"
+         }
+
+
+         # Functions, listed alphabetically
+
+      6  function sing(dummy)
+         {
+      6          print "I gotta be me!"
+         }
+
+   This example illustrates many of the basic features of profiling
+output.  They are as follows:
+
+   * The program is printed in the order 'BEGIN' rules, 'BEGINFILE'
+     rules, pattern-action rules, 'ENDFILE' rules, 'END' rules, and
+     functions, listed alphabetically.  Multiple 'BEGIN' and 'END' rules
+     retain their separate identities, as do multiple 'BEGINFILE' and
+     'ENDFILE' rules.
+
+   * Pattern-action rules have two counts.  The first count, to the left
+     of the rule, shows how many times the rule's pattern was _tested_.
+     The second count, to the right of the rule's opening left brace in
+     a comment, shows how many times the rule's action was _executed_.
+     The difference between the two indicates how many times the rule's
+     pattern evaluated to false.
+
+   * Similarly, the count for an 'if'-'else' statement shows how many
+     times the condition was tested.  To the right of the opening left
+     brace for the 'if''s body is a count showing how many times the
+     condition was true.  The count for the 'else' indicates how many
+     times the test failed.
+
+   * The count for a loop header (such as 'for' or 'while') shows how
+     many times the loop test was executed.  (Because of this, you can't
+     just look at the count on the first statement in a rule to
+     determine how many times the rule was executed.  If the first
+     statement is a loop, the count is misleading.)
+
+   * For user-defined functions, the count next to the 'function'
+     keyword indicates how many times the function was called.  The
+     counts next to the statements in the body show how many times those
+     statements were executed.
+
+   * The layout uses "K&R" style with TABs.  Braces are used everywhere,
+     even when the body of an 'if', 'else', or loop is only a single
+     statement.
+
+   * Parentheses are used only where needed, as indicated by the
+     structure of the program and the precedence rules.  For example,
+     '(3 + 5) * 4' means add three and five, then multiply the total by
+     four.  However, '3 + 5 * 4' has no parentheses, and means '3 + (5 *
+     4)'.
+
+   * Parentheses are used around the arguments to 'print' and 'printf'
+     only when the 'print' or 'printf' statement is followed by a
+     redirection.  Similarly, if the target of a redirection isn't a
+     scalar, it gets parenthesized.
+
+   * 'gawk' supplies leading comments in front of the 'BEGIN' and 'END'
+     rules, the 'BEGINFILE' and 'ENDFILE' rules, the pattern-action
+     rules, and the functions.
+
+   The profiled version of your program may not look exactly like what
+you typed when you wrote it.  This is because 'gawk' creates the
+profiled version by "pretty-printing" its internal representation of the
+program.  The advantage to this is that 'gawk' can produce a standard
+representation.  Also, things such as:
+
+     /foo/
+
+come out as:
+
+     /foo/   {
+         print $0
+     }
+
+which is correct, but possibly unexpected.
+
+   Besides creating profiles when a program has completed, 'gawk' can
+produce a profile while it is running.  This is useful if your 'awk'
+program goes into an infinite loop and you want to see what has been
+executed.  To use this feature, run 'gawk' with the '--profile' option
+in the background:
+
+     $ gawk --profile -f myprog &
+     [1] 13992
+
+The shell prints a job number and process ID number; in this case,
+13992.  Use the 'kill' command to send the 'USR1' signal to 'gawk':
+
+     $ kill -USR1 13992
+
+As usual, the profiled version of the program is written to
+'awkprof.out', or to a different file if one was specified with the
+'--profile' option.
+
+   Along with the regular profile, as shown earlier, the profile file
+includes a trace of any active functions:
+
+     # Function Call Stack:
+
+     #   3. baz
+     #   2. bar
+     #   1. foo
+     # -- main --
+
+   You may send 'gawk' the 'USR1' signal as many times as you like.
+Each time, the profile and function call trace are appended to the
+output profile file.
+
+   If you use the 'HUP' signal instead of the 'USR1' signal, 'gawk'
+produces the profile and the function call trace and then exits.
+
+   When 'gawk' runs on MS-Windows systems, it uses the 'INT' and 'QUIT'
+signals for producing the profile, and in the case of the 'INT' signal,
+'gawk' exits.  This is because these systems don't support the 'kill'
+command, so the only signals you can deliver to a program are those
+generated by the keyboard.  The 'INT' signal is generated by the
+'Ctrl-c' or 'Ctrl-BREAK' key, while the 'QUIT' signal is generated by
+the 'Ctrl-\' key.
+
+   Finally, 'gawk' also accepts another option, '--pretty-print'.  When
+called this way, 'gawk' "pretty-prints" the program into 'awkprof.out',
+without any execution counts.
+
+     NOTE: Once upon a time, the '--pretty-print' option would also run
+     your program.  This is is no longer the case.
+
+   There is a significant difference between the output created when
+profiling, and that created when pretty-printing.  Pretty-printed output
+preserves the original comments that were in the program, although their
+placement may not correspond exactly to their original locations in the
+source code.(1)
+
+   However, as a deliberate design decision, profiling output _omits_
+the original program's comments.  This allows you to focus on the
+execution count data and helps you avoid the temptation to use the
+profiler for pretty-printing.
+
+   Additionally, pretty-printed output does not have the leading
+indentation that the profiling output does.  This makes it easy to
+pretty-print your code once development is completed, and then use the
+result as the final version of your program.
+
+   Because the internal representation of your program is formatted to
+recreate an 'awk' program, profiling and pretty-printing automatically
+disable 'gawk''s default optimizations.
+
+   Pretty printing also preserves the original format of numeric
+constants; if you used an octal or hexadecimal value in your source
+code, it will appear that way in the output.
+
+   ---------- Footnotes ----------
+
+   (1) 'gawk' does the best it can to preserve the distinction between
+comments at the end of a statement and comments on lines by themselves.
+Due to implementation constraints, it does not always do so correctly,
+particularly for 'switch' statements.  The 'gawk' maintainers hope to
+improve this in a subsequent release.
+
+File: gawk.info,  Node: Advanced Features Summary,  Prev: Profiling,  Up: Advanced Features
+

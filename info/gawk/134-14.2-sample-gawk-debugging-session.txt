@@ -1,0 +1,239 @@
+14.2 Sample 'gawk' Debugging Session
+====================================
+
+In order to illustrate the use of 'gawk' as a debugger, let's look at a
+sample debugging session.  We will use the 'awk' implementation of the
+POSIX 'uniq' command described earlier (*note Uniq Program::) as our
+example.
+
+* Menu:
+
+* Debugger Invocation::         How to Start the Debugger.
+* Finding The Bug::             Finding the Bug.
+
+File: gawk.info,  Node: Debugger Invocation,  Next: Finding The Bug,  Up: Sample Debugging Session
+
+14.2.1 How to Start the Debugger
+--------------------------------
+
+Starting the debugger is almost exactly like running 'gawk' normally,
+except you have to pass an additional option, '--debug', or the
+corresponding short option, '-D'.  The file(s) containing the program
+and any supporting code are given on the command line as arguments to
+one or more '-f' options.  ('gawk' is not designed to debug command-line
+programs, only programs contained in files.)  In our case, we invoke the
+debugger like this:
+
+     $ gawk -D -f getopt.awk -f join.awk -f uniq.awk -1 inputfile
+
+where both 'getopt.awk' and 'uniq.awk' are in '$AWKPATH'.  (Experienced
+users of GDB or similar debuggers should note that this syntax is
+slightly different from what you are used to.  With the 'gawk' debugger,
+you give the arguments for running the program in the command line to
+the debugger rather than as part of the 'run' command at the debugger
+prompt.)  The '-1' is an option to 'uniq.awk'.
+
+   Instead of immediately running the program on 'inputfile', as 'gawk'
+would ordinarily do, the debugger merely loads all the program source
+files, compiles them internally, and then gives us a prompt:
+
+     gawk>
+
+from which we can issue commands to the debugger.  At this point, no
+code has been executed.
+
+File: gawk.info,  Node: Finding The Bug,  Prev: Debugger Invocation,  Up: Sample Debugging Session
+
+14.2.2 Finding the Bug
+----------------------
+
+Let's say that we are having a problem using (a faulty version of)
+'uniq.awk' in the "field-skipping" mode, and it doesn't seem to be
+catching lines which should be identical when skipping the first field,
+such as:
+
+     awk is a wonderful program!
+     gawk is a wonderful program!
+
+   This could happen if we were thinking (C-like) of the fields in a
+record as being numbered in a zero-based fashion, so instead of the
+lines:
+
+     clast = join(alast, fcount+1, n)
+     cline = join(aline, fcount+1, m)
+
+we wrote:
+
+     clast = join(alast, fcount, n)
+     cline = join(aline, fcount, m)
+
+   The first thing we usually want to do when trying to investigate a
+problem like this is to put a breakpoint in the program so that we can
+watch it at work and catch what it is doing wrong.  A reasonable spot
+for a breakpoint in 'uniq.awk' is at the beginning of the function
+'are_equal()', which compares the current line with the previous one.
+To set the breakpoint, use the 'b' (breakpoint) command:
+
+     gawk> b are_equal
+     -| Breakpoint 1 set at file `awklib/eg/prog/uniq.awk', line 63
+
+   The debugger tells us the file and line number where the breakpoint
+is.  Now type 'r' or 'run' and the program runs until it hits the
+breakpoint for the first time:
+
+     gawk> r
+     -| Starting program:
+     -| Stopping in Rule ...
+     -| Breakpoint 1, are_equal(n, m, clast, cline, alast, aline)
+              at `awklib/eg/prog/uniq.awk':63
+     -| 63          if (fcount == 0 && charcount == 0)
+     gawk>
+
+   Now we can look at what's going on inside our program.  First of all,
+let's see how we got to where we are.  At the prompt, we type 'bt'
+(short for "backtrace"), and the debugger responds with a listing of the
+current stack frames:
+
+     gawk> bt
+     -| #0  are_equal(n, m, clast, cline, alast, aline)
+              at `awklib/eg/prog/uniq.awk':68
+     -| #1  in main() at `awklib/eg/prog/uniq.awk':88
+
+   This tells us that 'are_equal()' was called by the main program at
+line 88 of 'uniq.awk'.  (This is not a big surprise, because this is the
+only call to 'are_equal()' in the program, but in more complex programs,
+knowing who called a function and with what parameters can be the key to
+finding the source of the problem.)
+
+   Now that we're in 'are_equal()', we can start looking at the values
+of some variables.  Let's say we type 'p n' ('p' is short for "print").
+We would expect to see the value of 'n', a parameter to 'are_equal()'.
+Actually, the debugger gives us:
+
+     gawk> p n
+     -| n = untyped variable
+
+In this case, 'n' is an uninitialized local variable, because the
+function was called without arguments (*note Function Calls::).
+
+   A more useful variable to display might be the current record:
+
+     gawk> p $0
+     -| $0 = "gawk is a wonderful program!"
+
+This might be a bit puzzling at first, as this is the second line of our
+test input.  Let's look at 'NR':
+
+     gawk> p NR
+     -| NR = 2
+
+So we can see that 'are_equal()' was only called for the second record
+of the file.  Of course, this is because our program contains a rule for
+'NR == 1':
+
+     NR == 1 {
+         last = $0
+         next
+     }
+
+   OK, let's just check that that rule worked correctly:
+
+     gawk> p last
+     -| last = "awk is a wonderful program!"
+
+   Everything we have done so far has verified that the program has
+worked as planned, up to and including the call to 'are_equal()', so the
+problem must be inside this function.  To investigate further, we must
+begin "stepping through" the lines of 'are_equal()'.  We start by typing
+'n' (for "next"):
+
+     gawk> n
+     -| 66          if (fcount > 0) {
+
+   This tells us that 'gawk' is now ready to execute line 66, which
+decides whether to give the lines the special "field-skipping" treatment
+indicated by the '-1' command-line option.  (Notice that we skipped from
+where we were before, at line 63, to here, because the condition in line
+63, 'if (fcount == 0 && charcount == 0)', was false.)
+
+   Continuing to step, we now get to the splitting of the current and
+last records:
+
+     gawk> n
+     -| 67              n = split(last, alast)
+     gawk> n
+     -| 68              m = split($0, aline)
+
+   At this point, we should be curious to see what our records were
+split into, so we try to look:
+
+     gawk> p n m alast aline
+     -| n = 5
+     -| m = untyped variable
+     -| alast = array, 5 elements
+     -| aline = untyped variable
+
+(The 'p' command can take more than one argument, similar to 'awk''s
+'print' statement.)
+
+   This is kind of disappointing, though.  All we found out is that
+there are five elements in 'alast'; 'm' and 'aline' don't have values
+because we are at line 68 but haven't executed it yet.  This information
+is useful enough (we now know that none of the words were accidentally
+left out), but what if we want to see inside the array?
+
+   The first choice would be to use subscripts:
+
+     gawk> p alast[0]
+     -| "0" not in array `alast'
+
+Oops!
+
+     gawk> p alast[1]
+     -| alast["1"] = "awk"
+
+   This would be kind of slow for a 100-member array, though, so 'gawk'
+provides a shortcut (reminiscent of another language not to be
+mentioned):
+
+     gawk> p @alast
+     -| alast["1"] = "awk"
+     -| alast["2"] = "is"
+     -| alast["3"] = "a"
+     -| alast["4"] = "wonderful"
+     -| alast["5"] = "program!"
+
+   It looks like we got this far OK. Let's take another step or two:
+
+     gawk> n
+     -| 69              clast = join(alast, fcount, n)
+     gawk> n
+     -| 70              cline = join(aline, fcount, m)
+
+   Well, here we are at our error (sorry to spoil the suspense).  What
+we had in mind was to join the fields starting from the second one to
+make the virtual record to compare, and if the first field were numbered
+zero, this would work.  Let's look at what we've got:
+
+     gawk> p cline clast
+     -| cline = "gawk is a wonderful program!"
+     -| clast = "awk is a wonderful program!"
+
+   Hey, those look pretty familiar!  They're just our original,
+unaltered input records.  A little thinking (the human brain is still
+the best debugging tool), and we realize that we were off by one!
+
+   We get out of the debugger:
+
+     gawk> q
+     -| The program is running. Exit anyway (y/n)? y
+
+Then we get into an editor:
+
+     clast = join(alast, fcount+1, n)
+     cline = join(aline, fcount+1, m)
+
+and problem solved!
+
+File: gawk.info,  Node: List of Debugger Commands,  Next: Readline Support,  Prev: Sample Debugging Session,  Up: Debugger
+

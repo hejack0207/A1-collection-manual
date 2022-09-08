@@ -1,0 +1,400 @@
+5.5 Using 'printf' Statements for Fancier Printing
+==================================================
+
+For more precise control over the output format than what is provided by
+'print', use 'printf'.  With 'printf' you can specify the width to use
+for each item, as well as various formatting choices for numbers (such
+as what output base to use, whether to print an exponent, whether to
+print a sign, and how many digits to print after the decimal point).
+
+* Menu:
+
+* Basic Printf::                Syntax of the 'printf' statement.
+* Control Letters::             Format-control letters.
+* Format Modifiers::            Format-specification modifiers.
+* Printf Examples::             Several examples.
+
+File: gawk.info,  Node: Basic Printf,  Next: Control Letters,  Up: Printf
+
+5.5.1 Introduction to the 'printf' Statement
+--------------------------------------------
+
+A simple 'printf' statement looks like this:
+
+     printf FORMAT, ITEM1, ITEM2, ...
+
+As for 'print', the entire list of arguments may optionally be enclosed
+in parentheses.  Here too, the parentheses are necessary if any of the
+item expressions uses the '>' relational operator; otherwise, it can be
+confused with an output redirection (*note Redirection::).
+
+   The difference between 'printf' and 'print' is the FORMAT argument.
+This is an expression whose value is taken as a string; it specifies how
+to output each of the other arguments.  It is called the "format
+string".
+
+   The format string is very similar to that in the ISO C library
+function 'printf()'.  Most of FORMAT is text to output verbatim.
+Scattered among this text are "format specifiers"--one per item.  Each
+format specifier says to output the next item in the argument list at
+that place in the format.
+
+   The 'printf' statement does not automatically append a newline to its
+output.  It outputs only what the format string specifies.  So if a
+newline is needed, you must include one in the format string.  The
+output separator variables 'OFS' and 'ORS' have no effect on 'printf'
+statements.  For example:
+
+     $ awk 'BEGIN {
+     >    ORS = "\nOUCH!\n"; OFS = "+"
+     >    msg = "Don\47t Panic!"
+     >    printf "%s\n", msg
+     > }'
+     -| Don't Panic!
+
+Here, neither the '+' nor the 'OUCH!' appears in the output message.
+
+File: gawk.info,  Node: Control Letters,  Next: Format Modifiers,  Prev: Basic Printf,  Up: Printf
+
+5.5.2 Format-Control Letters
+----------------------------
+
+A format specifier starts with the character '%' and ends with a
+"format-control letter"--it tells the 'printf' statement how to output
+one item.  The format-control letter specifies what _kind_ of value to
+print.  The rest of the format specifier is made up of optional
+"modifiers" that control _how_ to print the value, such as the field
+width.  Here is a list of the format-control letters:
+
+'%a', '%A'
+     A floating point number of the form ['-']'0xH.HHHHp+-DD' (C99
+     hexadecimal floating point format).  For '%A', uppercase letters
+     are used instead of lowercase ones.
+
+          NOTE: While the current POSIX standard requires support for
+          '%a' and '%A' in 'awk', as far as we know, no other version of
+          'awk' actually implements it.  It's use is thus highly
+          nonportable!
+
+          Furthermore, these formats are not available on any system
+          where the underlying C library 'printf()' function does not
+          support them.  As of this writing, among current systems, only
+          OpenVMS is known to not support them.
+
+'%c'
+     Print a number as a character; thus, 'printf "%c", 65' outputs the
+     letter 'A'.  The output for a string value is the first character
+     of the string.
+
+          NOTE: The POSIX standard says the first character of a string
+          is printed.  In locales with multibyte characters, 'gawk'
+          attempts to convert the leading bytes of the string into a
+          valid wide character and then to print the multibyte encoding
+          of that character.  Similarly, when printing a numeric value,
+          'gawk' allows the value to be within the numeric range of
+          values that can be held in a wide character.  If the
+          conversion to multibyte encoding fails, 'gawk' uses the low
+          eight bits of the value as the character to print.
+
+          Other 'awk' versions generally restrict themselves to printing
+          the first byte of a string or to numeric values within the
+          range of a single byte (0-255).  (d.c.)
+
+'%d', '%i'
+     Print a decimal integer.  The two control letters are equivalent.
+     (The '%i' specification is for compatibility with ISO C.)
+
+'%e', '%E'
+     Print a number in scientific (exponential) notation.  For example:
+
+          printf "%4.3e\n", 1950
+
+     prints '1.950e+03', with a total of four significant figures, three
+     of which follow the decimal point.  (The '4.3' represents two
+     modifiers, discussed in the next node.)  '%E' uses 'E' instead of
+     'e' in the output.
+
+'%f'
+     Print a number in floating-point notation.  For example:
+
+          printf "%4.3f", 1950
+
+     prints '1950.000', with a total of four significant figures, three
+     of which follow the decimal point.  (The '4.3' represents two
+     modifiers, discussed in the next node.)
+
+     On systems supporting IEEE 754 floating-point format, values
+     representing negative infinity are formatted as '-inf' or
+     '-infinity', and positive infinity as 'inf' or 'infinity'.  The
+     special "not a number" value formats as '-nan' or 'nan' (*note Math
+     Definitions::).
+
+'%F'
+     Like '%f', but the infinity and "not a number" values are spelled
+     using uppercase letters.
+
+     The '%F' format is a POSIX extension to ISO C; not all systems
+     support it.  On those that don't, 'gawk' uses '%f' instead.
+
+'%g', '%G'
+     Print a number in either scientific notation or in floating-point
+     notation, whichever uses fewer characters; if the result is printed
+     in scientific notation, '%G' uses 'E' instead of 'e'.
+
+'%o'
+     Print an unsigned octal integer (*note Nondecimal-numbers::).
+
+'%s'
+     Print a string.
+
+'%u'
+     Print an unsigned decimal integer.  (This format is of marginal
+     use, because all numbers in 'awk' are floating point; it is
+     provided primarily for compatibility with C.)
+
+'%x', '%X'
+     Print an unsigned hexadecimal integer; '%X' uses the letters 'A'
+     through 'F' instead of 'a' through 'f' (*note
+     Nondecimal-numbers::).
+
+'%%'
+     Print a single '%'.  This does not consume an argument and it
+     ignores any modifiers.
+
+     NOTE: When using the integer format-control letters for values that
+     are outside the range of the widest C integer type, 'gawk' switches
+     to the '%g' format specifier.  If '--lint' is provided on the
+     command line (*note Options::), 'gawk' warns about this.  Other
+     versions of 'awk' may print invalid values or do something else
+     entirely.  (d.c.)
+
+File: gawk.info,  Node: Format Modifiers,  Next: Printf Examples,  Prev: Control Letters,  Up: Printf
+
+5.5.3 Modifiers for 'printf' Formats
+------------------------------------
+
+A format specification can also include "modifiers" that can control how
+much of the item's value is printed, as well as how much space it gets.
+The modifiers come between the '%' and the format-control letter.  We
+use the bullet symbol "*" in the following examples to represent spaces
+in the output.  Here are the possible modifiers, in the order in which
+they may appear:
+
+'N$'
+     An integer constant followed by a '$' is a "positional specifier".
+     Normally, format specifications are applied to arguments in the
+     order given in the format string.  With a positional specifier, the
+     format specification is applied to a specific argument, instead of
+     what would be the next argument in the list.  Positional specifiers
+     begin counting with one.  Thus:
+
+          printf "%s %s\n", "don't", "panic"
+          printf "%2$s %1$s\n", "panic", "don't"
+
+     prints the famous friendly message twice.
+
+     At first glance, this feature doesn't seem to be of much use.  It
+     is in fact a 'gawk' extension, intended for use in translating
+     messages at runtime.  *Note Printf Ordering::, which describes how
+     and why to use positional specifiers.  For now, we ignore them.
+
+'-' (Minus)
+     The minus sign, used before the width modifier (see later on in
+     this list), says to left-justify the argument within its specified
+     width.  Normally, the argument is printed right-justified in the
+     specified width.  Thus:
+
+          printf "%-4s", "foo"
+
+     prints 'foo*'.
+
+SPACE
+     For numeric conversions, prefix positive values with a space and
+     negative values with a minus sign.
+
+'+'
+     The plus sign, used before the width modifier (see later on in this
+     list), says to always supply a sign for numeric conversions, even
+     if the data to format is positive.  The '+' overrides the space
+     modifier.
+
+'#'
+     Use an "alternative form" for certain control letters.  For '%o',
+     supply a leading zero.  For '%x' and '%X', supply a leading '0x' or
+     '0X' for a nonzero result.  For '%e', '%E', '%f', and '%F', the
+     result always contains a decimal point.  For '%g' and '%G',
+     trailing zeros are not removed from the result.
+
+'0'
+     A leading '0' (zero) acts as a flag indicating that output should
+     be padded with zeros instead of spaces.  This applies only to the
+     numeric output formats.  This flag only has an effect when the
+     field width is wider than the value to print.
+
+'''
+     A single quote or apostrophe character is a POSIX extension to ISO
+     C. It indicates that the integer part of a floating-point value, or
+     the entire part of an integer decimal value, should have a
+     thousands-separator character in it.  This only works in locales
+     that support such characters.  For example:
+
+          $ cat thousands.awk          Show source program
+          -| BEGIN { printf "%'d\n", 1234567 }
+          $ LC_ALL=C gawk -f thousands.awk
+          -| 1234567                   Results in "C" locale
+          $ LC_ALL=en_US.UTF-8 gawk -f thousands.awk
+          -| 1,234,567                 Results in US English UTF locale
+
+     For more information about locales and internationalization issues,
+     see *note Locales::.
+
+          NOTE: The ''' flag is a nice feature, but its use complicates
+          things: it becomes difficult to use it in command-line
+          programs.  For information on appropriate quoting tricks, see
+          *note Quoting::.
+
+WIDTH
+     This is a number specifying the desired minimum width of a field.
+     Inserting any number between the '%' sign and the format-control
+     character forces the field to expand to this width.  The default
+     way to do this is to pad with spaces on the left.  For example:
+
+          printf "%4s", "foo"
+
+     prints '*foo'.
+
+     The value of WIDTH is a minimum width, not a maximum.  If the item
+     value requires more than WIDTH characters, it can be as wide as
+     necessary.  Thus, the following:
+
+          printf "%4s", "foobar"
+
+     prints 'foobar'.
+
+     Preceding the WIDTH with a minus sign causes the output to be
+     padded with spaces on the right, instead of on the left.
+
+'.PREC'
+     A period followed by an integer constant specifies the precision to
+     use when printing.  The meaning of the precision varies by control
+     letter:
+
+     '%d', '%i', '%o', '%u', '%x', '%X'
+          Minimum number of digits to print.
+
+     '%e', '%E', '%f', '%F'
+          Number of digits to the right of the decimal point.
+
+     '%g', '%G'
+          Maximum number of significant digits.
+
+     '%s'
+          Maximum number of characters from the string that should
+          print.
+
+     Thus, the following:
+
+          printf "%.4s", "foobar"
+
+     prints 'foob'.
+
+   The C library 'printf''s dynamic WIDTH and PREC capability (e.g.,
+'"%*.*s"') is supported.  Instead of supplying explicit WIDTH and/or
+PREC values in the format string, they are passed in the argument list.
+For example:
+
+     w = 5
+     p = 3
+     s = "abcdefg"
+     printf "%*.*s\n", w, p, s
+
+is exactly equivalent to:
+
+     s = "abcdefg"
+     printf "%5.3s\n", s
+
+Both programs output '**abc'.  Earlier versions of 'awk' did not support
+this capability.  If you must use such a version, you may simulate this
+feature by using concatenation to build up the format string, like so:
+
+     w = 5
+     p = 3
+     s = "abcdefg"
+     printf "%" w "." p "s\n", s
+
+This is not particularly easy to read, but it does work.
+
+   C programmers may be used to supplying additional modifiers ('h',
+'j', 'l', 'L', 't', and 'z') in 'printf' format strings.  These are not
+valid in 'awk'.  Most 'awk' implementations silently ignore them.  If
+'--lint' is provided on the command line (*note Options::), 'gawk' warns
+about their use.  If '--posix' is supplied, their use is a fatal error.
+
+File: gawk.info,  Node: Printf Examples,  Prev: Format Modifiers,  Up: Printf
+
+5.5.4 Examples Using 'printf'
+-----------------------------
+
+The following simple example shows how to use 'printf' to make an
+aligned table:
+
+     awk '{ printf "%-10s %s\n", $1, $2 }' mail-list
+
+This command prints the names of the people ('$1') in the file
+'mail-list' as a string of 10 characters that are left-justified.  It
+also prints the phone numbers ('$2') next on the line.  This produces an
+aligned two-column table of names and phone numbers, as shown here:
+
+     $ awk '{ printf "%-10s %s\n", $1, $2 }' mail-list
+     -| Amelia     555-5553
+     -| Anthony    555-3412
+     -| Becky      555-7685
+     -| Bill       555-1675
+     -| Broderick  555-0542
+     -| Camilla    555-2912
+     -| Fabius     555-1234
+     -| Julie      555-6699
+     -| Martin     555-6480
+     -| Samuel     555-3430
+     -| Jean-Paul  555-2127
+
+   In this case, the phone numbers had to be printed as strings because
+the numbers are separated by dashes.  Printing the phone numbers as
+numbers would have produced just the first three digits: '555'.  This
+would have been pretty confusing.
+
+   It wasn't necessary to specify a width for the phone numbers because
+they are last on their lines.  They don't need to have spaces after
+them.
+
+   The table could be made to look even nicer by adding headings to the
+tops of the columns.  This is done using a 'BEGIN' rule (*note
+BEGIN/END::) so that the headers are only printed once, at the beginning
+of the 'awk' program:
+
+     awk 'BEGIN { print "Name      Number"
+                  print "----      ------" }
+                { printf "%-10s %s\n", $1, $2 }' mail-list
+
+   The preceding example mixes 'print' and 'printf' statements in the
+same program.  Using just 'printf' statements can produce the same
+results:
+
+     awk 'BEGIN { printf "%-10s %s\n", "Name", "Number"
+                  printf "%-10s %s\n", "----", "------" }
+                { printf "%-10s %s\n", $1, $2 }' mail-list
+
+Printing each column heading with the same format specification used for
+the column elements ensures that the headings are aligned just like the
+columns.
+
+   The fact that the same format specification is used three times can
+be emphasized by storing it in a variable, like this:
+
+     awk 'BEGIN { format = "%-10s %s\n"
+                  printf format, "Name", "Number"
+                  printf format, "----", "------" }
+                { printf format, $1, $2 }' mail-list
+
+File: gawk.info,  Node: Redirection,  Next: Special FD,  Prev: Printf,  Up: Printing
+

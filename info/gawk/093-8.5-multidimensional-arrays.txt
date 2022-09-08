@@ -1,0 +1,123 @@
+8.5 Multidimensional Arrays
+===========================
+
+* Menu:
+
+* Multiscanning::               Scanning multidimensional arrays.
+
+A "multidimensional array" is an array in which an element is identified
+by a sequence of indices instead of a single index.  For example, a
+two-dimensional array requires two indices.  The usual way (in many
+languages, including 'awk') to refer to an element of a two-dimensional
+array named 'grid' is with 'grid[X,Y]'.
+
+   Multidimensional arrays are supported in 'awk' through concatenation
+of indices into one string.  'awk' converts the indices into strings
+(*note Conversion::) and concatenates them together, with a separator
+between them.  This creates a single string that describes the values of
+the separate indices.  The combined string is used as a single index
+into an ordinary, one-dimensional array.  The separator used is the
+value of the built-in variable 'SUBSEP'.
+
+   For example, suppose we evaluate the expression 'foo[5,12] = "value"'
+when the value of 'SUBSEP' is '"@"'.  The numbers 5 and 12 are converted
+to strings and concatenated with an '@' between them, yielding '"5@12"';
+thus, the array element 'foo["5@12"]' is set to '"value"'.
+
+   Once the element's value is stored, 'awk' has no record of whether it
+was stored with a single index or a sequence of indices.  The two
+expressions 'foo[5,12]' and 'foo[5 SUBSEP 12]' are always equivalent.
+
+   The default value of 'SUBSEP' is the string '"\034"', which contains
+a nonprinting character that is unlikely to appear in an 'awk' program
+or in most input data.  The usefulness of choosing an unlikely character
+comes from the fact that index values that contain a string matching
+'SUBSEP' can lead to combined strings that are ambiguous.  Suppose that
+'SUBSEP' is '"@"'; then 'foo["a@b", "c"]' and 'foo["a", "b@c"]' are
+indistinguishable because both are actually stored as 'foo["a@b@c"]'.
+
+   To test whether a particular index sequence exists in a
+multidimensional array, use the same operator ('in') that is used for
+single-dimensional arrays.  Write the whole sequence of indices in
+parentheses, separated by commas, as the left operand:
+
+     if ((SUBSCRIPT1, SUBSCRIPT2, ...) in ARRAY)
+         ...
+
+   Here is an example that treats its input as a two-dimensional array
+of fields; it rotates this array 90 degrees clockwise and prints the
+result.  It assumes that all lines have the same number of elements:
+
+     {
+          if (max_nf < NF)
+               max_nf = NF
+          max_nr = NR
+          for (x = 1; x <= NF; x++)
+               vector[x, NR] = $x
+     }
+
+     END {
+          for (x = 1; x <= max_nf; x++) {
+               for (y = max_nr; y >= 1; --y)
+                    printf("%s ", vector[x, y])
+               printf("\n")
+          }
+     }
+
+When given the input:
+
+     1 2 3 4 5 6
+     2 3 4 5 6 1
+     3 4 5 6 1 2
+     4 5 6 1 2 3
+
+the program produces the following output:
+
+     4 3 2 1
+     5 4 3 2
+     6 5 4 3
+     1 6 5 4
+     2 1 6 5
+     3 2 1 6
+
+File: gawk.info,  Node: Multiscanning,  Up: Multidimensional
+
+8.5.1 Scanning Multidimensional Arrays
+--------------------------------------
+
+There is no special 'for' statement for scanning a "multidimensional"
+array.  There cannot be one, because, in truth, 'awk' does not have
+multidimensional arrays or elements--there is only a multidimensional
+_way of accessing_ an array.
+
+   However, if your program has an array that is always accessed as
+multidimensional, you can get the effect of scanning it by combining the
+scanning 'for' statement (*note Scanning an Array::) with the built-in
+'split()' function (*note String Functions::).  It works in the
+following manner:
+
+     for (combined in array) {
+         split(combined, separate, SUBSEP)
+         ...
+     }
+
+This sets the variable 'combined' to each concatenated combined index in
+the array, and splits it into the individual indices by breaking it
+apart where the value of 'SUBSEP' appears.  The individual indices then
+become the elements of the array 'separate'.
+
+   Thus, if a value is previously stored in 'array[1, "foo"]', then an
+element with index '"1\034foo"' exists in 'array'.  (Recall that the
+default value of 'SUBSEP' is the character with code 034.)  Sooner or
+later, the 'for' statement finds that index and does an iteration with
+the variable 'combined' set to '"1\034foo"'.  Then the 'split()'
+function is called as follows:
+
+     split("1\034foo", separate, "\034")
+
+The result is to set 'separate[1]' to '"1"' and 'separate[2]' to
+'"foo"'.  Presto!  The original sequence of separate indices is
+recovered.
+
+File: gawk.info,  Node: Arrays of Arrays,  Next: Arrays Summary,  Prev: Multidimensional,  Up: Arrays
+

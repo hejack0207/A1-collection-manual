@@ -1,0 +1,154 @@
+12.3 Two-Way Communications with Another Process
+================================================
+
+It is often useful to be able to send data to a separate program for
+processing and then read the result.  This can always be done with
+temporary files:
+
+     # Write the data for processing
+     tempfile = ("mydata." PROCINFO["pid"])
+     while (NOT DONE WITH DATA)
+         print DATA | ("subprogram > " tempfile)
+     close("subprogram > " tempfile)
+
+     # Read the results, remove tempfile when done
+     while ((getline newdata < tempfile) > 0)
+         PROCESS newdata APPROPRIATELY
+     close(tempfile)
+     system("rm " tempfile)
+
+This works, but not elegantly.  Among other things, it requires that the
+program be run in a directory that cannot be shared among users; for
+example, '/tmp' will not do, as another user might happen to be using a
+temporary file with the same name.(1)
+
+   However, with 'gawk', it is possible to open a _two-way_ pipe to
+another process.  The second process is termed a "coprocess", as it runs
+in parallel with 'gawk'.  The two-way connection is created using the
+'|&' operator (borrowed from the Korn shell, 'ksh'):(2)
+
+     do {
+         print DATA |& "subprogram"
+         "subprogram" |& getline results
+     } while (DATA LEFT TO PROCESS)
+     close("subprogram")
+
+   The first time an I/O operation is executed using the '|&' operator,
+'gawk' creates a two-way pipeline to a child process that runs the other
+program.  Output created with 'print' or 'printf' is written to the
+program's standard input, and output from the program's standard output
+can be read by the 'gawk' program using 'getline'.  As is the case with
+processes started by '|', the subprogram can be any program, or pipeline
+of programs, that can be started by the shell.
+
+   There are some cautionary items to be aware of:
+
+   * As the code inside 'gawk' currently stands, the coprocess's
+     standard error goes to the same place that the parent 'gawk''s
+     standard error goes.  It is not possible to read the child's
+     standard error separately.
+
+   * I/O buffering may be a problem.  'gawk' automatically flushes all
+     output down the pipe to the coprocess.  However, if the coprocess
+     does not flush its output, 'gawk' may hang when doing a 'getline'
+     in order to read the coprocess's results.  This could lead to a
+     situation known as "deadlock", where each process is waiting for
+     the other one to do something.
+
+   It is possible to close just one end of the two-way pipe to a
+coprocess, by supplying a second argument to the 'close()' function of
+either '"to"' or '"from"' (*note Close Files And Pipes::).  These
+strings tell 'gawk' to close the end of the pipe that sends data to the
+coprocess or the end that reads from it, respectively.
+
+   This is particularly necessary in order to use the system 'sort'
+utility as part of a coprocess; 'sort' must read _all_ of its input data
+before it can produce any output.  The 'sort' program does not receive
+an end-of-file indication until 'gawk' closes the write end of the pipe.
+
+   When you have finished writing data to the 'sort' utility, you can
+close the '"to"' end of the pipe, and then start reading sorted data via
+'getline'.  For example:
+
+     BEGIN {
+         command = "LC_ALL=C sort"
+         n = split("abcdefghijklmnopqrstuvwxyz", a, "")
+
+         for (i = n; i > 0; i--)
+             print a[i] |& command
+         close(command, "to")
+
+         while ((command |& getline line) > 0)
+             print "got", line
+         close(command)
+     }
+
+   This program writes the letters of the alphabet in reverse order, one
+per line, down the two-way pipe to 'sort'.  It then closes the write end
+of the pipe, so that 'sort' receives an end-of-file indication.  This
+causes 'sort' to sort the data and write the sorted data back to the
+'gawk' program.  Once all of the data has been read, 'gawk' terminates
+the coprocess and exits.
+
+   As a side note, the assignment 'LC_ALL=C' in the 'sort' command
+ensures traditional Unix (ASCII) sorting from 'sort'.  This is not
+strictly necessary here, but it's good to know how to do this.
+
+   Be careful when closing the '"from"' end of a two-way pipe; in this
+case 'gawk' waits for the child process to exit, which may cause your
+program to hang.  (Thus, this particular feature is of much less use in
+practice than being able to close the '"to"' end.)
+
+     CAUTION: Normally, it is a fatal error to write to the '"to"' end
+     of a two-way pipe which has been closed, and it is also a fatal
+     error to read from the '"from"' end of a two-way pipe that has been
+     closed.
+
+     You may set 'PROCINFO["COMMAND", "NONFATAL"]' to make such
+     operations become nonfatal.  If you do so, you then need to check
+     'ERRNO' after each 'print', 'printf', or 'getline'.  *Note
+     Nonfatal::, for more information.
+
+   You may also use pseudo-ttys (ptys) for two-way communication instead
+of pipes, if your system supports them.  This is done on a per-command
+basis, by setting a special element in the 'PROCINFO' array (*note
+Auto-set::), like so:
+
+     command = "sort -nr"           # command, save in convenience variable
+     PROCINFO[command, "pty"] = 1   # update PROCINFO
+     print ... |& command           # start two-way pipe
+     ...
+
+If your system does not have ptys, or if all the system's ptys are in
+use, 'gawk' automatically falls back to using regular pipes.
+
+   Using ptys usually avoids the buffer deadlock issues described
+earlier, at some loss in performance.  This is because the tty driver
+buffers and sends data line-by-line.  On systems with the 'stdbuf' (part
+of the GNU Coreutils package
+(https://www.gnu.org/software/coreutils/coreutils.html)), you can use
+that program instead of ptys.
+
+   Note also that ptys are not fully transparent.  Certain binary
+control codes, such 'Ctrl-d' for end-of-file, are interpreted by the tty
+driver and not passed through.
+
+     CAUTION: Finally, coprocesses open up the possibility of "deadlock"
+     between 'gawk' and the program running in the coprocess.  This can
+     occur if you send "too much" data to the coprocess before reading
+     any back; each process is blocked writing data with noone available
+     to read what they've already written.  There is no workaround for
+     deadlock; careful programming and knowledge of the behavior of the
+     coprocess are required.
+
+   ---------- Footnotes ----------
+
+   (1) Michael Brennan suggests the use of 'rand()' to generate unique
+file names.  This is a valid point; nevertheless, temporary files remain
+more difficult to use than two-way pipes.
+
+   (2) This is very different from the same operator in the C shell and
+in Bash.
+
+File: gawk.info,  Node: TCP/IP Networking,  Next: Profiling,  Prev: Two-way I/O,  Up: Advanced Features
+

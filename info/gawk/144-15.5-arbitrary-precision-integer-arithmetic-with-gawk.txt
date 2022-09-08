@@ -1,0 +1,77 @@
+15.5 Arbitrary-Precision Integer Arithmetic with 'gawk'
+=======================================================
+
+When given the '-M' option, 'gawk' performs all integer arithmetic using
+GMP arbitrary-precision integers.  Any number that looks like an integer
+in a source or data file is stored as an arbitrary-precision integer.
+The size of the integer is limited only by the available memory.  For
+example, the following computes 5^4^3^2, the result of which is beyond
+the limits of ordinary hardware double-precision floating-point values:
+
+     $ gawk -M 'BEGIN {
+     >   x = 5^4^3^2
+     >   print "number of digits =", length(x)
+     >   print substr(x, 1, 20), "...", substr(x, length(x) - 19, 20)
+     > }'
+     -| number of digits = 183231
+     -| 62060698786608744707 ... 92256259918212890625
+
+   If instead you were to compute the same value using
+arbitrary-precision floating-point values, the precision needed for
+correct output (using the formula 'prec = 3.322 * dps') would be 3.322 x
+183231, or 608693.
+
+   The result from an arithmetic operation with an integer and a
+floating-point value is a floating-point value with a precision equal to
+the working precision.  The following program calculates the eighth term
+in Sylvester's sequence(1) using a recurrence:
+
+     $ gawk -M 'BEGIN {
+     >   s = 2.0
+     >   for (i = 1; i <= 7; i++)
+     >       s = s * (s - 1) + 1
+     >   print s
+     > }'
+     -| 113423713055421845118910464
+
+   The output differs from the actual number,
+113,423,713,055,421,844,361,000,443, because the default precision of 53
+bits is not enough to represent the floating-point results exactly.  You
+can either increase the precision (100 bits is enough in this case), or
+replace the floating-point constant '2.0' with an integer, to perform
+all computations using integer arithmetic to get the correct output.
+
+   Sometimes 'gawk' must implicitly convert an arbitrary-precision
+integer into an arbitrary-precision floating-point value.  This is
+primarily because the MPFR library does not always provide the relevant
+interface to process arbitrary-precision integers or mixed-mode numbers
+as needed by an operation or function.  In such a case, the precision is
+set to the minimum value necessary for exact conversion, and the working
+precision is not used for this purpose.  If this is not what you need or
+want, you can employ a subterfuge and convert the integer to floating
+point first, like this:
+
+     gawk -M 'BEGIN { n = 13; print (n + 0.0) % 2.0 }'
+
+   You can avoid this issue altogether by specifying the number as a
+floating-point value to begin with:
+
+     gawk -M 'BEGIN { n = 13.0; print n % 2.0 }'
+
+   Note that for this particular example, it is likely best to just use
+the following:
+
+     gawk -M 'BEGIN { n = 13; print n % 2 }'
+
+   When dividing two arbitrary precision integers with either '/' or
+'%', the result is typically an arbitrary precision floating point value
+(unless the denominator evenly divides into the numerator).
+
+   ---------- Footnotes ----------
+
+   (1) Weisstein, Eric W. 'Sylvester's Sequence'.  From MathWorld--A
+Wolfram Web Resource
+(<http://mathworld.wolfram.com/SylvestersSequence.html>).
+
+File: gawk.info,  Node: Checking for MPFR,  Next: POSIX Floating Point Problems,  Prev: Arbitrary Precision Integers,  Up: Arbitrary Precision Arithmetic
+

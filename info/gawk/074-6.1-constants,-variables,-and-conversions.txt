@@ -1,0 +1,565 @@
+6.1 Constants, Variables, and Conversions
+=========================================
+
+Expressions are built up from values and the operations performed upon
+them.  This minor node describes the elementary objects that provide the
+values used in expressions.
+
+* Menu:
+
+* Constants::                   String, numeric and regexp constants.
+* Using Constant Regexps::      When and how to use a regexp constant.
+* Variables::                   Variables give names to values for later use.
+* Conversion::                  The conversion of strings to numbers and vice
+                                versa.
+
+File: gawk.info,  Node: Constants,  Next: Using Constant Regexps,  Up: Values
+
+6.1.1 Constant Expressions
+--------------------------
+
+The simplest type of expression is the "constant", which always has the
+same value.  There are three types of constants: numeric, string, and
+regular expression.
+
+   Each is used in the appropriate context when you need a data value
+that isn't going to change.  Numeric constants can have different forms,
+but are internally stored in an identical manner.
+
+* Menu:
+
+* Scalar Constants::            Numeric and string constants.
+* Nondecimal-numbers::          What are octal and hex numbers.
+* Regexp Constants::            Regular Expression constants.
+
+File: gawk.info,  Node: Scalar Constants,  Next: Nondecimal-numbers,  Up: Constants
+
+6.1.1.1 Numeric and String Constants
+....................................
+
+A "numeric constant" stands for a number.  This number can be an
+integer, a decimal fraction, or a number in scientific (exponential)
+notation.(1)  Here are some examples of numeric constants that all have
+the same value:
+
+     105
+     1.05e+2
+     1050e-1
+
+   A "string constant" consists of a sequence of characters enclosed in
+double quotation marks.  For example:
+
+     "parrot"
+
+represents the string whose contents are 'parrot'.  Strings in 'gawk'
+can be of any length, and they can contain any of the possible eight-bit
+ASCII characters, including ASCII NUL (character code zero).  Other
+'awk' implementations may have difficulty with some character codes.
+
+   ---------- Footnotes ----------
+
+   (1) The internal representation of all numbers, including integers,
+uses double-precision floating-point numbers.  On most modern systems,
+these are in IEEE 754 standard format.  *Note Arbitrary Precision
+Arithmetic::, for much more information.
+
+File: gawk.info,  Node: Nondecimal-numbers,  Next: Regexp Constants,  Prev: Scalar Constants,  Up: Constants
+
+6.1.1.2 Octal and Hexadecimal Numbers
+.....................................
+
+In 'awk', all numbers are in decimal (i.e., base 10).  Many other
+programming languages allow you to specify numbers in other bases, often
+octal (base 8) and hexadecimal (base 16).  In octal, the numbers go 0,
+1, 2, 3, 4, 5, 6, 7, 10, 11, 12, and so on.  Just as '11' in decimal is
+1 times 10 plus 1, so '11' in octal is 1 times 8 plus 1.  This equals 9
+in decimal.  In hexadecimal, there are 16 digits.  Because the everyday
+decimal number system only has ten digits ('0'-'9'), the letters 'a'
+through 'f' represent the rest.  (Case in the letters is usually
+irrelevant; hexadecimal 'a' and 'A' have the same value.)  Thus, '11' in
+hexadecimal is 1 times 16 plus 1, which equals 17 in decimal.
+
+   Just by looking at plain '11', you can't tell what base it's in.  So,
+in C, C++, and other languages derived from C, there is a special
+notation to signify the base.  Octal numbers start with a leading '0',
+and hexadecimal numbers start with a leading '0x' or '0X':
+
+'11'
+     Decimal value 11
+
+'011'
+     Octal 11, decimal value 9
+
+'0x11'
+     Hexadecimal 11, decimal value 17
+
+   This example shows the difference:
+
+     $ gawk 'BEGIN { printf "%d, %d, %d\n", 011, 11, 0x11 }'
+     -| 9, 11, 17
+
+   Being able to use octal and hexadecimal constants in your programs is
+most useful when working with data that cannot be represented
+conveniently as characters or as regular numbers, such as binary data of
+various sorts.
+
+   'gawk' allows the use of octal and hexadecimal constants in your
+program text.  However, such numbers in the input data are not treated
+differently; doing so by default would break old programs.  (If you
+really need to do this, use the '--non-decimal-data' command-line
+option; *note Nondecimal Data::.)  If you have octal or hexadecimal
+data, you can use the 'strtonum()' function (*note String Functions::)
+to convert the data into a number.  Most of the time, you will want to
+use octal or hexadecimal constants when working with the built-in
+bit-manipulation functions; see *note Bitwise Functions:: for more
+information.
+
+   Unlike in some early C implementations, '8' and '9' are not valid in
+octal constants.  For example, 'gawk' treats '018' as decimal 18:
+
+     $ gawk 'BEGIN { print "021 is", 021 ; print 018 }'
+     -| 021 is 17
+     -| 18
+
+   Octal and hexadecimal source code constants are a 'gawk' extension.
+If 'gawk' is in compatibility mode (*note Options::), they are not
+available.
+
+              A Constant's Base Does Not Affect Its Value
+
+   Once a numeric constant has been converted internally into a number,
+'gawk' no longer remembers what the original form of the constant was;
+the internal value is always used.  This has particular consequences for
+conversion of numbers to strings:
+
+     $ gawk 'BEGIN { printf "0x11 is <%s>\n", 0x11 }'
+     -| 0x11 is <17>
+
+File: gawk.info,  Node: Regexp Constants,  Prev: Nondecimal-numbers,  Up: Constants
+
+6.1.1.3 Regular Expression Constants
+....................................
+
+A "regexp constant" is a regular expression description enclosed in
+slashes, such as '/^beginning and end$/'.  Most regexps used in 'awk'
+programs are constant, but the '~' and '!~' matching operators can also
+match computed or dynamic regexps (which are typically just ordinary
+strings or variables that contain a regexp, but could be more complex
+expressions).
+
+File: gawk.info,  Node: Using Constant Regexps,  Next: Variables,  Prev: Constants,  Up: Values
+
+6.1.2 Using Regular Expression Constants
+----------------------------------------
+
+Regular expression constants consist of text describing a regular
+expression enclosed in slashes (such as '/the +answer/').  This minor
+node describes how such constants work in POSIX 'awk' and 'gawk', and
+then goes on to describe "strongly typed regexp constants", which are a
+'gawk' extension.
+
+* Menu:
+
+* Standard Regexp Constants::   Regexp constants in standard 'awk'.
+* Strong Regexp Constants::     Strongly typed regexp constants.
+
+File: gawk.info,  Node: Standard Regexp Constants,  Next: Strong Regexp Constants,  Up: Using Constant Regexps
+
+6.1.2.1 Standard Regular Expression Constants
+.............................................
+
+When used on the righthand side of the '~' or '!~' operators, a regexp
+constant merely stands for the regexp that is to be matched.  However,
+regexp constants (such as '/foo/') may be used like simple expressions.
+When a regexp constant appears by itself, it has the same meaning as if
+it appeared in a pattern (i.e., '($0 ~ /foo/)').  (d.c.)  *Note
+Expression Patterns::.  This means that the following two code segments:
+
+     if ($0 ~ /barfly/ || $0 ~ /camelot/)
+         print "found"
+
+and:
+
+     if (/barfly/ || /camelot/)
+         print "found"
+
+are exactly equivalent.  One rather bizarre consequence of this rule is
+that the following Boolean expression is valid, but does not do what its
+author probably intended:
+
+     # Note that /foo/ is on the left of the ~
+     if (/foo/ ~ $1) print "found foo"
+
+This code is "obviously" testing '$1' for a match against the regexp
+'/foo/'.  But in fact, the expression '/foo/ ~ $1' really means '($0 ~
+/foo/) ~ $1'.  In other words, first match the input record against the
+regexp '/foo/'.  The result is either zero or one, depending upon the
+success or failure of the match.  That result is then matched against
+the first field in the record.  Because it is unlikely that you would
+ever really want to make this kind of test, 'gawk' issues a warning when
+it sees this construct in a program.  Another consequence of this rule
+is that the assignment statement:
+
+     matches = /foo/
+
+assigns either zero or one to the variable 'matches', depending upon the
+contents of the current input record.
+
+   Constant regular expressions are also used as the first argument for
+the 'gensub()', 'sub()', and 'gsub()' functions, as the second argument
+of the 'match()' function, and as the third argument of the 'split()'
+and 'patsplit()' functions (*note String Functions::).  Modern
+implementations of 'awk', including 'gawk', allow the third argument of
+'split()' to be a regexp constant, but some older implementations do
+not.  (d.c.)  Because some built-in functions accept regexp constants as
+arguments, confusion can arise when attempting to use regexp constants
+as arguments to user-defined functions (*note User-defined::).  For
+example:
+
+     function mysub(pat, repl, str, global)
+     {
+         if (global)
+             gsub(pat, repl, str)
+         else
+             sub(pat, repl, str)
+         return str
+     }
+
+     {
+         ...
+         text = "hi! hi yourself!"
+         mysub(/hi/, "howdy", text, 1)
+         ...
+     }
+
+   In this example, the programmer wants to pass a regexp constant to
+the user-defined function 'mysub()', which in turn passes it on to
+either 'sub()' or 'gsub()'.  However, what really happens is that the
+'pat' parameter is assigned a value of either one or zero, depending
+upon whether or not '$0' matches '/hi/'.  'gawk' issues a warning when
+it sees a regexp constant used as a parameter to a user-defined
+function, because passing a truth value in this way is probably not what
+was intended.
+
+File: gawk.info,  Node: Strong Regexp Constants,  Prev: Standard Regexp Constants,  Up: Using Constant Regexps
+
+6.1.2.2 Strongly Typed Regexp Constants
+.......................................
+
+This minor node describes a 'gawk'-specific feature.
+
+   As we saw in the previous minor node, regexp constants ('/.../') hold
+a strange position in the 'awk' language.  In most contexts, they act
+like an expression: '$0 ~ /.../'.  In other contexts, they denote only a
+regexp to be matched.  In no case are they really a "first class
+citizen" of the language.  That is, you cannot define a scalar variable
+whose type is "regexp" in the same sense that you can define a variable
+to be a number or a string:
+
+     num = 42        Numeric variable
+     str = "hi"      String variable
+     re = /foo/      Wrong! re is the result of $0 ~ /foo/
+
+   For a number of more advanced use cases, it would be nice to have
+regexp constants that are "strongly typed"; in other words, that denote
+a regexp useful for matching, and not an expression.
+
+   'gawk' provides this feature.  A strongly typed regexp constant looks
+almost like a regular regexp constant, except that it is preceded by an
+'@' sign:
+
+     re = @/foo/     Regexp variable
+
+   Strongly typed regexp constants _cannot_ be used everywhere that a
+regular regexp constant can, because this would make the language even
+more confusing.  Instead, you may use them only in certain contexts:
+
+   * On the righthand side of the '~' and '!~' operators: 'some_var ~
+     @/foo/' (*note Regexp Usage::).
+
+   * In the 'case' part of a 'switch' statement (*note Switch
+     Statement::).
+
+   * As an argument to one of the built-in functions that accept regexp
+     constants: 'gensub()', 'gsub()', 'match()', 'patsplit()',
+     'split()', and 'sub()' (*note String Functions::).
+
+   * As a parameter in a call to a user-defined function (*note
+     User-defined::).
+
+   * On the righthand side of an assignment to a variable: 'some_var =
+     @/foo/'.  In this case, the type of 'some_var' is regexp.
+     Additionally, 'some_var' can be used with '~' and '!~', passed to
+     one of the built-in functions listed above, or passed as a
+     parameter to a user-defined function.
+
+   You may use the 'typeof()' built-in function (*note Type Functions::)
+to determine if a variable or function parameter is a regexp variable.
+
+   The true power of this feature comes from the ability to create
+variables that have regexp type.  Such variables can be passed on to
+user-defined functions, without the confusing aspects of computed
+regular expressions created from strings or string constants.  They may
+also be passed through indirect function calls (*note Indirect Calls::)
+and on to the built-in functions that accept regexp constants.
+
+   When used in numeric conversions, strongly typed regexp variables
+convert to zero.  When used in string conversions, they convert to the
+string value of the original regexp text.
+
+File: gawk.info,  Node: Variables,  Next: Conversion,  Prev: Using Constant Regexps,  Up: Values
+
+6.1.3 Variables
+---------------
+
+"Variables" are ways of storing values at one point in your program for
+use later in another part of your program.  They can be manipulated
+entirely within the program text, and they can also be assigned values
+on the 'awk' command line.
+
+* Menu:
+
+* Using Variables::             Using variables in your programs.
+* Assignment Options::          Setting variables on the command line and a
+                                summary of command-line syntax. This is an
+                                advanced method of input.
+
+File: gawk.info,  Node: Using Variables,  Next: Assignment Options,  Up: Variables
+
+6.1.3.1 Using Variables in a Program
+....................................
+
+Variables let you give names to values and refer to them later.
+Variables have already been used in many of the examples.  The name of a
+variable must be a sequence of letters, digits, or underscores, and it
+may not begin with a digit.  Here, a "letter" is any one of the 52
+upper- and lowercase English letters.  Other characters that may be
+defined as letters in non-English locales are not valid in variable
+names.  Case is significant in variable names; 'a' and 'A' are distinct
+variables.
+
+   A variable name is a valid expression by itself; it represents the
+variable's current value.  Variables are given new values with
+"assignment operators", "increment operators", and "decrement operators"
+(*note Assignment Ops::).  In addition, the 'sub()' and 'gsub()'
+functions can change a variable's value, and the 'match()', 'split()',
+and 'patsplit()' functions can change the contents of their array
+parameters (*note String Functions::).
+
+   A few variables have special built-in meanings, such as 'FS' (the
+field separator) and 'NF' (the number of fields in the current input
+record).  *Note Built-in Variables:: for a list of the predefined
+variables.  These predefined variables can be used and assigned just
+like all other variables, but their values are also used or changed
+automatically by 'awk'.  All predefined variables' names are entirely
+uppercase.
+
+   Variables in 'awk' can be assigned either numeric or string values.
+The kind of value a variable holds can change over the life of a
+program.  By default, variables are initialized to the empty string,
+which is zero if converted to a number.  There is no need to explicitly
+initialize a variable in 'awk', which is what you would do in C and in
+most other traditional languages.
+
+File: gawk.info,  Node: Assignment Options,  Prev: Using Variables,  Up: Variables
+
+6.1.3.2 Assigning Variables on the Command Line
+...............................................
+
+Any 'awk' variable can be set by including a "variable assignment" among
+the arguments on the command line when 'awk' is invoked (*note Other
+Arguments::).  Such an assignment has the following form:
+
+     VARIABLE=TEXT
+
+With it, a variable is set either at the beginning of the 'awk' run or
+in between input files.  When the assignment is preceded with the '-v'
+option, as in the following:
+
+     -v VARIABLE=TEXT
+
+the variable is set at the very beginning, even before the 'BEGIN' rules
+execute.  The '-v' option and its assignment must precede all the file
+name arguments, as well as the program text.  (*Note Options:: for more
+information about the '-v' option.)  Otherwise, the variable assignment
+is performed at a time determined by its position among the input file
+arguments--after the processing of the preceding input file argument.
+For example:
+
+     awk '{ print $n }' n=4 inventory-shipped n=2 mail-list
+
+prints the value of field number 'n' for all input records.  Before the
+first file is read, the command line sets the variable 'n' equal to
+four.  This causes the fourth field to be printed in lines from
+'inventory-shipped'.  After the first file has finished, but before the
+second file is started, 'n' is set to two, so that the second field is
+printed in lines from 'mail-list':
+
+     $ awk '{ print $n }' n=4 inventory-shipped n=2 mail-list
+     -| 15
+     -| 24
+     ...
+     -| 555-5553
+     -| 555-3412
+     ...
+
+   Command-line arguments are made available for explicit examination by
+the 'awk' program in the 'ARGV' array (*note ARGC and ARGV::).  'awk'
+processes the values of command-line assignments for escape sequences
+(*note Escape Sequences::).  (d.c.)
+
+File: gawk.info,  Node: Conversion,  Prev: Variables,  Up: Values
+
+6.1.4 Conversion of Strings and Numbers
+---------------------------------------
+
+Number-to-string and string-to-number conversion are generally
+straightforward.  There can be subtleties to be aware of; this minor
+node discusses this important facet of 'awk'.
+
+* Menu:
+
+* Strings And Numbers::         How 'awk' Converts Between Strings And
+                                Numbers.
+* Locale influences conversions:: How the locale may affect conversions.
+
+File: gawk.info,  Node: Strings And Numbers,  Next: Locale influences conversions,  Up: Conversion
+
+6.1.4.1 How 'awk' Converts Between Strings and Numbers
+......................................................
+
+Strings are converted to numbers and numbers are converted to strings,
+if the context of the 'awk' program demands it.  For example, if the
+value of either 'foo' or 'bar' in the expression 'foo + bar' happens to
+be a string, it is converted to a number before the addition is
+performed.  If numeric values appear in string concatenation, they are
+converted to strings.  Consider the following:
+
+     two = 2; three = 3
+     print (two three) + 4
+
+This prints the (numeric) value 27.  The numeric values of the variables
+'two' and 'three' are converted to strings and concatenated together.
+The resulting string is converted back to the number 23, to which 4 is
+then added.
+
+   If, for some reason, you need to force a number to be converted to a
+string, concatenate that number with the empty string, '""'.  To force a
+string to be converted to a number, add zero to that string.  A string
+is converted to a number by interpreting any numeric prefix of the
+string as numerals: '"2.5"' converts to 2.5, '"1e3"' converts to 1,000,
+and '"25fix"' has a numeric value of 25.  Strings that can't be
+interpreted as valid numbers convert to zero.
+
+   The exact manner in which numbers are converted into strings is
+controlled by the 'awk' predefined variable 'CONVFMT' (*note Built-in
+Variables::).  Numbers are converted using the 'sprintf()' function with
+'CONVFMT' as the format specifier (*note String Functions::).
+
+   'CONVFMT''s default value is '"%.6g"', which creates a value with at
+most six significant digits.  For some applications, you might want to
+change it to specify more precision.  On most modern machines, 17 digits
+is usually enough to capture a floating-point number's value exactly.(1)
+
+   Strange results can occur if you set 'CONVFMT' to a string that
+doesn't tell 'sprintf()' how to format floating-point numbers in a
+useful way.  For example, if you forget the '%' in the format, 'awk'
+converts all numbers to the same constant string.
+
+   As a special case, if a number is an integer, then the result of
+converting it to a string is _always_ an integer, no matter what the
+value of 'CONVFMT' may be.  Given the following code fragment:
+
+     CONVFMT = "%2.2f"
+     a = 12
+     b = a ""
+
+'b' has the value '"12"', not '"12.00"'.  (d.c.)
+
+           Pre-POSIX 'awk' Used 'OFMT' for String Conversion
+
+   Prior to the POSIX standard, 'awk' used the value of 'OFMT' for
+converting numbers to strings.  'OFMT' specifies the output format to
+use when printing numbers with 'print'.  'CONVFMT' was introduced in
+order to separate the semantics of conversion from the semantics of
+printing.  Both 'CONVFMT' and 'OFMT' have the same default value:
+'"%.6g"'.  In the vast majority of cases, old 'awk' programs do not
+change their behavior.  *Note Print:: for more information on the
+'print' statement.
+
+   ---------- Footnotes ----------
+
+   (1) Pathological cases can require up to 752 digits (!), but we doubt
+that you need to worry about this.
+
+File: gawk.info,  Node: Locale influences conversions,  Prev: Strings And Numbers,  Up: Conversion
+
+6.1.4.2 Locales Can Influence Conversion
+........................................
+
+Where you are can matter when it comes to converting between numbers and
+strings.  The local character set and language--the "locale"--can affect
+numeric formats.  In particular, for 'awk' programs, it affects the
+decimal point character and the thousands-separator character.  The
+'"C"' locale, and most English-language locales, use the period
+character ('.') as the decimal point and don't have a thousands
+separator.  However, many (if not most) European and non-English locales
+use the comma (',') as the decimal point character.  European locales
+often use either a space or a period as the thousands separator, if they
+have one.
+
+   The POSIX standard says that 'awk' always uses the period as the
+decimal point when reading the 'awk' program source code, and for
+command-line variable assignments (*note Other Arguments::).  However,
+when interpreting input data, for 'print' and 'printf' output, and for
+number-to-string conversion, the local decimal point character is used.
+(d.c.)  In all cases, numbers in source code and in input data cannot
+have a thousands separator.  Here are some examples indicating the
+difference in behavior, on a GNU/Linux system:
+
+     $ export POSIXLY_CORRECT=1                        Force POSIX behavior
+     $ gawk 'BEGIN { printf "%g\n", 3.1415927 }'
+     -| 3.14159
+     $ LC_ALL=en_DK.utf-8 gawk 'BEGIN { printf "%g\n", 3.1415927 }'
+     -| 3,14159
+     $ echo 4,321 | gawk '{ print $1 + 1 }'
+     -| 5
+     $ echo 4,321 | LC_ALL=en_DK.utf-8 gawk '{ print $1 + 1 }'
+     -| 5,321
+
+The 'en_DK.utf-8' locale is for English in Denmark, where the comma acts
+as the decimal point separator.  In the normal '"C"' locale, 'gawk'
+treats '4,321' as 4, while in the Danish locale, it's treated as the
+full number including the fractional part, 4.321.
+
+   Some earlier versions of 'gawk' fully complied with this aspect of
+the standard.  However, many users in non-English locales complained
+about this behavior, because their data used a period as the decimal
+point, so the default behavior was restored to use a period as the
+decimal point character.  You can use the '--use-lc-numeric' option
+(*note Options::) to force 'gawk' to use the locale's decimal point
+character.  ('gawk' also uses the locale's decimal point character when
+in POSIX mode, either via '--posix' or the 'POSIXLY_CORRECT' environment
+variable, as shown previously.)
+
+   *note Table 6.1: table-locale-affects. describes the cases in which
+the locale's decimal point character is used and when a period is used.
+Some of these features have not been described yet.
+
+Feature     Default        '--posix' or
+                           '--use-lc-numeric'
+------------------------------------------------------------
+'%'g'       Use locale     Use locale
+'%g'        Use period     Use locale
+Input       Use period     Use locale
+'strtonum()'Use period     Use locale
+
+Table 6.1: Locale decimal point versus a period
+
+   Finally, modern-day formal standards and the IEEE standard
+floating-point representation can have an unusual but important effect
+on the way 'gawk' converts some special string values to numbers.  The
+details are presented in *note POSIX Floating Point Problems::.
+
+File: gawk.info,  Node: All Operators,  Next: Truth Values and Conditions,  Prev: Values,  Up: Expressions
+

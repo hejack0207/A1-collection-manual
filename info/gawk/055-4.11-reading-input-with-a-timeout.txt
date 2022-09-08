@@ -1,0 +1,93 @@
+4.11 Reading Input with a Timeout
+=================================
+
+This minor node describes a feature that is specific to 'gawk'.
+
+   You may specify a timeout in milliseconds for reading input from the
+keyboard, a pipe, or two-way communication, including TCP/IP sockets.
+This can be done on a per-input, per-command, or per-connection basis,
+by setting a special element in the 'PROCINFO' array (*note Auto-set::):
+
+     PROCINFO["input_name", "READ_TIMEOUT"] = TIMEOUT IN MILLISECONDS
+
+   When set, this causes 'gawk' to time out and return failure if no
+data is available to read within the specified timeout period.  For
+example, a TCP client can decide to give up on receiving any response
+from the server after a certain amount of time:
+
+     Service = "/inet/tcp/0/localhost/daytime"
+     PROCINFO[Service, "READ_TIMEOUT"] = 100
+     if ((Service |& getline) > 0)
+         print $0
+     else if (ERRNO != "")
+         print ERRNO
+
+   Here is how to read interactively from the user(1) without waiting
+for more than five seconds:
+
+     PROCINFO["/dev/stdin", "READ_TIMEOUT"] = 5000
+     while ((getline < "/dev/stdin") > 0)
+         print $0
+
+   'gawk' terminates the read operation if input does not arrive after
+waiting for the timeout period, returns failure, and sets 'ERRNO' to an
+appropriate string value.  A negative or zero value for the timeout is
+the same as specifying no timeout at all.
+
+   A timeout can also be set for reading from the keyboard in the
+implicit loop that reads input records and matches them against
+patterns, like so:
+
+     $ gawk 'BEGIN { PROCINFO["-", "READ_TIMEOUT"] = 5000 }
+     > { print "You entered: " $0 }'
+     gawk
+     -| You entered: gawk
+
+   In this case, failure to respond within five seconds results in the
+following error message:
+
+     error-> gawk: cmd. line:2: (FILENAME=- FNR=1) fatal: error reading input file `-': Connection timed out
+
+   The timeout can be set or changed at any time, and will take effect
+on the next attempt to read from the input device.  In the following
+example, we start with a timeout value of one second, and progressively
+reduce it by one-tenth of a second until we wait indefinitely for the
+input to arrive:
+
+     PROCINFO[Service, "READ_TIMEOUT"] = 1000
+     while ((Service |& getline) > 0) {
+         print $0
+         PROCINFO[Service, "READ_TIMEOUT"] -= 100
+     }
+
+     NOTE: You should not assume that the read operation will block
+     exactly after the tenth record has been printed.  It is possible
+     that 'gawk' will read and buffer more than one record's worth of
+     data the first time.  Because of this, changing the value of
+     timeout like in the preceding example is not very useful.
+
+   If the 'PROCINFO' element is not present and the 'GAWK_READ_TIMEOUT'
+environment variable exists, 'gawk' uses its value to initialize the
+timeout value.  The exclusive use of the environment variable to specify
+timeout has the disadvantage of not being able to control it on a
+per-command or per-connection basis.
+
+   'gawk' considers a timeout event to be an error even though the
+attempt to read from the underlying device may succeed in a later
+attempt.  This is a limitation, and it also means that you cannot use
+this to multiplex input from two or more sources.  *Note Retrying
+Input:: for a way to enable later I/O attempts to succeed.
+
+   Assigning a timeout value prevents read operations from blocking
+indefinitely.  But bear in mind that there are other ways 'gawk' can
+stall waiting for an input device to be ready.  A network client can
+sometimes take a long time to establish a connection before it can start
+reading any data, or the attempt to open a FIFO special file for reading
+can block indefinitely until some other process opens it for writing.
+
+   ---------- Footnotes ----------
+
+   (1) This assumes that standard input is the keyboard.
+
+File: gawk.info,  Node: Retrying Input,  Next: Command-line directories,  Prev: Read Timeout,  Up: Reading Files
+

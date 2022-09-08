@@ -1,0 +1,108 @@
+16.3 How It Works at a High Level
+=================================
+
+Communication between 'gawk' and an extension is two-way.  First, when
+an extension is loaded, 'gawk' passes it a pointer to a 'struct' whose
+fields are function pointers.  This is shown in *note Figure 16.1:
+figure-load-extension.
+
+                          API
+                         Struct
+                         +---+
+                         |   |
+                         +---+
+         +---------------|   |
+         |               +---+      dl_load(api_p, id);
+         |               |   |  ___________________ 
+         |               +---+                     |
+         |     +---------|   |  __________________ |
+         |     |         +---+                    ||
+         |     |         |   |                    ||
+         |     |         +---+                    ||
+         |     |     +---|   |                    ||
+         |     |     |   +---+                  \ || /
+         |     |     |                           \  /
+         v     v     v                            \/
++-------+-+---+-+---+-+------------------+--------------------+
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOOOOOOOO|
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOOOOOOOO|
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOOOOOOOO|
++-------+-+---+-+---+-+------------------+--------------------+
+
+    gawk Main Program Address Space              Extension
+
+Figure 16.1: Loading the extension
+
+   The extension can call functions inside 'gawk' through these function
+pointers, at runtime, without needing (link-time) access to 'gawk''s
+symbols.  One of these function pointers is to a function for
+"registering" new functions.  This is shown in *note Figure 16.2:
+figure-register-new-function.
+
+            register_ext_func({ "chdir", do_chdir, 1 });
+
+            +--------------------------------------------+
+            |                                            |
+            V                                            |
++-------+-+---+-+---+-+------------------+--------------+-+---+
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOO|X|OOO|
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOO|X|OOO|
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOO|X|OOO|
++-------+-+---+-+---+-+------------------+--------------+-+---+
+
+    gawk Main Program Address Space              Extension
+
+Figure 16.2: Registering a new function
+
+   In the other direction, the extension registers its new functions
+with 'gawk' by passing function pointers to the functions that provide
+the new feature ('do_chdir()', for example).  'gawk' associates the
+function pointer with a name and can then call it, using a defined
+calling convention.  This is shown in *note Figure 16.3:
+figure-call-new-function.
+
+    BEGIN {
+        chdir("/path")                             (*fnptr)(1);
+    }
+            +--------------------------------------------+
+            |                                            |
+            |                                            V
++-------+-+---+-+---+-+------------------+--------------+-+---+
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOO|X|OOO|
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOO|X|OOO|
+|       |x|   |x|   |x|                  |OOOOOOOOOOOOOO|X|OOO|
++-------+-+---+-+---+-+------------------+--------------+-+---+
+
+    gawk Main Program Address Space              Extension
+
+Figure 16.3: Calling the new function
+
+   The 'do_XXX()' function, in turn, then uses the function pointers in
+the API 'struct' to do its work, such as updating variables or arrays,
+printing messages, setting 'ERRNO', and so on.
+
+   Convenience macros make calling through the function pointers look
+like regular function calls so that extension code is quite readable and
+understandable.
+
+   Although all of this sounds somewhat complicated, the result is that
+extension code is quite straightforward to write and to read.  You can
+see this in the sample extension 'filefuncs.c' (*note Extension
+Example::) and also in the 'testext.c' code for testing the APIs.
+
+   Some other bits and pieces:
+
+   * The API provides access to 'gawk''s 'do_XXX' values, reflecting
+     command-line options, like 'do_lint', 'do_profiling', and so on
+     (*note Extension API Variables::).  These are informational: an
+     extension cannot affect their values inside 'gawk'.  In addition,
+     attempting to assign to them produces a compile-time error.
+
+   * The API also provides major and minor version numbers, so that an
+     extension can check if the 'gawk' it is loaded with supports the
+     facilities it was compiled with.  (Version mismatches "shouldn't"
+     happen, but we all know how _that_ goes.)  *Note Extension
+     Versioning:: for details.
+
+File: gawk.info,  Node: Extension API Description,  Next: Finding Extensions,  Prev: Extension Mechanism Outline,  Up: Dynamic Extensions
+

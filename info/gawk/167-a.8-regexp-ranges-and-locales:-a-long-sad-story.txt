@@ -1,0 +1,105 @@
+A.8 Regexp Ranges and Locales: A Long Sad Story
+===============================================
+
+This minor node describes the confusing history of ranges within regular
+expressions and their interactions with locales, and how this affected
+different versions of 'gawk'.
+
+   The original Unix tools that worked with regular expressions defined
+character ranges (such as '[a-z]') to match any character between the
+first character in the range and the last character in the range,
+inclusive.  Ordering was based on the numeric value of each character in
+the machine's native character set.  Thus, on ASCII-based systems,
+'[a-z]' matched all the lowercase letters, and only the lowercase
+letters, as the numeric values for the letters from 'a' through 'z' were
+contiguous.  (On an EBCDIC system, the range '[a-z]' includes additional
+nonalphabetic characters as well.)
+
+   Almost all introductory Unix literature explained range expressions
+as working in this fashion, and in particular, would teach that the
+"correct" way to match lowercase letters was with '[a-z]', and that
+'[A-Z]' was the "correct" way to match uppercase letters.  And indeed,
+this was true.(1)
+
+   The 1992 POSIX standard introduced the idea of locales (*note
+Locales::).  Because many locales include other letters besides the
+plain 26 letters of the English alphabet, the POSIX standard added
+character classes (*note Bracket Expressions::) as a way to match
+different kinds of characters besides the traditional ones in the ASCII
+character set.
+
+   However, the standard _changed_ the interpretation of range
+expressions.  In the '"C"' and '"POSIX"' locales, a range expression
+like '[a-dx-z]' is still equivalent to '[abcdxyz]', as in ASCII. But
+outside those locales, the ordering was defined to be based on
+"collation order".
+
+   What does that mean?  In many locales, 'A' and 'a' are both less than
+'B'.  In other words, these locales sort characters in dictionary order,
+and '[a-dx-z]' is typically not equivalent to '[abcdxyz]'; instead, it
+might be equivalent to '[ABCXYabcdxyz]', for example.
+
+   This point needs to be emphasized: much literature teaches that you
+should use '[a-z]' to match a lowercase character.  But on systems with
+non-ASCII locales, this also matches all of the uppercase characters
+except 'A' or 'Z'!  This was a continuous cause of confusion, even well
+into the twenty-first century.
+
+   To demonstrate these issues, the following example uses the 'sub()'
+function, which does text replacement (*note String Functions::).  Here,
+the intent is to remove trailing uppercase characters:
+
+     $ echo something1234abc | gawk-3.1.8 '{ sub("[A-Z]*$", ""); print }'
+     -| something1234a
+
+This output is unexpected, as the 'bc' at the end of 'something1234abc'
+should not normally match '[A-Z]*'.  This result is due to the locale
+setting (and thus you may not see it on your system).
+
+   Similar considerations apply to other ranges.  For example, '["-/]'
+is perfectly valid in ASCII, but is not valid in many Unicode locales,
+such as 'en_US.UTF-8'.
+
+   Early versions of 'gawk' used regexp matching code that was not
+locale-aware, so ranges had their traditional interpretation.
+
+   When 'gawk' switched to using locale-aware regexp matchers, the
+problems began; especially as both GNU/Linux and commercial Unix vendors
+started implementing non-ASCII locales, _and making them the default_.
+Perhaps the most frequently asked question became something like, "Why
+does '[A-Z]' match lowercase letters?!?"
+
+   This situation existed for close to 10 years, if not more, and the
+'gawk' maintainer grew weary of trying to explain that 'gawk' was being
+nicely standards-compliant, and that the issue was in the user's locale.
+During the development of version 4.0, he modified 'gawk' to always
+treat ranges in the original, pre-POSIX fashion, unless '--posix' was
+used (*note Options::).(2)
+
+   Fortunately, shortly before the final release of 'gawk' 4.0, the
+maintainer learned that the 2008 standard had changed the definition of
+ranges, such that outside the '"C"' and '"POSIX"' locales, the meaning
+of range expressions was _undefined_.(3)
+
+   By using this lovely technical term, the standard gives license to
+implementers to implement ranges in whatever way they choose.  The
+'gawk' maintainer chose to apply the pre-POSIX meaning both with the
+default regexp matching and when '--traditional' or '--posix' are used.
+In all cases 'gawk' remains POSIX-compliant.
+
+   ---------- Footnotes ----------
+
+   (1) And Life was good.
+
+   (2) And thus was born the Campaign for Rational Range Interpretation
+(or RRI). A number of GNU tools have already implemented this change, or
+will soon.  Thanks to Karl Berry for coining the phrase "Rational Range
+Interpretation."
+
+   (3) See the standard
+(http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html#tag_09_03_05)
+and its rationale
+(http://pubs.opengroup.org/onlinepubs/9699919799/xrat/V4_xbd_chap09.html#tag_21_09_03_05).
+
+File: gawk.info,  Node: Contributors,  Next: History summary,  Prev: Ranges and Locales,  Up: Language History
+

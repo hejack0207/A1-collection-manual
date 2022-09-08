@@ -1,0 +1,308 @@
+10.3 Data file Management
+=========================
+
+This minor node presents functions that are useful for managing
+command-line data files.
+
+* Menu:
+
+* Filetrans Function::          A function for handling data file transitions.
+* Rewind Function::             A function for rereading the current file.
+* File Checking::               Checking that data files are readable.
+* Empty Files::                 Checking for zero-length files.
+* Ignoring Assigns::            Treating assignments as file names.
+
+File: gawk.info,  Node: Filetrans Function,  Next: Rewind Function,  Up: Data File Management
+
+10.3.1 Noting Data file Boundaries
+----------------------------------
+
+The 'BEGIN' and 'END' rules are each executed exactly once, at the
+beginning and end of your 'awk' program, respectively (*note
+BEGIN/END::).  We (the 'gawk' authors) once had a user who mistakenly
+thought that the 'BEGIN' rules were executed at the beginning of each
+data file and the 'END' rules were executed at the end of each data
+file.
+
+   When informed that this was not the case, the user requested that we
+add new special patterns to 'gawk', named 'BEGIN_FILE' and 'END_FILE',
+that would have the desired behavior.  He even supplied us the code to
+do so.
+
+   Adding these special patterns to 'gawk' wasn't necessary; the job can
+be done cleanly in 'awk' itself, as illustrated by the following library
+program.  It arranges to call two user-supplied functions, 'beginfile()'
+and 'endfile()', at the beginning and end of each data file.  Besides
+solving the problem in only nine(!)  lines of code, it does so
+_portably_; this works with any implementation of 'awk':
+
+     # transfile.awk
+     #
+     # Give the user a hook for filename transitions
+     #
+     # The user must supply functions beginfile() and endfile()
+     # that each take the name of the file being started or
+     # finished, respectively.
+
+     FILENAME != _oldfilename {
+         if (_oldfilename != "")
+             endfile(_oldfilename)
+         _oldfilename = FILENAME
+         beginfile(FILENAME)
+     }
+
+     END { endfile(FILENAME) }
+
+   This file must be loaded before the user's "main" program, so that
+the rule it supplies is executed first.
+
+   This rule relies on 'awk''s 'FILENAME' variable, which automatically
+changes for each new data file.  The current file name is saved in a
+private variable, '_oldfilename'.  If 'FILENAME' does not equal
+'_oldfilename', then a new data file is being processed and it is
+necessary to call 'endfile()' for the old file.  Because 'endfile()'
+should only be called if a file has been processed, the program first
+checks to make sure that '_oldfilename' is not the null string.  The
+program then assigns the current file name to '_oldfilename' and calls
+'beginfile()' for the file.  Because, like all 'awk' variables,
+'_oldfilename' is initialized to the null string, this rule executes
+correctly even for the first data file.
+
+   The program also supplies an 'END' rule to do the final processing
+for the last file.  Because this 'END' rule comes before any 'END' rules
+supplied in the "main" program, 'endfile()' is called first.  Once
+again, the value of multiple 'BEGIN' and 'END' rules should be clear.
+
+   If the same data file occurs twice in a row on the command line, then
+'endfile()' and 'beginfile()' are not executed at the end of the first
+pass and at the beginning of the second pass.  The following version
+solves the problem:
+
+     # ftrans.awk --- handle datafile transitions
+     #
+     # user supplies beginfile() and endfile() functions
+
+     FNR == 1 {
+         if (_filename_ != "")
+             endfile(_filename_)
+         _filename_ = FILENAME
+         beginfile(FILENAME)
+     }
+
+     END { endfile(_filename_) }
+
+   *note Wc Program:: shows how this library function can be used and
+how it simplifies writing the main program.
+
+          So Why Does 'gawk' Have 'BEGINFILE' and 'ENDFILE'?
+
+   You are probably wondering, if 'beginfile()' and 'endfile()'
+functions can do the job, why does 'gawk' have 'BEGINFILE' and 'ENDFILE'
+patterns?
+
+   Good question.  Normally, if 'awk' cannot open a file, this causes an
+immediate fatal error.  In this case, there is no way for a user-defined
+function to deal with the problem, as the mechanism for calling it
+relies on the file being open and at the first record.  Thus, the main
+reason for 'BEGINFILE' is to give you a "hook" to catch files that
+cannot be processed.  'ENDFILE' exists for symmetry, and because it
+provides an easy way to do per-file cleanup processing.  For more
+information, refer to *note BEGINFILE/ENDFILE::.
+
+File: gawk.info,  Node: Rewind Function,  Next: File Checking,  Prev: Filetrans Function,  Up: Data File Management
+
+10.3.2 Rereading the Current File
+---------------------------------
+
+Another request for a new built-in function was for a function that
+would make it possible to reread the current file.  The requesting user
+didn't want to have to use 'getline' (*note Getline::) inside a loop.
+
+   However, as long as you are not in the 'END' rule, it is quite easy
+to arrange to immediately close the current input file and then start
+over with it from the top.  For lack of a better name, we'll call the
+function 'rewind()':
+
+     # rewind.awk --- rewind the current file and start over
+
+     function rewind(    i)
+     {
+         # shift remaining arguments up
+         for (i = ARGC; i > ARGIND; i--)
+             ARGV[i] = ARGV[i-1]
+
+         # make sure gawk knows to keep going
+         ARGC++
+
+         # make current file next to get done
+         ARGV[ARGIND+1] = FILENAME
+
+         # do it
+         nextfile
+     }
+
+   The 'rewind()' function relies on the 'ARGIND' variable (*note
+Auto-set::), which is specific to 'gawk'.  It also relies on the
+'nextfile' keyword (*note Nextfile Statement::).  Because of this, you
+should not call it from an 'ENDFILE' rule.  (This isn't necessary
+anyway, because 'gawk' goes to the next file as soon as an 'ENDFILE'
+rule finishes!)
+
+   You need to be careful calling 'rewind()'.  You can end up causing
+infinite recursion if you don't pay attention.  Here is an example use:
+
+     $ cat data
+     -| a
+     -| b
+     -| c
+     -| d
+     -| e
+
+     $ cat test.awk
+     -| FNR == 3 && ! rewound {
+     -|    rewound = 1
+     -|    rewind()
+     -| }
+     -|
+     -| { print FILENAME, FNR, $0 }
+
+     $ gawk -f rewind.awk -f test.awk data
+     -| data 1 a
+     -| data 2 b
+     -| data 1 a
+     -| data 2 b
+     -| data 3 c
+     -| data 4 d
+     -| data 5 e
+
+File: gawk.info,  Node: File Checking,  Next: Empty Files,  Prev: Rewind Function,  Up: Data File Management
+
+10.3.3 Checking for Readable Data files
+---------------------------------------
+
+Normally, if you give 'awk' a data file that isn't readable, it stops
+with a fatal error.  There are times when you might want to just ignore
+such files and keep going.(1)  You can do this by prepending the
+following program to your 'awk' program:
+
+     # readable.awk --- library file to skip over unreadable files
+
+     BEGIN {
+         for (i = 1; i < ARGC; i++) {
+             if (ARGV[i] ~ /^[a-zA-Z_][a-zA-Z0-9_]*=.*/ \
+                 || ARGV[i] == "-" || ARGV[i] == "/dev/stdin")
+                 continue    # assignment or standard input
+             else if ((getline junk < ARGV[i]) < 0) # unreadable
+                 delete ARGV[i]
+             else
+                 close(ARGV[i])
+         }
+     }
+
+   This works, because the 'getline' won't be fatal.  Removing the
+element from 'ARGV' with 'delete' skips the file (because it's no longer
+in the list).  See also *note ARGC and ARGV::.
+
+   Because 'awk' variable names only allow the English letters, the
+regular expression check purposely does not use character classes such
+as '[:alpha:]' and '[:alnum:]' (*note Bracket Expressions::).
+
+   ---------- Footnotes ----------
+
+   (1) The 'BEGINFILE' special pattern (*note BEGINFILE/ENDFILE::)
+provides an alternative mechanism for dealing with files that can't be
+opened.  However, the code here provides a portable solution.
+
+File: gawk.info,  Node: Empty Files,  Next: Ignoring Assigns,  Prev: File Checking,  Up: Data File Management
+
+10.3.4 Checking for Zero-Length Files
+-------------------------------------
+
+All known 'awk' implementations silently skip over zero-length files.
+This is a by-product of 'awk''s implicit
+read-a-record-and-match-against-the-rules loop: when 'awk' tries to read
+a record from an empty file, it immediately receives an end-of-file
+indication, closes the file, and proceeds on to the next command-line
+data file, _without_ executing any user-level 'awk' program code.
+
+   Using 'gawk''s 'ARGIND' variable (*note Built-in Variables::), it is
+possible to detect when an empty data file has been skipped.  Similar to
+the library file presented in *note Filetrans Function::, the following
+library file calls a function named 'zerofile()' that the user must
+provide.  The arguments passed are the file name and the position in
+'ARGV' where it was found:
+
+     # zerofile.awk --- library file to process empty input files
+
+     BEGIN { Argind = 0 }
+
+     ARGIND > Argind + 1 {
+         for (Argind++; Argind < ARGIND; Argind++)
+             zerofile(ARGV[Argind], Argind)
+     }
+
+     ARGIND != Argind { Argind = ARGIND }
+
+     END {
+         if (ARGIND > Argind)
+             for (Argind++; Argind <= ARGIND; Argind++)
+                 zerofile(ARGV[Argind], Argind)
+     }
+
+   The user-level variable 'Argind' allows the 'awk' program to track
+its progress through 'ARGV'.  Whenever the program detects that 'ARGIND'
+is greater than 'Argind + 1', it means that one or more empty files were
+skipped.  The action then calls 'zerofile()' for each such file,
+incrementing 'Argind' along the way.
+
+   The 'Argind != ARGIND' rule simply keeps 'Argind' up to date in the
+normal case.
+
+   Finally, the 'END' rule catches the case of any empty files at the
+end of the command-line arguments.  Note that the test in the condition
+of the 'for' loop uses the '<=' operator, not '<'.
+
+File: gawk.info,  Node: Ignoring Assigns,  Prev: Empty Files,  Up: Data File Management
+
+10.3.5 Treating Assignments as File names
+-----------------------------------------
+
+Occasionally, you might not want 'awk' to process command-line variable
+assignments (*note Assignment Options::).  In particular, if you have a
+file name that contains an '=' character, 'awk' treats the file name as
+an assignment and does not process it.
+
+   Some users have suggested an additional command-line option for
+'gawk' to disable command-line assignments.  However, some simple
+programming with a library file does the trick:
+
+     # noassign.awk --- library file to avoid the need for a
+     # special option that disables command-line assignments
+
+     function disable_assigns(argc, argv,    i)
+     {
+         for (i = 1; i < argc; i++)
+             if (argv[i] ~ /^[a-zA-Z_][a-zA-Z0-9_]*=.*/)
+                 argv[i] = ("./" argv[i])
+     }
+
+     BEGIN {
+         if (No_command_assign)
+             disable_assigns(ARGC, ARGV)
+     }
+
+   You then run your program this way:
+
+     awk -v No_command_assign=1 -f noassign.awk -f yourprog.awk *
+
+   The function works by looping through the arguments.  It prepends
+'./' to any argument that matches the form of a variable assignment,
+turning that argument into a file name.
+
+   The use of 'No_command_assign' allows you to disable command-line
+assignments at invocation time, by giving the variable a true value.
+When not set, it is initially zero (i.e., false), so the command-line
+arguments are left alone.
+
+File: gawk.info,  Node: Getopt Function,  Next: Passwd Functions,  Prev: Data File Management,  Up: Library Functions
+

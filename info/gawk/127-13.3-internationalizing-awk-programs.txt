@@ -1,0 +1,124 @@
+13.3 Internationalizing 'awk' Programs
+======================================
+
+'gawk' provides the following variables for internationalization:
+
+'TEXTDOMAIN'
+     This variable indicates the application's text domain.  For
+     compatibility with GNU 'gettext', the default value is
+     '"messages"'.
+
+'_"your message here"'
+     String constants marked with a leading underscore are candidates
+     for translation at runtime.  String constants without a leading
+     underscore are not translated.
+
+   'gawk' provides the following functions for internationalization:
+
+'dcgettext(STRING [, DOMAIN [, CATEGORY]])'
+     Return the translation of STRING in text domain DOMAIN for locale
+     category CATEGORY.  The default value for DOMAIN is the current
+     value of 'TEXTDOMAIN'.  The default value for CATEGORY is
+     '"LC_MESSAGES"'.
+
+     If you supply a value for CATEGORY, it must be a string equal to
+     one of the known locale categories described in *note Explaining
+     gettext::.  You must also supply a text domain.  Use 'TEXTDOMAIN'
+     if you want to use the current domain.
+
+          CAUTION: The order of arguments to the 'awk' version of the
+          'dcgettext()' function is purposely different from the order
+          for the C version.  The 'awk' version's order was chosen to be
+          simple and to allow for reasonable 'awk'-style default
+          arguments.
+
+'dcngettext(STRING1, STRING2, NUMBER [, DOMAIN [, CATEGORY]])'
+     Return the plural form used for NUMBER of the translation of
+     STRING1 and STRING2 in text domain DOMAIN for locale category
+     CATEGORY.  STRING1 is the English singular variant of a message,
+     and STRING2 is the English plural variant of the same message.  The
+     default value for DOMAIN is the current value of 'TEXTDOMAIN'.  The
+     default value for CATEGORY is '"LC_MESSAGES"'.
+
+     The same remarks about argument order as for the 'dcgettext()'
+     function apply.
+
+'bindtextdomain(DIRECTORY [, DOMAIN ])'
+     Change the directory in which 'gettext' looks for '.gmo' files, in
+     case they will not or cannot be placed in the standard locations
+     (e.g., during testing).  Return the directory in which DOMAIN is
+     "bound."
+
+     The default DOMAIN is the value of 'TEXTDOMAIN'.  If DIRECTORY is
+     the null string ('""'), then 'bindtextdomain()' returns the current
+     binding for the given DOMAIN.
+
+   To use these facilities in your 'awk' program, follow these steps:
+
+  1. Set the variable 'TEXTDOMAIN' to the text domain of your program.
+     This is best done in a 'BEGIN' rule (*note BEGIN/END::), or it can
+     also be done via the '-v' command-line option (*note Options::):
+
+          BEGIN {
+              TEXTDOMAIN = "guide"
+              ...
+          }
+
+  2. Mark all translatable strings with a leading underscore ('_')
+     character.  It _must_ be adjacent to the opening quote of the
+     string.  For example:
+
+          print _"hello, world"
+          x = _"you goofed"
+          printf(_"Number of users is %d\n", nusers)
+
+  3. If you are creating strings dynamically, you can still translate
+     them, using the 'dcgettext()' built-in function:(1)
+
+          if (groggy)
+              message = dcgettext("%d customers disturbing me\n", "adminprog")
+          else
+              message = dcgettext("enjoying %d customers\n", "adminprog")
+          printf(message, ncustomers)
+
+     Here, the call to 'dcgettext()' supplies a different text domain
+     ('"adminprog"') in which to find the message, but it uses the
+     default '"LC_MESSAGES"' category.
+
+     The previous example only works if 'ncustomers' is greater than
+     one.  This example would be better done with 'dcngettext()':
+
+          if (groggy)
+              message = dcngettext("%d customer disturbing me\n",
+                                   "%d customers disturbing me\n",
+                                   ncustomers, "adminprog")
+          else
+              message = dcngettext("enjoying %d customer\n",
+                                   "enjoying %d customers\n",
+                                   ncustomers, "adminprog")
+          printf(message, ncustomers)
+
+  4. During development, you might want to put the '.gmo' file in a
+     private directory for testing.  This is done with the
+     'bindtextdomain()' built-in function:
+
+          BEGIN {
+             TEXTDOMAIN = "guide"   # our text domain
+             if (Testing) {
+                 # where to find our files
+                 bindtextdomain("testdir")
+                 # joe is in charge of adminprog
+                 bindtextdomain("../joe/testdir", "adminprog")
+             }
+             ...
+          }
+
+   *Note I18N Example:: for an example program showing the steps to
+create and use translations from 'awk'.
+
+   ---------- Footnotes ----------
+
+   (1) Thanks to Bruno Haible for this example.
+
+File: gawk.info,  Node: Translator i18n,  Next: I18N Example,  Prev: Programmer i18n,  Up: Internationalization
+

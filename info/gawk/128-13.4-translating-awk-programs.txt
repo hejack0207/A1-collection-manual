@@ -1,0 +1,188 @@
+13.4 Translating 'awk' Programs
+===============================
+
+Once a program's translatable strings have been marked, they must be
+extracted to create the initial '.pot' file.  As part of translation, it
+is often helpful to rearrange the order in which arguments to 'printf'
+are output.
+
+   'gawk''s '--gen-pot' command-line option extracts the messages and is
+discussed next.  After that, 'printf''s ability to rearrange the order
+for 'printf' arguments at runtime is covered.
+
+* Menu:
+
+* String Extraction::           Extracting marked strings.
+* Printf Ordering::             Rearranging 'printf' arguments.
+* I18N Portability::            'awk'-level portability issues.
+
+File: gawk.info,  Node: String Extraction,  Next: Printf Ordering,  Up: Translator i18n
+
+13.4.1 Extracting Marked Strings
+--------------------------------
+
+Once your 'awk' program is working, and all the strings have been marked
+and you've set (and perhaps bound) the text domain, it is time to
+produce translations.  First, use the '--gen-pot' command-line option to
+create the initial '.pot' file:
+
+     gawk --gen-pot -f guide.awk > guide.pot
+
+   When run with '--gen-pot', 'gawk' does not execute your program.
+Instead, it parses it as usual and prints all marked strings to standard
+output in the format of a GNU 'gettext' Portable Object file.  Also
+included in the output are any constant strings that appear as the first
+argument to 'dcgettext()' or as the first and second argument to
+'dcngettext()'.(1)  You should distribute the generated '.pot' file with
+your 'awk' program; translators will eventually use it to provide you
+translations that you can also then distribute.  *Note I18N Example::
+for the full list of steps to go through to create and test translations
+for 'guide'.
+
+   ---------- Footnotes ----------
+
+   (1) The 'xgettext' utility that comes with GNU 'gettext' can handle
+'.awk' files.
+
+File: gawk.info,  Node: Printf Ordering,  Next: I18N Portability,  Prev: String Extraction,  Up: Translator i18n
+
+13.4.2 Rearranging 'printf' Arguments
+-------------------------------------
+
+Format strings for 'printf' and 'sprintf()' (*note Printf::) present a
+special problem for translation.  Consider the following:(1)
+
+     printf(_"String `%s' has %d characters\n",
+               string, length(string)))
+
+   A possible German translation for this might be:
+
+     "%d Zeichen lang ist die Zeichenkette `%s'\n"
+
+   The problem should be obvious: the order of the format specifications
+is different from the original!  Even though 'gettext()' can return the
+translated string at runtime, it cannot change the argument order in the
+call to 'printf'.
+
+   To solve this problem, 'printf' format specifiers may have an
+additional optional element, which we call a "positional specifier".
+For example:
+
+     "%2$d Zeichen lang ist die Zeichenkette `%1$s'\n"
+
+   Here, the positional specifier consists of an integer count, which
+indicates which argument to use, and a '$'.  Counts are one-based, and
+the format string itself is _not_ included.  Thus, in the following
+example, 'string' is the first argument and 'length(string)' is the
+second:
+
+     $ gawk 'BEGIN {
+     >     string = "Don\47t Panic"
+     >     printf "%2$d characters live in \"%1$s\"\n",
+     >                         string, length(string)
+     > }'
+     -| 11 characters live in "Don't Panic"
+
+   If present, positional specifiers come first in the format
+specification, before the flags, the field width, and/or the precision.
+
+   Positional specifiers can be used with the dynamic field width and
+precision capability:
+
+     $ gawk 'BEGIN {
+     >    printf("%*.*s\n", 10, 20, "hello")
+     >    printf("%3$*2$.*1$s\n", 20, 10, "hello")
+     > }'
+     -|      hello
+     -|      hello
+
+     NOTE: When using '*' with a positional specifier, the '*' comes
+     first, then the integer position, and then the '$'.  This is
+     somewhat counterintuitive.
+
+   'gawk' does not allow you to mix regular format specifiers and those
+with positional specifiers in the same string:
+
+     $ gawk 'BEGIN { printf "%d %3$s\n", 1, 2, "hi" }'
+     error-> gawk: cmd. line:1: fatal: must use `count$' on all formats or none
+
+     NOTE: There are some pathological cases that 'gawk' may fail to
+     diagnose.  In such cases, the output may not be what you expect.
+     It's still a bad idea to try mixing them, even if 'gawk' doesn't
+     detect it.
+
+   Although positional specifiers can be used directly in 'awk'
+programs, their primary purpose is to help in producing correct
+translations of format strings into languages different from the one in
+which the program is first written.
+
+   ---------- Footnotes ----------
+
+   (1) This example is borrowed from the GNU 'gettext' manual.
+
+File: gawk.info,  Node: I18N Portability,  Prev: Printf Ordering,  Up: Translator i18n
+
+13.4.3 'awk' Portability Issues
+-------------------------------
+
+'gawk''s internationalization features were purposely chosen to have as
+little impact as possible on the portability of 'awk' programs that use
+them to other versions of 'awk'.  Consider this program:
+
+     BEGIN {
+         TEXTDOMAIN = "guide"
+         if (Test_Guide)   # set with -v
+             bindtextdomain("/test/guide/messages")
+         print _"don't panic!"
+     }
+
+As written, it won't work on other versions of 'awk'.  However, it is
+actually almost portable, requiring very little change:
+
+   * Assignments to 'TEXTDOMAIN' won't have any effect, because
+     'TEXTDOMAIN' is not special in other 'awk' implementations.
+
+   * Non-GNU versions of 'awk' treat marked strings as the concatenation
+     of a variable named '_' with the string following it.(1)
+     Typically, the variable '_' has the null string ('""') as its
+     value, leaving the original string constant as the result.
+
+   * By defining "dummy" functions to replace 'dcgettext()',
+     'dcngettext()', and 'bindtextdomain()', the 'awk' program can be
+     made to run, but all the messages are output in the original
+     language.  For example:
+
+          function bindtextdomain(dir, domain)
+          {
+              return dir
+          }
+
+          function dcgettext(string, domain, category)
+          {
+              return string
+          }
+
+          function dcngettext(string1, string2, number, domain, category)
+          {
+              return (number == 1 ? string1 : string2)
+          }
+
+   * The use of positional specifications in 'printf' or 'sprintf()' is
+     _not_ portable.  To support 'gettext()' at the C level, many
+     systems' C versions of 'sprintf()' do support positional
+     specifiers.  But it works only if enough arguments are supplied in
+     the function call.  Many versions of 'awk' pass 'printf' formats
+     and arguments unchanged to the underlying C library version of
+     'sprintf()', but only one format and argument at a time.  What
+     happens if a positional specification is used is anybody's guess.
+     However, because the positional specifications are primarily for
+     use in _translated_ format strings, and because non-GNU 'awk's
+     never retrieve the translated string, this should not be a problem
+     in practice.
+
+   ---------- Footnotes ----------
+
+   (1) This is good fodder for an "Obfuscated 'awk'" contest.
+
+File: gawk.info,  Node: I18N Example,  Next: Gawk I18N,  Prev: Translator i18n,  Up: Internationalization
+

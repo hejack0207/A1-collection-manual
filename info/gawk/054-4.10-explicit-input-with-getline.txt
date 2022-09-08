@@ -1,0 +1,453 @@
+4.10 Explicit Input with 'getline'
+==================================
+
+So far we have been getting our input data from 'awk''s main input
+stream--either the standard input (usually your keyboard, sometimes the
+output from another program) or the files specified on the command line.
+The 'awk' language has a special built-in command called 'getline' that
+can be used to read input under your explicit control.
+
+   The 'getline' command is used in several different ways and should
+_not_ be used by beginners.  The examples that follow the explanation of
+the 'getline' command include material that has not been covered yet.
+Therefore, come back and study the 'getline' command _after_ you have
+reviewed the rest of this Info file and have a good knowledge of how
+'awk' works.
+
+   The 'getline' command returns 1 if it finds a record and 0 if it
+encounters the end of the file.  If there is some error in getting a
+record, such as a file that cannot be opened, then 'getline' returns -1.
+In this case, 'gawk' sets the variable 'ERRNO' to a string describing
+the error that occurred.
+
+   If 'ERRNO' indicates that the I/O operation may be retried, and
+'PROCINFO["INPUT", "RETRY"]' is set, then 'getline' returns -2 instead
+of -1, and further calls to 'getline' may be attempted.  *Note Retrying
+Input:: for further information about this feature.
+
+   In the following examples, COMMAND stands for a string value that
+represents a shell command.
+
+     NOTE: When '--sandbox' is specified (*note Options::), reading
+     lines from files, pipes, and coprocesses is disabled.
+
+* Menu:
+
+* Plain Getline::               Using 'getline' with no arguments.
+* Getline/Variable::            Using 'getline' into a variable.
+* Getline/File::                Using 'getline' from a file.
+* Getline/Variable/File::       Using 'getline' into a variable from a
+                                file.
+* Getline/Pipe::                Using 'getline' from a pipe.
+* Getline/Variable/Pipe::       Using 'getline' into a variable from a
+                                pipe.
+* Getline/Coprocess::           Using 'getline' from a coprocess.
+* Getline/Variable/Coprocess::  Using 'getline' into a variable from a
+                                coprocess.
+* Getline Notes::               Important things to know about 'getline'.
+* Getline Summary::             Summary of 'getline' Variants.
+
+File: gawk.info,  Node: Plain Getline,  Next: Getline/Variable,  Up: Getline
+
+4.10.1 Using 'getline' with No Arguments
+----------------------------------------
+
+The 'getline' command can be used without arguments to read input from
+the current input file.  All it does in this case is read the next input
+record and split it up into fields.  This is useful if you've finished
+processing the current record, but want to do some special processing on
+the next record _right now_.  For example:
+
+     # Remove text between /* and */, inclusive
+     {
+         if ((i = index($0, "/*")) != 0) {
+             out = substr($0, 1, i - 1)  # leading part of the string
+             rest = substr($0, i + 2)    # ... */ ...
+             j = index(rest, "*/")       # is */ in trailing part?
+             if (j > 0) {
+                 rest = substr(rest, j + 2)  # remove comment
+             } else {
+                 while (j == 0) {
+                     # get more text
+                     if (getline <= 0) {
+                         print("unexpected EOF or error:", ERRNO) > "/dev/stderr"
+                         exit
+                     }
+                     # build up the line using string concatenation
+                     rest = rest $0
+                     j = index(rest, "*/")   # is */ in trailing part?
+                     if (j != 0) {
+                         rest = substr(rest, j + 2)
+                         break
+                     }
+                 }
+             }
+             # build up the output line using string concatenation
+             $0 = out rest
+         }
+         print $0
+     }
+
+   This 'awk' program deletes C-style comments ('/* ... */') from the
+input.  It uses a number of features we haven't covered yet, including
+string concatenation (*note Concatenation::) and the 'index()' and
+'substr()' built-in functions (*note String Functions::).  By replacing
+the 'print $0' with other statements, you could perform more complicated
+processing on the decommented input, such as searching for matches of a
+regular expression.  (This program has a subtle problem--it does not
+work if one comment ends and another begins on the same line.)
+
+   This form of the 'getline' command sets 'NF', 'NR', 'FNR', 'RT', and
+the value of '$0'.
+
+     NOTE: The new value of '$0' is used to test the patterns of any
+     subsequent rules.  The original value of '$0' that triggered the
+     rule that executed 'getline' is lost.  By contrast, the 'next'
+     statement reads a new record but immediately begins processing it
+     normally, starting with the first rule in the program.  *Note Next
+     Statement::.
+
+File: gawk.info,  Node: Getline/Variable,  Next: Getline/File,  Prev: Plain Getline,  Up: Getline
+
+4.10.2 Using 'getline' into a Variable
+--------------------------------------
+
+You can use 'getline VAR' to read the next record from 'awk''s input
+into the variable VAR.  No other processing is done.  For example,
+suppose the next line is a comment or a special string, and you want to
+read it without triggering any rules.  This form of 'getline' allows you
+to read that line and store it in a variable so that the main
+read-a-line-and-check-each-rule loop of 'awk' never sees it.  The
+following example swaps every two lines of input:
+
+     {
+          if ((getline tmp) > 0) {
+               print tmp
+               print $0
+          } else
+               print $0
+     }
+
+It takes the following list:
+
+     wan
+     tew
+     free
+     phore
+
+and produces these results:
+
+     tew
+     wan
+     phore
+     free
+
+   The 'getline' command used in this way sets only the variables 'NR',
+'FNR', and 'RT' (and, of course, VAR).  The record is not split into
+fields, so the values of the fields (including '$0') and the value of
+'NF' do not change.
+
+File: gawk.info,  Node: Getline/File,  Next: Getline/Variable/File,  Prev: Getline/Variable,  Up: Getline
+
+4.10.3 Using 'getline' from a File
+----------------------------------
+
+Use 'getline < FILE' to read the next record from FILE.  Here, FILE is a
+string-valued expression that specifies the file name.  '< FILE' is
+called a "redirection" because it directs input to come from a different
+place.  For example, the following program reads its input record from
+the file 'secondary.input' when it encounters a first field with a value
+equal to 10 in the current input file:
+
+     {
+         if ($1 == 10) {
+              getline < "secondary.input"
+              print
+         } else
+              print
+     }
+
+   Because the main input stream is not used, the values of 'NR' and
+'FNR' are not changed.  However, the record it reads is split into
+fields in the normal manner, so the values of '$0' and the other fields
+are changed, resulting in a new value of 'NF'.  'RT' is also set.
+
+   According to POSIX, 'getline < EXPRESSION' is ambiguous if EXPRESSION
+contains unparenthesized operators other than '$'; for example, 'getline
+< dir "/" file' is ambiguous because the concatenation operator (not
+discussed yet; *note Concatenation::) is not parenthesized.  You should
+write it as 'getline < (dir "/" file)' if you want your program to be
+portable to all 'awk' implementations.
+
+File: gawk.info,  Node: Getline/Variable/File,  Next: Getline/Pipe,  Prev: Getline/File,  Up: Getline
+
+4.10.4 Using 'getline' into a Variable from a File
+--------------------------------------------------
+
+Use 'getline VAR < FILE' to read input from the file FILE, and put it in
+the variable VAR.  As earlier, FILE is a string-valued expression that
+specifies the file from which to read.
+
+   In this version of 'getline', none of the predefined variables are
+changed and the record is not split into fields.  The only variable
+changed is VAR.(1)  For example, the following program copies all the
+input files to the output, except for records that say
+'@include FILENAME'.  Such a record is replaced by the contents of the
+file FILENAME:
+
+     {
+          if (NF == 2 && $1 == "@include") {
+               while ((getline line < $2) > 0)
+                    print line
+               close($2)
+          } else
+               print
+     }
+
+   Note here how the name of the extra input file is not built into the
+program; it is taken directly from the data, specifically from the
+second field on the '@include' line.
+
+   The 'close()' function is called to ensure that if two identical
+'@include' lines appear in the input, the entire specified file is
+included twice.  *Note Close Files And Pipes::.
+
+   One deficiency of this program is that it does not process nested
+'@include' statements (i.e., '@include' statements in included files)
+the way a true macro preprocessor would.  *Note Igawk Program:: for a
+program that does handle nested '@include' statements.
+
+   ---------- Footnotes ----------
+
+   (1) This is not quite true.  'RT' could be changed if 'RS' is a
+regular expression.
+
+File: gawk.info,  Node: Getline/Pipe,  Next: Getline/Variable/Pipe,  Prev: Getline/Variable/File,  Up: Getline
+
+4.10.5 Using 'getline' from a Pipe
+----------------------------------
+
+     Omniscience has much to recommend it.  Failing that, attention to
+     details would be useful.
+                         -- _Brian Kernighan_
+
+   The output of a command can also be piped into 'getline', using
+'COMMAND | getline'.  In this case, the string COMMAND is run as a shell
+command and its output is piped into 'awk' to be used as input.  This
+form of 'getline' reads one record at a time from the pipe.  For
+example, the following program copies its input to its output, except
+for lines that begin with '@execute', which are replaced by the output
+produced by running the rest of the line as a shell command:
+
+     {
+          if ($1 == "@execute") {
+               tmp = substr($0, 10)        # Remove "@execute"
+               while ((tmp | getline) > 0)
+                    print
+               close(tmp)
+          } else
+               print
+     }
+
+The 'close()' function is called to ensure that if two identical
+'@execute' lines appear in the input, the command is run for each one.
+*Note Close Files And Pipes::.  Given the input:
+
+     foo
+     bar
+     baz
+     @execute who
+     bletch
+
+the program might produce:
+
+     foo
+     bar
+     baz
+     arnold     ttyv0   Jul 13 14:22
+     miriam     ttyp0   Jul 13 14:23     (murphy:0)
+     bill       ttyp1   Jul 13 14:23     (murphy:0)
+     bletch
+
+Notice that this program ran the command 'who' and printed the result.
+(If you try this program yourself, you will of course get different
+results, depending upon who is logged in on your system.)
+
+   This variation of 'getline' splits the record into fields, sets the
+value of 'NF', and recomputes the value of '$0'.  The values of 'NR' and
+'FNR' are not changed.  'RT' is set.
+
+   According to POSIX, 'EXPRESSION | getline' is ambiguous if EXPRESSION
+contains unparenthesized operators other than '$'--for example, '"echo "
+"date" | getline' is ambiguous because the concatenation operator is not
+parenthesized.  You should write it as '("echo " "date") | getline' if
+you want your program to be portable to all 'awk' implementations.
+
+     NOTE: Unfortunately, 'gawk' has not been consistent in its
+     treatment of a construct like '"echo " "date" | getline'.  Most
+     versions, including the current version, treat it at as '("echo "
+     "date") | getline'.  (This is also how BWK 'awk' behaves.)  Some
+     versions instead treat it as '"echo " ("date" | getline)'.  (This
+     is how 'mawk' behaves.)  In short, _always_ use explicit
+     parentheses, and then you won't have to worry.
+
+File: gawk.info,  Node: Getline/Variable/Pipe,  Next: Getline/Coprocess,  Prev: Getline/Pipe,  Up: Getline
+
+4.10.6 Using 'getline' into a Variable from a Pipe
+--------------------------------------------------
+
+When you use 'COMMAND | getline VAR', the output of COMMAND is sent
+through a pipe to 'getline' and into the variable VAR.  For example, the
+following program reads the current date and time into the variable
+'current_time', using the 'date' utility, and then prints it:
+
+     BEGIN {
+          "date" | getline current_time
+          close("date")
+          print "Report printed on " current_time
+     }
+
+   In this version of 'getline', none of the predefined variables are
+changed and the record is not split into fields.  However, 'RT' is set.
+
+   According to POSIX, 'EXPRESSION | getline VAR' is ambiguous if
+EXPRESSION contains unparenthesized operators other than '$'; for
+example, '"echo " "date" | getline VAR' is ambiguous because the
+concatenation operator is not parenthesized.  You should write it as
+'("echo " "date") | getline VAR' if you want your program to be portable
+to other 'awk' implementations.
+
+File: gawk.info,  Node: Getline/Coprocess,  Next: Getline/Variable/Coprocess,  Prev: Getline/Variable/Pipe,  Up: Getline
+
+4.10.7 Using 'getline' from a Coprocess
+---------------------------------------
+
+Reading input into 'getline' from a pipe is a one-way operation.  The
+command that is started with 'COMMAND | getline' only sends data _to_
+your 'awk' program.
+
+   On occasion, you might want to send data to another program for
+processing and then read the results back.  'gawk' allows you to start a
+"coprocess", with which two-way communications are possible.  This is
+done with the '|&' operator.  Typically, you write data to the coprocess
+first and then read the results back, as shown in the following:
+
+     print "SOME QUERY" |& "db_server"
+     "db_server" |& getline
+
+which sends a query to 'db_server' and then reads the results.
+
+   The values of 'NR' and 'FNR' are not changed, because the main input
+stream is not used.  However, the record is split into fields in the
+normal manner, thus changing the values of '$0', of the other fields,
+and of 'NF' and 'RT'.
+
+   Coprocesses are an advanced feature.  They are discussed here only
+because this is the minor node on 'getline'.  *Note Two-way I/O::, where
+coprocesses are discussed in more detail.
+
+File: gawk.info,  Node: Getline/Variable/Coprocess,  Next: Getline Notes,  Prev: Getline/Coprocess,  Up: Getline
+
+4.10.8 Using 'getline' into a Variable from a Coprocess
+-------------------------------------------------------
+
+When you use 'COMMAND |& getline VAR', the output from the coprocess
+COMMAND is sent through a two-way pipe to 'getline' and into the
+variable VAR.
+
+   In this version of 'getline', none of the predefined variables are
+changed and the record is not split into fields.  The only variable
+changed is VAR.  However, 'RT' is set.
+
+   Coprocesses are an advanced feature.  They are discussed here only
+because this is the minor node on 'getline'.  *Note Two-way I/O::, where
+coprocesses are discussed in more detail.
+
+File: gawk.info,  Node: Getline Notes,  Next: Getline Summary,  Prev: Getline/Variable/Coprocess,  Up: Getline
+
+4.10.9 Points to Remember About 'getline'
+-----------------------------------------
+
+Here are some miscellaneous points about 'getline' that you should bear
+in mind:
+
+   * When 'getline' changes the value of '$0' and 'NF', 'awk' does _not_
+     automatically jump to the start of the program and start testing
+     the new record against every pattern.  However, the new record is
+     tested against any subsequent rules.
+
+   * Some very old 'awk' implementations limit the number of pipelines
+     that an 'awk' program may have open to just one.  In 'gawk', there
+     is no such limit.  You can open as many pipelines (and coprocesses)
+     as the underlying operating system permits.
+
+   * An interesting side effect occurs if you use 'getline' without a
+     redirection inside a 'BEGIN' rule.  Because an unredirected
+     'getline' reads from the command-line data files, the first
+     'getline' command causes 'awk' to set the value of 'FILENAME'.
+     Normally, 'FILENAME' does not have a value inside 'BEGIN' rules,
+     because you have not yet started to process the command-line data
+     files.  (d.c.)  (See *note BEGIN/END::; also *note Auto-set::.)
+
+   * Using 'FILENAME' with 'getline' ('getline < FILENAME') is likely to
+     be a source of confusion.  'awk' opens a separate input stream from
+     the current input file.  However, by not using a variable, '$0' and
+     'NF' are still updated.  If you're doing this, it's probably by
+     accident, and you should reconsider what it is you're trying to
+     accomplish.
+
+   * *note Getline Summary::, presents a table summarizing the 'getline'
+     variants and which variables they can affect.  It is worth noting
+     that those variants that do not use redirection can cause
+     'FILENAME' to be updated if they cause 'awk' to start reading a new
+     input file.
+
+   * If the variable being assigned is an expression with side effects,
+     different versions of 'awk' behave differently upon encountering
+     end-of-file.  Some versions don't evaluate the expression; many
+     versions (including 'gawk') do.  Here is an example, courtesy of
+     Duncan Moore:
+
+          BEGIN {
+              system("echo 1 > f")
+              while ((getline a[++c] < "f") > 0) { }
+              print c
+          }
+
+     Here, the side effect is the '++c'.  Is 'c' incremented if
+     end-of-file is encountered before the element in 'a' is assigned?
+
+     'gawk' treats 'getline' like a function call, and evaluates the
+     expression 'a[++c]' before attempting to read from 'f'.  However,
+     some versions of 'awk' only evaluate the expression once they know
+     that there is a string value to be assigned.
+
+File: gawk.info,  Node: Getline Summary,  Prev: Getline Notes,  Up: Getline
+
+4.10.10 Summary of 'getline' Variants
+-------------------------------------
+
+*note Table 4.1: table-getline-variants. summarizes the eight variants
+of 'getline', listing which predefined variables are set by each one,
+and whether the variant is standard or a 'gawk' extension.  Note: for
+each variant, 'gawk' sets the 'RT' predefined variable.
+
+Variant                  Effect                      'awk' / 'gawk'
+-------------------------------------------------------------------------
+'getline'                Sets '$0', 'NF', 'FNR',     'awk'
+                         'NR', and 'RT'
+'getline' VAR            Sets VAR, 'FNR', 'NR',      'awk'
+                         and 'RT'
+'getline <' FILE         Sets '$0', 'NF', and 'RT'   'awk'
+'getline VAR < FILE'     Sets VAR and 'RT'           'awk'
+COMMAND '| getline'      Sets '$0', 'NF', and 'RT'   'awk'
+COMMAND '| getline'      Sets VAR and 'RT'           'awk'
+VAR
+COMMAND '|& getline'     Sets '$0', 'NF', and 'RT'   'gawk'
+COMMAND '|& getline'     Sets VAR and 'RT'           'gawk'
+VAR
+
+Table 4.1: 'getline' variants and what they set
+
+File: gawk.info,  Node: Read Timeout,  Next: Retrying Input,  Prev: Getline,  Up: Reading Files
+

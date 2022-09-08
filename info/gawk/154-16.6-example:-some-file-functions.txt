@@ -1,0 +1,571 @@
+16.6 Example: Some File Functions
+=================================
+
+     No matter where you go, there you are.
+                         -- _Buckaroo Banzai_
+
+   Two useful functions that are not in 'awk' are 'chdir()' (so that an
+'awk' program can change its directory) and 'stat()' (so that an 'awk'
+program can gather information about a file).  In order to illustrate
+the API in action, this minor node implements these functions for 'gawk'
+in an extension.
+
+* Menu:
+
+* Internal File Description::   What the new functions will do.
+* Internal File Ops::           The code for internal file operations.
+* Using Internal File Ops::     How to use an external extension.
+
+File: gawk.info,  Node: Internal File Description,  Next: Internal File Ops,  Up: Extension Example
+
+16.6.1 Using 'chdir()' and 'stat()'
+-----------------------------------
+
+This minor node shows how to use the new functions at the 'awk' level
+once they've been integrated into the running 'gawk' interpreter.  Using
+'chdir()' is very straightforward.  It takes one argument, the new
+directory to change to:
+
+     @load "filefuncs"
+     ...
+     newdir = "/home/arnold/funstuff"
+     ret = chdir(newdir)
+     if (ret < 0) {
+         printf("could not change to %s: %s\n", newdir, ERRNO) > "/dev/stderr"
+         exit 1
+     }
+     ...
+
+   The return value is negative if the 'chdir()' failed, and 'ERRNO'
+(*note Built-in Variables::) is set to a string indicating the error.
+
+   Using 'stat()' is a bit more complicated.  The C 'stat()' function
+fills in a structure that has a fair amount of information.  The right
+way to model this in 'awk' is to fill in an associative array with the
+appropriate information:
+
+     file = "/home/arnold/.profile"
+     ret = stat(file, fdata)
+     if (ret < 0) {
+         printf("could not stat %s: %s\n",
+                  file, ERRNO) > "/dev/stderr"
+         exit 1
+     }
+     printf("size of %s is %d bytes\n", file, fdata["size"])
+
+   The 'stat()' function always clears the data array, even if the
+'stat()' fails.  It fills in the following elements:
+
+'"name"'
+     The name of the file that was 'stat()'ed.
+
+'"dev"'
+'"ino"'
+     The file's device and inode numbers, respectively.
+
+'"mode"'
+     The file's mode, as a numeric value.  This includes both the file's
+     type and its permissions.
+
+'"nlink"'
+     The number of hard links (directory entries) the file has.
+
+'"uid"'
+'"gid"'
+     The numeric user and group ID numbers of the file's owner.
+
+'"size"'
+     The size in bytes of the file.
+
+'"blocks"'
+     The number of disk blocks the file actually occupies.  This may not
+     be a function of the file's size if the file has holes.
+
+'"atime"'
+'"mtime"'
+'"ctime"'
+     The file's last access, modification, and inode update times,
+     respectively.  These are numeric timestamps, suitable for
+     formatting with 'strftime()' (*note Time Functions::).
+
+'"pmode"'
+     The file's "printable mode."  This is a string representation of
+     the file's type and permissions, such as is produced by 'ls
+     -l'--for example, '"drwxr-xr-x"'.
+
+'"type"'
+     A printable string representation of the file's type.  The value is
+     one of the following:
+
+     '"blockdev"'
+     '"chardev"'
+          The file is a block or character device ("special file").
+
+     '"directory"'
+          The file is a directory.
+
+     '"fifo"'
+          The file is a named pipe (also known as a FIFO).
+
+     '"file"'
+          The file is just a regular file.
+
+     '"socket"'
+          The file is an 'AF_UNIX' ("Unix domain") socket in the
+          filesystem.
+
+     '"symlink"'
+          The file is a symbolic link.
+
+'"devbsize"'
+     The size of a block for the element indexed by '"blocks"'.  This
+     information is derived from either the 'DEV_BSIZE' constant defined
+     in '<sys/param.h>' on most systems, or the 'S_BLKSIZE' constant in
+     '<sys/stat.h>' on BSD systems.  For some other systems, "a priori"
+     knowledge is used to provide a value.  Where no value can be
+     determined, it defaults to 512.
+
+   Several additional elements may be present, depending upon the
+operating system and the type of the file.  You can test for them in
+your 'awk' program by using the 'in' operator (*note Reference to
+Elements::):
+
+'"blksize"'
+     The preferred block size for I/O to the file.  This field is not
+     present on all POSIX-like systems in the C 'stat' structure.
+
+'"linkval"'
+     If the file is a symbolic link, this element is the name of the
+     file the link points to (i.e., the value of the link).
+
+'"rdev"'
+'"major"'
+'"minor"'
+     If the file is a block or character device file, then these values
+     represent the numeric device number and the major and minor
+     components of that number, respectively.
+
+File: gawk.info,  Node: Internal File Ops,  Next: Using Internal File Ops,  Prev: Internal File Description,  Up: Extension Example
+
+16.6.2 C Code for 'chdir()' and 'stat()'
+----------------------------------------
+
+Here is the C code for these extensions.(1)
+
+   The file includes a number of standard header files, and then
+includes the 'gawkapi.h' header file, which provides the API
+definitions.  Those are followed by the necessary variable declarations
+to make use of the API macros and boilerplate code (*note Extension API
+Boilerplate::):
+
+     #ifdef HAVE_CONFIG_H
+     #include <config.h>
+     #endif
+
+     #include <stdio.h>
+     #include <assert.h>
+     #include <errno.h>
+     #include <stdlib.h>
+     #include <string.h>
+     #include <unistd.h>
+
+     #include <sys/types.h>
+     #include <sys/stat.h>
+
+     #include "gawkapi.h"
+
+     #include "gettext.h"
+     #define _(msgid)  gettext(msgid)
+     #define N_(msgid) msgid
+
+     #include "gawkfts.h"
+     #include "stack.h"
+
+     static const gawk_api_t *api;    /* for convenience macros to work */
+     static awk_ext_id_t ext_id;
+     static awk_bool_t init_filefuncs(void);
+     static awk_bool_t (*init_func)(void) = init_filefuncs;
+     static const char *ext_version = "filefuncs extension: version 1.0";
+
+     int plugin_is_GPL_compatible;
+
+   By convention, for an 'awk' function 'foo()', the C function that
+implements it is called 'do_foo()'.  The function should have two
+arguments.  The first is an 'int', usually called 'nargs', that
+represents the number of actual arguments for the function.  The second
+is a pointer to an 'awk_value_t' structure, usually named 'result':
+
+     /*  do_chdir --- provide dynamically loaded chdir() function for gawk */
+
+     static awk_value_t *
+     do_chdir(int nargs, awk_value_t *result, struct awk_ext_func *unused)
+     {
+         awk_value_t newdir;
+         int ret = -1;
+
+         assert(result != NULL);
+
+   The 'newdir' variable represents the new directory to change to,
+which is retrieved with 'get_argument()'.  Note that the first argument
+is numbered zero.
+
+   If the argument is retrieved successfully, the function calls the
+'chdir()' system call.  Otherwise, if the 'chdir()' fails, it updates
+'ERRNO':
+
+         if (get_argument(0, AWK_STRING, & newdir)) {
+             ret = chdir(newdir.str_value.str);
+             if (ret < 0)
+                 update_ERRNO_int(errno);
+         }
+
+   Finally, the function returns the return value to the 'awk' level:
+
+         return make_number(ret, result);
+     }
+
+   The 'stat()' extension is more involved.  First comes a function that
+turns a numeric mode into a printable representation (e.g., octal '0644'
+becomes '-rw-r--r--').  This is omitted here for brevity:
+
+     /* format_mode --- turn a stat mode field into something readable */
+
+     static char *
+     format_mode(unsigned long fmode)
+     {
+         ...
+     }
+
+   Next comes a function for reading symbolic links, which is also
+omitted here for brevity:
+
+     /* read_symlink --- read a symbolic link into an allocated buffer.
+        ... */
+
+     static char *
+     read_symlink(const char *fname, size_t bufsize, ssize_t *linksize)
+     {
+         ...
+     }
+
+   Two helper functions simplify entering values in the array that will
+contain the result of the 'stat()':
+
+     /* array_set --- set an array element */
+
+     static void
+     array_set(awk_array_t array, const char *sub, awk_value_t *value)
+     {
+         awk_value_t index;
+
+         set_array_element(array,
+                           make_const_string(sub, strlen(sub), & index),
+                           value);
+
+     }
+
+     /* array_set_numeric --- set an array element with a number */
+
+     static void
+     array_set_numeric(awk_array_t array, const char *sub, double num)
+     {
+         awk_value_t tmp;
+
+         array_set(array, sub, make_number(num, & tmp));
+     }
+
+   The following function does most of the work to fill in the
+'awk_array_t' result array with values obtained from a valid 'struct
+stat'.  This work is done in a separate function to support the 'stat()'
+function for 'gawk' and also to support the 'fts()' extension, which is
+included in the same file but whose code is not shown here (*note
+Extension Sample File Functions::).
+
+   The first part of the function is variable declarations, including a
+table to map file types to strings:
+
+     /* fill_stat_array --- do the work to fill an array with stat info */
+
+     static int
+     fill_stat_array(const char *name, awk_array_t array, struct stat *sbuf)
+     {
+         char *pmode;    /* printable mode */
+         const char *type = "unknown";
+         awk_value_t tmp;
+         static struct ftype_map {
+             unsigned int mask;
+             const char *type;
+         } ftype_map[] = {
+             { S_IFREG, "file" },
+             { S_IFBLK, "blockdev" },
+             { S_IFCHR, "chardev" },
+             { S_IFDIR, "directory" },
+     #ifdef S_IFSOCK
+             { S_IFSOCK, "socket" },
+     #endif
+     #ifdef S_IFIFO
+             { S_IFIFO, "fifo" },
+     #endif
+     #ifdef S_IFLNK
+             { S_IFLNK, "symlink" },
+     #endif
+     #ifdef S_IFDOOR /* Solaris weirdness */
+             { S_IFDOOR, "door" },
+     #endif
+         };
+         int j, k;
+
+   The destination array is cleared, and then code fills in various
+elements based on values in the 'struct stat':
+
+         /* empty out the array */
+         clear_array(array);
+
+         /* fill in the array */
+         array_set(array, "name", make_const_string(name, strlen(name),
+                                                    & tmp));
+         array_set_numeric(array, "dev", sbuf->st_dev);
+         array_set_numeric(array, "ino", sbuf->st_ino);
+         array_set_numeric(array, "mode", sbuf->st_mode);
+         array_set_numeric(array, "nlink", sbuf->st_nlink);
+         array_set_numeric(array, "uid", sbuf->st_uid);
+         array_set_numeric(array, "gid", sbuf->st_gid);
+         array_set_numeric(array, "size", sbuf->st_size);
+         array_set_numeric(array, "blocks", sbuf->st_blocks);
+         array_set_numeric(array, "atime", sbuf->st_atime);
+         array_set_numeric(array, "mtime", sbuf->st_mtime);
+         array_set_numeric(array, "ctime", sbuf->st_ctime);
+
+         /* for block and character devices, add rdev,
+            major and minor numbers */
+         if (S_ISBLK(sbuf->st_mode) || S_ISCHR(sbuf->st_mode)) {
+             array_set_numeric(array, "rdev", sbuf->st_rdev);
+             array_set_numeric(array, "major", major(sbuf->st_rdev));
+             array_set_numeric(array, "minor", minor(sbuf->st_rdev));
+         }
+
+The latter part of the function makes selective additions to the
+destination array, depending upon the availability of certain members
+and/or the type of the file.  It then returns zero, for success:
+
+     #ifdef HAVE_STRUCT_STAT_ST_BLKSIZE
+         array_set_numeric(array, "blksize", sbuf->st_blksize);
+     #endif
+
+         pmode = format_mode(sbuf->st_mode);
+         array_set(array, "pmode", make_const_string(pmode, strlen(pmode),
+                                                     & tmp));
+
+         /* for symbolic links, add a linkval field */
+         if (S_ISLNK(sbuf->st_mode)) {
+             char *buf;
+             ssize_t linksize;
+
+             if ((buf = read_symlink(name, sbuf->st_size,
+                         & linksize)) != NULL)
+                 array_set(array, "linkval",
+                           make_malloced_string(buf, linksize, & tmp));
+             else
+                 warning(ext_id, _("stat: unable to read symbolic link `%s'"),
+                         name);
+         }
+
+         /* add a type field */
+         type = "unknown";   /* shouldn't happen */
+         for (j = 0, k = sizeof(ftype_map)/sizeof(ftype_map[0]); j < k; j++) {
+             if ((sbuf->st_mode & S_IFMT) == ftype_map[j].mask) {
+                 type = ftype_map[j].type;
+                 break;
+             }
+         }
+
+         array_set(array, "type", make_const_string(type, strlen(type), & tmp));
+
+         return 0;
+     }
+
+   The third argument to 'stat()' was not discussed previously.  This
+argument is optional.  If present, it causes 'do_stat()' to use the
+'stat()' system call instead of the 'lstat()' system call.  This is done
+by using a function pointer: 'statfunc'.  'statfunc' is initialized to
+point to 'lstat()' (instead of 'stat()') to get the file information, in
+case the file is a symbolic link.  However, if the third argument is
+included, 'statfunc' is set to point to 'stat()', instead.
+
+   Here is the 'do_stat()' function, which starts with variable
+declarations and argument checking:
+
+     /* do_stat --- provide a stat() function for gawk */
+
+     static awk_value_t *
+     do_stat(int nargs, awk_value_t *result, struct awk_ext_func *unused)
+     {
+         awk_value_t file_param, array_param;
+         char *name;
+         awk_array_t array;
+         int ret;
+         struct stat sbuf;
+         /* default is lstat() */
+         int (*statfunc)(const char *path, struct stat *sbuf) = lstat;
+
+         assert(result != NULL);
+
+   Then comes the actual work.  First, the function gets the arguments.
+Next, it gets the information for the file.  If the called function
+('lstat()' or 'stat()') returns an error, the code sets 'ERRNO' and
+returns:
+
+         /* file is first arg, array to hold results is second */
+         if (   ! get_argument(0, AWK_STRING, & file_param)
+             || ! get_argument(1, AWK_ARRAY, & array_param)) {
+             warning(ext_id, _("stat: bad parameters"));
+             return make_number(-1, result);
+         }
+
+         if (nargs == 3) {
+             statfunc = stat;
+         }
+
+         name = file_param.str_value.str;
+         array = array_param.array_cookie;
+
+         /* always empty out the array */
+         clear_array(array);
+
+         /* stat the file; if error, set ERRNO and return */
+         ret = statfunc(name, & sbuf);
+         if (ret < 0) {
+             update_ERRNO_int(errno);
+             return make_number(ret, result);
+         }
+
+   The tedious work is done by 'fill_stat_array()', shown earlier.  When
+done, the function returns the result from 'fill_stat_array()':
+
+         ret = fill_stat_array(name, array, & sbuf);
+
+         return make_number(ret, result);
+     }
+
+   Finally, it's necessary to provide the "glue" that loads the new
+function(s) into 'gawk'.
+
+   The 'filefuncs' extension also provides an 'fts()' function, which we
+omit here (*note Extension Sample File Functions::).  For its sake,
+there is an initialization function:
+
+     /* init_filefuncs --- initialization routine */
+
+     static awk_bool_t
+     init_filefuncs(void)
+     {
+         ...
+     }
+
+   We are almost done.  We need an array of 'awk_ext_func_t' structures
+for loading each function into 'gawk':
+
+     static awk_ext_func_t func_table[] = {
+         { "chdir", do_chdir, 1, 1, awk_false, NULL },
+         { "stat",  do_stat, 3, 2, awk_false, NULL },
+         ...
+     };
+
+   Each extension must have a routine named 'dl_load()' to load
+everything that needs to be loaded.  It is simplest to use the
+'dl_load_func()' macro in 'gawkapi.h':
+
+     /* define the dl_load() function using the boilerplate macro */
+
+     dl_load_func(func_table, filefuncs, "")
+
+   And that's it!
+
+   ---------- Footnotes ----------
+
+   (1) This version is edited slightly for presentation.  See
+'extension/filefuncs.c' in the 'gawk' distribution for the complete
+version.
+
+File: gawk.info,  Node: Using Internal File Ops,  Prev: Internal File Ops,  Up: Extension Example
+
+16.6.3 Integrating the Extensions
+---------------------------------
+
+Now that the code is written, it must be possible to add it at runtime
+to the running 'gawk' interpreter.  First, the code must be compiled.
+Assuming that the functions are in a file named 'filefuncs.c', and IDIR
+is the location of the 'gawkapi.h' header file, the following steps(1)
+create a GNU/Linux shared library:
+
+     $ gcc -fPIC -shared -DHAVE_CONFIG_H -c -O -g -IIDIR filefuncs.c
+     $ gcc -o filefuncs.so -shared filefuncs.o
+
+   Once the library exists, it is loaded by using the '@load' keyword:
+
+     # file testff.awk
+     @load "filefuncs"
+
+     BEGIN {
+         "pwd" | getline curdir  # save current directory
+         close("pwd")
+
+         chdir("/tmp")
+         system("pwd")   # test it
+         chdir(curdir)   # go back
+
+         print "Info for testff.awk"
+         ret = stat("testff.awk", data)
+         print "ret =", ret
+         for (i in data)
+             printf "data[\"%s\"] = %s\n", i, data[i]
+         print "testff.awk modified:",
+             strftime("%m %d %Y %H:%M:%S", data["mtime"])
+
+         print "\nInfo for JUNK"
+         ret = stat("JUNK", data)
+         print "ret =", ret
+         for (i in data)
+             printf "data[\"%s\"] = %s\n", i, data[i]
+         print "JUNK modified:", strftime("%m %d %Y %H:%M:%S", data["mtime"])
+     }
+
+   The 'AWKLIBPATH' environment variable tells 'gawk' where to find
+extensions (*note Finding Extensions::).  We set it to the current
+directory and run the program:
+
+     $ AWKLIBPATH=$PWD gawk -f testff.awk
+     -| /tmp
+     -| Info for testff.awk
+     -| ret = 0
+     -| data["blksize"] = 4096
+     -| data["devbsize"] = 512
+     -| data["mtime"] = 1412004710
+     -| data["mode"] = 33204
+     -| data["type"] = file
+     -| data["dev"] = 2053
+     -| data["gid"] = 1000
+     -| data["ino"] = 10358899
+     -| data["ctime"] = 1412004710
+     -| data["blocks"] = 8
+     -| data["nlink"] = 1
+     -| data["name"] = testff.awk
+     -| data["atime"] = 1412004716
+     -| data["pmode"] = -rw-rw-r--
+     -| data["size"] = 666
+     -| data["uid"] = 1000
+     -| testff.awk modified: 09 29 2014 18:31:50
+     -|
+     -| Info for JUNK
+     -| ret = -1
+     -| JUNK modified: 01 01 1970 02:00:00
+
+   ---------- Footnotes ----------
+
+   (1) In practice, you would probably want to use the GNU Autotools
+(Automake, Autoconf, Libtool, and 'gettext') to configure and build your
+libraries.  Instructions for doing so are beyond the scope of this Info
+file.  *Note gawkextlib:: for Internet links to the tools.
+
+File: gawk.info,  Node: Extension Samples,  Next: gawkextlib,  Prev: Extension Example,  Up: Dynamic Extensions
+
