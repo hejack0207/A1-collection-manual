@@ -1,0 +1,153 @@
+2. Command-line completion				*cmdline-completion*
+
+When editing the command-line, a few commands can be used to complete the
+word before the cursor.  This is available for:
+
+- Command names: At the start of the command-line.
+- Tags: Only after the ":tag" command.
+- File names: Only after a command that accepts a file name or a setting for
+  an option that can be set to a file name.  This is called file name
+  completion.
+- Shell command names: After ":!cmd", ":r !cmd" and ":w !cmd".  $PATH is used.
+- Options: Only after the ":set" command.
+- Mappings: Only after a ":map" or similar command.
+- Variable and function names: Only after a ":if", ":call" or similar command.
+
+The number of help item matches is limited (currently to 300) to avoid a long
+delay when there are very many matches.
+
+These are the commands that can be used:
+
+							*c_CTRL-D*
+CTRL-D		List names that match the pattern in front of the cursor.
+		When showing file names, directories are highlighted (see
+		'highlight' option).  Names where 'suffixes' matches are moved
+		to the end.
+		The 'wildoptions' option can be set to "tagfile" to list the
+		file of matching tags.
+					*c_CTRL-I* *c_wildchar* *c_<Tab>*
+'wildchar' option
+		A match is done on the pattern in front of the cursor.  The
+		match (if there are several, the first match) is inserted
+		in place of the pattern.  (Note: does not work inside a
+		macro, because <Tab> or <Esc> are mostly used as 'wildchar',
+		and these have a special meaning in some macros.) When typed
+		again and there were multiple matches, the next
+		match is inserted.  After the last match, the first is used
+		again (wrap around).
+		The behavior can be changed with the 'wildmode' option.
+							*c_<S-Tab>*
+<S-Tab>		Like 'wildchar' or <Tab>, but begin with the last match and
+		then go to the previous match.
+		<S-Tab> does not work everywhere.
+							*c_CTRL-N*
+CTRL-N		After using 'wildchar' which got multiple matches, go to next
+		match.  Otherwise recall more recent command-line from history.
+							*c_CTRL-P*
+CTRL-P		After using 'wildchar' which got multiple matches, go to
+		previous match.  Otherwise recall older command-line from
+		history.
+							*c_CTRL-A*
+CTRL-A		All names that match the pattern in front of the cursor are
+		inserted.
+							*c_CTRL-L*
+CTRL-L		A match is done on the pattern in front of the cursor.  If
+		there is one match, it is inserted in place of the pattern.
+		If there are multiple matches the longest common part is
+		inserted in place of the pattern.  If the result is shorter
+		than the pattern, no completion is done.
+							*/_CTRL-L*
+		When 'incsearch' is set, entering a search pattern for "/" or
+		"?" and the current match is displayed then CTRL-L will add
+		one character from the end of the current match.  If
+		'ignorecase' and 'smartcase' are set and the command line has
+		no uppercase characters, the added character is converted to
+		lowercase.
+	                                            *c_CTRL-G* */_CTRL-G*
+CTRL-G		When 'incsearch' is set, entering a search pattern for "/" or
+		"?" and the current match is displayed then CTRL-G will move
+		to the next match (does not take |search-offset| into account)
+		Use CTRL-T to move to the previous match.  Hint: on a regular
+		keyboard T is above G.
+	                                            *c_CTRL-T* */_CTRL-T*
+CTRL-T		When 'incsearch' is set, entering a search pattern for "/" or
+		"?" and the current match is displayed then CTRL-T will move
+		to the previous match (does not take |search-offset| into
+		account).
+		Use CTRL-G to move to the next match.  Hint: on a regular
+		keyboard T is above G.
+
+The 'wildchar' option defaults to <Tab> (CTRL-E when in Vi compatible mode; in
+a previous version <Esc> was used).  In the pattern standard wildcards '*' and
+'?' are accepted when matching file names.  '*' matches any string, '?'
+matches exactly one character.
+
+When repeating 'wildchar' or CTRL-N you cycle through the matches, eventually
+ending up back to what was typed.  If the first match is not what you wanted,
+you can use <S-Tab> or CTRL-P to go straight back to what you typed.
+
+The 'wildignorecase' option can be set to ignore case in filenames.
+
+The 'wildmenu' option can be set to show the matches just above the command
+line.
+
+If you like tcsh's autolist completion, you can use this mapping:
+	:cnoremap X <C-L><C-D>
+(Where X is the command key to use, <C-L> is CTRL-L and <C-D> is CTRL-D)
+This will find the longest match and then list all matching files.
+
+If you like tcsh's autolist completion, you can use the 'wildmode' option to
+emulate it.  For example, this mimics autolist=ambiguous:
+	:set wildmode=longest,list
+This will find the longest match with the first 'wildchar', then list all
+matching files with the next.
+
+					*complete-script-local-functions*
+When completing user function names, prepend "s:" to find script-local
+functions.
+
+							*suffixes*
+For file name completion you can use the 'suffixes' option to set a priority
+between files with almost the same name.  If there are multiple matches,
+those files with an extension that is in the 'suffixes' option are ignored.
+The default is ".bak,~,.o,.h,.info,.swp,.obj", which means that files ending
+in ".bak", "~", ".o", ".h", ".info", ".swp" and ".obj" are sometimes ignored.
+
+An empty entry, two consecutive commas, match a file name that does not
+contain a ".", thus has no suffix.  This is useful to ignore "prog" and prefer
+"prog.c".
+
+Examples:
+
+  pattern:	files:				match:	~
+   test*	test.c test.h test.o		test.c
+   test*	test.h test.o			test.h and test.o
+   test*	test.i test.h test.c		test.i and test.c
+
+It is impossible to ignore suffixes with two dots.
+
+If there is more than one matching file (after ignoring the ones matching
+the 'suffixes' option) the first file name is inserted.  You can see that
+there is only one match when you type 'wildchar' twice and the completed
+match stays the same.  You can get to the other matches by entering
+'wildchar', CTRL-N or CTRL-P.  All files are included, also the ones with
+extensions matching the 'suffixes' option.
+
+To completely ignore files with some extension use 'wildignore'.
+
+To match only files that end at the end of the typed text append a "$".  For
+example, to match only files that end in ".c": >
+	:e *.c$
+This will not match a file ending in ".cpp".  Without the "$" it does match.
+
+The old value of an option can be obtained by hitting 'wildchar' just after
+the '='.  For example, typing 'wildchar' after ":set dir=" will insert the
+current value of 'dir'.  This overrules file name completion for the options
+that take a file name.
+
+If you would like using <S-Tab> for CTRL-P in an xterm, put this command in
+your .cshrc: >
+	xmodmap -e "keysym Tab = Tab Find"
+And this in your .vimrc: >
+	:cmap <Esc>[1~ <C-P>
+

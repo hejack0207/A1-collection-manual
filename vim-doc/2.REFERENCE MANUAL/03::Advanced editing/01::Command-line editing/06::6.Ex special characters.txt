@@ -1,0 +1,244 @@
+6. Ex special characters				*cmdline-special*
+
+Note: These are special characters in the executed command line.  If you want
+to insert special things while typing you can use the CTRL-R command.  For
+example, "%" stands for the current file name, while CTRL-R % inserts the
+current file name right away.  See |c_CTRL-R|.
+
+Note:  If you want to avoid the effects of special characters in a Vim script
+you may want to use |fnameescape()|.  Also see |`=|.
+
+
+In Ex commands, at places where a file name can be used, the following
+characters have a special meaning.  These can also be used in the expression
+function |expand()|.
+	%	Is replaced with the current file name.		  *:_%* *c_%*
+	#	Is replaced with the alternate file name.	  *:_#* *c_#*
+		This is remembered for every window.
+	#n	(where n is a number) is replaced with		  *:_#0* *:_#n*
+		the file name of buffer n.  "#0" is the same as "#".     *c_#n*
+	##	Is replaced with all names in the argument list	  *:_##* *c_##*
+		concatenated, separated by spaces.  Each space in a name
+		is preceded with a backslash.
+	#<n	(where n is a number > 0) is replaced with old	  *:_#<* *c_#<*
+		file name n.  See |:oldfiles| or |v:oldfiles| to get the
+		number.							*E809*
+		{only when compiled with the |+eval| and |+viminfo| features}
+
+Note that these, except "#<n", give the file name as it was typed.  If an
+absolute path is needed (when using the file name from a different directory),
+you need to add ":p".  See |filename-modifiers|.
+
+The "#<n" item returns an absolute path, but it will start with "~/" for files
+below your home directory.
+
+Note that backslashes are inserted before spaces, so that the command will
+correctly interpret the file name.  But this doesn't happen for shell
+commands.  For those you probably have to use quotes (this fails for files
+that contain a quote and wildcards): >
+	:!ls "%"
+	:r !spell "%"
+
+To avoid the special meaning of '%' and '#' insert a backslash before it.
+Detail: The special meaning is always escaped when there is a backslash before
+it, no matter how many backslashes.
+	you type:		result	~
+	   #			alternate.file
+	   \#			#
+	   \\#			\#
+Also see |`=|.
+
+			       *:<cword>* *<cword>* *:<cWORD>* *<cWORD>*
+			       *:<cexpr>* *<cexpr>* *:<cfile>* *<cfile>*
+			       *:<afile>* *<afile>* *:<abuf>* *<abuf>*
+			       *:<amatch>* *<amatch>*
+			       *:<sfile>* *<sfile>* *:<slnum>* *<slnum>*
+			       *:<sflnum>* *<sflnum>* *E499* *E500*
+Note: these are typed literally, they are not special keys!
+	<cword>    is replaced with the word under the cursor (like |star|)
+	<cWORD>    is replaced with the WORD under the cursor (see |WORD|)
+	<cexpr>    is replaced with the word under the cursor, including more
+		   to form a C expression.  E.g., when the cursor is on "arg"
+		   of "ptr->arg" then the result is "ptr->arg"; when the
+		   cursor is on "]" of "list[idx]" then the result is
+		   "list[idx]".  This is used for |v:beval_text|.
+	<cfile>    is replaced with the path name under the cursor (like what
+		   |gf| uses)
+	<afile>    When executing autocommands, is replaced with the file name
+		   of the buffer being manipulated, or the file for a read or
+		   write.  *E495*
+	<abuf>     When executing autocommands, is replaced with the currently
+		   effective buffer number (for ":r file" and ":so file" it is
+		   the current buffer, the file being read/sourced is not in a
+		   buffer).  *E496*
+	<amatch>   When executing autocommands, is replaced with the match for
+		   which this autocommand was executed.  *E497*
+		   It differs from <afile> only when the file name isn't used
+		   to match with (for FileType, Syntax and SpellFileMissing
+		   events).
+	<sfile>    When executing a ":source" command, is replaced with the
+		   file name of the sourced file.  *E498*
+		   When executing a function, is replaced with:
+		   "function {function-name}[{lnum}]"
+		   function call nesting is indicated like this:
+		   "function {function-name1}[{lnum}]..{function-name2}[{lnum}]"
+		   Note that filename-modifiers are useless when <sfile> is
+		   used inside a function.
+	<slnum>	   When executing a ":source" command, is replaced with the
+		   line number.  *E842*
+		   When executing a function it's the line number relative to
+		   the start of the function.
+	<sflnum>   When executing a script, is replaced with the line number.
+		   It differs from <slnum> in that <sflnum> is replaced with
+		   the script line number in any situation.  *E961*
+
+							 *filename-modifiers*
+*:_%:* *::8* *::p* *::.* *::~* *::h* *::t* *::r* *::e* *::s* *::gs* *::S*
+     *%:8* *%:p* *%:.* *%:~* *%:h* *%:t* *%:r* *%:e* *%:s* *%:gs* *%:S*
+The file name modifiers can be used after "%", "#", "#n", "<cfile>", "<sfile>",
+"<afile>" or "<abuf>".  They are also used with the |fnamemodify()| function.
+
+These modifiers can be given, in this order:
+	:p	Make file name a full path.  Must be the first modifier.  Also
+		changes "~/" (and "~user/" for Unix and VMS) to the path for
+		the home directory.  If the name is a directory a path
+		separator is added at the end.  For a file name that does not
+		exist and does not have an absolute path the result is
+		unpredictable.  On MS-Windows an 8.3 filename is expanded to
+		the long name.
+	:8	Converts the path to 8.3 short format (currently only on
+		MS-Windows).  Will act on as much of a path that is an
+		existing path.
+	:~	Reduce file name to be relative to the home directory, if
+		possible.  File name is unmodified if it is not below the home
+		directory.
+	:.	Reduce file name to be relative to current directory, if
+		possible.  File name is unmodified if it is not below the
+		current directory.
+		For maximum shortness, use ":~:.".
+	:h	Head of the file name (the last component and any separators
+		removed).  Cannot be used with :e, :r or :t.
+		Can be repeated to remove several components at the end.
+		When the file name ends in a path separator, only the path
+		separator is removed.  Thus ":p:h" on a directory name results
+		on the directory name itself (without trailing slash).
+		When the file name is an absolute path (starts with "/" for
+		Unix; "x:\" for Win32; "drive:" for Amiga), that part is not
+		removed.  When there is no head (path is relative to current
+		directory) the result is empty.
+	:t	Tail of the file name (last component of the name).  Must
+		precede any :r or :e.
+	:r	Root of the file name (the last extension removed).  When
+		there is only an extension (file name that starts with '.',
+		e.g., ".vimrc"), it is not removed.  Can be repeated to remove
+		several extensions (last one first).
+	:e	Extension of the file name.  Only makes sense when used alone.
+		When there is no extension the result is empty.
+		When there is only an extension (file name that starts with
+		'.'), the result is empty.  Can be repeated to include more
+		extensions.  If there are not enough extensions (but at least
+		one) as much as possible are included.
+	:s?pat?sub?
+		Substitute the first occurrence of "pat" with "sub".  This
+		works like the |:s| command.  "pat" is a regular expression.
+		Any character can be used for '?', but it must not occur in
+		"pat" or "sub".
+		After this, the previous modifiers can be used again.  For
+		example ":p", to make a full path after the substitution.
+	:gs?pat?sub?
+		Substitute all occurrences of "pat" with "sub".  Otherwise
+		this works like ":s".
+	:S	Escape special characters for use with a shell command (see
+		|shellescape()|). Must be the last one. Examples: >
+		    :!dir <cfile>:S
+		    :call system('chmod +w -- ' . expand('%:S'))
+
+Examples, when the file name is "src/version.c", current dir
+"/home/mool/vim": >
+  :p			/home/mool/vim/src/version.c
+  :p:.				       src/version.c
+  :p:~				 ~/vim/src/version.c
+  :h				       src
+  :p:h			/home/mool/vim/src
+  :p:h:h		/home/mool/vim
+  :t					   version.c
+  :p:t					   version.c
+  :r				       src/version
+  :p:r			/home/mool/vim/src/version
+  :t:r					   version
+  :e						   c
+  :s?version?main?		       src/main.c
+  :s?version?main?:p	/home/mool/vim/src/main.c
+  :p:gs?/?\\?		\home\mool\vim\src\version.c
+
+Examples, when the file name is "src/version.c.gz": >
+  :p			/home/mool/vim/src/version.c.gz
+  :e						     gz
+  :e:e						   c.gz
+  :e:e:e					   c.gz
+  :e:e:r					   c
+  :r				       src/version.c
+  :r:e						   c
+  :r:r				       src/version
+  :r:r:r			       src/version
+<
+					*extension-removal* *:_%<*
+If a "<" is appended to "%", "#", "#n" or "CTRL-V p" the extension of the file
+name is removed (everything after and including the last '.' in the file
+name).  This is included for backwards compatibility with version 3.0, the
+":r" form is preferred.  Examples: >
+
+	%		current file name
+	%<		current file name without extension
+	#		alternate file name for current window
+	#<		idem, without extension
+	#31		alternate file number 31
+	#31<		idem, without extension
+	<cword>		word under the cursor
+	<cWORD>		WORD under the cursor (see |WORD|)
+	<cfile>		path name under the cursor
+	<cfile><	idem, without extension
+
+Note: Where a file name is expected wildcards expansion is done.  On Unix the
+shell is used for this, unless it can be done internally (for speed).
+Unless in |restricted-mode|, backticks work also, like in >
+	:n `echo *.c`
+But expansion is only done if there are any wildcards before expanding the
+'%', '#', etc..  This avoids expanding wildcards inside a file name.  If you
+want to expand the result of <cfile>, add a wildcard character to it.
+Examples: (alternate file name is "?readme?")
+	command		expands to  ~
+	:e #		:e ?readme?
+	:e `ls #`	:e {files matching "?readme?"}
+	:e #.*		:e {files matching "?readme?.*"}
+	:cd <cfile>	:cd {file name under cursor}
+	:cd <cfile>*	:cd {file name under cursor plus "*" and then expanded}
+Also see |`=|.
+
+When the expanded argument contains a "!" and it is used for a shell command
+(":!cmd", ":r !cmd" or ":w !cmd"), the "!" is escaped with a backslash to
+avoid it being expanded into a previously used command.  When the 'shell'
+option contains "sh", this is done twice, to avoid the shell trying to expand
+the "!".
+
+							*filename-backslash*
+For filesystems that use a backslash as directory separator (MS-Windows), it's
+a bit difficult to recognize a backslash that is used to escape the special
+meaning of the next character.  The general rule is: If the backslash is
+followed by a normal file name character, it does not have a special meaning.
+Therefore "\file\foo" is a valid file name, you don't have to type the
+backslash twice.
+
+An exception is the '$' sign.  It is a valid character in a file name.  But
+to avoid a file name like "$home" to be interpreted as an environment variable,
+it needs to be preceded by a backslash.  Therefore you need to use "/\$home"
+for the file "$home" in the root directory.  A few examples:
+
+	FILE NAME	INTERPRETED AS	~
+	$home		expanded to value of environment var $home
+	\$home		file "$home" in current directory
+	/\$home		file "$home" in root directory
+	\\$home		file "\\", followed by expanded $home
+
+Also see |`=|.
+

@@ -1,0 +1,168 @@
+1. Navigation					*sql-navigation*
+
+The SQL ftplugin provides a number of options to assist with file
+navigation.
+
+
+1.1 Matchit					*sql-matchit*
+-----------
+The matchit plugin (http://www.vim.org/scripts/script.php?script_id=39)
+provides many additional features and can be customized for different
+languages.  The matchit plugin is configured by defining a local
+buffer variable, b:match_words.  Pressing the % key while on various
+keywords will move the cursor to its match.  For example, if the cursor
+is on an "if", pressing % will cycle between the "else", "elseif" and
+"end if" keywords.
+
+The following keywords are supported: >
+    if
+    elseif | elsif
+    else [if]
+    end if
+
+    [while condition] loop
+	leave
+	break
+	continue
+	exit
+    end loop
+
+    for
+	leave
+	break
+	continue
+	exit
+    end loop
+
+    do
+	statements
+    doend
+
+    case
+    when
+    when
+    default
+    end case
+
+    merge
+    when not matched
+    when matched
+
+    create[ or replace] procedure|function|event
+    returns
+
+
+1.2 Text Object Motions				*sql-object-motions*
+-----------------------
+Vim has a number of predefined keys for working with text |object-motions|.
+This filetype plugin attempts to translate these keys to maps which make sense
+for the SQL language.
+
+The following |Normal| mode and |Visual| mode maps exist (when you edit a SQL
+file): >
+    ]]		    move forward to the next 'begin'
+    [[		    move backwards to the previous 'begin'
+    ][		    move forward to the next 'end'
+    []		    move backwards to the previous 'end'
+
+
+1.3 Predefined Object Motions			*sql-predefined-objects*
+-----------------------------
+Most relational databases support various standard features, tables, indices,
+triggers and stored procedures.  Each vendor also has a variety of proprietary
+objects.  The next set of maps have been created to help move between these
+objects.  Depends on which database vendor you are using, the list of objects
+must be configurable.  The filetype plugin attempts to define many of the
+standard objects, plus many additional ones.  In order to make this as
+flexible as possible, you can override the list of objects from within your
+|vimrc| with the following: >
+    let g:ftplugin_sql_objects = 'function,procedure,event,table,trigger' .
+		\ ',schema,service,publication,database,datatype,domain' .
+		\ ',index,subscription,synchronization,view,variable'
+
+The following |Normal| mode and |Visual| mode maps have been created which use
+the above list: >
+    ]}		    move forward to the next 'create <object name>'
+    [{		    move backward to the previous 'create <object name>'
+
+Repeatedly pressing ]} will cycle through each of these create statements: >
+    create table t1 (
+	...
+    );
+
+    create procedure p1
+    begin
+	...
+    end;
+
+    create index i1 on t1 (c1);
+
+The default setting for g:ftplugin_sql_objects is: >
+    let g:ftplugin_sql_objects = 'function,procedure,event,' .
+		\ '\\(existing\\\\|global\\s\\+temporary\\s\\+\\)\\\{,1}' .
+		\ 'table,trigger' .
+		\ ',schema,service,publication,database,datatype,domain' .
+		\ ',index,subscription,synchronization,view,variable'
+
+The above will also handle these cases: >
+    create table t1 (
+	...
+    );
+    create existing table t2 (
+	...
+    );
+    create global temporary table t3 (
+	...
+    );
+
+By default, the ftplugin only searches for CREATE statements.  You can also
+override this via your |vimrc| with the following: >
+    let g:ftplugin_sql_statements = 'create,alter'
+
+The filetype plugin defines three types of comments: >
+    1.  --
+    2.  //
+    3.  /*
+	 *
+	 */
+
+The following |Normal| mode and |Visual| mode maps have been created to work
+with comments: >
+    ]"		    move forward to the beginning of a comment
+    ["		    move forward to the end of a comment
+
+
+
+1.4 Macros					   *sql-macros*
+----------
+Vim's feature to find macro definitions, |'define'|, is supported using this
+regular expression: >
+    \c\<\(VARIABLE\|DECLARE\|IN\|OUT\|INOUT\)\>
+
+This addresses the following code: >
+    CREATE VARIABLE myVar1 INTEGER;
+
+    CREATE PROCEDURE sp_test(
+	IN myVar2 INTEGER,
+	OUT myVar3 CHAR(30),
+	INOUT myVar4 NUMERIC(20,0)
+    )
+    BEGIN
+	DECLARE myVar5 INTEGER;
+
+	SELECT c1, c2, c3
+	  INTO myVar2, myVar3, myVar4
+	  FROM T1
+	 WHERE c4 = myVar1;
+    END;
+
+Place your cursor on "myVar1" on this line: >
+	 WHERE c4 = myVar1;
+		     ^
+
+Press any of the following keys: >
+    [d
+    [D
+    [CTRL-D
+
+

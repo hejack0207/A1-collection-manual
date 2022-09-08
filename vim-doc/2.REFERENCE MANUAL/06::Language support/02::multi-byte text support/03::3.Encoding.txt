@@ -1,0 +1,264 @@
+3.  Encoding				*mbyte-encoding*
+
+Vim uses the 'encoding' option to specify how characters are identified and
+encoded when they are used inside Vim.  This applies to all the places where
+text is used, including buffers (files loaded into memory), registers and
+variables.
+
+							*charset* *codeset*
+Charset is another name for encoding.  There are subtle differences, but these
+don't matter when using Vim.  "codeset" is another similar name.
+
+Each character is encoded as one or more bytes.  When all characters are
+encoded with one byte, we call this a single-byte encoding.  The most often
+used one is called "latin1".  This limits the number of characters to 256.
+Some of these are control characters, thus even fewer can be used for text.
+
+When some characters use two or more bytes, we call this a multi-byte
+encoding.  This allows using much more than 256 characters, which is required
+for most East Asian languages.
+
+Most multi-byte encodings use one byte for the first 127 characters.  These
+are equal to ASCII, which makes it easy to exchange plain-ASCII text, no
+matter what language is used.  Thus you might see the right text even when the
+encoding was set wrong.
+
+							*encoding-names*
+Vim can use many different character encodings.  There are three major groups:
+
+1   8bit	Single-byte encodings, 256 different characters.  Mostly used
+		in USA and Europe.  Example: ISO-8859-1 (Latin1).  All
+		characters occupy one screen cell only.
+
+2   2byte	Double-byte encodings, over 10000 different characters.
+		Mostly used in Asian countries.  Example: euc-kr (Korean)
+		The number of screen cells is equal to the number of bytes
+		(except for euc-jp when the first byte is 0x8e).
+
+u   Unicode	Universal encoding, can replace all others.  ISO 10646.
+		Millions of different characters.  Example: UTF-8.  The
+		relation between bytes and screen cells is complex.
+
+Other encodings cannot be used by Vim internally.  But files in other
+encodings can be edited by using conversion, see 'fileencoding'.
+Note that all encodings must use ASCII for the characters up to 128 (except
+when compiled for EBCDIC).
+
+Supported 'encoding' values are:			*encoding-values*
+1   latin1	8-bit characters (ISO 8859-1, also used for cp1252)
+1   iso-8859-n	ISO_8859 variant (n = 2 to 15)
+1   koi8-r	Russian
+1   koi8-u	Ukrainian
+1   macroman    MacRoman (Macintosh encoding)
+1   8bit-{name} any 8-bit encoding (Vim specific name)
+1   cp437	similar to iso-8859-1
+1   cp737	similar to iso-8859-7
+1   cp775	Baltic
+1   cp850	similar to iso-8859-4
+1   cp852	similar to iso-8859-1
+1   cp855	similar to iso-8859-2
+1   cp857	similar to iso-8859-5
+1   cp860	similar to iso-8859-9
+1   cp861	similar to iso-8859-1
+1   cp862	similar to iso-8859-1
+1   cp863	similar to iso-8859-8
+1   cp865	similar to iso-8859-1
+1   cp866	similar to iso-8859-5
+1   cp869	similar to iso-8859-7
+1   cp874	Thai
+1   cp1250	Czech, Polish, etc.
+1   cp1251	Cyrillic
+1   cp1253	Greek
+1   cp1254	Turkish
+1   cp1255	Hebrew
+1   cp1256	Arabic
+1   cp1257	Baltic
+1   cp1258	Vietnamese
+1   cp{number}	MS-Windows: any installed single-byte codepage
+2   cp932	Japanese (Windows only)
+2   euc-jp	Japanese (Unix only)
+2   sjis	Japanese (Unix only)
+2   cp949	Korean (Unix and Windows)
+2   euc-kr	Korean (Unix only)
+2   cp936	simplified Chinese (Windows only)
+2   euc-cn	simplified Chinese (Unix only)
+2   cp950	traditional Chinese (on Unix alias for big5)
+2   big5	traditional Chinese (on Windows alias for cp950)
+2   euc-tw	traditional Chinese (Unix only)
+2   2byte-{name} Unix: any double-byte encoding (Vim specific name)
+2   cp{number}	MS-Windows: any installed double-byte codepage
+u   utf-8	32 bit UTF-8 encoded Unicode (ISO/IEC 10646-1)
+u   ucs-2	16 bit UCS-2 encoded Unicode (ISO/IEC 10646-1)
+u   ucs-2le	like ucs-2, little endian
+u   utf-16	ucs-2 extended with double-words for more characters
+u   utf-16le	like utf-16, little endian
+u   ucs-4	32 bit UCS-4 encoded Unicode (ISO/IEC 10646-1)
+u   ucs-4le	like ucs-4, little endian
+
+The {name} can be any encoding name that your system supports.  It is passed
+to iconv() to convert between the encoding of the file and the current locale.
+For MS-Windows "cp{number}" means using codepage {number}.
+Examples: >
+		:set encoding=8bit-cp1252
+		:set encoding=2byte-cp932
+
+The MS-Windows codepage 1252 is very similar to latin1.  For practical reasons
+the same encoding is used and it's called latin1.  'isprint' can be used to
+display the characters 0x80 - 0xA0 or not.
+
+Several aliases can be used, they are translated to one of the names above.
+An incomplete list:
+
+1   ansi	same as latin1 (obsolete, for backward compatibility)
+2   japan	Japanese: on Unix "euc-jp", on MS-Windows cp932
+2   korea	Korean: on Unix "euc-kr", on MS-Windows cp949
+2   prc		simplified Chinese: on Unix "euc-cn", on MS-Windows cp936
+2   chinese     same as "prc"
+2   taiwan	traditional Chinese: on Unix "euc-tw", on MS-Windows cp950
+u   utf8	same as utf-8
+u   unicode	same as ucs-2
+u   ucs2be	same as ucs-2 (big endian)
+u   ucs-2be	same as ucs-2 (big endian)
+u   ucs-4be	same as ucs-4 (big endian)
+u   utf-32	same as ucs-4
+u   utf-32le	same as ucs-4le
+    default     stands for the default value of 'encoding', depends on the
+		environment
+
+For the UCS codes the byte order matters.  This is tricky, use UTF-8 whenever
+you can.  The default is to use big-endian (most significant byte comes
+first):
+	    name	bytes		char ~
+	    ucs-2	      11 22	    1122
+	    ucs-2le	      22 11	    1122
+	    ucs-4	11 22 33 44	11223344
+	    ucs-4le	44 33 22 11	11223344
+
+On MS-Windows systems you often want to use "ucs-2le", because it uses little
+endian UCS-2.
+
+There are a few encodings which are similar, but not exactly the same.  Vim
+treats them as if they were different encodings, so that conversion will be
+done when needed.  You might want to use the similar name to avoid conversion
+or when conversion is not possible:
+
+	cp932, shift-jis, sjis
+	cp936, euc-cn
+
+							*encoding-table*
+Normally 'encoding' is equal to your current locale and 'termencoding' is
+empty.  This means that your keyboard and display work with characters encoded
+in your current locale, and Vim uses the same characters internally.
+
+You can make Vim use characters in a different encoding by setting the
+'encoding' option to a different value.  Since the keyboard and display still
+use the current locale, conversion needs to be done.  The 'termencoding' then
+takes over the value of the current locale, so Vim converts between 'encoding'
+and 'termencoding'.  Example: >
+	:let &termencoding = &encoding
+	:set encoding=utf-8
+
+However, not all combinations of values are possible.  The table below tells
+you how each of the nine combinations works.  This is further restricted by
+not all conversions being possible, iconv() being present, etc.  Since this
+depends on the system used, no detailed list can be given.
+
+('tenc' is the short name for 'termencoding' and 'enc' short for 'encoding')
+
+'tenc'	    'enc'	remark ~
+
+ 8bit	    8bit	Works.  When 'termencoding' is different from
+			'encoding' typing and displaying may be wrong for some
+			characters, Vim does NOT perform conversion (set
+			'encoding' to "utf-8" to get this).
+ 8bit      2byte	MS-Windows: works for all codepages installed on your
+			system; you can only type 8bit characters;
+			Other systems: does NOT work.
+ 8bit	   Unicode	Works, but only 8bit characters can be typed directly
+			(others through digraphs, keymaps, etc.); in a
+			terminal you can only see 8bit characters; the GUI can
+			show all characters that the 'guifont' supports.
+
+ 2byte	    8bit	Works, but typing non-ASCII characters might
+			be a problem.
+ 2byte	   2byte	MS-Windows: works for all codepages installed on your
+			system; typing characters might be a problem when
+			locale is different from 'encoding'.
+			Other systems: Only works when 'termencoding' is equal
+			to 'encoding', you might as well leave it empty.
+ 2byte	   Unicode	works, Vim will translate typed characters.
+
+ Unicode    8bit	works (unusual)
+ Unicode    2byte	does NOT work
+ Unicode   Unicode	works very well (leaving 'termencoding' empty works
+			the same way, because all Unicode is handled
+			internally as UTF-8)
+
+CONVERSION						*charset-conversion*
+
+Vim will automatically convert from one to another encoding in several places:
+- When reading a file and 'fileencoding' is different from 'encoding'
+- When writing a file and 'fileencoding' is different from 'encoding'
+- When displaying characters and 'termencoding' is different from 'encoding'
+- When reading input and 'termencoding' is different from 'encoding'
+- When displaying messages and the encoding used for LC_MESSAGES differs from
+  'encoding' (requires a gettext version that supports this).
+- When reading a Vim script where |:scriptencoding| is different from
+  'encoding'.
+- When reading or writing a |viminfo| file.
+Most of these require the |+iconv| feature.  Conversion for reading and
+writing files may also be specified with the 'charconvert' option.
+
+Useful utilities for converting the charset:
+    All:	    iconv
+	GNU iconv can convert most encodings.  Unicode is used as the
+	intermediate encoding, which allows conversion from and to all other
+	encodings.  See http://www.gnu.org/directory/libiconv.html.
+
+    Japanese:	    nkf
+	Nkf is "Network Kanji code conversion Filter".  One of the most unique
+	facility of nkf is the guess of the input Kanji code.  So, you don't
+	need to know what the inputting file's |charset| is.  When convert to
+	EUC-JP from ISO-2022-JP or Shift_JIS, simply do the following command
+	in Vim:
+	    :%!nkf -e
+	Nkf can be found at:
+	http://www.sfc.wide.ad.jp/~max/FreeBSD/ports/distfiles/nkf-1.62.tar.gz
+
+    Chinese:	    hc
+	Hc is "Hanzi Converter".  Hc convert a GB file to a Big5 file, or Big5
+	file to GB file.  Hc can be found at:
+	ftp://ftp.cuhk.hk/pub/chinese/ifcss/software/unix/convert/hc-30.tar.gz
+
+    Korean:	    hmconv
+	Hmconv is Korean code conversion utility especially for E-mail.  It can
+	convert between EUC-KR and ISO-2022-KR.  Hmconv can be found at:
+	ftp://ftp.kaist.ac.kr/pub/hangul/code/hmconv/
+
+    Multilingual:   lv
+	Lv is a Powerful Multilingual File Viewer.  And it can be worked as
+	|charset| converter.  Supported |charset|: ISO-2022-CN, ISO-2022-JP,
+	ISO-2022-KR, EUC-CN, EUC-JP, EUC-KR, EUC-TW, UTF-7, UTF-8, ISO-8859
+	series, Shift_JIS, Big5 and HZ.  Lv can be found at:
+	http://www.ff.iij4u.or.jp/~nrt/lv/index.html
+
+
+							*mbyte-conversion*
+When reading and writing files in an encoding different from 'encoding',
+conversion needs to be done.  These conversions are supported:
+- All conversions between Latin-1 (ISO-8859-1), UTF-8, UCS-2 and UCS-4 are
+  handled internally.
+- For MS-Windows, when 'encoding' is a Unicode encoding, conversion from and
+  to any codepage should work.
+- Conversion specified with 'charconvert'
+- Conversion with the iconv library, if it is available.
+	Old versions of GNU iconv() may cause the conversion to fail (they
+	request a very large buffer, more than Vim is willing to provide).
+	Try getting another iconv() implementation.
+
+							*iconv-dynamic*
+On MS-Windows Vim can be compiled with the |+iconv/dyn| feature.  This means
+Vim will search for the "iconv.dll" and "libiconv.dll" libraries.  When
+neither of them can be found Vim will still work but some conversions won't be
+possible.
+

@@ -1,0 +1,755 @@
+1. Variables						*variables*
+
+1.1 Variable types ~
+						*E712* *E896* *E897* *E899*
+There are ten types of variables:
+
+							*Number* *Integer*
+Number		A 32 or 64 bit signed number.  |expr-number|
+		The number of bits is available in |v:numbersize|.
+		Examples:  -123  0x10  0177  0b1011
+
+Float		A floating point number. |floating-point-format| *Float*
+		{only when compiled with the |+float| feature}
+		Examples: 123.456  1.15e-6  -1.1e3
+
+							*E928*
+String		A NUL terminated string of 8-bit unsigned characters (bytes).
+		|expr-string| Examples: "ab\txx\"--"  'x-z''a,c'
+
+List		An ordered sequence of items, see |List| for details.
+		Example: [1, 2, ['a', 'b']]
+
+Dictionary	An associative, unordered array: Each entry has a key and a
+		value. |Dictionary|
+		Examples:
+			{'blue': "#0000ff", 'red': "#ff0000"}
+			#{blue: "#0000ff", red: "#ff0000"}
+
+Funcref		A reference to a function |Funcref|.
+		Example: function("strlen")
+		It can be bound to a dictionary and arguments, it then works
+		like a Partial.
+		Example: function("Callback", [arg], myDict)
+
+Special		|v:false|, |v:true|, |v:none| and |v:null|.  *Special*
+
+Job		Used for a job, see |job_start()|. *Job* *Jobs*
+
+Channel		Used for a channel, see |ch_open()|. *Channel* *Channels*
+
+Blob		Binary Large Object. Stores any sequence of bytes.  See |Blob|
+		for details
+		Example: 0zFF00ED015DAF
+		0z is an empty Blob.
+
+The Number and String types are converted automatically, depending on how they
+are used.
+
+Conversion from a Number to a String is by making the ASCII representation of
+the Number.  Examples:
+	Number 123	-->	String "123" ~
+	Number 0	-->	String "0" ~
+	Number -1	-->	String "-1" ~
+							*octal*
+Conversion from a String to a Number is done by converting the first digits to
+a number.  Hexadecimal "0xf9", Octal "017" or "0o17", and Binary "0b10"
+numbers are recognized (NOTE: when using |scriptversion-4| octal with a
+leading "0" is not recognized).  If the String doesn't start with digits, the
+result is zero.
+Examples:
+	String "456"	-->	Number 456 ~
+	String "6bar"	-->	Number 6 ~
+	String "foo"	-->	Number 0 ~
+	String "0xf1"	-->	Number 241 ~
+	String "0100"	-->	Number 64 ~
+	String "0o100"	-->	Number 64 ~
+	String "0b101"	-->	Number 5 ~
+	String "-8"	-->	Number -8 ~
+	String "+8"	-->	Number 0 ~
+
+To force conversion from String to Number, add zero to it: >
+	:echo "0100" + 0
+<	64 ~
+
+To avoid a leading zero to cause octal conversion, or for using a different
+base, use |str2nr()|.
+
+						*TRUE* *FALSE* *Boolean*
+For boolean operators Numbers are used.  Zero is FALSE, non-zero is TRUE.
+You can also use |v:false| and |v:true|.  When TRUE is returned from a
+function it is the Number one, FALSE is the number zero.
+
+Note that in the command: >
+	:if "foo"
+	:" NOT executed
+"foo" is converted to 0, which means FALSE.  If the string starts with a
+non-zero number it means TRUE: >
+	:if "8foo"
+	:" executed
+To test for a non-empty string, use empty(): >
+	:if !empty("foo")
+<
+							*non-zero-arg*
+Function arguments often behave slightly different from |TRUE|: If the
+argument is present and it evaluates to a non-zero Number, |v:true| or a
+non-empty String, then the value is considered to be TRUE.
+Note that " " and "0" are also non-empty strings, thus considered to be TRUE.
+A List, Dictionary or Float is not a Number or String, thus evaluate to FALSE.
+
+		*E745* *E728* *E703* *E729* *E730* *E731* *E908* *E910* *E913*
+		*E974* *E975* *E976*
+|List|, |Dictionary|, |Funcref|, |Job|, |Channel| and |Blob| types are not
+automatically converted.
+
+							*E805* *E806* *E808*
+When mixing Number and Float the Number is converted to Float.  Otherwise
+there is no automatic conversion of Float.  You can use str2float() for String
+to Float, printf() for Float to String and float2nr() for Float to Number.
+
+			*E891* *E892* *E893* *E894* *E907* *E911* *E914*
+When expecting a Float a Number can also be used, but nothing else.
+
+						*no-type-checking*
+You will not get an error if you try to change the type of a variable.
+
+
+1.2 Function references ~
+					*Funcref* *E695* *E718*
+A Funcref variable is obtained with the |function()| function, the |funcref()|
+function or created with the lambda expression |expr-lambda|.  It can be used
+in an expression in the place of a function name, before the parenthesis
+around the arguments, to invoke the function it refers to.  Example: >
+
+	:let Fn = function("MyFunc")
+	:echo Fn()
+<							*E704* *E705* *E707*
+A Funcref variable must start with a capital, "s:", "w:", "t:" or "b:".  You
+can use "g:" but the following name must still start with a capital.  You
+cannot have both a Funcref variable and a function with the same name.
+
+A special case is defining a function and directly assigning its Funcref to a
+Dictionary entry.  Example: >
+	:function dict.init() dict
+	:   let self.val = 0
+	:endfunction
+
+The key of the Dictionary can start with a lower case letter.  The actual
+function name is not used here.  Also see |numbered-function|.
+
+A Funcref can also be used with the |:call| command: >
+	:call Fn()
+	:call dict.init()
+
+The name of the referenced function can be obtained with |string()|. >
+	:let func = string(Fn)
+
+You can use |call()| to invoke a Funcref and use a list variable for the
+arguments: >
+	:let r = call(Fn, mylist)
+<
+								*Partial*
+A Funcref optionally binds a Dictionary and/or arguments.  This is also called
+a Partial.  This is created by passing the Dictionary and/or arguments to
+function() or funcref().  When calling the function the Dictionary and/or
+arguments will be passed to the function.  Example: >
+
+	let Cb = function('Callback', ['foo'], myDict)
+	call Cb('bar')
+
+This will invoke the function as if using: >
+	call myDict.Callback('foo', 'bar')
+
+This is very useful when passing a function around, e.g. in the arguments of
+|ch_open()|.
+
+Note that binding a function to a Dictionary also happens when the function is
+a member of the Dictionary: >
+
+	let myDict.myFunction = MyFunction
+	call myDict.myFunction()
+
+Here MyFunction() will get myDict passed as "self".  This happens when the
+"myFunction" member is accessed.  When making assigning "myFunction" to
+otherDict and calling it, it will be bound to otherDict: >
+
+	let otherDict.myFunction = myDict.myFunction
+	call otherDict.myFunction()
+
+Now "self" will be "otherDict".  But when the dictionary was bound explicitly
+this won't happen: >
+
+	let myDict.myFunction = function(MyFunction, myDict)
+	let otherDict.myFunction = myDict.myFunction
+	call otherDict.myFunction()
+
+Here "self" will be "myDict", because it was bound explicitly.
+
+
+1.3 Lists ~
+						*list* *List* *Lists* *E686*
+A List is an ordered sequence of items.  An item can be of any type.  Items
+can be accessed by their index number.  Items can be added and removed at any
+position in the sequence.
+
+
+List creation ~
+							*E696* *E697*
+A List is created with a comma separated list of items in square brackets.
+Examples: >
+	:let mylist = [1, two, 3, "four"]
+	:let emptylist = []
+
+An item can be any expression.  Using a List for an item creates a
+List of Lists: >
+	:let nestlist = [[11, 12], [21, 22], [31, 32]]
+
+An extra comma after the last item is ignored.
+
+
+List index ~
+							*list-index* *E684*
+An item in the List can be accessed by putting the index in square brackets
+after the List.  Indexes are zero-based, thus the first item has index zero. >
+	:let item = mylist[0]		" get the first item: 1
+	:let item = mylist[2]		" get the third item: 3
+
+When the resulting item is a list this can be repeated: >
+	:let item = nestlist[0][1]	" get the first list, second item: 12
+<
+A negative index is counted from the end.  Index -1 refers to the last item in
+the List, -2 to the last but one item, etc. >
+	:let last = mylist[-1]		" get the last item: "four"
+
+To avoid an error for an invalid index use the |get()| function.  When an item
+is not available it returns zero or the default value you specify: >
+	:echo get(mylist, idx)
+	:echo get(mylist, idx, "NONE")
+
+
+List concatenation ~
+
+Two lists can be concatenated with the "+" operator: >
+	:let longlist = mylist + [5, 6]
+	:let mylist += [7, 8]
+
+To prepend or append an item turn the item into a list by putting [] around
+it.  To change a list in-place see |list-modification| below.
+
+
+Sublist ~
+							*sublist*
+A part of the List can be obtained by specifying the first and last index,
+separated by a colon in square brackets: >
+	:let shortlist = mylist[2:-1]	" get List [3, "four"]
+
+Omitting the first index is similar to zero.  Omitting the last index is
+similar to -1. >
+	:let endlist = mylist[2:]	" from item 2 to the end: [3, "four"]
+	:let shortlist = mylist[2:2]	" List with one item: [3]
+	:let otherlist = mylist[:]	" make a copy of the List
+
+If the first index is beyond the last item of the List or the second item is
+before the first item, the result is an empty list.  There is no error
+message.
+
+If the second index is equal to or greater than the length of the list the
+length minus one is used: >
+	:let mylist = [0, 1, 2, 3]
+	:echo mylist[2:8]		" result: [2, 3]
+
+NOTE: mylist[s:e] means using the variable "s:e" as index.  Watch out for
+using a single letter variable before the ":".  Insert a space when needed:
+mylist[s : e].
+
+
+List identity ~
+							*list-identity*
+When variable "aa" is a list and you assign it to another variable "bb", both
+variables refer to the same list.  Thus changing the list "aa" will also
+change "bb": >
+	:let aa = [1, 2, 3]
+	:let bb = aa
+	:call add(aa, 4)
+	:echo bb
+<	[1, 2, 3, 4]
+
+Making a copy of a list is done with the |copy()| function.  Using [:] also
+works, as explained above.  This creates a shallow copy of the list: Changing
+a list item in the list will also change the item in the copied list: >
+	:let aa = [[1, 'a'], 2, 3]
+	:let bb = copy(aa)
+	:call add(aa, 4)
+	:let aa[0][1] = 'aaa'
+	:echo aa
+<	[[1, aaa], 2, 3, 4] >
+	:echo bb
+<	[[1, aaa], 2, 3]
+
+To make a completely independent list use |deepcopy()|.  This also makes a
+copy of the values in the list, recursively.  Up to a hundred levels deep.
+
+The operator "is" can be used to check if two variables refer to the same
+List.  "isnot" does the opposite.  In contrast "==" compares if two lists have
+the same value. >
+	:let alist = [1, 2, 3]
+	:let blist = [1, 2, 3]
+	:echo alist is blist
+<	0 >
+	:echo alist == blist
+<	1
+
+Note about comparing lists: Two lists are considered equal if they have the
+same length and all items compare equal, as with using "==".  There is one
+exception: When comparing a number with a string they are considered
+different.  There is no automatic type conversion, as with using "==" on
+variables.  Example: >
+	echo 4 == "4"
+<	1 >
+	echo [4] == ["4"]
+<	0
+
+Thus comparing Lists is more strict than comparing numbers and strings.  You
+can compare simple values this way too by putting them in a list: >
+
+	:let a = 5
+	:let b = "5"
+	:echo a == b
+<	1 >
+	:echo [a] == [b]
+<	0
+
+
+List unpack ~
+
+To unpack the items in a list to individual variables, put the variables in
+square brackets, like list items: >
+	:let [var1, var2] = mylist
+
+When the number of variables does not match the number of items in the list
+this produces an error.  To handle any extra items from the list append ";"
+and a variable name: >
+	:let [var1, var2; rest] = mylist
+
+This works like: >
+	:let var1 = mylist[0]
+	:let var2 = mylist[1]
+	:let rest = mylist[2:]
+
+Except that there is no error if there are only two items.  "rest" will be an
+empty list then.
+
+
+List modification ~
+							*list-modification*
+To change a specific item of a list use |:let| this way: >
+	:let list[4] = "four"
+	:let listlist[0][3] = item
+
+To change part of a list you can specify the first and last item to be
+modified.  The value must at least have the number of items in the range: >
+	:let list[3:5] = [3, 4, 5]
+
+Adding and removing items from a list is done with functions.  Here are a few
+examples: >
+	:call insert(list, 'a')		" prepend item 'a'
+	:call insert(list, 'a', 3)	" insert item 'a' before list[3]
+	:call add(list, "new")		" append String item
+	:call add(list, [1, 2])		" append a List as one new item
+	:call extend(list, [1, 2])	" extend the list with two more items
+	:let i = remove(list, 3)	" remove item 3
+	:unlet list[3]			" idem
+	:let l = remove(list, 3, -1)	" remove items 3 to last item
+	:unlet list[3 : ]		" idem
+	:call filter(list, 'v:val !~ "x"')  " remove items with an 'x'
+
+Changing the order of items in a list: >
+	:call sort(list)		" sort a list alphabetically
+	:call reverse(list)		" reverse the order of items
+	:call uniq(sort(list))		" sort and remove duplicates
+
+
+For loop ~
+
+The |:for| loop executes commands for each item in a list.  A variable is set
+to each item in the list in sequence.  Example: >
+	:for item in mylist
+	:   call Doit(item)
+	:endfor
+
+This works like: >
+	:let index = 0
+	:while index < len(mylist)
+	:   let item = mylist[index]
+	:   :call Doit(item)
+	:   let index = index + 1
+	:endwhile
+
+If all you want to do is modify each item in the list then the |map()|
+function will be a simpler method than a for loop.
+
+Just like the |:let| command, |:for| also accepts a list of variables.  This
+requires the argument to be a list of lists. >
+	:for [lnum, col] in [[1, 3], [2, 8], [3, 0]]
+	:   call Doit(lnum, col)
+	:endfor
+
+This works like a |:let| command is done for each list item.  Again, the types
+must remain the same to avoid an error.
+
+It is also possible to put remaining items in a List variable: >
+	:for [i, j; rest] in listlist
+	:   call Doit(i, j)
+	:   if !empty(rest)
+	:      echo "remainder: " . string(rest)
+	:   endif
+	:endfor
+
+
+List functions ~
+						*E714*
+Functions that are useful with a List: >
+	:let r = call(funcname, list)	" call a function with an argument list
+	:if empty(list)			" check if list is empty
+	:let l = len(list)		" number of items in list
+	:let big = max(list)		" maximum value in list
+	:let small = min(list)		" minimum value in list
+	:let xs = count(list, 'x')	" count nr of times 'x' appears in list
+	:let i = index(list, 'x')	" index of first 'x' in list
+	:let lines = getline(1, 10)	" get ten text lines from buffer
+	:call append('$', lines)	" append text lines in buffer
+	:let list = split("a b c")	" create list from items in a string
+	:let string = join(list, ', ')	" create string from list items
+	:let s = string(list)		" String representation of list
+	:call map(list, '">> " . v:val')  " prepend ">> " to each item
+
+Don't forget that a combination of features can make things simple.  For
+example, to add up all the numbers in a list: >
+	:exe 'let sum = ' . join(nrlist, '+')
+
+
+1.4 Dictionaries ~
+				*dict* *Dict* *Dictionaries* *Dictionary*
+A Dictionary is an associative array: Each entry has a key and a value.  The
+entry can be located with the key.  The entries are stored without a specific
+ordering.
+
+
+Dictionary creation ~
+						*E720* *E721* *E722* *E723*
+A Dictionary is created with a comma separated list of entries in curly
+braces.  Each entry has a key and a value, separated by a colon.  Each key can
+only appear once.  Examples: >
+	:let mydict = {1: 'one', 2: 'two', 3: 'three'}
+	:let emptydict = {}
+<							*E713* *E716* *E717*
+A key is always a String.  You can use a Number, it will be converted to a
+String automatically.  Thus the String '4' and the number 4 will find the same
+entry.  Note that the String '04' and the Number 04 are different, since the
+Number will be converted to the String '4'.  The empty string can also be used
+as a key.
+						*literal-Dict* *#{}*
+To avoid having to put quotes around every key the #{} form can be used.  This
+does require the key to consist only of ASCII letters, digits, '-' and '_'.
+Example: >
+	:let mydict = #{zero: 0, one_key: 1, two-key: 2, 333: 3}
+Note that 333 here is the string "333".  Empty keys are not possible with #{}.
+
+A value can be any expression.  Using a Dictionary for a value creates a
+nested Dictionary: >
+	:let nestdict = {1: {11: 'a', 12: 'b'}, 2: {21: 'c'}}
+
+An extra comma after the last entry is ignored.
+
+
+Accessing entries ~
+
+The normal way to access an entry is by putting the key in square brackets: >
+	:let val = mydict["one"]
+	:let mydict["four"] = 4
+
+You can add new entries to an existing Dictionary this way, unlike Lists.
+
+For keys that consist entirely of letters, digits and underscore the following
+form can be used |expr-entry|: >
+	:let val = mydict.one
+	:let mydict.four = 4
+
+Since an entry can be any type, also a List and a Dictionary, the indexing and
+key lookup can be repeated: >
+	:echo dict.key[idx].key
+
+
+Dictionary to List conversion ~
+
+You may want to loop over the entries in a dictionary.  For this you need to
+turn the Dictionary into a List and pass it to |:for|.
+
+Most often you want to loop over the keys, using the |keys()| function: >
+	:for key in keys(mydict)
+	:   echo key . ': ' . mydict[key]
+	:endfor
+
+The List of keys is unsorted.  You may want to sort them first: >
+	:for key in sort(keys(mydict))
+
+To loop over the values use the |values()| function:  >
+	:for v in values(mydict)
+	:   echo "value: " . v
+	:endfor
+
+If you want both the key and the value use the |items()| function.  It returns
+a List in which each item is a List with two items, the key and the value: >
+	:for [key, value] in items(mydict)
+	:   echo key . ': ' . value
+	:endfor
+
+
+Dictionary identity ~
+							*dict-identity*
+Just like Lists you need to use |copy()| and |deepcopy()| to make a copy of a
+Dictionary.  Otherwise, assignment results in referring to the same
+Dictionary: >
+	:let onedict = {'a': 1, 'b': 2}
+	:let adict = onedict
+	:let adict['a'] = 11
+	:echo onedict['a']
+	11
+
+Two Dictionaries compare equal if all the key-value pairs compare equal.  For
+more info see |list-identity|.
+
+
+Dictionary modification ~
+							*dict-modification*
+To change an already existing entry of a Dictionary, or to add a new entry,
+use |:let| this way: >
+	:let dict[4] = "four"
+	:let dict['one'] = item
+
+Removing an entry from a Dictionary is done with |remove()| or |:unlet|.
+Three ways to remove the entry with key "aaa" from dict: >
+	:let i = remove(dict, 'aaa')
+	:unlet dict.aaa
+	:unlet dict['aaa']
+
+Merging a Dictionary with another is done with |extend()|: >
+	:call extend(adict, bdict)
+This extends adict with all entries from bdict.  Duplicate keys cause entries
+in adict to be overwritten.  An optional third argument can change this.
+Note that the order of entries in a Dictionary is irrelevant, thus don't
+expect ":echo adict" to show the items from bdict after the older entries in
+adict.
+
+Weeding out entries from a Dictionary can be done with |filter()|: >
+	:call filter(dict, 'v:val =~ "x"')
+This removes all entries from "dict" with a value not matching 'x'.
+This can also be used to remove all entries: >
+	call filter(dict, 0)
+
+
+Dictionary function ~
+				*Dictionary-function* *self* *E725* *E862*
+When a function is defined with the "dict" attribute it can be used in a
+special way with a dictionary.  Example: >
+	:function Mylen() dict
+	:   return len(self.data)
+	:endfunction
+	:let mydict = {'data': [0, 1, 2, 3], 'len': function("Mylen")}
+	:echo mydict.len()
+
+This is like a method in object oriented programming.  The entry in the
+Dictionary is a |Funcref|.  The local variable "self" refers to the dictionary
+the function was invoked from.
+
+It is also possible to add a function without the "dict" attribute as a
+Funcref to a Dictionary, but the "self" variable is not available then.
+
+				*numbered-function* *anonymous-function*
+To avoid the extra name for the function it can be defined and directly
+assigned to a Dictionary in this way: >
+	:let mydict = {'data': [0, 1, 2, 3]}
+	:function mydict.len()
+	:   return len(self.data)
+	:endfunction
+	:echo mydict.len()
+
+The function will then get a number and the value of dict.len is a |Funcref|
+that references this function.  The function can only be used through a
+|Funcref|.  It will automatically be deleted when there is no |Funcref|
+remaining that refers to it.
+
+It is not necessary to use the "dict" attribute for a numbered function.
+
+If you get an error for a numbered function, you can find out what it is with
+a trick.  Assuming the function is 42, the command is: >
+	:function {42}
+
+
+Functions for Dictionaries ~
+							*E715*
+Functions that can be used with a Dictionary: >
+	:if has_key(dict, 'foo')	" TRUE if dict has entry with key "foo"
+	:if empty(dict)			" TRUE if dict is empty
+	:let l = len(dict)		" number of items in dict
+	:let big = max(dict)		" maximum value in dict
+	:let small = min(dict)		" minimum value in dict
+	:let xs = count(dict, 'x')	" count nr of times 'x' appears in dict
+	:let s = string(dict)		" String representation of dict
+	:call map(dict, '">> " . v:val')  " prepend ">> " to each item
+
+
+1.5 Blobs ~
+						*blob* *Blob* *Blobs* *E978*
+A Blob is a binary object.  It can be used to read an image from a file and
+send it over a channel, for example.
+
+A Blob mostly behaves like a |List| of numbers, where each number has the
+value of an 8-bit byte, from 0 to 255.
+
+
+Blob creation ~
+
+A Blob can be created with a |blob-literal|: >
+	:let b = 0zFF00ED015DAF
+Dots can be inserted between bytes (pair of hex characters) for readability,
+they don't change the value: >
+	:let b = 0zFF00.ED01.5DAF
+
+A blob can be read from a file with |readfile()| passing the {type} argument
+set to "B", for example: >
+	:let b = readfile('image.png', 'B')
+
+A blob can be read from a channel with the |ch_readblob()| function.
+
+
+Blob index ~
+							*blob-index* *E979*
+A byte in the Blob can be accessed by putting the index in square brackets
+after the Blob.  Indexes are zero-based, thus the first byte has index zero. >
+	:let myblob = 0z00112233
+	:let byte = myblob[0]		" get the first byte: 0x00
+	:let byte = myblob[2]		" get the third byte: 0x22
+
+A negative index is counted from the end.  Index -1 refers to the last byte in
+the Blob, -2 to the last but one byte, etc. >
+	:let last = myblob[-1]		" get the last byte: 0x33
+
+To avoid an error for an invalid index use the |get()| function.  When an item
+is not available it returns -1 or the default value you specify: >
+	:echo get(myblob, idx)
+	:echo get(myblob, idx, 999)
+
+
+Blob iteration ~
+
+The |:for| loop executes commands for each byte of a Blob.  The loop variable is
+set to each byte in the Blob.  Example: >
+	:for byte in 0z112233
+	:   call Doit(byte)
+	:endfor
+This calls Doit() with 0x11, 0x22 and 0x33.
+
+
+Blob concatenation ~
+
+Two blobs can be concatenated with the "+" operator: >
+	:let longblob = myblob + 0z4455
+	:let myblob += 0z6677
+
+To change a blob in-place see |blob-modification| below.
+
+
+Part of a blob ~
+
+A part of the Blob can be obtained by specifying the first and last index,
+separated by a colon in square brackets: >
+	:let myblob = 0z00112233
+	:let shortblob = myblob[1:2]	" get 0z1122
+	:let shortblob = myblob[2:-1]	" get 0z2233
+
+Omitting the first index is similar to zero.  Omitting the last index is
+similar to -1. >
+	:let endblob = myblob[2:]	" from item 2 to the end: 0z2233
+	:let shortblob = myblob[2:2]	" Blob with one byte: 0z22
+	:let otherblob = myblob[:]	" make a copy of the Blob
+
+If the first index is beyond the last byte of the Blob or the second index is
+before the first index, the result is an empty Blob.  There is no error
+message.
+
+If the second index is equal to or greater than the length of the list the
+length minus one is used: >
+	:echo myblob[2:8]		" result: 0z2233
+
+
+Blob modification ~
+							*blob-modification*
+To change a specific byte of a blob use |:let| this way: >
+	:let blob[4] = 0x44
+
+When the index is just one beyond the end of the Blob, it is appended. Any
+higher index is an error.
+
+To change a sequence of bytes the [:] notation can be used: >
+	let blob[1:3] = 0z445566
+The length of the replaced bytes must be exactly the same as the value
+provided. *E972*
+
+To change part of a blob you can specify the first and last byte to be
+modified.  The value must have the same number of bytes in the range: >
+	:let blob[3:5] = 0z334455
+
+You can also use the functions |add()|, |remove()| and |insert()|.
+
+
+Blob identity ~
+
+Blobs can be compared for equality: >
+	if blob == 0z001122
+And for equal identity: >
+	if blob is otherblob
+<							*blob-identity* *E977*
+When variable "aa" is a Blob and you assign it to another variable "bb", both
+variables refer to the same Blob.  Then the "is" operator returns true.
+
+When making a copy using [:] or |copy()| the values are the same, but the
+identity is different: >
+	:let blob = 0z112233
+	:let blob2 = blob
+	:echo blob == blob2
+<	1 >
+	:echo blob is blob2
+<	1 >
+	:let blob3 = blob[:]
+	:echo blob == blob3
+<	1 >
+	:echo blob is blob3
+<	0
+
+Making a copy of a Blob is done with the |copy()| function.  Using [:] also
+works, as explained above.
+
+
+1.6 More about variables ~
+							*more-variables*
+If you need to know the type of a variable or expression, use the |type()|
+function.
+
+When the '!' flag is included in the 'viminfo' option, global variables that
+start with an uppercase letter, and don't contain a lowercase letter, are
+stored in the viminfo file |viminfo-file|.
+
+When the 'sessionoptions' option contains "global", global variables that
+start with an uppercase letter and contain at least one lowercase letter are
+stored in the session file |session-file|.
+
+variable name		can be stored where ~
+my_var_6		not
+My_Var_6		session file
+MY_VAR_6		viminfo file
+
+
+It's possible to form a variable name with curly braces, see
+|curly-braces-names|.
+

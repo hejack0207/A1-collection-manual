@@ -1,0 +1,135 @@
+2. Special special keys				*ins-special-special*
+
+The following keys are special.  They stop the current insert, do something,
+and then restart insertion.  This means you can do something without getting
+out of Insert mode.  This is very handy if you prefer to use the Insert mode
+all the time, just like editors that don't have a separate Normal mode.  You
+may also want to set the 'backspace' option to "indent,eol,start" and set the
+'insertmode' option.  You can use CTRL-O if you want to map a function key to
+a command.
+
+The changes (inserted or deleted characters) before and after these keys can
+be undone separately.  Only the last change can be redone and always behaves
+like an "i" command.
+
+char		action	~
+-----------------------------------------------------------------------
+<Up>		cursor one line up			     *i_<Up>*
+<Down>		cursor one line down			     *i_<Down>*
+CTRL-G <Up>	cursor one line up, insert start column	     *i_CTRL-G_<Up>*
+CTRL-G k	cursor one line up, insert start column	     *i_CTRL-G_k*
+CTRL-G CTRL-K	cursor one line up, insert start column	     *i_CTRL-G_CTRL-K*
+CTRL-G <Down>	cursor one line down, insert start column    *i_CTRL-G_<Down>*
+CTRL-G j	cursor one line down, insert start column    *i_CTRL-G_j*
+CTRL-G CTRL-J	cursor one line down, insert start column    *i_CTRL-G_CTRL-J*
+<Left>		cursor one character left		     *i_<Left>*
+<Right>		cursor one character right		     *i_<Right>*
+<S-Left>	cursor one word back (like "b" command)	     *i_<S-Left>*
+<C-Left>	cursor one word back (like "b" command)	     *i_<C-Left>*
+<S-Right>	cursor one word forward (like "w" command)   *i_<S-Right>*
+<C-Right>	cursor one word forward (like "w" command)   *i_<C-Right>*
+<Home>		cursor to first char in the line	     *i_<Home>*
+<End>		cursor to after last char in the line	     *i_<End>*
+<C-Home>	cursor to first char in the file	     *i_<C-Home>*
+<C-End>		cursor to after last char in the file	     *i_<C-End>*
+<LeftMouse>	cursor to position of mouse click	     *i_<LeftMouse>*
+<S-Up>		move window one page up			     *i_<S-Up>*
+<PageUp>	move window one page up			     *i_<PageUp>*
+<S-Down>	move window one page down		     *i_<S-Down>*
+<PageDown>	move window one page down		     *i_<PageDown>*
+<ScrollWheelDown>    move window three lines down	*i_<ScrollWheelDown>*
+<S-ScrollWheelDown>  move window one page down		*i_<S-ScrollWheelDown>*
+<ScrollWheelUp>      move window three lines up		*i_<ScrollWheelUp>*
+<S-ScrollWheelUp>    move window one page up		*i_<S-ScrollWheelUp>*
+<ScrollWheelLeft>    move window six columns left	*i_<ScrollWheelLeft>*
+<S-ScrollWheelLeft>  move window one page left		*i_<S-ScrollWheelLeft>*
+<ScrollWheelRight>   move window six columns right	*i_<ScrollWheelRight>*
+<S-ScrollWheelRight> move window one page right		*i_<S-ScrollWheelRight>*
+CTRL-O		execute one command, return to Insert mode   *i_CTRL-O*
+CTRL-\ CTRL-O	like CTRL-O but don't move the cursor	     *i_CTRL-\_CTRL-O*
+CTRL-L		when 'insertmode' is set: go to Normal mode  *i_CTRL-L*
+CTRL-G u	break undo sequence, start new change	     *i_CTRL-G_u*
+CTRL-G U	don't break undo with next left/right cursor *i_CTRL-G_U*
+		movement, if the cursor stays within the
+		same line
+-----------------------------------------------------------------------
+
+Note: If the cursor keys take you out of Insert mode, check the 'noesckeys'
+option.
+
+The CTRL-O command sometimes has a side effect: If the cursor was beyond the
+end of the line, it will be put on the last character in the line.  In
+mappings it's often better to use <Esc> (first put an "x" in the text, <Esc>
+will then always put the cursor on it).  Or use CTRL-\ CTRL-O, but then
+beware of the cursor possibly being beyond the end of the line.  Note that the
+command following CTRL-\ CTRL-O can still move the cursor, it is not restored
+to its original position.
+
+The CTRL-O command takes you to Normal mode.  If you then use a command enter
+Insert mode again it normally doesn't nest.  Thus when typing "a<C-O>a" and
+then <Esc> takes you back to Normal mode, you do not need to type <Esc> twice.
+An exception is when not typing the command, e.g. when executing a mapping or
+sourcing a script.  This makes mappings work that briefly switch to Insert
+mode.
+
+The shifted cursor keys are not available on all terminals.
+
+Another side effect is that a count specified before the "i" or "a" command is
+ignored.  That is because repeating the effect of the command after CTRL-O is
+too complicated.
+
+An example for using CTRL-G u: >
+
+	:inoremap <C-H> <C-G>u<C-H>
+
+This redefines the backspace key to start a new undo sequence.  You can now
+undo the effect of the backspace key, without changing what you typed before
+that, with CTRL-O u.  Another example: >
+
+	:inoremap <CR> <C-]><C-G>u<CR>
+
+This breaks undo at each line break.  It also expands abbreviations before
+this.
+
+An example for using CTRL-G U: >
+
+	inoremap <Left>  <C-G>U<Left>
+	inoremap <Right> <C-G>U<Right>
+	inoremap <expr> <Home> col('.') == match(getline('.'), '\S') + 1 ?
+	 \ repeat('<C-G>U<Left>', col('.') - 1) :
+	 \ (col('.') < match(getline('.'), '\S') ?
+	 \     repeat('<C-G>U<Right>', match(getline('.'), '\S') + 0) :
+	 \     repeat('<C-G>U<Left>', col('.') - 1 - match(getline('.'), '\S')))
+	inoremap <expr> <End> repeat('<C-G>U<Right>', col('$') - col('.'))
+	inoremap ( ()<C-G>U<Left>
+
+This makes it possible to use the cursor keys in Insert mode, without breaking
+the undo sequence and therefore using |.| (redo) will work as expected.
+Also entering a text like (with the "(" mapping from above):
+
+   Lorem ipsum (dolor
+
+will be repeatable by using |.| to the expected
+
+   Lorem ipsum (dolor)
+
+Using CTRL-O splits undo: the text typed before and after it is undone
+separately.  If you want to avoid this (e.g., in a mapping) you might be able
+to use CTRL-R = |i_CTRL-R|.  E.g., to call a function: >
+	:imap <F2> <C-R>=MyFunc()<CR>
+
+When the 'whichwrap' option is set appropriately, the <Left> and <Right>
+keys on the first/last character in the line make the cursor wrap to the
+previous/next line.
+
+The CTRL-G j and CTRL-G k commands can be used to insert text in front of a
+column.  Example: >
+   int i;
+   int j;
+Position the cursor on the first "int", type "istatic <C-G>j       ".  The
+result is: >
+   static int i;
+	  int j;
+When inserting the same text in front of the column in every line, use the
+Visual blockwise command "I" |v_b_I|.
+

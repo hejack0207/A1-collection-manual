@@ -1,0 +1,200 @@
+3. Generating a spell file				*spell-mkspell*
+
+Vim uses a binary file format for spelling.  This greatly speeds up loading
+the word list and keeps it small.
+						    *.aff* *.dic* *Myspell*
+You can create a Vim spell file from the .aff and .dic files that Myspell
+uses.  Myspell is used by OpenOffice.org and Mozilla. The OpenOffice .oxt
+files are zip files which contain the .aff and .dic files. You should be able
+to find them here:
+	http://extensions.services.openoffice.org/dictionary
+The older, OpenOffice 2 files may be used if this doesn't work:
+	http://wiki.services.openoffice.org/wiki/Dictionaries
+You can also use a plain word list.  The results are the same, the choice
+depends on what word lists you can find.
+
+If you install Aap (from www.a-a-p.org) you can use the recipes in the
+runtime/spell/??/ directories.  Aap will take care of downloading the files,
+apply patches needed for Vim and build the .spl file.
+
+Make sure your current locale is set properly, otherwise Vim doesn't know what
+characters are upper/lower case letters.  If the locale isn't available (e.g.,
+when using an MS-Windows codepage on Unix) add tables to the .aff file
+|spell-affix-chars|.  If the .aff file doesn't define a table then the word
+table of the currently active spelling is used.  If spelling is not active
+then Vim will try to guess.
+
+							*:mksp* *:mkspell*
+:mksp[ell][!] [-ascii] {outname} {inname} ...
+			Generate a Vim spell file from word lists.  Example: >
+		:mkspell /tmp/nl nl_NL.words
+<								*E751*
+			When {outname} ends in ".spl" it is used as the output
+			file name.  Otherwise it should be a language name,
+			such as "en", without the region name.  The file
+			written will be "{outname}.{encoding}.spl", where
+			{encoding} is the value of the 'encoding' option.
+
+			When the output file already exists [!] must be used
+			to overwrite it.
+
+			When the [-ascii] argument is present, words with
+			non-ascii characters are skipped.  The resulting file
+			ends in "ascii.spl".
+
+			The input can be the Myspell format files {inname}.aff
+			and {inname}.dic.  If {inname}.aff does not exist then
+			{inname} is used as the file name of a plain word
+			list.
+
+			Multiple {inname} arguments can be given to combine
+			regions into one Vim spell file.  Example: >
+		:mkspell ~/.vim/spell/en /tmp/en_US /tmp/en_CA /tmp/en_AU
+<			This combines the English word lists for US, CA and AU
+			into one en.spl file.
+			Up to eight regions can be combined. *E754* *E755*
+			The REP and SAL items of the first .aff file where
+			they appear are used. |spell-REP| |spell-SAL|
+								*E845*
+			This command uses a lot of memory, required to find
+			the optimal word tree (Polish, Italian and Hungarian
+			require several hundred Mbyte).  The final result will
+			be much smaller, because compression is used.  To
+			avoid running out of memory compression will be done
+			now and then.  This can be tuned with the 'mkspellmem'
+			option.
+
+			After the spell file was written and it was being used
+			in a buffer it will be reloaded automatically.
+
+:mksp[ell] [-ascii] {name}.{enc}.add
+			Like ":mkspell" above, using {name}.{enc}.add as the
+			input file and producing an output file in the same
+			directory that has ".spl" appended.
+
+:mksp[ell] [-ascii] {name}
+			Like ":mkspell" above, using {name} as the input file
+			and producing an output file in the same directory
+			that has ".{enc}.spl" appended.
+
+Vim will report the number of duplicate words.  This might be a mistake in the
+list of words.  But sometimes it is used to have different prefixes and
+suffixes for the same basic word to avoid them combining (e.g. Czech uses
+this).  If you want Vim to report all duplicate words set the 'verbose'
+option.
+
+Since you might want to change a Myspell word list for use with Vim the
+following procedure is recommended:
+
+1. Obtain the xx_YY.aff and xx_YY.dic files from Myspell.
+2. Make a copy of these files to xx_YY.orig.aff and xx_YY.orig.dic.
+3. Change the xx_YY.aff and xx_YY.dic files to remove bad words, add missing
+   words, define word characters with FOL/LOW/UPP, etc.  The distributed
+   "*.diff" files can be used.
+4. Start Vim with the right locale and use |:mkspell| to generate the Vim
+   spell file.
+5. Try out the spell file with ":set spell spelllang=xx" if you wrote it in
+   a spell directory in 'runtimepath', or ":set spelllang=xx.enc.spl" if you
+   wrote it somewhere else.
+
+When the Myspell files are updated you can merge the differences:
+1. Obtain the new Myspell files as xx_YY.new.aff and xx_UU.new.dic.
+2. Use Vimdiff to see what changed: >
+	vimdiff xx_YY.orig.dic xx_YY.new.dic
+3. Take over the changes you like in xx_YY.dic.
+   You may also need to change xx_YY.aff.
+4. Rename xx_YY.new.dic to xx_YY.orig.dic and xx_YY.new.aff to xx_YY.orig.aff.
+
+
+SPELL FILE VERSIONS					*E770* *E771* *E772*
+
+Spell checking is a relatively new feature in Vim, thus it's possible that the
+.spl file format will be changed to support more languages.  Vim will check
+the validity of the spell file and report anything wrong.
+
+	E771: Old spell file, needs to be updated ~
+This spell file is older than your Vim.  You need to update the .spl file.
+
+	E772: Spell file is for newer version of Vim ~
+This means the spell file was made for a later version of Vim.  You need to
+update Vim.
+
+	E770: Unsupported section in spell file ~
+This means the spell file was made for a later version of Vim and contains a
+section that is required for the spell file to work.  In this case it's
+probably a good idea to upgrade your Vim.
+
+
+SPELL FILE DUMP
+
+If for some reason you want to check what words are supported by the currently
+used spelling files, use this command:
+
+							*:spelldump* *:spelld*
+:spelld[ump]		Open a new window and fill it with all currently valid
+			words.  Compound words are not included.
+			Note: For some languages the result may be enormous,
+			causing Vim to run out of memory.
+
+:spelld[ump]!		Like ":spelldump" and include the word count.  This is
+			the number of times the word was found while
+			updating the screen.  Words that are in COMMON items
+			get a starting count of 10.
+
+The format of the word list is used |spell-wordlist-format|.  You should be
+able to read it with ":mkspell" to generate one .spl file that includes all
+the words.
+
+When all entries to 'spelllang' use the same regions or no regions at all then
+the region information is included in the dumped words.  Otherwise only words
+for the current region are included and no "/regions" line is generated.
+
+Comment lines with the name of the .spl file are used as a header above the
+words that were generated from that .spl file.
+
+
+SPELL FILE MISSING		*spell-SpellFileMissing* *spellfile.vim*
+
+If the spell file for the language you are using is not available, you will
+get an error message.  But if the "spellfile.vim" plugin is active it will
+offer you to download the spell file.  Just follow the instructions, it will
+ask you where to write the file (there must be a writable directory in
+'runtimepath' for this).
+
+The plugin has a default place where to look for spell files, on the Vim ftp
+server.  If you want to use another location or another protocol, set the
+g:spellfile_URL variable to the directory that holds the spell files.  The
+|netrw| plugin is used for getting the file, look there for the specific
+syntax of the URL.  Example: >
+	let g:spellfile_URL = 'http://ftp.vim.org/vim/runtime/spell'
+You may need to escape special characters.
+
+The plugin will only ask about downloading a language once.  If you want to
+try again anyway restart Vim, or set g:spellfile_URL to another value (e.g.,
+prepend a space).
+
+To avoid using the "spellfile.vim" plugin do this in your vimrc file: >
+
+	let loaded_spellfile_plugin = 1
+
+Instead of using the plugin you can define a |SpellFileMissing| autocommand to
+handle the missing file yourself.  You can use it like this: >
+
+	:au SpellFileMissing * call Download_spell_file(expand('<amatch>'))
+
+Thus the <amatch> item contains the name of the language.  Another important
+value is 'encoding', since every encoding has its own spell file.  With two
+exceptions:
+- For ISO-8859-15 (latin9) the name "latin1" is used (the encodings only
+  differ in characters not used in dictionary words).
+- The name "ascii" may also be used for some languages where the words use
+  only ASCII letters for most of the words.
+
+The default "spellfile.vim" plugin uses this autocommand, if you define your
+autocommand afterwards you may want to use ":au! SpellFileMissing" to overrule
+it.  If you define your autocommand before the plugin is loaded it will notice
+this and not do anything.
+							*E797*
+Note that the SpellFileMissing autocommand must not change or destroy the
+buffer the user was editing.
+

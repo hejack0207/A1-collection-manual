@@ -1,0 +1,74 @@
+4. Tcl window commands					*tcl-window-cmds*
+
+Window commands represent vim windows.  They are created by several commands:
+	::vim::window list			|tcl-window|
+	"windows" option of a buffer command	|tcl-buffer-windows|
+The ::vim::current(window) variable contains the name of the window command
+for the current window.  A window command is automatically deleted when the
+corresponding vim window is closed.
+
+Let's assume the name of the window command is stored in the Tcl variable "win",
+i.e. "$win" calls the command.  The following options are available: >
+
+	$win buffer		# Create Tcl command for window's buffer.
+	$win command {cmd}	# Execute Ex command in windows context.
+	$win cursor		# Get current cursor position.
+	$win cursor {var}	# Set cursor position from array variable.
+	$win cursor {row} {col}	# Set cursor position.
+	$win delcmd {cmd}	# Call Tcl command when window is closed.
+	$win expr {expr}	# Evaluate vim expression in windows context.
+	$win height		# Report the window's height.
+	$win height {n}		# Set the window's height.
+	$win option {opt} [val]	# Get/Set vim option in windows context.
+
+Options:
+	$win buffer					*tcl-window-buffer*
+	Creates a Tcl command for the window's buffer, and returns its name as
+	the result.  The name should be stored in a variable: >
+		set buf [$win buffer]
+<	$buf is now a valid Tcl command.  See |tcl-buffer-cmds| for the
+	available options.
+
+	$win cursor					*tcl-window-cursor*
+	$win cursor {var}
+	$win cursor {row} {col}
+	Without argument, reports the current cursor position as a string.
+	This can be converted to a Tcl array variable: >
+		array set here [$win cursor]
+<	"here(row)" and "here(column)" now contain the cursor position.
+	With a single argument, the argument is interpreted as the name of a
+	Tcl array variable, which must contain two elements "row" and "column".
+	These are used to set the cursor to the new position: >
+		$win cursor here	;# not $here !
+<	With two arguments, sets the cursor to the specified row and column: >
+		$win cursor $here(row) $here(column)
+<	Invalid positions result in a standard Tcl error, which can be caught
+	with "catch".  The row and column values depend on the "::vim::lbase"
+	variable.  See |tcl-var-lbase|.
+
+	$win delcmd {cmd}				*tcl-window-delcmd*
+	Registers the Tcl command {cmd} as a deletion callback for the window.
+	This command is executed (in the global scope) just before the window
+	is closed.  Complex commands should be build with "list": >
+		$win delcmd [list puts vimerr "window deleted"]
+<	See also |tcl-buffer-delcmd|.
+
+	$win height					*tcl-window-height*
+	$win height {n}
+	Without argument, reports the window's current height.  With an
+	argument, tries to set the window's height to {n}, then reports the
+	new height (which might be different from {n}).
+
+	$win command [-quiet] {cmd}			*tcl-window-command*
+	$win expr {expr}				*tcl-window-expr*
+	$win option {opt} [val]				*tcl-window-option*
+	These are similar to "::vim::command" etc., except that everything is
+	done in the context of the window represented by $win, instead of the
+	current window.  For example, setting an option that is marked 'local
+	to window' affects the window $win.  Anything that affects or queries
+	a buffer uses the buffer displayed in this window (i.e. the buffer
+	that is represented by "$win buffer").  See |tcl-command|, |tcl-expr|
+	and |tcl-option| for more information.
+	Example: >
+		$win option number on
+

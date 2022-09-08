@@ -1,0 +1,96 @@
+5. Channel commands					*channel-commands*
+
+With a JSON channel the process can send commands to Vim that will be
+handled by Vim internally, it does not require a handler for the channel.
+
+Possible commands are:				*E903* *E904* *E905*
+    ["redraw", {forced}]
+    ["ex",     {Ex command}]
+    ["normal", {Normal mode command}]
+    ["expr",   {expression}, {number}]
+    ["expr",   {expression}]
+    ["call",   {func name}, {argument list}, {number}]
+    ["call",   {func name}, {argument list}]
+
+With all of these: Be careful what these commands do!  You can easily
+interfere with what the user is doing.  To avoid trouble use |mode()| to check
+that the editor is in the expected state.  E.g., to send keys that must be
+inserted as text, not executed as a command:
+    ["ex","if mode() == 'i' | call feedkeys('ClassName') | endif"] ~
+
+Errors in these commands are normally not reported to avoid them messing up
+the display.  If you do want to see them, set the 'verbose' option to 3 or
+higher.
+
+
+Command "redraw" ~
+
+The other commands do not explicitly update the screen, so that you can send a
+sequence of commands without the cursor moving around.  A redraw can happen as
+a side effect of some commands.  You must end with the "redraw" command to
+show any changed text and show the cursor where it belongs.
+
+The argument is normally an empty string:
+	["redraw", ""] ~
+To first clear the screen pass "force":
+	["redraw", "force"] ~
+
+
+Command "ex" ~
+
+The "ex" command is executed as any Ex command.  There is no response for
+completion or error.  You could use functions in an |autoload| script:
+	["ex","call myscript#MyFunc(arg)"]
+
+You can also use "call |feedkeys()|" to insert any key sequence.
+
+When there is an error a message is written to the channel log, if it exists,
+and v:errmsg is set to the error.
+
+
+Command "normal" ~
+
+The "normal" command is executed like with ":normal!", commands are not
+mapped.  Example to open the folds under the cursor:
+	["normal" "zO"]
+
+
+Command "expr"  with response ~
+
+The "expr" command can be used to get the result of an expression.  For
+example, to get the number of lines in the current buffer:
+	["expr","line('$')", -2] ~
+
+It will send back the result of the expression:
+	[-2, "last line"] ~
+The format is:
+	[{number}, {result}]
+
+Here {number} is the same as what was in the request.  Use a negative number
+to avoid confusion with message that Vim sends.  Use a different number on
+every request to be able to match the request with the response.
+
+{result} is the result of the evaluation and is JSON encoded.  If the
+evaluation fails or the result can't be encoded in JSON it is the string
+"ERROR".
+
+
+Command "expr" without a response ~
+
+This command is similar to "expr" above, but does not send back any response.
+Example:
+	["expr","setline('$', ['one', 'two', 'three'])"] ~
+There is no third argument in the request.
+
+
+Command "call" ~
+
+This is similar to "expr", but instead of passing the whole expression as a
+string this passes the name of a function and a list of arguments.  This
+avoids the conversion of the arguments to a string and escaping and
+concatenating them.  Example:
+	["call", "line", ["$"], -2] ~
+
+Leave out the fourth argument if no response is to be sent:
+	["call", "setline", ["$", ["one", "two", "three"]]] ~
+

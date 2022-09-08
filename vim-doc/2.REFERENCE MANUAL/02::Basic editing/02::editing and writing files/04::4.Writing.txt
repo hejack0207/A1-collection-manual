@@ -1,0 +1,204 @@
+4. Writing					*writing* *save-file*
+
+Note: When the 'write' option is off, you are not able to write any file.
+
+							*:w* *:write*
+					*E502* *E503* *E504* *E505*
+					*E512* *E514* *E667* *E796* *E949*
+:w[rite] [++opt]	Write the whole buffer to the current file.  This is
+			the normal way to save changes to a file.  It fails
+			when the 'readonly' option is set or when there is
+			another reason why the file can't be written.
+			For ++opt see |++opt|, but only ++bin, ++nobin, ++ff
+			and ++enc are effective.
+
+:w[rite]! [++opt]	Like ":write", but forcefully write when 'readonly' is
+			set or there is another reason why writing was
+			refused.
+			Note: This may change the permission and ownership of
+			the file and break (symbolic) links.  Add the 'W' flag
+			to 'cpoptions' to avoid this.
+
+:[range]w[rite][!] [++opt]
+			Write the specified lines to the current file.  This
+			is unusual, because the file will not contain all
+			lines in the buffer.
+
+							*:w_f* *:write_f*
+:[range]w[rite] [++opt]	{file}
+			Write the specified lines to {file}, unless it
+			already exists and the 'writeany' option is off.
+
+							*:w!*
+:[range]w[rite]! [++opt] {file}
+			Write the specified lines to {file}.  Overwrite an
+			existing file.
+
+						*:w_a* *:write_a* *E494*
+:[range]w[rite][!] [++opt] >>
+			Append the specified lines to the current file.
+
+:[range]w[rite][!] [++opt] >> {file}
+			Append the specified lines to {file}.  '!' forces the
+			write even if file does not exist.
+
+							*:w_c* *:write_c*
+:[range]w[rite] [++opt] !{cmd}
+			Execute {cmd} with [range] lines as standard input
+			(note the space in front of the '!').  {cmd} is
+			executed like with ":!{cmd}", any '!' is replaced with
+			the previous command |:!|.
+
+The default [range] for the ":w" command is the whole buffer (1,$).  If you
+write the whole buffer, it is no longer considered changed.  When you
+write it to a different file with ":w somefile" it depends on the "+" flag in
+'cpoptions'.  When included, the write command will reset the 'modified' flag,
+even though the buffer itself may still be different from its file.
+
+If a file name is given with ":w" it becomes the alternate file.  This can be
+used, for example, when the write fails and you want to try again later with
+":w #".  This can be switched off by removing the 'A' flag from the
+'cpoptions' option.
+
+Note that the 'fsync' option matters here.  If it's set it may make writes
+slower (but safer).
+
+							*:sav* *:saveas*
+:sav[eas][!] [++opt] {file}
+			Save the current buffer under the name {file} and set
+			the filename of the current buffer to {file}.  The
+			previous name is used for the alternate file name.
+			The [!] is needed to overwrite an existing file.
+			When 'filetype' is empty filetype detection is done
+			with the new name, before the file is written.
+			When the write was successful 'readonly' is reset.
+
+							*:up* *:update*
+:[range]up[date][!] [++opt] [>>] [file]
+			Like ":write", but only write when the buffer has been
+			modified.
+
+
+WRITING WITH MULTIPLE BUFFERS				*buffer-write*
+
+							*:wa* *:wall*
+:wa[ll]			Write all changed buffers.  Buffers without a file
+			name cause an error message.  Buffers which are
+			readonly are not written.
+
+:wa[ll]!		Write all changed buffers, even the ones that are
+			readonly.  Buffers without a file name are not
+			written and cause an error message.
+
+
+Vim will warn you if you try to overwrite a file that has been changed
+elsewhere.  See |timestamp|.
+
+			    *backup* *E207* *E506* *E507* *E508* *E509* *E510*
+If you write to an existing file (but do not append) while the 'backup',
+'writebackup' or 'patchmode' option is on, a backup of the original file is
+made.  The file is either copied or renamed (see 'backupcopy').  After the
+file has been successfully written and when the 'writebackup' option is on and
+the 'backup' option is off, the backup file is deleted.  When the 'patchmode'
+option is on the backup file may be renamed.
+
+							*backup-table*
+'backup' 'writebackup'	action	~
+   off	     off	no backup made
+   off	     on		backup current file, deleted afterwards (default)
+   on	     off	delete old backup, backup current file
+   on	     on		delete old backup, backup current file
+
+When the 'backupskip' pattern matches with the name of the file which is
+written, no backup file is made.  The values of 'backup' and 'writebackup' are
+ignored then.
+
+When the 'backup' option is on, an old backup file (with the same name as the
+new backup file) will be deleted.  If 'backup' is not set, but 'writebackup'
+is set, an existing backup file will not be deleted.  The backup file that is
+made while the file is being written will have a different name.
+
+On some filesystems it's possible that in a crash you lose both the backup and
+the newly written file (it might be there but contain bogus data).  In that
+case try recovery, because the swap file is synced to disk and might still be
+there. |:recover|
+
+The directories given with the 'backupdir' option are used to put the backup
+file in.  (default: same directory as the written file).
+
+Whether the backup is a new file, which is a copy of the original file, or the
+original file renamed depends on the 'backupcopy' option.  See there for an
+explanation of when the copy is made and when the file is renamed.
+
+If the creation of a backup file fails, the write is not done.  If you want
+to write anyway add a '!' to the command.
+
+							*write-permissions*
+When writing a new file the permissions are read-write.  For unix the mask is
+0666 with additionally umask applied.  When writing a file that was read Vim
+will preserve the permissions, but clear the s-bit.
+
+							*write-readonly*
+When the 'cpoptions' option contains 'W', Vim will refuse to overwrite a
+readonly file.  When 'W' is not present, ":w!" will overwrite a readonly file,
+if the system allows it (the directory must be writable).
+
+							*write-fail*
+If the writing of the new file fails, you have to be careful not to lose
+your changes AND the original file.  If there is no backup file and writing
+the new file failed, you have already lost the original file!  DON'T EXIT VIM
+UNTIL YOU WRITE OUT THE FILE!  If a backup was made, it is put back in place
+of the original file (if possible).  If you exit Vim, and lose the changes
+you made, the original file will mostly still be there.  If putting back the
+original file fails, there will be an error message telling you that you
+lost the original file.
+
+						*DOS-format-write*
+If the 'fileformat' is "dos", <CR> <NL> is used for <EOL>.  This is default
+for Win32.  On other systems the message "[dos format]" is shown to remind you
+that an unusual <EOL> was used.
+						*Unix-format-write*
+If the 'fileformat' is "unix", <NL> is used for <EOL>.  On Win32 the message
+"[unix format]" is shown.
+						*Mac-format-write*
+If the 'fileformat' is "mac", <CR> is used for <EOL>.  On non-Mac systems the
+message "[mac format]" is shown.
+
+See also |file-formats| and the 'fileformat' and 'fileformats' options.
+
+						*ACL*
+ACL stands for Access Control List.  It is an advanced way to control access
+rights for a file.  It is used on new MS-Windows and Unix systems, but only
+when the filesystem supports it.
+   Vim attempts to preserve the ACL info when writing a file.  The backup file
+will get the ACL info of the original file.
+   The ACL info is also used to check if a file is read-only (when opening the
+file).
+
+						*read-only-share*
+When MS-Windows shares a drive on the network it can be marked as read-only.
+This means that even if the file read-only attribute is absent, and the ACL
+settings on NT network shared drives allow writing to the file, you can still
+not write to the file.  Vim on Win32 platforms will detect read-only network
+drives and will mark the file as read-only.  You will not be able to override
+it with |:write|.
+
+						*write-device*
+When the file name is actually a device name, Vim will not make a backup (that
+would be impossible).  You need to use "!", since the device already exists.
+Example for Unix: >
+	:w! /dev/lpt0
+and for MS-Windows: >
+	:w! lpt0
+For Unix a device is detected when the name doesn't refer to a normal file or
+a directory.  A fifo or named pipe also looks like a device to Vim.
+For MS-Windows the device is detected by its name:
+	AUX
+	CON
+	CLOCK$
+	NUL
+	PRN
+	COMn	n=1,2,3... etc
+	LPTn	n=1,2,3... etc
+The names can be in upper- or lowercase.
+

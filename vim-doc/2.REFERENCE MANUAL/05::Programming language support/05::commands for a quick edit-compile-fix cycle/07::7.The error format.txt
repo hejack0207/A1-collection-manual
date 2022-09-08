@@ -1,0 +1,348 @@
+7. The error format					*error-file-format*
+
+					*errorformat* *E372* *E373* *E374*
+						*E375* *E376* *E377* *E378*
+The 'errorformat' option specifies a list of formats that are recognized.  The
+first format that matches with an error message is used.  You can add several
+formats for different messages your compiler produces, or even entries for
+multiple compilers.  See |efm-entries|.
+
+Each entry in 'errorformat' is a scanf-like string that describes the format.
+First, you need to know how scanf works.  Look in the documentation of your
+C compiler.  Below you find the % items that Vim understands.  Others are
+invalid.
+
+Special characters in 'errorformat' are comma and backslash.  See
+|efm-entries| for how to deal with them.  Note that a literal "%" is matched
+by "%%", thus it is not escaped with a backslash.
+Keep in mind that in the `:make` and `:grep` output all NUL characters are
+replaced with SOH (0x01).
+
+Note: By default the difference between upper and lowercase is ignored.  If
+you want to match case, add "\C" to the pattern |/\C|.
+
+Vim will read lines of any length, but only the first 4095 bytes are used, the
+rest is ignored.  Items can only be 1023 bytes long.
+
+
+Basic items
+
+	%f		file name (finds a string)
+	%o		module name (finds a string)
+	%l		line number (finds a number)
+	%c		column number (finds a number representing character
+			column of the error, (1 <tab> == 1 character column))
+	%v		virtual column number (finds a number representing
+			screen column of the error (1 <tab> == 8 screen
+			columns))
+	%t		error type (finds a single character):
+			    e - error message
+			    w - warning message
+			    i - info message
+			    n - note message
+	%n		error number (finds a number)
+	%m		error message (finds a string)
+	%r		matches the "rest" of a single-line file message %O/P/Q
+	%p		pointer line (finds a sequence of '-', '.', ' ' or
+			tabs and uses the length for the column number)
+	%*{conv}	any scanf non-assignable conversion
+	%%		the single '%' character
+	%s		search text (finds a string)
+
+The "%f" conversion may depend on the current 'isfname' setting.  "~/" is
+expanded to the home directory and environment variables are expanded.
+
+The "%f" and "%m" conversions have to detect the end of the string.  This
+normally happens by matching following characters and items.  When nothing is
+following the rest of the line is matched.  If "%f" is followed by a '%' or a
+backslash, it will look for a sequence of 'isfname' characters.
+
+On MS-Windows a leading "C:" will be included in "%f", even when using "%f:".
+This means that a file name which is a single alphabetical letter will not be
+detected.
+
+The "%p" conversion is normally followed by a "^".  It's used for compilers
+that output a line like: >
+	    ^
+or >
+   ---------^
+to indicate the column of the error.  This is to be used in a multi-line error
+message.  See |errorformat-javac| for a  useful example.
+
+The "%s" conversion specifies the text to search for, to locate the error line.
+The text is used as a literal string.  The anchors "^" and "$" are added to
+the text to locate the error line exactly matching the search text and the
+text is prefixed with the "\V" atom to make it "very nomagic".  The "%s"
+conversion can be used to locate lines without a line number in the error
+output.  Like the output of the "grep" shell command.
+When the pattern is present the line number will not be used.
+
+The "%o" conversion specifies the module name in quickfix entry.  If present
+it will be used in quickfix error window instead of the filename.  The module
+name is used only for displaying purposes, the file name is used when jumping
+to the file.
+
+Changing directory
+
+The following uppercase conversion characters specify the type of special
+format strings.  At most one of them may be given as a prefix at the beginning
+of a single comma-separated format pattern.
+Some compilers produce messages that consist of directory names that have to
+be prepended to each file name read by %f (example: GNU make).  The following
+codes can be used to scan these directory names; they will be stored in an
+internal directory stack.					*E379*
+	%D		"enter directory" format string; expects a following
+			  %f that finds the directory name
+	%X		"leave directory" format string; expects following %f
+
+When defining an "enter directory" or "leave directory" format, the "%D" or
+"%X" has to be given at the start of that substring.  Vim tracks the directory
+changes and prepends the current directory to each erroneous file found with a
+relative path.  See |quickfix-directory-stack| for details, tips and
+limitations.
+
+
+Multi-line messages				*errorformat-multi-line*
+
+It is possible to read the output of programs that produce multi-line
+messages, i.e. error strings that consume more than one line.  Possible
+prefixes are:
+	%E		start of a multi-line error message
+	%W		start of a multi-line warning message
+	%I		start of a multi-line informational message
+	%N		start of a multi-line note message
+	%A		start of a multi-line message (unspecified type)
+	%>		for next line start with current pattern again |efm-%>|
+	%C		continuation of a multi-line message
+	%Z		end of a multi-line message
+These can be used with '+' and '-', see |efm-ignore| below.
+
+Using "\n" in the pattern won't work to match multi-line messages.
+
+Example: Your compiler happens to write out errors in the following format
+(leading line numbers not being part of the actual output):
+
+     1	Error 275 ~
+     2	line 42 ~
+     3	column 3 ~
+     4	' ' expected after '--' ~
+
+The appropriate error format string has to look like this: >
+   :set efm=%EError\ %n,%Cline\ %l,%Ccolumn\ %c,%Z%m
+
+And the |:clist| error message generated for this error is:
+
+ 1:42 col 3 error 275:  ' ' expected after '--'
+
+Another example: Think of a Python interpreter that produces the following
+error message (line numbers are not part of the actual output):
+
+     1	==============================================================
+     2	FAIL: testGetTypeIdCachesResult (dbfacadeTest.DjsDBFacadeTest)
+     3	--------------------------------------------------------------
+     4	Traceback (most recent call last):
+     5	  File "unittests/dbfacadeTest.py", line 89, in testFoo
+     6	    self.assertEquals(34, dtid)
+     7	  File "/usr/lib/python2.2/unittest.py", line 286, in
+     8	 failUnlessEqual
+     9	    raise self.failureException, \
+    10	AssertionError: 34 != 33
+    11
+    12	--------------------------------------------------------------
+    13	Ran 27 tests in 0.063s
+
+Say you want |:clist| write the relevant information of this message only,
+namely:
+ 5 unittests/dbfacadeTest.py:89:  AssertionError: 34 != 33
+
+Then the error format string could be defined as follows: >
+  :set efm=%C\ %.%#,%A\ \ File\ \"%f\"\\,\ line\ %l%.%#,%Z%[%^\ ]%\\@=%m
+
+Note that the %C string is given before the %A here: since the expression
+' %.%#' (which stands for the regular expression ' .*') matches every line
+starting with a space, followed by any characters to the end of the line,
+it also hides line 7 which would trigger a separate error message otherwise.
+Error format strings are always parsed pattern by pattern until the first
+match occurs.
+							*efm-%>*
+The %> item can be used to avoid trying patterns that appear earlier in
+'errorformat'.  This is useful for patterns that match just about anything.
+For example, if the error looks like this:
+
+	Error in line 123 of foo.c: ~
+	unknown variable "i" ~
+
+This can be found with: >
+	:set efm=xxx,%E%>Error in line %l of %f:,%Z%m
+Where "xxx" has a pattern that would also match the second line.
+
+Important: There is no memory of what part of the errorformat matched before;
+every line in the error file gets a complete new run through the error format
+lines.  For example, if one has: >
+  setlocal efm=aa,bb,cc,dd,ee
+Where aa, bb, etc. are error format strings.  Each line of the error file will
+be matched to the pattern aa, then bb, then cc, etc.  Just because cc matched
+the previous error line does _not_ mean that dd will be tried first on the
+current line, even if cc and dd are multi-line errorformat strings.
+
+
+
+Separate file name			*errorformat-separate-filename*
+
+These prefixes are useful if the file name is given once and multiple messages
+follow that refer to this file name.
+	%O		single-line file message: overread the matched part
+	%P		single-line file message: push file %f onto the stack
+	%Q		single-line file message: pop the last file from stack
+
+Example: Given a compiler that produces the following error logfile (without
+leading line numbers):
+
+     1	[a1.tt]
+     2	(1,17)  error: ';' missing
+     3	(21,2)  warning: variable 'z' not defined
+     4	(67,3)  error: end of file found before string ended
+     5
+     6	[a2.tt]
+     7
+     8	[a3.tt]
+     9	NEW compiler v1.1
+    10	(2,2)   warning: variable 'x' not defined
+    11	(67,3)  warning: 's' already defined
+
+This logfile lists several messages for each file enclosed in [...] which are
+properly parsed by an error format like this: >
+  :set efm=%+P[%f],(%l\\,%c)%*[\ ]%t%*[^:]:\ %m,%-Q
+
+A call of |:clist| writes them accordingly with their correct filenames:
+
+  2 a1.tt:1 col 17 error: ';' missing
+  3 a1.tt:21 col 2 warning: variable 'z' not defined
+  4 a1.tt:67 col 3 error: end of file found before string ended
+  8 a3.tt:2 col 2 warning: variable 'x' not defined
+  9 a3.tt:67 col 3 warning: 's' already defined
+
+Unlike the other prefixes that all match against whole lines, %P, %Q and %O
+can be used to match several patterns in the same line.  Thus it is possible
+to parse even nested files like in the following line:
+  {"file1" {"file2" error1} error2 {"file3" error3 {"file4" error4 error5}}}
+The %O then parses over strings that do not contain any push/pop file name
+information.  See |errorformat-LaTeX| for an extended example.
+
+
+Ignoring and using whole messages			*efm-ignore*
+
+The codes '+' or '-' can be combined with the uppercase codes above; in that
+case they have to precede the letter, e.g. '%+A' or '%-G':
+	%-		do not include the matching multi-line in any output
+	%+		include the whole matching line in the %m error string
+
+One prefix is only useful in combination with '+' or '-', namely %G.  It parses
+over lines containing general information like compiler version strings or
+other headers that can be skipped.
+	%-G		ignore this message
+	%+G		general message
+
+
+Pattern matching
+
+The scanf()-like "%*[]" notation is supported for backward-compatibility
+with previous versions of Vim.  However, it is also possible to specify
+(nearly) any Vim supported regular expression in format strings.
+Since meta characters of the regular expression language can be part of
+ordinary matching strings or file names (and therefore internally have to
+be escaped), meta symbols have to be written with leading '%':
+	%\		The single '\' character.  Note that this has to be
+			escaped ("%\\") in ":set errorformat=" definitions.
+	%.		The single '.' character.
+	%#		The single '*'(!) character.
+	%^		The single '^' character.  Note that this is not
+			useful, the pattern already matches start of line.
+	%$		The single '$' character.  Note that this is not
+			useful, the pattern already matches end of line.
+	%[		The single '[' character for a [] character range.
+	%~		The single '~' character.
+When using character classes in expressions (see |/\i| for an overview),
+terms containing the "\+" quantifier can be written in the scanf() "%*"
+notation.  Example: "%\\d%\\+" ("\d\+", "any number") is equivalent to "%*\\d".
+Important note: The \(...\) grouping of sub-matches can not be used in format
+specifications because it is reserved for internal conversions.
+
+
+Multiple entries in 'errorformat'			*efm-entries*
+
+To be able to detect output from several compilers, several format patterns
+may be put in 'errorformat', separated by commas (note: blanks after the comma
+are ignored).  The first pattern that has a complete match is used.  If no
+match is found, matching parts from the last one will be used, although the
+file name is removed and the error message is set to the whole message.  If
+there is a pattern that may match output from several compilers (but not in a
+right way), put it after one that is more restrictive.
+
+To include a comma in a pattern precede it with a backslash (you have to type
+two in a ":set" command).  To include a backslash itself give two backslashes
+(you have to type four in a ":set" command).  You also need to put a backslash
+before a space for ":set".
+
+
+Valid matches						*quickfix-valid*
+
+If a line does not completely match one of the entries in 'errorformat', the
+whole line is put in the error message and the entry is marked "not valid"
+These lines are skipped with the ":cn" and ":cp" commands (unless there is
+no valid line at all).  You can use ":cl!" to display all the error messages.
+
+If the error format does not contain a file name Vim cannot switch to the
+correct file.  You will have to do this by hand.
+
+
+Examples
+
+The format of the file from the Amiga Aztec compiler is:
+
+	filename>linenumber:columnnumber:errortype:errornumber:errormessage
+
+	filename	name of the file in which the error was detected
+	linenumber	line number where the error was detected
+	columnnumber	column number where the error was detected
+	errortype	type of the error, normally a single 'E' or 'W'
+	errornumber	number of the error (for lookup in the manual)
+	errormessage	description of the error
+
+This can be matched with this 'errorformat' entry:
+	%f>%l:%c:%t:%n:%m
+
+Some examples for C compilers that produce single-line error outputs:
+%f:%l:\ %t%*[^0123456789]%n:\ %m	for Manx/Aztec C error messages
+					(scanf() doesn't understand [0-9])
+%f\ %l\ %t%*[^0-9]%n:\ %m		for SAS C
+\"%f\"\\,%*[^0-9]%l:\ %m		for generic C compilers
+%f:%l:\ %m				for GCC
+%f:%l:\ %m,%Dgmake[%*\\d]:\ Entering\ directory\ `%f',
+%Dgmake[%*\\d]:\ Leaving\ directory\ `%f'
+					for GCC with gmake (concat the lines!)
+%f(%l)\ :\ %*[^:]:\ %m			old SCO C compiler (pre-OS5)
+%f(%l)\ :\ %t%*[^0-9]%n:\ %m		idem, with error type and number
+%f:%l:\ %m,In\ file\ included\ from\ %f:%l:,\^I\^Ifrom\ %f:%l%m
+					for GCC, with some extras
+
+Extended examples for the handling of multi-line messages are given below,
+see |errorformat-Jikes| and |errorformat-LaTeX|.
+
+Note the backslash in front of a space and double quote.  It is required for
+the :set command.  There are two backslashes in front of a comma, one for the
+:set command and one to avoid recognizing the comma as a separator of error
+formats.
+
+
+Filtering messages
+
+If you have a compiler that produces error messages that do not fit in the
+format string, you could write a program that translates the error messages
+into this format.  You can use this program with the ":make" command by
+changing the 'makeprg' option.  For example: >
+   :set mp=make\ \\\|&\ error_filter
+The backslashes before the pipe character are required to avoid it to be
+recognized as a command separator.  The backslash before each space is
+required for the set command.
+

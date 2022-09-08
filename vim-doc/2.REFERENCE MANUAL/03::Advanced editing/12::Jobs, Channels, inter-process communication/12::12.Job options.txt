@@ -1,0 +1,193 @@
+12. Job options						*job-options*
+
+The {options} argument in job_start() is a dictionary.  All entries are
+optional.  Some options can be used after the job has started, using
+job_setoptions(job, {options}).  Many options can be used with the channel
+related to the job, using ch_setoptions(channel, {options}).
+See |job_setoptions()| and |ch_setoptions()|.
+
+						*in_mode* *out_mode* *err_mode*
+"in_mode"		mode specifically for stdin, only when using pipes
+"out_mode"		mode specifically for stdout, only when using pipes
+"err_mode"		mode specifically for stderr, only when using pipes
+			See |channel-mode| for the values.
+
+			Note: when setting "mode" the part specific mode is
+			overwritten.  Therefore set "mode" first and the part
+			specific mode later.
+
+			Note: when writing to a file or buffer and when
+			reading from a buffer NL mode is used by default.
+
+						*job-noblock*
+"noblock": 1		When writing use a non-blocking write call.  This
+			avoids getting stuck if Vim should handle other
+			messages in between, e.g. when a job sends back data
+			to Vim.  It implies that when `ch_sendraw()` returns
+			not all data may have been written yet.
+			This option was added in patch 8.1.0350, test with: >
+				if has("patch-8.1.350")
+				  let options['noblock'] = 1
+				endif
+<
+						*job-callback*
+"callback": handler	Callback for something to read on any part of the
+			channel.
+						*job-out_cb* *out_cb*
+"out_cb": handler	Callback for when there is something to read on
+			stdout.  Only for when the channel uses pipes.  When
+			"out_cb" wasn't set the channel callback is used.
+			The two arguments are the channel and the message.
+
+						*job-err_cb* *err_cb*
+"err_cb": handler	Callback for when there is something to read on
+			stderr.  Only for when the channel uses pipes.  When
+			"err_cb" wasn't set the channel callback is used.
+			The two arguments are the channel and the message.
+						*job-close_cb*
+"close_cb": handler	Callback for when the channel is closed.  Same as
+			"close_cb" on |ch_open()|, see |close_cb|.
+						*job-drop*
+"drop": when		Specifies when to drop messages.  Same as "drop" on
+			|ch_open()|, see |channel-drop|.  For "auto" the
+			exit_cb is not considered.
+						*job-exit_cb*
+"exit_cb": handler	Callback for when the job ends.  The arguments are the
+			job and the exit status.
+			Vim checks up to 10 times per second for jobs that
+			ended.  The check can also be triggered by calling
+			|job_status()|, which may then invoke the exit_cb
+			handler.
+			Note that data can be buffered, callbacks may still be
+			called after the process ends.
+							*job-timeout*
+"timeout": time		The time to wait for a request when blocking, E.g.
+			when using ch_evalexpr().  In milliseconds.  The
+			default is 2000 (2 seconds).
+						*out_timeout* *err_timeout*
+"out_timeout": time	Timeout for stdout.  Only when using pipes.
+"err_timeout": time	Timeout for stderr.  Only when using pipes.
+			Note: when setting "timeout" the part specific mode is
+			overwritten.  Therefore set "timeout" first and the
+			part specific mode later.
+
+						*job-stoponexit*
+"stoponexit": {signal}	Send {signal} to the job when Vim exits.  See
+			|job_stop()| for possible values.
+"stoponexit": ""	Do not stop the job when Vim exits.
+			The default is "term".
+
+						*job-term*
+"term": "open"		Start a terminal in a new window and connect the job
+			stdin/stdout/stderr to it.  Similar to using
+			`:terminal`.
+			NOTE: Not implemented yet!
+
+"channel": {channel}	Use an existing channel instead of creating a new one.
+			The parts of the channel that get used for the new job
+			will be disconnected from what they were used before.
+			If the channel was still used by another job this may
+			cause I/O errors.
+			Existing callbacks and other settings remain.
+
+"pty": 1		Use a pty (pseudo-tty) instead of a pipe when
+			possible.  This is most useful in combination with a
+			terminal window, see |terminal|.
+			{only on Unix and Unix-like systems}
+
+				*job-in_io* *in_top* *in_bot* *in_name* *in_buf*
+"in_io": "null"		disconnect stdin (read from /dev/null)
+"in_io": "pipe"		stdin is connected to the channel (default)
+"in_io": "file"		stdin reads from a file
+"in_io": "buffer"	stdin reads from a buffer
+"in_top": number	when using "buffer": first line to send (default: 1)
+"in_bot": number	when using "buffer": last line to send (default: last)
+"in_name": "/path/file"	the name of the file or buffer to read from
+"in_buf": number	the number of the buffer to read from
+
+				*job-out_io* *out_name* *out_buf*
+"out_io": "null"	disconnect stdout (goes to /dev/null)
+"out_io": "pipe"	stdout is connected to the channel (default)
+"out_io": "file"	stdout writes to a file
+"out_io": "buffer"	stdout appends to a buffer (see below)
+"out_name": "/path/file" the name of the file or buffer to write to
+"out_buf": number	the number of the buffer to write to
+"out_modifiable": 0	when writing to a buffer, 'modifiable' will be off
+			(see below)
+"out_msg": 0		when writing to a new buffer, the first line will be
+			set to "Reading from channel output..."
+
+				*job-err_io* *err_name* *err_buf*
+"err_io": "out"		stderr messages to go to stdout
+"err_io": "null"	disconnect stderr  (goes to /dev/null)
+"err_io": "pipe"	stderr is connected to the channel (default)
+"err_io": "file"	stderr writes to a file
+"err_io": "buffer"	stderr appends to a buffer (see below)
+"err_name": "/path/file" the name of the file or buffer to write to
+"err_buf": number	the number of the buffer to write to
+"err_modifiable": 0	when writing to a buffer, 'modifiable' will be off
+			(see below)
+"err_msg": 0		when writing to a new buffer, the first line will be
+			set to "Reading from channel error..."
+
+"block_write": number	only for testing: pretend every other write to stdin
+			will block
+
+"env": dict		environment variables for the new process
+"cwd": "/path/to/dir"	current working directory for the new process;
+			if the directory does not exist an error is given
+
+
+Writing to a buffer ~
+							*out_io-buffer*
+When the out_io or err_io mode is "buffer" and there is a callback, the text
+is appended to the buffer before invoking the callback.
+
+When a buffer is used both for input and output, the output lines are put
+above the last line, since the last line is what is written to the channel
+input.  Otherwise lines are appended below the last line.
+
+When using JS or JSON mode with "buffer", only messages with zero or negative
+ID will be added to the buffer, after decoding + encoding.  Messages with a
+positive number will be handled by a callback, commands are handled as usual.
+
+The name of the buffer from "out_name" or "err_name" is compared the full name
+of existing buffers, also after expanding the name for the current directory.
+E.g., when a buffer was created with ":edit somename" and the buffer name is
+"somename" it will use that buffer.
+
+If there is no matching buffer a new buffer is created.  Use an empty name to
+always create a new buffer.  |ch_getbufnr()| can then be used to get the
+buffer number.
+
+For a new buffer 'buftype' is set to "nofile" and 'bufhidden' to "hide".  If
+you prefer other settings, create the buffer first and pass the buffer number.
+					*out_modifiable* *err_modifiable*
+The "out_modifiable" and "err_modifiable" options can be used to set the
+'modifiable' option off, or write to a buffer that has 'modifiable' off.  That
+means that lines will be appended to the buffer, but the user can't easily
+change the buffer.
+					*out_msg* *err_msg*
+The "out_msg" option can be used to specify whether a new buffer will have the
+first line set to "Reading from channel output...".  The default is to add the
+message.  "err_msg" does the same for channel error.
+
+When an existing buffer is to be written where 'modifiable' is off and the
+"out_modifiable" or "err_modifiable" options is not zero, an error is given
+and the buffer will not be written to.
+
+When the buffer written to is displayed in a window and the cursor is in the
+first column of the last line, the cursor will be moved to the newly added
+line and the window is scrolled up to show the cursor if needed.
+
+Undo is synced for every added line.  NUL bytes are accepted (internally Vim
+stores these as NL bytes).
+
+
+Writing to a file ~
+							*E920*
+The file is created with permissions 600 (read-write for the user, not
+accessible for others).  Use |setfperm()| to change this.
+
+If the file already exists it is truncated.
+

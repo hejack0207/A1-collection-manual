@@ -1,0 +1,99 @@
+10. Python 3						*python3*
+
+							*:py3* *:python3*
+:[range]py3 {stmt}
+:[range]py3 << [trim] [{endmarker}]
+{script}
+{endmarker}
+
+:[range]python3 {stmt}
+:[range]python3 << [trim] [{endmarker}]
+{script}
+{endmarker}
+	The `:py3` and `:python3` commands work similar to `:python`.  A
+	simple check if the `:py3` command is working: >
+		:py3 print("Hello")
+<
+	To see what version of Python you have: >
+		:py3 import sys
+		:py3 print(sys.version)
+<							*:py3file*
+:[range]py3f[ile] {file}
+	The `:py3file` command works similar to `:pyfile`.
+							*:py3do*
+:[range]py3do {body}
+	The `:py3do` command works similar to `:pydo`.
+
+
+Vim can be built in four ways (:version output):
+1. No Python support	    (-python, -python3)
+2. Python 2 support only    (+python or +python/dyn, -python3)
+3. Python 3 support only    (-python, +python3 or +python3/dyn)
+4. Python 2 and 3 support   (+python/dyn, +python3/dyn)
+
+Some more details on the special case 4:  *python-2-and-3*
+
+When Python 2 and Python 3 are both supported they must be loaded dynamically.
+
+When doing this on Linux/Unix systems and importing global symbols, this leads
+to a crash when the second Python version is used.  So either global symbols
+are loaded but only one Python version is activated, or no global symbols are
+loaded. The latter makes Python's "import" fail on libraries that expect the
+symbols to be provided by Vim.
+							*E836* *E837*
+Vim's configuration script makes a guess for all libraries based on one
+standard Python library (termios).  If importing this library succeeds for
+both Python versions, then both will be made available in Vim at the same
+time.  If not, only the version first used in a session will be enabled.
+When trying to use the other one you will get the E836 or E837 error message.
+
+Here Vim's behavior depends on the system in which it was configured.  In a
+system where both versions of Python were configured with --enable-shared,
+both versions of Python will be activated at the same time.  There will still
+be problems with other third party libraries that were not linked to
+libPython.
+
+To work around such problems there are these options:
+1. The problematic library is recompiled to link to the according
+   libpython.so.
+2. Vim is recompiled for only one Python version.
+3. You undefine PY_NO_RTLD_GLOBAL in auto/config.h after configuration.  This
+   may crash Vim though.
+
+							*E880*
+Raising SystemExit exception in python isn't endorsed way to quit vim, use: >
+	:py vim.command("qall!")
+<
+
+							*has-python*
+You can test what Python version is available with: >
+	if has('python')
+	  echo 'there is Python 2.x'
+	endif
+  	if has('python3')
+	  echo 'there is Python 3.x'
+	endif
+
+Note however, that when Python 2 and 3 are both available and loaded
+dynamically, these has() calls will try to load them.  If only one can be
+loaded at a time, just checking if Python 2 or 3 are available will prevent
+the other one from being available.
+
+To avoid loading the dynamic library, only check if Vim was compiled with
+python support: >
+	if has('python_compiled')
+	  echo 'compiled with Python 2.x support'
+	  if has('python_dynamic')
+	    echo 'Python 2.x dynamically loaded'
+	  endif
+	endif
+  	if has('python3_compiled')
+	  echo 'compiled with Python 3.x support'
+	  if has('python3_dynamic')
+	    echo 'Python 3.x dynamically loaded'
+	  endif
+	endif
+
+This also tells you whether Python is dynamically loaded, which will fail if
+the runtime library cannot be found.
+

@@ -1,0 +1,144 @@
+10. The preview window				*preview-window*
+
+The preview window is a special window to show (preview) another file.  It is
+normally a small window used to show an include file or definition of a
+function.
+{not available when compiled without the |+quickfix| feature}
+
+There can be only one preview window (per tab page).  It is created with one
+of the commands below.  The 'previewheight' option can be set to specify the
+height of the preview window when it's opened.  The 'previewwindow' option is
+set in the preview window to be able to recognize it.  The 'winfixheight'
+option is set to have it keep the same height when opening/closing other
+windows.
+						*preview-popup*
+Alternatively, a popup window can be used by setting the 'previewpopup'
+option.  When set, it overrules the 'previewwindow' and 'previewheight'
+settings.  The option is a comma separated list of values:
+	height		maximum height of the popup
+	width		maximum width of the popup
+	highlight	highlight group of the popup (default is Pmenu)
+Example: >
+	:set previewpopup=height:10,width:60
+
+A few peculiarities:
+- If the file is in a buffer already, it will be re-used.  This will allow for
+  editing the file while it's visible in the popup window.
+- No ATTENTION dialog will be used, since you can't edit the file in the popup
+  window.  However, if you later open the same buffer in a normal window, you
+  may not notice it's edited elsewhere.  And when then using ":edit" to
+  trigger the ATTENTION and responding "A" for Abort, the preview window will
+  become empty.
+
+						*:pta* *:ptag*
+:pta[g][!] [tagname]
+		Does ":tag[!] [tagname]" and shows the found tag in a
+		"Preview" window without changing the current buffer or cursor
+		position.  If a "Preview" window already exists, it is re-used
+		(like a help window is).  If a new one is opened,
+		'previewheight' is used for the height of the window.   See
+		also |:tag|.
+		See below for an example. |CursorHold-example|
+		Small difference from |:tag|: When [tagname] is equal to the
+		already displayed tag, the position in the matching tag list
+		is not reset.  This makes the CursorHold example work after a
+		|:ptnext|.
+
+CTRL-W z					*CTRL-W_z*
+CTRL-W CTRL-Z					*CTRL-W_CTRL-Z* *:pc* *:pclose*
+:pc[lose][!]	Close any "Preview" window currently open.  When the 'hidden'
+		option is set, or when the buffer was changed and the [!] is
+		used, the buffer becomes hidden (unless there is another
+		window editing it).  The command fails if any "Preview" buffer
+		cannot be closed.  See also |:close|.
+
+							*:pp* *:ppop*
+:[count]pp[op][!]
+		Does ":[count]pop[!]" in the preview window.  See |:pop| and
+		|:ptag|.
+
+CTRL-W }						*CTRL-W_}*
+		Use identifier under cursor as a tag and perform a :ptag on
+		it.  Make the new Preview window (if required) N high.  If N is
+		not given, 'previewheight' is used.
+
+CTRL-W g }						*CTRL-W_g}*
+		Use identifier under cursor as a tag and perform a :ptjump on
+		it.  Make the new Preview window (if required) N high.  If N is
+		not given, 'previewheight' is used.
+
+							*:ped* *:pedit*
+:ped[it][!] [++opt] [+cmd] {file}
+		Edit {file} in the preview window.  The preview window is
+		opened like with |:ptag|.  The current window and cursor
+		position isn't changed.  Useful example: >
+			:pedit +/fputc /usr/include/stdio.h
+<
+							*:ps* *:psearch*
+:[range]ps[earch][!] [count] [/]pattern[/]
+		Works like |:ijump| but shows the found match in the preview
+		window.  The preview window is opened like with |:ptag|.  The
+		current window and cursor position isn't changed.  Useful
+		example: >
+			:psearch popen
+<		Like with the |:ptag| command, you can use this to
+		automatically show information about the word under the
+		cursor.  This is less clever than using |:ptag|, but you don't
+		need a tags file and it will also find matches in system
+		include files.  Example: >
+  :au! CursorHold *.[ch] nested exe "silent! psearch " . expand("<cword>")
+<		Warning: This can be slow.
+
+Example						*CursorHold-example*  >
+
+  :au! CursorHold *.[ch] nested exe "silent! ptag " . expand("<cword>")
+
+This will cause a ":ptag" to be executed for the keyword under the cursor,
+when the cursor hasn't moved for the time set with 'updatetime'.  The "nested"
+makes other autocommands be executed, so that syntax highlighting works in the
+preview window.  The "silent!" avoids an error message when the tag could not
+be found.  Also see |CursorHold|.  To disable this again: >
+
+  :au! CursorHold
+
+A nice addition is to highlight the found tag, avoid the ":ptag" when there
+is no word under the cursor, and a few other things: >
+
+  :au! CursorHold *.[ch] nested call PreviewWord()
+  :func PreviewWord()
+  :  if &previewwindow			" don't do this in the preview window
+  :    return
+  :  endif
+  :  let w = expand("<cword>")		" get the word under cursor
+  :  if w =~ '\a'			" if the word contains a letter
+  :
+  :    " Delete any existing highlight before showing another tag
+  :    silent! wincmd P			" jump to preview window
+  :    if &previewwindow			" if we really get there...
+  :      match none			" delete existing highlight
+  :      wincmd p			" back to old window
+  :    endif
+  :
+  :    " Try displaying a matching tag for the word under the cursor
+  :    try
+  :       exe "ptag " . w
+  :    catch
+  :      return
+  :    endtry
+  :
+  :    silent! wincmd P			" jump to preview window
+  :    if &previewwindow		" if we really get there...
+  :	 if has("folding")
+  :	   silent! .foldopen		" don't want a closed fold
+  :	 endif
+  :	 call search("$", "b")		" to end of previous line
+  :	 let w = substitute(w, '\\', '\\\\', "")
+  :	 call search('\<\V' . w . '\>')	" position cursor on match
+  :	 " Add a match highlight to the word at this position
+  :      hi previewWord term=bold ctermbg=green guibg=green
+  :	 exe 'match previewWord "\%' . line(".") . 'l\%' . col(".") . 'c\k*"'
+  :      wincmd p			" back to old window
+  :    endif
+  :  endif
+  :endfun
+

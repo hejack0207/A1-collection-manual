@@ -1,0 +1,379 @@
+4. Initialization				*initialization* *startup*
+
+This section is about the non-GUI version of Vim.  See |gui-fork| for
+additional initialization when starting the GUI.
+
+At startup, Vim checks environment variables and files and sets values
+accordingly.  Vim proceeds in this order:
+
+1. Set the 'shell' and 'term' option		*SHELL* *COMSPEC* *TERM*
+	The environment variable SHELL, if it exists, is used to set the
+	'shell' option.  On Win32, the COMSPEC variable is used
+	if SHELL is not set.
+	The environment variable TERM, if it exists, is used to set the 'term'
+	option.  However, 'term' will change later when starting the GUI (step
+	8 below).
+
+2. Process the arguments
+	The options and file names from the command that start Vim are
+	inspected.  Buffers are created for all files (but not loaded yet).
+	The |-V| argument can be used to display or log what happens next,
+	useful for debugging the initializations.
+
+3. Execute Ex commands, from environment variables and/or files
+	An environment variable is read as one Ex command line, where multiple
+	commands must be separated with '|' or "<NL>".
+								*vimrc* *exrc*
+	A file that contains initialization commands is called a "vimrc" file.
+	Each line in a vimrc file is executed as an Ex command line.  It is
+	sometimes also referred to as "exrc" file.  They are the same type of
+	file, but "exrc" is what Vi always used, "vimrc" is a Vim specific
+	name.  Also see |vimrc-intro|.
+
+	Places for your personal initializations:
+		Unix		$HOME/.vimrc or $HOME/.vim/vimrc
+		MS-Windows	$HOME/_vimrc, $HOME/vimfiles/vimrc
+				or $VIM/_vimrc
+		Amiga		s:.vimrc, home:.vimrc, home:vimfiles:vimrc
+				or $VIM/.vimrc
+		Haiku		$HOME/config/settings/vim/vimrc
+
+	The files are searched in the order specified above and only the first
+	one that is found is read.
+
+	RECOMMENDATION: Put all your Vim configuration stuff in the
+	$HOME/.vim/ directory ($HOME/vimfiles/ for MS-Windows). That makes it
+	easy to copy it to another system.
+
+	If Vim was started with "-u filename", the file "filename" is used.
+	All following initializations until 4. are skipped. $MYVIMRC is not
+	set.
+	"vim -u NORC" can be used to skip these initializations without
+	reading a file.  "vim -u NONE" also skips loading plugins.  |-u|
+
+	If Vim was started in Ex mode with the "-s" argument, all following
+	initializations until 4. are skipped.  Only the "-u" option is
+	interpreted.
+							*evim.vim*
+     a. If vim was started as |evim| or |eview| or with the |-y| argument, the
+	script $VIMRUNTIME/evim.vim will be loaded.
+							*system-vimrc*
+     b. For Unix, MS-Windows, VMS, Macintosh and Amiga the system vimrc file
+	is read for initializations.  The path of this file is shown with the
+	":version" command.  Mostly it's "$VIM/vimrc".  Note that this file is
+	ALWAYS read in 'compatible' mode, since the automatic resetting of
+	'compatible' is only done later.  Add a ":set nocp" command if you
+	like.  For the Macintosh the $VIMRUNTIME/macmap.vim is read.
+
+	  *VIMINIT* *.vimrc* *_vimrc* *EXINIT* *.exrc* *_exrc* *$MYVIMRC*
+     c. Five places are searched for initializations.  The first that exists
+	is used, the others are ignored.  The $MYVIMRC environment variable is
+	set to the file that was first found, unless $MYVIMRC was already set
+	and when using VIMINIT.
+	I   The environment variable VIMINIT (see also |compatible-default|) (*)
+	    The value of $VIMINIT is used as an Ex command line.
+	II  The user vimrc file(s):
+		    "$HOME/.vimrc"	   (for Unix) (*)
+		    "$HOME/.vim/vimrc"	   (for Unix) (*)
+		    "s:.vimrc"		   (for Amiga) (*)
+		    "home:.vimrc"	   (for Amiga) (*)
+		    "home:vimfiles:vimrc"  (for Amiga) (*)
+		    "$VIM/.vimrc"	   (for Amiga) (*)
+		    "$HOME/_vimrc"	   (for Win32) (*)
+		    "$HOME/vimfiles/vimrc" (for Win32) (*)
+		    "$VIM/_vimrc"	   (for Win32) (*)
+		    "$HOME/config/settings/vim/vimrc"	(for Haiku) (*)
+
+		Note: For Unix and Amiga, when ".vimrc" does not exist,
+		"_vimrc" is also tried, in case an MS-DOS compatible file
+		system is used.  For MS-Windows ".vimrc" is checked after
+		"_vimrc", in case long file names are used.
+		Note: For Win32, "$HOME" is checked first.  If no "_vimrc" or
+		".vimrc" is found there, "$VIM" is tried.  See |$VIM| for when
+		$VIM is not set.
+	III The environment variable EXINIT.
+	    The value of $EXINIT is used as an Ex command line.
+	IV  The user exrc file(s).  Same as for the user vimrc file, but with
+	    "vimrc" replaced by "exrc".  But only one of ".exrc" and "_exrc" is
+	    used, depending on the system.  And without the (*)!
+	V   The default vimrc file, $VIMRUNTIME/defaults.vim.  This sets up
+	    options values and has "syntax on" and "filetype on" commands,
+	    which is what most new users will want.  See |defaults.vim|.
+
+     d. If the 'exrc' option is on (which is NOT the default), the current
+	directory is searched for three files.  The first that exists is used,
+	the others are ignored.
+	-  The file ".vimrc" (for Unix, Amiga) (*)
+		    "_vimrc" (for Win32) (*)
+	-  The file "_vimrc" (for Unix, Amiga) (*)
+		    ".vimrc" (for Win32) (*)
+	-  The file ".exrc"  (for Unix, Amiga)
+		    "_exrc"  (for Win32)
+
+     (*) Using this file or environment variable will cause 'compatible' to be
+	 off by default.  See |compatible-default|.
+
+     Note: When using the |mzscheme| interface, it is initialized after loading
+     the vimrc file.  Changing 'mzschemedll' later has no effect.
+
+4. Load the plugin scripts.					*load-plugins*
+	This does the same as the command: >
+		:runtime! plugin/**/*.vim
+<	The result is that all directories in the 'runtimepath' option will be
+	searched for the "plugin" sub-directory and all files ending in ".vim"
+	will be sourced (in alphabetical order per directory), also in
+	subdirectories.
+	However, directories in 'runtimepath' ending in "after" are skipped
+	here and only loaded after packages, see below.
+	Loading plugins won't be done when:
+	- The 'loadplugins' option was reset in a vimrc file.
+	- The |--noplugin| command line argument is used.
+	- The |--clean| command line argument is used.
+	- The "-u NONE" command line argument is used |-u|.
+	- When Vim was compiled without the |+eval| feature.
+	Note that using "-c 'set noloadplugins'" doesn't work, because the
+	commands from the command line have not been executed yet.  You can
+	use "--cmd 'set noloadplugins'" or "--cmd 'set loadplugins'" |--cmd|.
+
+	Packages are loaded.  These are plugins, as above, but found in the
+	"start" directory of each entry in 'packpath'.  Every plugin directory
+	found is added in 'runtimepath' and then the plugins are sourced.  See
+	|packages|.
+
+	The plugins scripts are loaded, as above, but now only the directories
+	ending in "after" are used.  Note that 'runtimepath' will have changed
+	if packages have been found, but that should not add a directory
+	ending in "after".
+
+5. Set 'shellpipe' and 'shellredir'
+	The 'shellpipe' and 'shellredir' options are set according to the
+	value of the 'shell' option, unless they have been set before.
+	This means that Vim will figure out the values of 'shellpipe' and
+	'shellredir' for you, unless you have set them yourself.
+
+6. Set 'updatecount' to zero, if "-n" command argument used
+
+7. Set binary options
+	If the "-b" flag was given to Vim, the options for binary editing will
+	be set now.  See |-b|.
+
+8. Perform GUI initializations
+	Only when starting "gvim", the GUI initializations will be done.  See
+	|gui-init|.
+
+9. Read the viminfo file
+	If the 'viminfo' option is not empty, the viminfo file is read.  See
+	|viminfo-file|.
+
+10. Read the quickfix file
+	If the "-q" flag was given to Vim, the quickfix file is read.  If this
+	fails, Vim exits.
+
+11. Open all windows
+	When the |-o| flag was given, windows will be opened (but not
+	displayed yet).
+	When the |-p| flag was given, tab pages will be created (but not
+	displayed yet).
+	When switching screens, it happens now.  Redrawing starts.
+	If the "-q" flag was given to Vim, the first error is jumped to.
+	Buffers for all windows will be loaded, without triggering |BufAdd|
+	autocommands.
+
+12. Execute startup commands
+	If a "-t" flag was given to Vim, the tag is jumped to.
+	The commands given with the |-c| and |+cmd| arguments are executed.
+	If the 'insertmode' option is set, Insert mode is entered.
+	The starting flag is reset, has("vim_starting") will now return zero.
+	The |v:vim_did_enter| variable is set to 1.
+	The |VimEnter| autocommands are executed.
+
+The $MYVIMRC or $MYGVIMRC file will be set to the first found vimrc and/or
+gvimrc file.
+
+
+Some hints on using initializations ~
+
+Standard setup:
+Create a vimrc file to set the default settings and mappings for all your edit
+sessions.  Put it in a place so that it will be found by 3b:
+	~/.vimrc	(Unix)
+	s:.vimrc	(Amiga)
+	$VIM\_vimrc	(Win32)
+	~/config/settings/vim/vimrc (Haiku)
+
+Note that creating a vimrc file will cause the 'compatible' option to be off
+by default.  See |compatible-default|.
+
+Local setup:
+Put all commands that you need for editing a specific directory only into a
+vimrc file and place it in that directory under the name ".vimrc" ("_vimrc"
+for Win32).  NOTE: To make Vim look for these special files you have to turn
+on the option 'exrc'.  See |trojan-horse| too.
+
+System setup:
+This only applies if you are managing a Unix system with several users and
+want to set the defaults for all users.  Create a vimrc file with commands
+for default settings and mappings and put it in the place that is given with
+the ":version" command.
+
+
+Saving the current state of Vim to a file ~
+
+Whenever you have changed values of options or when you have created a
+mapping, then you may want to save them in a vimrc file for later use.  See
+|save-settings| about saving the current state of settings to a file.
+
+
+Avoiding setup problems for Vi users ~
+
+Vi uses the variable EXINIT and the file "~/.exrc".  So if you do not want to
+interfere with Vi, then use the variable VIMINIT and the file "vimrc" instead.
+
+
+Amiga environment variables ~
+
+On the Amiga, two types of environment variables exist.  The ones set with the
+DOS 1.3 (or later) setenv command are recognized.  See the AmigaDos 1.3
+manual.  The environment variables set with the old Manx Set command (before
+version 5.0) are not recognized.
+
+
+MS-Windows line separators ~
+
+On MS-Windows, Vim assumes that all the vimrc files have <CR> <NL> pairs as
+line separators.  This will give problems if you have a file with only <NL>s
+and have a line like ":map xx yy^M".  The trailing ^M will be ignored.
+
+
+Vi compatible default value ~
+						     *compatible-default*
+When Vim starts, the 'compatible' option is on.  This will be used when Vim
+starts its initializations.  But as soon as:
+- a user vimrc file is found, or
+- a vimrc file in the current directory is found, or
+- the "VIMINIT" environment variable is set, or
+- the "-N" command line argument is given, or
+- the "--clean" command line argument is given, or
+- the |defaults.vim| script is loaded, or
+- a gvimrc file was found,
+then the option will be set to 'nocompatible'.
+
+Note that this does NOT happen when a system-wide vimrc file was found.
+
+This has the side effect of setting or resetting other options (see
+'compatible').  But only the options that have not been set or reset will be
+changed.  This has the same effect like the value of 'compatible' had this
+value when starting Vim.
+
+'compatible' is NOT reset, and |defaults.vim| is not loaded:
+- when Vim was started with the |-u| command line argument, especially with
+  "-u NONE", or
+- when started with the |-C| command line argument, or
+- when the name of the executable ends in "ex". (This has been done to make
+  Vim behave like "ex", when it is started as "ex")
+
+But there is a side effect of setting or resetting 'compatible' at the moment
+a .vimrc file is found: Mappings are interpreted the moment they are
+encountered.  This makes a difference when using things like "<CR>".  If the
+mappings depend on a certain value of 'compatible', set or reset it before
+giving the mapping.
+
+
+Defaults without a .vimrc file ~
+							*defaults.vim*
+If Vim is started normally and no user vimrc file is found, the
+$VIMRUNTIME/defaults.vim script is loaded.  This will set 'compatible' off,
+switch on syntax highlighting and a few more things.  See the script for
+details.  NOTE: this is done since Vim 8.0, not in Vim 7.4. (it was added in
+patch 7.4.2111 to be exact).
+
+This should work well for new Vim users.  If you create your own .vimrc, it is
+recommended to add these lines somewhere near the top: >
+	unlet! skip_defaults_vim
+	source $VIMRUNTIME/defaults.vim
+Then Vim works like before you had a .vimrc. Copying $VIMRUNTIME/vimrc_example
+is way to do this.  Alternatively, you can copy defaults.vim to your .vimrc
+and modify it (but then you won't get updates when it changes).
+
+If you don't like some of the defaults, you can still source defaults.vim and
+revert individual settings.  See the defaults.vim file for hints on how to
+revert each item.
+						*skip_defaults_vim*
+If you use a system-wide vimrc and don't want defaults.vim to change settings,
+set the "skip_defaults_vim" variable.  If this was set and you want to load
+defaults.vim from your .vimrc, first unlet skip_defaults_vim, as in the
+example above.
+
+
+Avoiding trojan horses ~
+							*trojan-horse*
+While reading the "vimrc" or the "exrc" file in the current directory, some
+commands can be disabled for security reasons by setting the 'secure' option.
+This is always done when executing the command from a tags file.  Otherwise it
+would be possible that you accidentally use a vimrc or tags file that somebody
+else created and contains nasty commands.  The disabled commands are the ones
+that start a shell, the ones that write to a file, and ":autocmd".  The ":map"
+commands are echoed, so you can see which keys are being mapped.
+	If you want Vim to execute all commands in a local vimrc file, you
+can reset the 'secure' option in the EXINIT or VIMINIT environment variable or
+in the global "exrc" or "vimrc" file.  This is not possible in "vimrc" or
+"exrc" in the current directory, for obvious reasons.
+	On Unix systems, this only happens if you are not the owner of the
+vimrc file.  Warning: If you unpack an archive that contains a vimrc or exrc
+file, it will be owned by you.  You won't have the security protection.  Check
+the vimrc file before you start Vim in that directory, or reset the 'exrc'
+option.  Some Unix systems allow a user to do "chown" on a file.  This makes
+it possible for another user to create a nasty vimrc and make you the owner.
+Be careful!
+	When using tag search commands, executing the search command (the last
+part of the line in the tags file) is always done in secure mode.  This works
+just like executing a command from a vimrc/exrc in the current directory.
+
+
+If Vim startup is slow ~
+							*slow-start*
+If Vim takes a long time to start up, use the |--startuptime| argument to find
+out what happens.  There are a few common causes:
+- If the Unix version was compiled with the GUI and/or X11 (check the output
+  of ":version" for "+GUI" and "+X11"), it may need to load shared libraries
+  and connect to the X11 server.  Try compiling a version with GUI and X11
+  disabled.  This also should make the executable smaller.
+  Use the |-X| command line argument to avoid connecting to the X server when
+  running in a terminal.
+- If you have "viminfo" enabled, the loading of the viminfo file may take a
+  while.  You can find out if this is the problem by disabling viminfo for a
+  moment (use the Vim argument "-i NONE", |-i|).  Try reducing the number of
+  lines stored in a register with ":set viminfo='20,<50,s10".  |viminfo-file|.
+
+
+Intro message ~
+							*:intro*
+When Vim starts without a file name, an introductory message is displayed (for
+those who don't know what Vim is).  It is removed as soon as the display is
+redrawn in any way.  To see the message again, use the ":intro" command (if
+there is not enough room, you will see only part of it).
+   To avoid the intro message on startup, add the 'I' flag to 'shortmess'.
+
+							*info-message*
+The |--help| and |--version| arguments cause Vim to print a message and then
+exit.  Normally the message is sent to stdout, thus can be redirected to a
+file with: >
+
+	vim --help >file
+
+From inside Vim: >
+
+	:read !vim --help
+
+When using gvim, it detects that it might have been started from the desktop,
+without a terminal to show messages on.  This is detected when both stdout and
+stderr are not a tty.  This breaks the ":read" command, as used in the example
+above.  To make it work again, set 'shellredir' to ">" instead of the default
+">&": >
+
+	:set shellredir=>
+	:read !gvim --help
+
+This still won't work for systems where gvim does not use stdout at all
+though.
+

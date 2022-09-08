@@ -1,0 +1,82 @@
+3. Syntax loading procedure				*syntax-loading*
+
+This explains the details that happen when the command ":syntax enable" is
+issued.  When Vim initializes itself, it finds out where the runtime files are
+located.  This is used here as the variable |$VIMRUNTIME|.
+
+":syntax enable" and ":syntax on" do the following:
+
+    Source $VIMRUNTIME/syntax/syntax.vim
+    |
+    +-	Clear out any old syntax by sourcing $VIMRUNTIME/syntax/nosyntax.vim
+    |
+    +-	Source first syntax/synload.vim in 'runtimepath'
+    |	|
+    |	+-  Setup the colors for syntax highlighting.  If a color scheme is
+    |	|   defined it is loaded again with ":colors {name}".  Otherwise
+    |	|   ":runtime! syntax/syncolor.vim" is used.  ":syntax on" overrules
+    |	|   existing colors, ":syntax enable" only sets groups that weren't
+    |	|   set yet.
+    |	|
+    |	+-  Set up syntax autocmds to load the appropriate syntax file when
+    |	|   the 'syntax' option is set. *synload-1*
+    |	|
+    |	+-  Source the user's optional file, from the |mysyntaxfile| variable.
+    |	    This is for backwards compatibility with Vim 5.x only. *synload-2*
+    |
+    +-	Do ":filetype on", which does ":runtime! filetype.vim".  It loads any
+    |	filetype.vim files found.  It should always Source
+    |	$VIMRUNTIME/filetype.vim, which does the following.
+    |	|
+    |	+-  Install autocmds based on suffix to set the 'filetype' option
+    |	|   This is where the connection between file name and file type is
+    |	|   made for known file types. *synload-3*
+    |	|
+    |	+-  Source the user's optional file, from the *myfiletypefile*
+    |	|   variable.  This is for backwards compatibility with Vim 5.x only.
+    |	|   *synload-4*
+    |	|
+    |	+-  Install one autocommand which sources scripts.vim when no file
+    |	|   type was detected yet. *synload-5*
+    |	|
+    |	+-  Source $VIMRUNTIME/menu.vim, to setup the Syntax menu. |menu.vim|
+    |
+    +-	Install a FileType autocommand to set the 'syntax' option when a file
+    |	type has been detected. *synload-6*
+    |
+    +-	Execute syntax autocommands to start syntax highlighting for each
+	already loaded buffer.
+
+
+Upon loading a file, Vim finds the relevant syntax file as follows:
+
+    Loading the file triggers the BufReadPost autocommands.
+    |
+    +-	If there is a match with one of the autocommands from |synload-3|
+    |	(known file types) or |synload-4| (user's file types), the 'filetype'
+    |	option is set to the file type.
+    |
+    +-	The autocommand at |synload-5| is triggered.  If the file type was not
+    |	found yet, then scripts.vim is searched for in 'runtimepath'.  This
+    |	should always load $VIMRUNTIME/scripts.vim, which does the following.
+    |	|
+    |	+-  Source the user's optional file, from the *myscriptsfile*
+    |	|   variable.  This is for backwards compatibility with Vim 5.x only.
+    |	|
+    |	+-  If the file type is still unknown, check the contents of the file,
+    |	    again with checks like "getline(1) =~ pattern" as to whether the
+    |	    file type can be recognized, and set 'filetype'.
+    |
+    +-	When the file type was determined and 'filetype' was set, this
+    |	triggers the FileType autocommand |synload-6| above.  It sets
+    |	'syntax' to the determined file type.
+    |
+    +-	When the 'syntax' option was set above, this triggers an autocommand
+    |	from |synload-1| (and |synload-2|).  This find the main syntax file in
+    |	'runtimepath', with this command:
+    |		runtime! syntax/<name>.vim
+    |
+    +-	Any other user installed FileType or Syntax autocommands are
+	triggered.  This can be used to change the highlighting for a specific
+	syntax.
+

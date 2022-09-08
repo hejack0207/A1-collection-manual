@@ -1,0 +1,88 @@
+4. Using :make						*:make_makeprg*
+
+							*:mak* *:make*
+:mak[e][!] [arguments]	1. All relevant |QuickFixCmdPre| autocommands are
+			   executed.
+			2. If the 'autowrite' option is on, write any changed
+			   buffers
+			3. An errorfile name is made from 'makeef'.  If
+			   'makeef' doesn't contain "##", and a file with this
+			   name already exists, it is deleted.
+			4. The program given with the 'makeprg' option is
+			   started (default "make") with the optional
+			   [arguments] and the output is saved in the
+			   errorfile (for Unix it is also echoed on the
+			   screen).
+			5. The errorfile is read using 'errorformat'.
+			6. All relevant |QuickFixCmdPost| autocommands are
+			   executed.  See example below.
+			7. If [!] is not given the first error is jumped to.
+			8. The errorfile is deleted.
+			9. You can now move through the errors with commands
+			   like |:cnext| and |:cprevious|, see above.
+			This command does not accept a comment, any "
+			characters are considered part of the arguments.
+			If the encoding of the program output differs from the
+			'encoding' option, you can use the 'makeencoding'
+			option to specify the encoding.
+
+							*:lmak* *:lmake*
+:lmak[e][!] [arguments]
+			Same as ":make", except the location list for the
+			current window is used instead of the quickfix list.
+
+The ":make" command executes the command given with the 'makeprg' option.
+This is done by passing the command to the shell given with the 'shell'
+option.  This works almost like typing
+
+	":!{makeprg} [arguments] {shellpipe} {errorfile}".
+
+{makeprg} is the string given with the 'makeprg' option.  Any command can be
+used, not just "make".  Characters '%' and '#' are expanded as usual on a
+command-line.  You can use "%<" to insert the current file name without
+extension, or "#<" to insert the alternate file name without extension, for
+example: >
+   :set makeprg=make\ #<.o
+
+[arguments] is anything that is typed after ":make".
+{shellpipe} is the 'shellpipe' option.
+{errorfile} is the 'makeef' option, with ## replaced to make it unique.
+
+The placeholder "$*" can be used for the argument list in {makeprg} if the
+command needs some additional characters after its arguments.  The $* is
+replaced then by all arguments.  Example: >
+   :set makeprg=latex\ \\\\nonstopmode\ \\\\input\\{$*}
+or simpler >
+   :let &mp = 'latex \\nonstopmode \\input\{$*}'
+"$*" can be given multiple times, for example: >
+   :set makeprg=gcc\ -o\ $*\ $*
+
+The 'shellpipe' option defaults to ">" for the Amiga and ">%s 2>&1" for Win32.
+This means that the output of the compiler is saved in a file and not shown on
+the screen directly.  For Unix "| tee" is used.  The compiler output is shown
+on the screen and saved in a file the same time.  Depending on the shell used
+"|& tee" or "2>&1| tee" is the default, so stderr output will be included.
+
+If 'shellpipe' is empty, the {errorfile} part will be omitted.  This is useful
+for compilers that write to an errorfile themselves (e.g., Manx's Amiga C).
+
+
+Using QuickFixCmdPost to fix the encoding ~
+
+It may be that 'encoding' is set to an encoding that differs from the messages
+your build program produces.  This example shows how to fix this after Vim has
+read the error messages: >
+
+	function QfMakeConv()
+	   let qflist = getqflist()
+	   for i in qflist
+	      let i.text = iconv(i.text, "cp936", "utf-8")
+	   endfor
+	   call setqflist(qflist)
+	endfunction
+
+	au QuickfixCmdPost make call QfMakeConv()
+
+(Example by Faque Cheng)
+Another option is using 'makeencoding'.
+

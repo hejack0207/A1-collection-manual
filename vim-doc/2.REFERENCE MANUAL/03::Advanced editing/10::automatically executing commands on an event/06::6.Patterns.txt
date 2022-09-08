@@ -1,0 +1,101 @@
+6. Patterns					*autocmd-patterns* *{pat}*
+
+The {pat} argument can be a comma separated list.  This works as if the
+command was given with each pattern separately.  Thus this command: >
+	:autocmd BufRead *.txt,*.info set et
+Is equivalent to: >
+	:autocmd BufRead *.txt set et
+	:autocmd BufRead *.info set et
+
+The file pattern {pat} is tested for a match against the file name in one of
+two ways:
+1. When there is no '/' in the pattern, Vim checks for a match against only
+   the tail part of the file name (without its leading directory path).
+2. When there is a '/' in the pattern, Vim checks for a match against both the
+   short file name (as you typed it) and the full file name (after expanding
+   it to a full path and resolving symbolic links).
+
+The special pattern <buffer> or <buffer=N> is used for buffer-local
+autocommands |autocmd-buflocal|.  This pattern is not matched against the name
+of a buffer.
+
+Examples: >
+	:autocmd BufRead *.txt		set et
+Set the 'et' option for all text files. >
+
+	:autocmd BufRead /vim/src/*.c	set cindent
+Set the 'cindent' option for C files in the /vim/src directory. >
+
+	:autocmd BufRead /tmp/*.c	set ts=5
+If you have a link from "/tmp/test.c" to "/home/nobody/vim/src/test.c", and
+you start editing "/tmp/test.c", this autocommand will match.
+
+Note:  To match part of a path, but not from the root directory, use a '*' as
+the first character.  Example: >
+	:autocmd BufRead */doc/*.txt	set tw=78
+This autocommand will for example be executed for "/tmp/doc/xx.txt" and
+"/usr/home/piet/doc/yy.txt".  The number of directories does not matter here.
+
+
+The file name that the pattern is matched against is after expanding
+wildcards.  Thus if you issue this command: >
+	:e $ROOTDIR/main.$EXT
+The argument is first expanded to: >
+	/usr/root/main.py
+Before it's matched with the pattern of the autocommand.  Careful with this
+when using events like FileReadCmd, the value of <amatch> may not be what you
+expect.
+
+
+Environment variables can be used in a pattern: >
+	:autocmd BufRead $VIMRUNTIME/doc/*.txt  set expandtab
+And ~ can be used for the home directory (if $HOME is defined): >
+	:autocmd BufWritePost ~/.vimrc   so ~/.vimrc
+	:autocmd BufRead ~archive/*      set readonly
+The environment variable is expanded when the autocommand is defined, not when
+the autocommand is executed.  This is different from the command!
+
+							*file-pattern*
+The pattern is interpreted like mostly used in file names:
+	*	matches any sequence of characters; Unusual: includes path
+		separators
+	?	matches any single character
+	\?	matches a '?'
+	.	matches a '.'
+	~	matches a '~'
+	,	separates patterns
+	\,	matches a ','
+	{ }	like \( \) in a |pattern|
+	,	inside { }: like \| in a |pattern|
+	\}	literal }
+	\{	literal {
+	\\\{n,m\}  like \{n,m} in a |pattern|
+	\	special meaning like in a |pattern|
+	[ch]	matches 'c' or 'h'
+	[^ch]   match any character but 'c' and 'h'
+
+Note that for all systems the '/' character is used for path separator (even
+for MS-Windows).  This was done because the backslash is difficult to use in a
+pattern and to make the autocommands portable across different systems.
+
+It is possible to use |pattern| items, but they may not work as expected,
+because of the translation done for the above.
+
+							*autocmd-changes*
+Matching with the pattern is done when an event is triggered.  Changing the
+buffer name in one of the autocommands, or even deleting the buffer, does not
+change which autocommands will be executed.  Example: >
+
+	au BufEnter *.foo  bdel
+	au BufEnter *.foo  set modified
+
+This will delete the current buffer and then set 'modified' in what has become
+the current buffer instead.  Vim doesn't take into account that "*.foo"
+doesn't match with that buffer name.  It matches "*.foo" with the name of the
+buffer at the moment the event was triggered.
+
+However, buffer-local autocommands will not be executed for a buffer that has
+been wiped out with |:bwipe|.  After deleting the buffer with |:bdel| the
+buffer actually still exists (it becomes unlisted), thus the autocommands are
+still executed.
+

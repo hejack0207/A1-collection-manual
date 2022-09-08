@@ -4,16 +4,18 @@ if [[ -e help.txt ]]; then
     cat help.txt | ./organize.awk
 fi
 
-awkscript="$(pwd)/split-txt.awk"
-
+awkscript="$(pwd)/split-txt1.awk"
 while read f; do
     dir=$(dirname "$f")
     pushd "$dir"
     awk -f $awkscript $(basename "$f")
     popd
-done <<<$(find "1.USER MANUAL" -name '*.txt')
+done <<<$(find "1.USER MANUAL" -name 'usr*.txt')
 
-# while read f; do
-#     cd ${f:A:h}
-#     awk -f $awkscript ${f:A:t}
-# done <<<$(find "2.REFERENCE MANUAL/" -name '*.txt')
+awkscript="$(pwd)/split-txt2.awk"
+while read f; do
+    dir=$(dirname "$f")
+    pushd "$dir"
+    awk -f $awkscript $(basename "$f")
+    popd
+done <<<$(find "2.REFERENCE MANUAL/" -name '*.txt')

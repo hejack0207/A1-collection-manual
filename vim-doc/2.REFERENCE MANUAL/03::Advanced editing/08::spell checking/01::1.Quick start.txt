@@ -1,0 +1,206 @@
+1. Quick start					*spell-quickstart* *E756*
+
+This command switches on spell checking: >
+
+	:setlocal spell spelllang=en_us
+
+This switches on the 'spell' option and specifies to check for US English.
+
+The words that are not recognized are highlighted with one of these:
+	SpellBad	word not recognized			|hl-SpellBad|
+	SpellCap	word not capitalised			|hl-SpellCap|
+	SpellRare	rare word				|hl-SpellRare|
+	SpellLocal	wrong spelling for selected region	|hl-SpellLocal|
+
+Vim only checks words for spelling, there is no grammar check.
+
+If the 'mousemodel' option is set to "popup" and the cursor is on a badly
+spelled word or it is "popup_setpos" and the mouse pointer is on a badly
+spelled word, then the popup menu will contain a submenu to replace the bad
+word.  Note: this slows down the appearance of the popup menu.  Note for GTK:
+don't release the right mouse button until the menu appears, otherwise it
+won't work.
+
+To search for the next misspelled word:
+
+							*]s*
+]s			Move to next misspelled word after the cursor.
+			A count before the command can be used to repeat.
+			'wrapscan' applies.
+
+							*[s*
+[s			Like "]s" but search backwards, find the misspelled
+			word before the cursor.  Doesn't recognize words
+			split over two lines, thus may stop at words that are
+			not highlighted as bad.  Does not stop at word with
+			missing capital at the start of a line.
+
+							*]S*
+]S			Like "]s" but only stop at bad words, not at rare
+			words or words for another region.
+
+							*[S*
+[S			Like "]S" but search backwards.
+
+
+To add words to your own word list:
+
+							*zg*
+zg			Add word under the cursor as a good word to the first
+			name in 'spellfile'.  A count may precede the command
+			to indicate the entry in 'spellfile' to be used.  A
+			count of two uses the second entry.
+
+			In Visual mode the selected characters are added as a
+			word (including white space!).
+			When the cursor is on text that is marked as badly
+			spelled then the marked text is used.
+			Otherwise the word under the cursor, separated by
+			non-word characters, is used.
+
+			If the word is explicitly marked as bad word in
+			another spell file the result is unpredictable.
+
+							*zG*
+zG			Like "zg" but add the word to the internal word list
+			|internal-wordlist|.
+
+							*zw*
+zw			Like "zg" but mark the word as a wrong (bad) word.
+			If the word already appears in 'spellfile' it is
+			turned into a comment line.  See |spellfile-cleanup|
+			for getting rid of those.
+
+							*zW*
+zW			Like "zw" but add the word to the internal word list
+			|internal-wordlist|.
+
+zuw							*zug* *zuw*
+zug			Undo |zw| and |zg|, remove the word from the entry in
+			'spellfile'.  Count used as with |zg|.
+
+zuW							*zuG* *zuW*
+zuG			Undo |zW| and |zG|, remove the word from the internal
+			word list.  Count used as with |zg|.
+
+							*:spe* *:spellgood*
+:[count]spe[llgood] {word}
+			Add {word} as a good word to 'spellfile', like with
+			|zg|.  Without count the first name is used, with a
+			count of two the second entry, etc.
+
+:spe[llgood]! {word}	Add {word} as a good word to the internal word list,
+			like with |zG|.
+
+							*:spellw* *:spellwrong*
+:[count]spellw[rong] {word}
+			Add {word} as a wrong (bad) word to 'spellfile', as
+			with |zw|.  Without count the first name is used, with
+			a count of two the second entry, etc.
+
+:spellw[rong]! {word}	Add {word} as a wrong (bad) word to the internal word
+			list, like with |zW|.
+
+							*:spellra* *:spellrare*
+:[count]spellr[are] {word}
+			Add {word} as a rare word to 'spellfile', similar to
+			|zw|.  Without count the first name is used, with
+			a count of two the second entry, etc.
+
+			There are no normal mode commands to mark words as
+			rare as this is a fairly uncommon command and all
+			intuitive commands for this are already taken. If you
+			want you can add mappings with e.g.: >
+		nnoremap z?  :exe ':spellrare  ' . expand('<cWORD>')<CR>
+		nnoremap z/  :exe ':spellrare! ' . expand('<cWORD>')<CR>
+<			|:spellundo|, |zuw|, or |zuW| can be used to undo this.
+
+:spellr[rare]! {word}	Add {word} as a rare word to the internal word
+			list, similar to |zW|.
+
+:[count]spellu[ndo] {word}				*:spellu* *:spellundo*
+			Like |zuw|.  [count] used as with |:spellgood|.
+
+:spellu[ndo]! {word}	Like |zuW|.  [count] used as with |:spellgood|.
+
+
+After adding a word to 'spellfile' with the above commands its associated
+".spl" file will automatically be updated and reloaded.  If you change
+'spellfile' manually you need to use the |:mkspell| command.  This sequence of
+commands mostly works well: >
+	:edit <file in 'spellfile'>
+<	(make changes to the spell file) >
+	:mkspell! %
+
+More details about the 'spellfile' format below |spell-wordlist-format|.
+
+							*internal-wordlist*
+The internal word list is used for all buffers where 'spell' is set.  It is
+not stored, it is lost when you exit Vim.  It is also cleared when 'encoding'
+is set.
+
+
+Finding suggestions for bad words:
+							*z=*
+z=			For the word under/after the cursor suggest correctly
+			spelled words.  This also works to find alternatives
+			for a word that is not highlighted as a bad word,
+			e.g., when the word after it is bad.
+			In Visual mode the highlighted text is taken as the
+			word to be replaced.
+			The results are sorted on similarity to the word being
+			replaced.
+			This may take a long time.  Hit CTRL-C when you get
+			bored.
+
+			If the command is used without a count the
+			alternatives are listed and you can enter the number
+			of your choice or press <Enter> if you don't want to
+			replace.  You can also use the mouse to click on your
+			choice (only works if the mouse can be used in Normal
+			mode and when there are no line wraps).  Click on the
+			first line (the header) to cancel.
+
+			The suggestions listed normally replace a highlighted
+			bad word.  Sometimes they include other text, in that
+			case the replaced text is also listed after a "<".
+
+			If a count is used that suggestion is used, without
+			prompting.  For example, "1z=" always takes the first
+			suggestion.
+
+			If 'verbose' is non-zero a score will be displayed
+			with the suggestions to indicate the likeliness to the
+			badly spelled word (the higher the score the more
+			different).
+			When a word was replaced the redo command "." will
+			repeat the word replacement.  This works like "ciw",
+			the good word and <Esc>.  This does NOT work for Thai
+			and other languages without spaces between words.
+
+					*:spellr* *:spellrepall* *E752* *E753*
+:spellr[epall]		Repeat the replacement done by |z=| for all matches
+			with the replaced word in the current window.
+
+In Insert mode, when the cursor is after a badly spelled word, you can use
+CTRL-X s to find suggestions.  This works like Insert mode completion.  Use
+CTRL-N to use the next suggestion, CTRL-P to go back. |i_CTRL-X_s|
+
+The 'spellsuggest' option influences how the list of suggestions is generated
+and sorted.  See |'spellsuggest'|.
+
+The 'spellcapcheck' option is used to check the first word of a sentence
+starts with a capital.  This doesn't work for the first word in the file.
+When there is a line break right after a sentence the highlighting of the next
+line may be postponed.  Use |CTRL-L| when needed.  Also see |set-spc-auto| for
+how it can be set automatically when 'spelllang' is set.
+
+The 'spelloptions' option has a few more flags that influence the way spell
+checking works.
+
+Vim counts the number of times a good word is encountered.  This is used to
+sort the suggestions: words that have been seen before get a small bonus,
+words that have been seen often get a bigger bonus.  The COMMON item in the
+affix file can be used to define common words, so that this mechanism also
+works in a new or short file |spell-COMMON|.
+

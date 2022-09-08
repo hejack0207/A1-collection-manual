@@ -1,0 +1,452 @@
+8. Useful notes						*vms-notes*
+
+8.1 Backspace/delete
+8.2 Filters
+8.3 VMS file version numbers
+8.4 Directory conversion
+8.5 Remote host invocation
+8.6 Terminal problems
+8.7 Hex-editing and other external tools
+8.8 Sourcing vimrc and gvimrc
+8.9 Printing from Vim
+8.10 Setting up the symbols
+8.11 diff and other GNU programs
+8.12 diff-mode
+8.13 Allow '$' in C keywords
+8.14 VIMTUTOR for beginners
+8.15 Slow start in console mode issue
+8.16 Common VIM directory - different architectures
+
+8.1 Backspace/delete
+
+There are backspace/delete key inconsistencies with VMS.
+:fixdel doesn't do the trick, but the solution is: >
+
+	:inoremap ^? ^H		" for terminal mode
+	:inoremap <Del> ^H	" for gui mode
+
+Read more in ch: 8.6 (Terminal problems).
+(Bruce Hunsaker <BNHunsaker@chq.byu.edu> Vim 5.3)
+
+
+8.2 Filters
+
+Vim supports filters, i.e., if you have a sort program that can handle
+input/output redirection like Unix (<infile >outfile), you could use >
+
+	:map \s 0!'aqsort<CR>
+
+(Charles E. Campbell, Jr. <cec@gryphon.gsfc.nasa.gov> Vim 5.4)
+
+
+8.3 VMS file version numbers
+
+Vim is saving files into a new file with the next higher file version
+number, try these settings. >
+
+	:set nobackup	     " does not create *.*_ backup files
+	:set nowritebackup   " does not have any purpose on VMS.  It's the
+			     " default.
+
+Recovery is working perfectly as well from the default swap file.
+Read more with :help swapfile
+
+(Claude Marinier <ClaudeMarinier@xwavesolutions.com> Vim 5.5, Zoltan Arpadffy
+Vim 5.6)
+
+
+8.4 Directory conversion
+
+Vim will internally convert any unix-style paths and even mixed unix/VMS
+paths into VMS style paths.  Some typical conversions resemble:
+
+	/abc/def/ghi		-> abc:[def]ghi.
+	/abc/def/ghi.j		-> abc:[def]ghi.j
+	/abc/def/ghi.j;2	-> abc:[def]ghi.j;2
+	/abc/def/ghi/jkl/mno	-> abc:[def.ghi.jkl]mno.
+	abc:[def.ghi]jkl/mno	-> abc:[def.ghi.jkl]mno.
+	  ./			-> current directory
+	  ../			-> relative parent directory
+	  [.def.ghi]		-> relative child directory
+	   ./def/ghi		-> relative child directory
+
+Note: You may use <,> brackets as well (device:<path>file.ext;version) as
+rf10:<user.zay.work>test.c;1
+
+(David Elins <delins@foliage.com>, Jerome Lauret
+<JLAURET@mail.chem.sunysb.edu> Vim 5.6)
+
+
+8.5 Remote host invocation
+
+It is possible to use Vim as an internode editor.
+1. Edit some file from remote node: >
+
+	vi "<server>""username passwd""::<device>:<path><filename>;<version>"
+
+Example: >
+	vi "pluto""zay passwd""::RF10:<USER.ZAY.WORK>TEST.C;1"
+
+Note: syntax is very important, otherwise VMS will recognize more parameters
+instead of one (resulting with: file not found)
+
+2.  Set up Vim as your internode editor.  If Vim is not installed on your
+host, just set up your IP address, the full Vim path including the server name
+and run the command procedure below: >
+
+	$ if (p1 .eqs. "") .OR. (p2 .eqs. "") then goto usage
+	$ set disp/create/node=<your_IP_here>/trans=tcpip
+	$ define "VIM "<vim_server>""''p1' ''p2'""::<device>:<vim_path>"
+	$  vi*m :== "mcr VIM:VIM.EXE"
+	$ gv*im :== "spawn/nowait mcr VIM:VIM.EXE -g"
+	$ goto end
+	$ usage:
+	$ write sys$output " Please enter username and password as a parameter."
+	$ write sys$output " Example: @SETVIM.COM username passwd"
+	$ end:
+
+Note: Never use it in a clustered environment (you do not need it), loading
+could be very-very slow, but even faster than a local Emacs. :-)
+
+(Zoltan Arpadffy, Vim 5.6)
+
+
+8.6 Terminal problems
+
+If your terminal name is not known to Vim and it is trying to find the default
+one you will get the following message during start-up:
+---
+Terminal entry not found in termcap
+'unknown-terminal' not known.  Available built-in terminals are:
+    builtin_gui
+    builtin_riscos
+    builtin_amiga
+    builtin_ansi
+    builtin_vt320
+    builtin_vt52
+    builtin_pcansi
+    builtin_win32
+    builtin_xterm
+    builtin_iris-ansi
+    builtin_debug
+    builtin_dumb
+defaulting to 'vt320'
+---
+The solution is to define the default terminal name: >
+
+	$ ! unknown terminal name.  Let us use vt320 or ansi instead.
+	$ ! Note: it's case sensitive
+	$ define term "vt320"
+
+Terminals from VT100 to VT320 (as V300, VT220, VT200) do not need any extra
+keyboard mappings.  They should work perfectly as they are, including arrows,
+Ins, Del buttons etc., except Backspace in GUI mode.  To solve it, add to
+.gvimrc: >
+
+	inoremap <Del> <BS>
+
+Vim will also recognize that they are fast terminals.
+
+If you have some annoying line jumping on the screen between windows add to
+your .vimrc file: >
+
+	set ttyfast	" set fast terminal
+
+Note: if you're using Vim on remote host or through a very slow connection, it's
+recommended to avoid the fast terminal option with: >
+
+	set nottyfast   " set terminal to slow mode
+
+(Zoltan Arpadffy, Vim 5.6)
+
+
+8.7 Hex-editing and other external tools
+
+A very important difference between OpenVMS and other systems is that VMS uses
+special commands to execute executables: >
+
+	RUN <path>filename
+	MCR <path>filename <parameters>
+
+OpenVMS users always have to be aware that the Vim command :! "just" drop them
+to DCL prompt.  This feature is possible to use without any problem with all
+DCL commands, but if we want to execute some programs such as XXD, CTAGS, JTAGS,
+etc.  we're running into trouble if we follow the Vim documentation (see: help
+xxd).
+
+Solution: Execute with the MC command and add the full path to the executable.
+Example: Instead of :%!xxd command use: >
+
+	:%!mc vim:xxd
+
+... or in general: >
+	:!mc <path>filename <parameters>
+
+Note: You can use XXD and CTAGS from GUI menu.
+
+To customize ctags it is possible to define the logical $CTAGS with standard
+parameters as: >
+
+	define/nolog CTAGS "--totals -o sys$login:tags"
+
+For additional information, please read :help tagsearch and CTAGS
+documentation at http://ctags.sourceforge.net/ctags.html.
+
+(Zoltan Arpadffy, Vim 5.6-70)
+
+
+8.8 Sourcing vimrc and gvimrc
+
+If you want to use your .vimrc and .gvimrc from other platforms (e.g. Windows)
+you can get in trouble if you ftp that file(s): VMS has different end-of-line
+indication.
+The symptom is that Vim is not sourcing your .vimrc/.gvimrc, even if you say:
+>
+	:so sys$login:.vimrc
+
+One trick is to compress (e.g. zip) the files on the other platform and
+uncompress it on VMS; if you have the same symptom, try to create the files
+with copy-paste (for this you need both op. systems reachable from one
+machine, e.g. an Xterm on Windows or telnet to Windows from VMS).
+
+(Sandor Kopanyi, <sandor.kopanyi@mailbox.hu> Vim 6.0a)
+
+
+8.9 Printing from Vim
+
+To be able to print from Vim (running in GUI mode) under VMS you have to set
+up $TMP logical which should point to some temporary directory and logical
+SYS$PRINT to your default print queue.
+Example: >
+
+	$define SYS$PRINT HP5ANSI
+
+You can print out the whole buffer or just the marked area.
+More info under :help hardcopy
+
+(Zoltan Arpadffy, Vim 6.0c)
+
+
+8.10 Setting up the symbols
+
+When I use gvim this way and press CTRL-Y in the parent terminal, gvim exits.
+I now use a different symbol that seems to work OK and fixes the problem.
+I suggest this instead: >
+
+	$ GV*IM:==SPAWN/NOWAIT/INPUT=NLA0: MCR VIM:VIM.EXE -G -GEOMETRY 80X40
+
+The /INPUT=NLA0: separates the standard input of the gvim process from the
+parent terminal, to block signals from the parent window.
+Without the -GEOMETRY, the gvim window size will be minimal and the menu
+will be confused after a window-resize.
+
+(Carlo Mekenkamp, Coen Engelbarts, Vim 6.0ac)
+
+
+8.11 diff and other GNU programs
+
+From 6.0 diff functionality has been implemented, but OpenVMS does not use
+GNU/Unix like diff therefore built in diff does not work.
+There is a simple solution to solve this anomaly.  Install a Unix like diff
+and Vim will work perfectly in diff mode too.  You just have to redefine your
+diff program as: >
+
+	define /nolog diff <GNU_PATH>diff.exe
+
+Another, more sophisticated solution is described below (8.12 diff-mode)
+There are other programs such as patch, make etc that may cause the same
+problems.  At www.polarhome.com is possible to download an GNU package for
+Alpha and VAX boxes that is meant to solve GNU problems on OpenVMS.
+(Zoltan Arpadffy, Vim 6.1)
+
+
+8.12 diff-mode
+
+Vim 6.0 and higher supports Vim diff-mode (See |new-diff-mode|, |diff-mode|
+and |08.7|).  This uses the external program 'diff' and expects a Unix-like
+output format from diff.  The standard VMS diff has a different output
+format.  To use Vim on VMS in diff-mode, you need to:
+    1 Install a Unix-like diff program, e.g. GNU diff
+    2 Tell Vim to use the Unix-like diff for diff-mode.
+
+You can download GNU diff from the VIM-VMS website, it is one of the GNU
+tools in http://www.polarhome.com/vim/files/gnu_tools.zip.  I suggest to
+unpack it in a separate directory "GNU" and create a logical GNU: that
+points to that directory, e.g: >
+
+   DEFINE GNU    <DISK>:[<DIRECTORY>.BIN.GNU]
+
+You may also want to define a symbol GDIFF, to use the GNU diff from the DCL
+prompt: >
+
+   GDIFF :==     $GNU:DIFF.EXE
+
+Now you need to tell Vim to use the new diff program.  Take the example
+settings from |diff-diffexpr| and change the call to the external diff
+program to the new diff on VMS.  Add this to your .vimrc file: >
+
+     " Set up vimdiff options
+       if v:version >= 600
+	" Use GNU diff on VMS
+	set diffexpr=MyDiff()
+	function MyDiff()
+	   let opt = ""
+	   if &diffopt =~ "icase"
+	     let opt = opt . "-i "
+	   endif
+	   if &diffopt =~ "iwhite"
+	     let opt = opt . "-b "
+	   endif
+	   silent execute "!mc GNU:diff.exe -a " . opt . v:fname_in . " " .  v:fname_new .
+		\  " > " . v:fname_out
+	endfunction
+      endif
+
+You can now use Vim in diff-mode, e.g. to compare two files in read-only
+mode: >
+
+    $ VIM -D/R <FILE1> <FILE2>
+
+You can also define new symbols for vimdiff, e.g.: >
+
+    $ VIMDIFF     :== 'VIM' -D/R
+    $ GVIMDIFF    :== 'GVIM' -D/R
+
+You can now compare files in 4 ways: >
+
+    1. VMS  diff:  $ DIFF     <FILE1> <FILE2>
+    2. GNU  diff:  $ GDIFF    <FILE1> <FILE2>
+    3. VIM  diff:  $ VIMDIFF  <FILE1> <FILE2>
+    4. GVIM diff:  $ GVIMDIFF <FILE1> <FILE2>
+
+(Coen Engelbarts, Vim 6.1)
+
+
+8.13 Allow '$' in C keywords
+
+DEC C uses many identifiers with '$' in them.  This is not allowed in ANSI C,
+and Vim recognises the '$' as the end of the identifier.  You can change this
+with the 'iskeyword' option.
+Add this command to your .vimrc file: >
+
+    autocmd FileType c,cpp,cs  set iskeyword+=$
+
+You can also create the file(s) $VIM/FTPLUGIN/C.VIM (and/or CPP.VIM and
+CS.VIM) and add this command: >
+
+	set iskeyword+=$
+
+Now word-based commands, e.g. the '*'-search-command and the CTRL-]
+tag-lookup, work on the whole identifier.  (Ctags on VMS also supports '$' in
+C keywords since ctags version 5.1.)
+
+(Coen Engelbarts, Vim 6.1)
+
+8.14 VIMTUTOR for beginners
+
+The VIMTUTOR.COM DCL script can help Vim beginners to learn/make their first
+steps with Vim on OpenVMS.  Depending of binary distribution you may start it
+with: >
+
+	@vim:vimtutor
+
+(Thomas.R.Wyant III, Vim 6.1)
+
+8.16 Slow start in console mode issue
+
+As GUI/GTK Vim works equally well in console mode, many administrators
+deploy those executables system wide.
+Unfortunately, on a remote slow connections GUI/GTK executables behave rather
+slow when user wants to run Vim just in the console mode - because of X
+environment detection timeout.
+
+Luckily, there is a simple solution for that. Administrators need to deploy
+both GUI/GTK build and just console build executables, like below: >
+
+    |- vim73
+    |----- doc
+    |----- syntax
+       vimrc    (system rc files)
+       gvimrc
+       gvim.exe (the renamed GUI or GTK built vim.exe)
+       vim.exe  (the console only executable)
+
+Define system symbols like below in for ex in LOGIN.COM or SYLOGIN.COM: >
+
+	$ define/nolog VIM RF10:[UTIL.VIM73] ! where you VIM directory is
+	$ vi*m  :== mcr VIM:VIM.EXE
+	$ gvi*m :== mcr VIM:GVIM.EXE
+	$ ! or you can try to spawn with
+	$ gv*im :== spawn/nowait/input=NLA0 mcr VIM:GVIM.EXE -g -GEOMETRY 80x40
+
+
+Like this, users that do not have X environment and want to use Vim just in
+console mode can avoid performance problems.
+
+(Zoltan Arpadffy, Vim 7.2)
+
+8.15 Common VIM directory - different architectures
+
+In a cluster that contains nodes with different architectures like below:
+
+$show cluster
+View of Cluster from system ID 11655  node: TOR                                                                     18-AUG-2008 11:58:31
++---------------------------------+
+|        SYSTEMS        | MEMBERS |
++-----------------------+---------|
+|  NODE  |   SOFTWARE   |  STATUS |
++--------+--------------+---------|
+| TOR    | VMS V7.3-2   | MEMBER  |
+| TITAN2 | VMS V8.3     | MEMBER  |
+| ODIN   | VMS V7.3-2   | MEMBER  |
++---------------------------------+
+
+It is convenient to have a common VIM directory but execute different
+executables.
+There are several solutions for this problem:
+
+Solution 1.  All executables in the same directory with different names
+This is easily done with the following script that can be added
+to the login.com or sylogin.com: >
+
+	$ if f$getsyi("NODE_HWTYPE") .eqs. "VAX"
+	$ then
+	$       say "VAX platform"
+	$       vi*m:== mcr vim:VIM.EXE_VAX
+	$ endif
+	$ if f$getsyi("NODE_HWTYPE") .eqs. "ALPH"
+	$ then
+	$       say "ALPHA platform"
+	$       vi*m :== mcr vim:VIM.EXE_AXP
+	$ endif
+	$ if f$getsyi("ARCH_NAME") .eqs. "IA64"
+	$ then
+	$      say "IA64 platform"
+	$      vi*m :== mcr vim:VIM.EXE_IA64
+	$ endif
+
+Solution 2.  Different directories: >
+
+	$ if f$getsyi("NODE_HWTYPE") .eqs. "VAX"
+	$ then
+	$       say "VAX platform"
+	$       define/nolog VIM RF10:[UTIL.VAX_EXE] ! VAX executables
+	$ endif
+	$ if f$getsyi("NODE_HWTYPE") .eqs. "ALPH"
+	$ then
+	$       say "ALPHA platform"
+	$       define/nolog VIM RF10:[UTIL.AXP_EXE] ! AXP executables
+	$ endif
+	$ if f$getsyi("ARCH_NAME") .eqs. "IA64"
+	$ then
+	$      say "IA64 platform"
+	$      define/nolog VIM RF10:[UTIL.IA64_EXE] ! IA64 executables
+	$ endif
+        $! VIMRUNTIME must be defined in order to find runtime files
+	$ define/nolog VIMRUNTIME RF10:[UTIL.VIM73]
+
+A good example for this approach is the [GNU]gnu_tools.com script from
+GNU_TOOLS.ZIP package downloadable from http://www.polarhome.com/vim/
+
+(Zoltan Arpadffy, Vim 7.2)
+

@@ -1,0 +1,82 @@
+2. Defining autocommands				*autocmd-define*
+
+							*:au* *:autocmd*
+:au[tocmd] [group] {event} {pat} [++once] [++nested] {cmd}
+			Add {cmd} to the list of commands that Vim will
+			execute automatically on {event} for a file matching
+			{pat} |autocmd-patterns|.
+			Note: A quote character is seen as argument to the
+			:autocmd and won't start a comment.
+			Vim always adds the {cmd} after existing autocommands,
+			so that the autocommands execute in the order in which
+			they were given.
+			See |autocmd-nested| for [++nested].  "nested"
+			(without the ++) can also be used, for backwards
+			compatibility.
+							*autocmd-once*
+			If [++once] is supplied the command is executed once,
+			then removed ("one shot").
+
+The special pattern <buffer> or <buffer=N> defines a buffer-local autocommand.
+See |autocmd-buflocal|.
+
+Note: The ":autocmd" command can only be followed by another command when the
+'|' appears before {cmd}.  This works: >
+	:augroup mine | au! BufRead | augroup END
+But this sees "augroup" as part of the defined command: >
+	:augroup mine | au! BufRead * | augroup END
+	:augroup mine | au BufRead * set tw=70 | augroup END
+Instead you can put the group name into the command: >
+	:au! mine BufRead *
+	:au mine BufRead * set tw=70
+Or use `:execute`: >
+	:augroup mine | exe "au! BufRead *" | augroup END
+	:augroup mine | exe "au BufRead * set tw=70" | augroup END
+
+Note that special characters (e.g., "%", "<cword>") in the ":autocmd"
+arguments are not expanded when the autocommand is defined.  These will be
+expanded when the Event is recognized, and the {cmd} is executed.  The only
+exception is that "<sfile>" is expanded when the autocmd is defined.  Example:
+>
+	:au BufNewFile,BufRead *.html so <sfile>:h/html.vim
+
+Here Vim expands <sfile> to the name of the file containing this line.
+
+`:autocmd` adds to the list of autocommands regardless of whether they are
+already present.  When your .vimrc file is sourced twice, the autocommands
+will appear twice.  To avoid this, define your autocommands in a group, so
+that you can easily clear them: >
+
+	augroup vimrc
+	  " Remove all vimrc autocommands
+	  autocmd!
+	  au BufNewFile,BufRead *.html so <sfile>:h/html.vim
+	augroup END
+
+If you don't want to remove all autocommands, you can instead use a variable
+to ensure that Vim includes the autocommands only once: >
+
+	:if !exists("autocommands_loaded")
+	:  let autocommands_loaded = 1
+	:  au ...
+	:endif
+
+When the [group] argument is not given, Vim uses the current group (as defined
+with ":augroup"); otherwise, Vim uses the group defined with [group].  Note
+that [group] must have been defined before.  You cannot define a new group
+with ":au group ..."; use ":augroup" for that.
+
+While testing autocommands, you might find the 'verbose' option to be useful: >
+	:set verbose=9
+This setting makes Vim echo the autocommands as it executes them.
+
+When defining an autocommand in a script, it will be able to call functions
+local to the script and use mappings local to the script.  When the event is
+triggered and the command executed, it will run in the context of the script
+it was defined in.  This matters if |<SID>| is used in a command.
+
+When executing the commands, the message from one command overwrites a
+previous message.  This is different from when executing the commands
+manually.  Mostly the screen will not scroll up, thus there is no hit-enter
+prompt.  When one command outputs two messages this can happen anyway.
+

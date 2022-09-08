@@ -1,0 +1,286 @@
+3. Netrw Reference					*netrw-ref* {{{1
+
+   Netrw supports several protocols in addition to scp and ftp as mentioned
+   in |netrw-start|.  These include dav, fetch, http,... well, just look
+   at the list in |netrw-externapp|.  Each protocol is associated with a
+   variable which holds the default command supporting that protocol.
+
+EXTERNAL APPLICATIONS AND PROTOCOLS			*netrw-externapp* {{{2
+
+	Protocol  Variable	       Default Value
+	--------  ----------------     -------------
+	   dav:   *g:netrw_dav_cmd*      = "cadaver"    if cadaver is executable
+	   dav:   g:netrw_dav_cmd      = "curl -o"    elseif curl is available
+	 fetch:   *g:netrw_fetch_cmd*    = "fetch -o"   if fetch is available
+	   ftp:   *g:netrw_ftp_cmd*      = "ftp"
+	  http:   *g:netrw_http_cmd*     = "elinks"     if   elinks  is available
+	  http:   g:netrw_http_cmd     = "links"      elseif links is available
+	  http:   g:netrw_http_cmd     = "curl"       elseif curl  is available
+	  http:   g:netrw_http_cmd     = "wget"       elseif wget  is available
+          http:   g:netrw_http_cmd     = "fetch"      elseif fetch is available
+	  http:   *g:netrw_http_put_cmd* = "curl -T"
+	   rcp:   *g:netrw_rcp_cmd*      = "rcp"
+	 rsync:   *g:netrw_rsync_cmd*    = "rsync"     (see |g:netrw_rsync_sep|)
+	   scp:   *g:netrw_scp_cmd*      = "scp -q"
+	  sftp:   *g:netrw_sftp_cmd*     = "sftp"
+	  file:   *g:netrw_file_cmd*     = "elinks" or "links"
+
+	*g:netrw_http_xcmd* : the option string for http://... protocols are
+	specified via this variable and may be independently overridden.  By
+	default, the option arguments for the http-handling commands are: >
+
+		    elinks : "-source >"
+		    links  : "-dump >"
+		    curl   : "-L -o"
+		    wget   : "-q -O"
+		    fetch  : "-o"
+<
+	For example, if your system has elinks, and you'd rather see the
+	page using an attempt at rendering the text, you may wish to have >
+		let g:netrw_http_xcmd= "-dump >"
+<	in your .vimrc.
+
+	g:netrw_http_put_cmd: this option specifies both the executable and
+	any needed options.  This command does a PUT operation to the url.
+
+
+READING						*netrw-read* *netrw-nread* {{{2
+
+	Generally, one may just use the URL notation with a normal editing
+	command, such as >
+
+		:e ftp://[user@]machine/path
+<
+	Netrw also provides the Nread command:
+
+	:Nread ?					give help
+	:Nread "machine:path"				uses rcp
+	:Nread "machine path"				uses ftp w/ <.netrc>
+	:Nread "machine id password path"		uses ftp
+	:Nread "dav://machine[:port]/path"		uses cadaver
+	:Nread "fetch://[user@]machine/path"		uses fetch
+	:Nread "ftp://[user@]machine[[:#]port]/path"	uses ftp w/ <.netrc>
+	:Nread "http://[user@]machine/path"		uses http  uses wget
+	:Nread "rcp://[user@]machine/path"		uses rcp
+	:Nread "rsync://[user@]machine[:port]/path"	uses rsync
+	:Nread "scp://[user@]machine[[:#]port]/path"	uses scp
+	:Nread "sftp://[user@]machine/path"		uses sftp
+
+WRITING					*netrw-write* *netrw-nwrite* {{{2
+
+	One may just use the URL notation with a normal file writing
+	command, such as >
+
+		:w ftp://[user@]machine/path
+<
+	Netrw also provides the Nwrite command:
+
+	:Nwrite ?					give help
+	:Nwrite "machine:path"				uses rcp
+	:Nwrite "machine path"				uses ftp w/ <.netrc>
+	:Nwrite "machine id password path"		uses ftp
+	:Nwrite "dav://machine[:port]/path"		uses cadaver
+	:Nwrite "ftp://[user@]machine[[:#]port]/path"	uses ftp w/ <.netrc>
+	:Nwrite "rcp://[user@]machine/path"		uses rcp
+	:Nwrite "rsync://[user@]machine[:port]/path"	uses rsync
+	:Nwrite "scp://[user@]machine[[:#]port]/path"	uses scp
+	:Nwrite "sftp://[user@]machine/path"		uses sftp
+	http: not supported!
+
+SOURCING					*netrw-source* {{{2
+
+	One may just use the URL notation with the normal file sourcing
+	command, such as >
+
+		:so ftp://[user@]machine/path
+<
+	Netrw also provides the Nsource command:
+
+	:Nsource ?					give help
+	:Nsource "dav://machine[:port]/path"		uses cadaver
+	:Nsource "fetch://[user@]machine/path"		uses fetch
+	:Nsource "ftp://[user@]machine[[:#]port]/path"	uses ftp w/ <.netrc>
+	:Nsource "http://[user@]machine/path"		uses http  uses wget
+	:Nsource "rcp://[user@]machine/path"		uses rcp
+	:Nsource "rsync://[user@]machine[:port]/path"	uses rsync
+	:Nsource "scp://[user@]machine[[:#]port]/path"	uses scp
+	:Nsource "sftp://[user@]machine/path"		uses sftp
+
+DIRECTORY LISTING		*netrw-trailingslash* *netrw-dirlist* {{{2
+
+	One may browse a directory to get a listing by simply attempting to
+	edit the directory: >
+
+		:e scp://[user]@hostname/path/
+		:e ftp://[user]@hostname/path/
+<
+	For remote directory listings (ie. those using scp or ftp), that
+	trailing "/" is necessary (the slash tells netrw to treat the argument
+	as a directory to browse instead of as a file to download).
+
+	The Nread command may also be used to accomplish this (again, that
+	trailing slash is necessary): >
+
+		:Nread [protocol]://[user]@hostname/path/
+<
+					*netrw-login* *netrw-password*
+CHANGING USERID AND PASSWORD		*netrw-chgup* *netrw-userpass* {{{2
+
+	Attempts to use ftp will prompt you for a user-id and a password.
+	These will be saved in global variables |g:netrw_uid| and
+	|s:netrw_passwd|; subsequent use of ftp will re-use those two strings,
+	thereby simplifying use of ftp.  However, if you need to use a
+	different user id and/or password, you'll want to call |NetUserPass()|
+	first.  To work around the need to enter passwords, check if your ftp
+	supports a <.netrc> file in your home directory.  Also see
+	|netrw-passwd| (and if you're using ssh/scp hoping to figure out how
+	to not need to use passwords for scp, look at |netrw-ssh-hack|).
+
+	:NetUserPass [uid [password]]		-- prompts as needed
+	:call NetUserPass()			-- prompts for uid and password
+	:call NetUserPass("uid")		-- prompts for password
+	:call NetUserPass("uid","password")	-- sets global uid and password
+
+(Related topics: |ftp| |netrw-userpass| |netrw-start|)
+
+NETRW VARIABLES AND SETTINGS				*netrw-variables* {{{2
+    (Also see:
+    |netrw-browser-var|     : netrw browser option variables
+    |netrw-protocol|        : file transfer protocol option variables
+    |netrw-settings|        : additional file transfer options
+    |netrw-browser-options| : these options affect browsing directories
+    )
+
+Netrw provides a lot of variables which allow you to customize netrw to your
+preferences.  One way to look at them is via the command :NetrwSettings (see
+|netrw-settings|) which will display your current netrw settings.  Most such
+settings are described below, in |netrw-browser-options|, and in
+|netrw-externapp|:
+
+ *b:netrw_lastfile*	last file Network-read/written retained on a
+			per-buffer basis (supports plain :Nw )
+
+ *g:netrw_bufsettings*	the settings that netrw buffers have
+			(default) noma nomod nonu nowrap ro nobl
+
+ *g:netrw_chgwin*	specifies a window number where subsequent file edits
+			will take place.  (also see |netrw-C|)
+			(default) -1
+
+ *g:Netrw_funcref*	specifies a function (or functions) to be called when
+			netrw edits a file.  The file is first edited, and
+			then the function reference (|Funcref|) is called.
+			This variable may also hold a |List| of Funcrefs.
+			(default) not defined.  (the capital in g:Netrw...
+			is required by its holding a function reference)
+>
+			    Example: place in .vimrc; affects all file opening
+			    fun! MyFuncRef()
+			    endfun
+			    let g:Netrw_funcref= function("MyFuncRef")
+
+<
+ *g:Netrw_UserMaps*	specifies a function or |List| of functions which can
+			be used to set up user-specified maps and functionality.
+			See |netrw-usermaps|
+
+ *g:netrw_ftp*		   if it doesn't exist, use default ftp
+			=0 use default ftp		       (uid password)
+			=1 use alternate ftp method	  (user uid password)
+			   If you're having trouble with ftp, try changing the
+			   value of this variable to see if the alternate ftp
+			   method works for your setup.
+
+ *g:netrw_ftp_options*     Chosen by default, these options are supposed to
+			 turn interactive prompting off and to restrain ftp
+			 from attempting auto-login upon initial connection.
+			 However, it appears that not all ftp implementations
+			 support this (ex. ncftp).
+		        ="-i -n"
+
+ *g:netrw_ftpextracmd*	default: doesn't exist
+			If this variable exists, then any string it contains
+			will be placed into the commands set to your ftp
+			client.  As an example:
+			   ="passive"
+
+ *g:netrw_ftpmode*	="binary"				    (default)
+			="ascii"
+
+ *g:netrw_ignorenetrc*	=0 (default for linux, cygwin)
+			=1 If you have a <.netrc> file but it doesn't work and
+			   you want it ignored, then set this variable as
+			   shown. (default for Windows + cmd.exe)
+
+ *g:netrw_menu*		=0 disable netrw's menu
+			=1 (default) netrw's menu enabled
+
+ *g:netrw_nogx*		if this variable exists, then the "gx" map will not
+			be available (see |netrw-gx|)
+
+ *g:netrw_uid*		(ftp) user-id,      retained on a per-vim-session basis
+ *s:netrw_passwd*	(ftp) password,     retained on a per-vim-session basis
+
+ *g:netrw_preview*	=0 (default) preview window shown in a horizontally
+			   split window
+			=1 preview window shown in a vertically split window.
+			   Also affects the "previous window" (see |netrw-P|)
+			   in the same way.
+			The |g:netrw_alto| variable may be used to provide
+			additional splitting control:
+				g:netrw_preview g:netrw_alto result
+				         0             0     |:aboveleft|
+				         0             1     |:belowright|
+				         1             0     |:topleft|
+				         1             1     |:botright|
+			To control sizing, see |g:netrw_winsize|
+
+ *g:netrw_scpport*	= "-P" : option to use to set port for scp
+ *g:netrw_sshport*	= "-p" : option to use to set port for ssh
+
+ *g:netrw_sepchr*	=\0xff
+			=\0x01 for enc == euc-jp (and perhaps it should be for
+			   others, too, please let me know)
+			   Separates priority codes from filenames internally.
+			   See |netrw-p12|.
+
+  *g:netrw_silent*	=0 : transfers done normally
+			=1 : transfers done silently
+
+ *g:netrw_use_errorwindow* =1 : messages from netrw will use a separate one
+			      line window.  This window provides reliable
+			      delivery of messages. (default)
+			 =0 : messages from netrw will use echoerr ;
+			      messages don't always seem to show up this
+			      way, but one doesn't have to quit the window.
+
+ *g:netrw_win95ftp*	=1 if using Win95, will remove four trailing blank
+			   lines that o/s's ftp "provides" on transfers
+			=0 force normal ftp behavior (no trailing line removal)
+
+ *g:netrw_cygwin*	=1 assume scp under windows is from cygwin. Also
+			   permits network browsing to use ls with time and
+			   size sorting (default if windows)
+			=0 assume Windows' scp accepts windows-style paths
+			   Network browsing uses dir instead of ls
+			   This option is ignored if you're using unix
+
+ *g:netrw_use_nt_rcp*	=0 don't use the rcp of WinNT, Win2000 and WinXP
+			=1 use WinNT's rcp in binary mode         (default)
+
+PATHS							*netrw-path* {{{2
+
+Paths to files are generally user-directory relative for most protocols.
+It is possible that some protocol will make paths relative to some
+associated directory, however.
+>
+	example:  vim scp://user@host/somefile
+	example:  vim scp://user@host/subdir1/subdir2/somefile
+<
+where "somefile" is in the "user"'s home directory.  If you wish to get a
+file using root-relative paths, use the full path:
+>
+	example:  vim scp://user@host//somefile
+	example:  vim scp://user@host//subdir1/subdir2/somefile
+<
+

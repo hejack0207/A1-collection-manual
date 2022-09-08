@@ -1,0 +1,156 @@
+5. Tags file format				*tags-file-format* *E431*
+
+						*ctags* *jtags*
+A tags file can be created with an external command, for example "ctags".  It
+will contain a tag for each function.  Some versions of "ctags" will also make
+a tag for each "#defined" macro, typedefs, enums, etc.
+
+Some programs that generate tags files:
+ctags			As found on most Unix systems.  Only supports C.  Only
+			does the basic work.
+universal ctags		A maintained version of ctags based on exuberant
+			ctags. See https://ctags.io.
+							*Exuberant_ctags*
+exuberant ctags		This is a very good one.  It works for C, C++, Java,
+			Fortran, Eiffel and others.  It can generate tags for
+			many items.  See http://ctags.sourceforge.net.
+			No new version since 2009.
+etags			Connected to Emacs.  Supports many languages.
+JTags			For Java, in Java.  It can be found at
+			http://www.fleiner.com/jtags/.
+ptags.py		For Python, in Python.  Found in your Python source
+			directory at Tools/scripts/ptags.py.
+ptags			For Perl, in Perl.  It can be found at
+			http://www.eleves.ens.fr:8080/home/nthiery/Tags/.
+gnatxref		For Ada.  See http://www.gnuada.org/.  gnatxref is
+			part of the gnat package.
+
+
+The lines in the tags file must have one of these two formats:
+
+1.  {tagname}		{TAB} {tagfile} {TAB} {tagaddress}
+2.  {tagname}		{TAB} {tagfile} {TAB} {tagaddress} {term} {field} ..
+
+Previously an old format was supported, see |tag-old-static|.
+
+The first format is a normal tag, which is completely compatible with Vi.  It
+is the only format produced by traditional ctags implementations.  This is
+often used for functions that are global, also referenced in other files.
+
+The lines in the tags file can end in <LF> or <CR><LF>.  On the Macintosh <CR>
+also works.  The <CR> and <NL> characters can never appear inside a line.
+
+The second format is new.  It includes additional information in optional
+fields at the end of each line.  It is backwards compatible with Vi.  It is
+only supported by new versions of ctags (such as Exuberant ctags).
+
+{tagname}	The identifier.  Normally the name of a function, but it can
+		be any identifier.  It cannot contain a <Tab>.
+{TAB}		One <Tab> character.  Note: previous versions allowed any
+		white space here.  This has been abandoned to allow spaces in
+		{tagfile}.
+{tagfile}	The file that contains the definition of {tagname}.  It can
+		have an absolute or relative path.  It may contain environment
+		variables and wildcards (although the use of wildcards is
+		doubtful).  It cannot contain a <Tab>.
+{tagaddress}	The Ex command that positions the cursor on the tag.  It can
+		be any Ex command, although restrictions apply (see
+		|tag-security|).  Posix only allows line numbers and search
+		commands, which are mostly used.
+{term}		;" The two characters semicolon and double quote.  This is
+		interpreted by Vi as the start of a comment, which makes the
+		following be ignored.  This is for backwards compatibility
+		with Vi, it ignores the following fields. Example:
+			APP	file	/^static int APP;$/;"	v
+		When {tagaddress} is not a line number or search pattern, then
+		{term} must be |;".  Here the bar ends the command (excluding
+		the bar) and ;" is used to have Vi ignore the rest of the
+		line.  Example:
+			APP	file.c	call cursor(3, 4)|;"	v
+
+{field} ..	A list of optional fields.  Each field has the form:
+
+			<Tab>{fieldname}:{value}
+
+		The {fieldname} identifies the field, and can only contain
+		alphabetical characters [a-zA-Z].
+		The {value} is any string, but cannot contain a <Tab>.
+		These characters are special:
+			"\t" stands for a <Tab>
+			"\r" stands for a <CR>
+			"\n" stands for a <NL>
+			"\\" stands for a single '\' character
+
+		There is one field that doesn't have a ':'.  This is the kind
+		of the tag.  It is handled like it was preceded with "kind:".
+		See the documentation of ctags for the kinds it produces.
+
+		The only other field currently recognized by Vim is "file:"
+		(with an empty value).  It is used for a static tag.
+
+
+The first lines in the tags file can contain lines that start with
+	!_TAG_
+These are sorted to the first lines, only rare tags that start with "!" can
+sort to before them.  Vim recognizes two items.  The first one is the line
+that indicates if the file was sorted.  When this line is found, Vim uses
+binary searching for the tags file:
+	!_TAG_FILE_SORTED<Tab>1<Tab>{anything} ~
+
+A tag file may be case-fold sorted to avoid a linear search when case is
+ignored.  (Case is ignored when 'ignorecase' is set and 'tagcase' is
+"followic", or when 'tagcase' is "ignore".)  See 'tagbsearch' for details.
+The value '2' should be used then:
+	!_TAG_FILE_SORTED<Tab>2<Tab>{anything} ~
+
+The other tag that Vim recognizes is the encoding of the tags file:
+	!_TAG_FILE_ENCODING<Tab>utf-8<Tab>{anything} ~
+Here "utf-8" is the encoding used for the tags.  Vim will then convert the tag
+being searched for from 'encoding' to the encoding of the tags file.  And when
+listing tags the reverse happens.  When the conversion fails the unconverted
+tag is used.
+
+							*tag-search*
+The command can be any Ex command, but often it is a search command.
+Examples:
+	tag1	file1	/^main(argc, argv)/ ~
+	tag2	file2	108 ~
+
+The command is always executed with 'magic' not set.  The only special
+characters in a search pattern are "^" (begin-of-line) and "$" (<EOL>).
+See |pattern|.  Note that you must put a backslash before each backslash in
+the search text.  This is for backwards compatibility with Vi.
+
+							*E434* *E435*
+If the command is a normal search command (it starts and ends with "/" or
+"?"), some special handling is done:
+- Searching starts on line 1 of the file.
+  The direction of the search is forward for "/", backward for "?".
+  Note that 'wrapscan' does not matter, the whole file is always searched.
+- If the search fails, another try is done ignoring case.  If that fails too,
+  a search is done for:
+	"^tagname[ \t]*("
+  (the tag with '^' prepended and "[ \t]*(" appended).  When using function
+  names, this will find the function name when it is in column 0.  This will
+  help when the arguments to the function have changed since the tags file was
+  made.  If this search also fails another search is done with:
+	"^[#a-zA-Z_].*\<tagname[ \t]*("
+  This means: A line starting with '#' or an identifier and containing the tag
+  followed by white space and a '('.  This will find macro names and function
+  names with a type prepended.
+
+
+							*tag-old-static*
+Until March 2019 (patch 8.1.1092) an outdated format was supported:
+    {tagfile}:{tagname} {TAB} {tagfile} {TAB} {tagaddress}
+
+This format is for a static tag only.  It is obsolete now, replaced by
+the second format.  It is only supported by Elvis 1.x, older Vim versions and
+a few versions of ctags.  A static tag is often used for functions that are
+local, only referenced in the file {tagfile}.  Note that for the static tag,
+the two occurrences of {tagfile} must be exactly the same.  Also see
+|tags-option| below, for how static tags are used.
+
+The support was removed, since when you can update to the new Vim version you
+should also be able to update ctags to one that supports the second format.
+

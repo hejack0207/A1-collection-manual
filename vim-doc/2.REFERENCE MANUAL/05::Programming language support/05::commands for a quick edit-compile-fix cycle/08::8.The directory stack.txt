@@ -1,0 +1,82 @@
+8. The directory stack				*quickfix-directory-stack*
+
+Quickfix maintains a stack for saving all used directories parsed from the
+make output.  For GNU-make this is rather simple, as it always prints the
+absolute path of all directories it enters and leaves.  Regardless if this is
+done via a 'cd' command in the makefile or with the parameter "-C dir" (change
+to directory before reading the makefile).  It may be useful to use the switch
+"-w" to force GNU-make to print out the working directory before and after
+processing.
+
+Maintaining the correct directory is more complicated if you don't use
+GNU-make.  AIX-make for example doesn't print any information about its
+working directory.  Then you need to enhance the makefile.  In the makefile of
+LessTif there is a command which echoes "Making {target} in {dir}".  The
+special problem here is that it doesn't print information on leaving the
+directory and that it doesn't print the absolute path.
+
+To solve the problem with relative paths and missing "leave directory"
+messages Vim uses following algorithm:
+
+1) Check if the given directory is a subdirectory of the current directory.
+   If this is true, store it as the current directory.
+2) If it is not a subdir of the current directory, try if this is a
+   subdirectory of one of the upper directories.
+3) If the directory still isn't found, it is assumed to be a subdirectory
+   of Vim's current directory.
+
+Additionally it is checked for every file, if it really exists in the
+identified directory.  If not, it is searched in all other directories of the
+directory stack (NOT the directory subtree!).  If it is still not found, it is
+assumed that it is in Vim's current directory.
+
+There are limitations in this algorithm.  These examples assume that make just
+prints information about entering a directory in the form "Making all in dir".
+
+1) Assume you have following directories and files:
+   ./dir1
+   ./dir1/file1.c
+   ./file1.c
+
+   If make processes the directory "./dir1" before the current directory and
+   there is an error in the file "./file1.c", you will end up with the file
+   "./dir1/file.c" loaded by Vim.
+
+   This can only be solved with a "leave directory" message.
+
+2) Assume you have following directories and files:
+   ./dir1
+   ./dir1/dir2
+   ./dir2
+
+   You get the following:
+
+   Make output			  Directory interpreted by Vim
+   ------------------------	  ----------------------------
+   Making all in dir1		  ./dir1
+   Making all in dir2		  ./dir1/dir2
+   Making all in dir2		  ./dir1/dir2
+
+   This can be solved by printing absolute directories in the "enter directory"
+   message or by printing "leave directory" messages.
+
+To avoid this problem, ensure to print absolute directory names and "leave
+directory" messages.
+
+Examples for Makefiles:
+
+Unix:
+    libs:
+	    for dn in $(LIBDIRS); do				\
+		(cd $$dn; echo "Entering dir '$$(pwd)'"; make); \
+		echo "Leaving dir";				\
+	    done
+
+Add
+    %DEntering\ dir\ '%f',%XLeaving\ dir
+to your 'errorformat' to handle the above output.
+
+Note that Vim doesn't check if the directory name in a "leave directory"
+messages is the current directory.  This is why you could just use the message
+"Leaving dir".
+

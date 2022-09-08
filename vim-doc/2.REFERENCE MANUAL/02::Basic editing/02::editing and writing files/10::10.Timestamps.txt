@@ -1,0 +1,100 @@
+10. Timestamps					*timestamp* *timestamps*
+
+Vim remembers the modification timestamp, mode and size of a file when you
+begin editing it.  This is used to avoid that you have two different versions
+of the same file (without you knowing this).
+
+After a shell command is run (|:!cmd| |suspend| |:read!| |K|) timestamps,
+file modes and file sizes are compared for all buffers in a window.   Vim will
+run any associated |FileChangedShell| autocommands or display a warning for
+any files that have changed.  In the GUI this happens when Vim regains input
+focus.
+
+							*E321* *E462*
+If you want to automatically reload a file when it has been changed outside of
+Vim, set the 'autoread' option.  This doesn't work at the moment you write the
+file though, only when the file wasn't changed inside of Vim.
+							*ignore-timestamp*
+If you do not want to be asked or automatically reload the file, you can use
+this: >
+	set buftype=nofile
+
+Or, when starting gvim from a shell: >
+	gvim file.log -c "set buftype=nofile"
+
+Note that if a FileChangedShell autocommand is defined you will not get a
+warning message or prompt.  The autocommand is expected to handle this.
+
+There is no warning for a directory (e.g., with |netrw-browse|).  But you do
+get warned if you started editing a new file and it was created as a directory
+later.
+
+When Vim notices the timestamp of a file has changed, and the file is being
+edited in a buffer but has not changed, Vim checks if the contents of the file
+is equal.  This is done by reading the file again (into a hidden buffer, which
+is immediately deleted again) and comparing the text.  If the text is equal,
+you will get no warning.
+
+If you don't get warned often enough you can use the following command.
+
+							*:checkt* *:checktime*
+:checkt[ime]		Check if any buffers were changed outside of Vim.
+			This checks and warns you if you would end up with two
+			versions of a file.
+			If this is called from an autocommand, a ":global"
+			command or is not typed the actual check is postponed
+			until a moment the side effects (reloading the file)
+			would be harmless.
+			Each loaded buffer is checked for its associated file
+			being changed.  If the file was changed Vim will take
+			action.  If there are no changes in the buffer and
+			'autoread' is set, the buffer is reloaded.  Otherwise,
+			you are offered the choice of reloading the file.  If
+			the file was deleted you get an error message.
+			If the file previously didn't exist you get a warning
+			if it exists now.
+			Once a file has been checked the timestamp is reset,
+			you will not be warned again.
+
+:[N]checkt[ime] {filename}
+:[N]checkt[ime] [N]
+			Check the timestamp of a specific buffer.  The buffer
+			may be specified by name, number or with a pattern.
+
+
+							*E813* *E814*
+Vim will reload the buffer if you chose to.  If a window is visible that
+contains this buffer, the reloading will happen in the context of this window.
+Otherwise a special window is used, so that most autocommands will work.  You
+can't close this window.  A few other restrictions apply.  Best is to make
+sure nothing happens outside of the current buffer.  E.g., setting
+window-local options may end up in the wrong window.  Splitting the window,
+doing something there and closing it should be OK (if there are no side
+effects from other autocommands).  Closing unrelated windows and buffers will
+get you into trouble.
+
+Before writing a file the timestamp is checked.  If it has changed, Vim will
+ask if you really want to overwrite the file:
+
+	WARNING: The file has been changed since reading it!!!
+	Do you really want to write to it (y/n)?
+
+If you hit 'y' Vim will continue writing the file.  If you hit 'n' the write is
+aborted.  If you used ":wq" or "ZZ" Vim will not exit, you will get another
+chance to write the file.
+
+The message would normally mean that somebody has written to the file after
+the edit session started.  This could be another person, in which case you
+probably want to check if your changes to the file and the changes from the
+other person should be merged.  Write the file under another name and check for
+differences (the "diff" program can be used for this).
+
+It is also possible that you modified the file yourself, from another edit
+session or with another command (e.g., a filter command).  Then you will know
+which version of the file you want to keep.
+
+There is one situation where you get the message while there is nothing wrong:
+On a Win32 system on the day daylight saving time starts.  There is something
+in the Win32 libraries that confuses Vim about the hour time difference.  The
+problem goes away the next day.
+

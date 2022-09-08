@@ -1,0 +1,131 @@
+5.  Namespace, Import and Export
+					*vim9script* *vim9-export* *vim9-import*
+
+THIS IS STILL UNDER DEVELOPMENT - ANYTHING CAN BREAK - ANYTHING CAN CHANGE
+
+A Vim9 script can be written to be imported.  This means that everything in
+the script is local, unless exported.  Those exported items, and only those
+items, can then be imported in another script.
+
+
+Namespace ~
+							*:vim9script* *:vim9*
+To recognize a file that can be imported the `vim9script` statement must
+appear as the first statement in the file.  It tells Vim to interpret the
+script in its own namespace, instead of the global namespace.  If a file
+starts with: >
+	vim9script
+	let myvar = 'yes'
+Then "myvar" will only exist in this file.  While without `vim9script` it would
+be available as `g:myvar` from any other script and function.
+
+The variables at the file level are very much like the script-local "s:"
+variables in legacy Vim script, but the "s:" is omitted.  And they cannot be
+deleted.
+
+In Vim9 script the global "g:" namespace can still be used as before.  And the
+"w:", "b:" and "t:" namespaces.  These have in common that variables are not
+declared and they can be deleted.
+
+A side effect of `:vim9script` is that the 'cpoptions' option is set to the
+Vim default value, like with: >
+	:set cpo&vim
+One of the effects is that |line-continuation| is always enabled.
+The original value of 'cpoptions' is restored at the end of the script.
+
+
+Export ~
+							*:export* *:exp*
+Exporting one item can be written as: >
+	export const EXPORTED_CONST = 1234
+	export let someValue = ...
+	export def MyFunc() ...
+	export class MyClass ...
+
+As this suggests, only constants, variables, `:def` functions and classes can
+be exported.
+
+Alternatively, an export statement can be used to export several already
+defined (otherwise script-local) items: >
+	export {EXPORTED_CONST, someValue, MyFunc, MyClass}
+<
+							*E1042*
+`:export` can only be used in Vim9 script, at the script level.
+
+
+Import ~
+						*:import* *:imp* *E1094*
+The exported items can be imported individually in another Vim9 script: >
+	import EXPORTED_CONST from "thatscript.vim"
+	import MyClass from "myclass.vim"
+
+To import multiple items at the same time: >
+	import {someValue, MyClass} from "thatscript.vim"
+
+In case the name is ambiguous, another name can be specified: >
+	import MyClass as ThatClass from "myclass.vim"
+	import {someValue, MyClass as ThatClass} from "myclass.vim"
+
+To import all exported items under a specific identifier: >
+	import * as That from 'thatscript.vim'
+
+Then you can use "That.EXPORTED_CONST", "That.someValue", etc.  You are free
+to choose the name "That", but it is highly recommended to use the name of the
+script file to avoid confusion.
+
+The script name after `import` can be:
+- A relative path, starting "." or "..".  This finds a file relative to the
+  location of the script file itself.  This is useful to split up a large
+  plugin into several files.
+- An absolute path, starting with "/" on Unix or "D:/" on MS-Windows.  This
+  will be rarely used.
+- A path not being relative or absolute.  This will be found in the
+  "import" subdirectories of 'runtimepath' entries.  The name will usually be
+  longer and unique, to avoid loading the wrong file.
+
+Once a vim9 script file has been imported, the result is cached and used the
+next time the same script is imported.  It will not be read again.
+							*:import-cycle*
+The `import` commands are executed when encountered.  If that script (directly
+or indirectly) imports the current script, then items defined after the
+`import` won't be processed yet.  Therefore cyclic imports can exist, but may
+result in undefined items.
+
+
+Import in an autoload script ~
+
+For optimal startup speed, loading scripts should be postponed until they are
+actually needed.  A recommended mechanism:
+
+1. In the plugin define user commands, functions and/or mappings that refer to
+   an autoload script. >
+   	command -nargs=1 SearchForStuff call searchfor#Stuff(<f-args>)
+
+<   This goes in .../plugin/anyname.vim.  "anyname.vim" can be freely chosen.
+
+2. In the autocommand script do the actual work.  You can import items from
+   other files to split up functionality in appropriate pieces. >
+	vim9script
+        import FilterFunc from "../import/someother.vim"
+	def searchfor#Stuff(arg: string)
+	  let filtered = FilterFunc(arg)
+	  ...
+<   This goes in .../autoload/searchfor.vim.  "searchfor" in the file name
+   must be exactly the same as the prefix for the function name, that is how
+   Vim finds the file.
+
+3. Other functionality, possibly shared between plugins, contains the exported
+   items and any private items. >
+	vim9script
+	let localVar = 'local'
+   	export def FilterFunc(arg: string): string
+	   ...
+<   This goes in .../import/someother.vim.
+
+
+Import in legacy Vim script ~
+
+If an `import` statement is used in legacy Vim script, the script-local "s:"
+namespace will be used for the imported item, even when "s:" is not specified.
+
+

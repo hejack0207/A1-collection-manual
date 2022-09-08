@@ -1,0 +1,145 @@
+9. Views and Sessions					*views-sessions*
+
+This is introduced in sections |21.4| and |21.5| of the user manual.
+
+						*View* *view-file*
+A View is a collection of settings that apply to one window.  You can save a
+View and when you restore it later, the text is displayed in the same way.
+The options and mappings in this window will also be restored, so that you can
+continue editing like when the View was saved.
+
+						*Session* *session-file*
+A Session keeps the Views for all windows, plus the global settings.  You can
+save a Session and when you restore it later the window layout looks the same.
+You can use a Session to quickly switch between different projects,
+automatically loading the files you were last working on in that project.
+
+Views and Sessions are a nice addition to viminfo-files, which are used to
+remember information for all Views and Sessions together |viminfo-file|.
+
+You can quickly start editing with a previously saved View or Session with the
+|-S| argument: >
+	vim -S Session.vim
+<
+All this is {not available when compiled without the |+mksession| feature}.
+
+							*:mks* *:mksession*
+:mks[ession][!] [file]	Write a Vim script that restores the current editing
+			session.
+			When [!] is included an existing file is overwritten.
+			When [file] is omitted "Session.vim" is used.
+
+The output of ":mksession" is like ":mkvimrc", but additional commands are
+added to the file.  Which ones depends on the 'sessionoptions' option.  The
+resulting file, when executed with a ":source" command:
+1. Restores global mappings and options, if 'sessionoptions' contains
+   "options".  Script-local mappings will not be written.
+2. Restores global variables that start with an uppercase letter and contain
+   at least one lowercase letter, if 'sessionoptions' contains "globals".
+3. Unloads all currently loaded buffers.
+4. Restores the current directory if 'sessionoptions' contains "curdir", or
+   sets the current directory to where the Session file is if 'sessionoptions'
+   contains "sesdir".
+5. Restores GUI Vim window position, if 'sessionoptions' contains "winpos".
+6. Restores screen size, if 'sessionoptions' contains "resize".
+7. Reloads the buffer list, with the last cursor positions.  If
+   'sessionoptions' contains "buffers" then all buffers are restored,
+   including hidden and unloaded buffers.  Otherwise only buffers in windows
+   are restored.
+8. Restores all windows with the same layout.  If 'sessionoptions' contains
+   "help", help windows are restored.  If 'sessionoptions' contains "blank",
+   windows editing a buffer without a name will be restored.
+   If 'sessionoptions' contains "winsize" and no (help/blank) windows were
+   left out, the window sizes are restored (relative to the screen size).
+   Otherwise, the windows are just given sensible sizes.
+9. Restores the Views for all the windows, as with |:mkview|.  But
+   'sessionoptions' is used instead of 'viewoptions'.
+10. If a file exists with the same name as the Session file, but ending in
+   "x.vim" (for eXtra), executes that as well.  You can use *x.vim files to
+   specify additional settings and actions associated with a given Session,
+   such as creating menu items in the GUI version.
+
+After restoring the Session, the full filename of your current Session is
+available in the internal variable "v:this_session" |this_session-variable|.
+An example mapping: >
+  :nmap <F2> :wa<Bar>exe "mksession! " . v:this_session<CR>:so ~/sessions/
+This saves the current Session, and starts off the command to load another.
+
+A session includes all tab pages, unless "tabpages" was removed from
+'sessionoptions'. |tab-page|
+
+The |SessionLoadPost| autocmd event is triggered after a session file is
+loaded/sourced.
+						*SessionLoad-variable*
+While the session file is loading the SessionLoad global variable is set to 1.
+Plugins can use this to postpone some work until the SessionLoadPost event is
+triggered.
+
+							*:mkvie* *:mkview*
+:mkvie[w][!] [file]	Write a Vim script that restores the contents of the
+			current window.
+			When [!] is included an existing file is overwritten.
+			When [file] is omitted or is a number from 1 to 9, a
+			name is generated and 'viewdir' prepended.  When the
+			last path part of 'viewdir' does not exist, this
+			directory is created.  E.g., when 'viewdir' is
+			"$VIM/vimfiles/view" then "view" is created in
+			"$VIM/vimfiles".
+			An existing file is always overwritten then.  Use
+			|:loadview| to load this view again.
+			When [file] is the name of a file ('viewdir' is not
+			used), a command to edit the file is added to the
+			generated file.
+
+The output of ":mkview" contains these items:
+1. The argument list used in the window.  When the global argument list is
+   used it is reset to the global list.
+   The index in the argument list is also restored.
+2. The file being edited in the window.  If there is no file, the window is
+   made empty.
+3. Restore mappings, abbreviations and options local to the window if
+   'viewoptions' contains "options" or "localoptions".  For the options it
+   restores only values that are local to the current buffer and values local
+   to the window.
+   When storing the view as part of a session and "options" is in
+   'sessionoptions', global values for local options will be stored too.
+4. Restore folds when using manual folding and 'viewoptions' contains
+   "folds".  Restore manually opened and closed folds.
+5. The scroll position and the cursor position in the file.  Doesn't work very
+   well when there are closed folds.
+6. The local current directory, if it is different from the global current
+   directory and 'viewoptions' contains "curdir".
+
+Note that Views and Sessions are not perfect:
+- They don't restore everything.  For example, defined functions, autocommands
+  and ":syntax on" are not included.  Things like register contents and
+  command line history are in viminfo, not in Sessions or Views.
+- Global option values are only set when they differ from the default value.
+  When the current value is not the default value, loading a Session will not
+  set it back to the default value.  Local options will be set back to the
+  default value though.
+- Existing mappings will be overwritten without warning.  An existing mapping
+  may cause an error for ambiguity.
+- When storing manual folds and when storing manually opened/closed folds,
+  changes in the file between saving and loading the view will mess it up.
+- The Vim script is not very efficient.  But still faster than typing the
+  commands yourself!
+
+							*:lo* *:loadview*
+:lo[adview] [nr]	Load the view for the current file.  When [nr] is
+			omitted, the view stored with ":mkview" is loaded.
+			When [nr] is specified, the view stored with ":mkview
+			[nr]" is loaded.
+
+The combination of ":mkview" and ":loadview" can be used to store up to ten
+different views of a file.  These are remembered in the directory specified
+with the 'viewdir' option.  The views are stored using the file name.  If a
+file is renamed or accessed through a (symbolic) link the view will not be
+found.
+
+You might want to clean up your 'viewdir' directory now and then.
+
+To automatically save and restore views for *.c files: >
+	au BufWinLeave *.c mkview
+	au BufWinEnter *.c silent loadview
+

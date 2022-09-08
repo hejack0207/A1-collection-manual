@@ -1,0 +1,378 @@
+6. Defining a syntax					*:syn-define* *E410*
+
+Vim understands three types of syntax items:
+
+1. Keyword
+   It can only contain keyword characters, according to the 'iskeyword'
+   option.  It cannot contain other syntax items.  It will only match with a
+   complete word (there are no keyword characters before or after the match).
+   The keyword "if" would match in "if(a=b)", but not in "ifdef x", because
+   "(" is not a keyword character and "d" is.
+
+2. Match
+   This is a match with a single regexp pattern.
+
+3. Region
+   This starts at a match of the "start" regexp pattern and ends with a match
+   with the "end" regexp pattern.  Any other text can appear in between.  A
+   "skip" regexp pattern can be used to avoid matching the "end" pattern.
+
+Several syntax ITEMs can be put into one syntax GROUP.	For a syntax group
+you can give highlighting attributes.  For example, you could have an item
+to define a "/* .. */" comment and another one that defines a "// .." comment,
+and put them both in the "Comment" group.  You can then specify that a
+"Comment" will be in bold font and have a blue color.  You are free to make
+one highlight group for one syntax item, or put all items into one group.
+This depends on how you want to specify your highlighting attributes.  Putting
+each item in its own group results in having to specify the highlighting
+for a lot of groups.
+
+Note that a syntax group and a highlight group are similar.  For a highlight
+group you will have given highlight attributes.  These attributes will be used
+for the syntax group with the same name.
+
+In case more than one item matches at the same position, the one that was
+defined LAST wins.  Thus you can override previously defined syntax items by
+using an item that matches the same text.  But a keyword always goes before a
+match or region.  And a keyword with matching case always goes before a
+keyword with ignoring case.
+
+
+PRIORITY						*:syn-priority*
+
+When several syntax items may match, these rules are used:
+
+1. When multiple Match or Region items start in the same position, the item
+   defined last has priority.
+2. A Keyword has priority over Match and Region items.
+3. An item that starts in an earlier position has priority over items that
+   start in later positions.
+
+
+DEFINING CASE						*:syn-case* *E390*
+
+:sy[ntax] case [match | ignore]
+	This defines if the following ":syntax" commands will work with
+	matching case, when using "match", or with ignoring case, when using
+	"ignore".  Note that any items before this are not affected, and all
+	items until the next ":syntax case" command are affected.
+
+:sy[ntax] case
+	Show either "syntax case match" or "syntax case ignore" (translated).
+
+
+DEFINING FOLDLEVEL					*:syn-foldlevel*
+
+:sy[ntax] foldlevel [start | minimum]
+	This defines how the foldlevel of a line is computed when using
+	foldmethod=syntax (see |fold-syntax| and |:syn-fold|):
+
+	start:		Use level of item containing start of line.
+	minimum:	Use lowest local-minimum level of items on line.
+
+	The default is 'start'.  Use 'minimum' to search a line horizontally
+	for the lowest level contained on the line that is followed by a
+	higher level.  This produces more natural folds when syntax items
+	may close and open horizontally within a line.
+
+:sy[ntax] foldlevel
+	Show either "syntax foldlevel start" or "syntax foldlevel minimum".
+
+	{not meaningful when Vim was compiled without |+folding| feature}
+
+SPELL CHECKING						*:syn-spell*
+
+:sy[ntax] spell [toplevel | notoplevel | default]
+	This defines where spell checking is to be done for text that is not
+	in a syntax item:
+
+	toplevel:	Text is spell checked.
+	notoplevel:	Text is not spell checked.
+	default:	When there is a @Spell cluster no spell checking.
+
+	For text in syntax items use the @Spell and @NoSpell clusters
+	|spell-syntax|.  When there is no @Spell and no @NoSpell cluster then
+	spell checking is done for "default" and "toplevel".
+
+	To activate spell checking the 'spell' option must be set.
+
+:sy[ntax] spell
+	Show either "syntax spell toplevel", "syntax spell notoplevel" or
+	"syntax spell default" (translated).
+
+
+SYNTAX ISKEYWORD SETTING				*:syn-iskeyword*
+
+:sy[ntax] iskeyword [clear | {option}]
+	This defines the keyword characters.  It's like the 'iskeyword' option
+	for but only applies to syntax highlighting.
+
+	clear:		Syntax specific iskeyword setting is disabled and the
+			buffer-local 'iskeyword' setting is used.
+	{option}        Set the syntax 'iskeyword' option to a new value.
+
+	Example: >
+  :syntax iskeyword @,48-57,192-255,$,_
+<
+	This would set the syntax specific iskeyword option to include all
+	alphabetic characters, plus the numeric characters, all accented
+	characters and also includes the "_" and the "$".
+
+	If no argument is given, the current value will be output.
+
+	Setting this option influences what |/\k| matches in syntax patterns
+	and also determines where |:syn-keyword| will be checked for a new
+	match.
+
+	It is recommended when writing syntax files, to use this command to
+	set the correct value for the specific syntax language and not change
+	the 'iskeyword' option.
+
+DEFINING KEYWORDS					*:syn-keyword*
+
+:sy[ntax] keyword {group-name} [{options}] {keyword} .. [{options}]
+
+	This defines a number of keywords.
+
+	{group-name}	Is a syntax group name such as "Comment".
+	[{options}]	See |:syn-arguments| below.
+	{keyword} ..	Is a list of keywords which are part of this group.
+
+	Example: >
+  :syntax keyword   Type   int long char
+<
+	The {options} can be given anywhere in the line.  They will apply to
+	all keywords given, also for options that come after a keyword.
+	These examples do exactly the same: >
+  :syntax keyword   Type   contained int long char
+  :syntax keyword   Type   int long contained char
+  :syntax keyword   Type   int long char contained
+<								*E789* *E890*
+	When you have a keyword with an optional tail, like Ex commands in
+	Vim, you can put the optional characters inside [], to define all the
+	variations at once: >
+  :syntax keyword   vimCommand	 ab[breviate] n[ext]
+<
+	Don't forget that a keyword can only be recognized if all the
+	characters are included in the 'iskeyword' option.  If one character
+	isn't, the keyword will never be recognized.
+	Multi-byte characters can also be used.  These do not have to be in
+	'iskeyword'.
+	See |:syn-iskeyword| for defining syntax specific iskeyword settings.
+
+	A keyword always has higher priority than a match or region, the
+	keyword is used if more than one item matches.	Keywords do not nest
+	and a keyword can't contain anything else.
+
+	Note that when you have a keyword that is the same as an option (even
+	one that isn't allowed here), you can not use it.  Use a match
+	instead.
+
+	The maximum length of a keyword is 80 characters.
+
+	The same keyword can be defined multiple times, when its containment
+	differs.  For example, you can define the keyword once not contained
+	and use one highlight group, and once contained, and use a different
+	highlight group.  Example: >
+  :syn keyword vimCommand tag
+  :syn keyword vimSetting contained tag
+<	When finding "tag" outside of any syntax item, the "vimCommand"
+	highlight group is used.  When finding "tag" in a syntax item that
+	contains "vimSetting", the "vimSetting" group is used.
+
+
+DEFINING MATCHES					*:syn-match*
+
+:sy[ntax] match {group-name} [{options}]
+		[excludenl]
+		[keepend]
+		{pattern}
+		[{options}]
+
+	This defines one match.
+
+	{group-name}		A syntax group name such as "Comment".
+	[{options}]		See |:syn-arguments| below.
+	[excludenl]		Don't make a pattern with the end-of-line "$"
+				extend a containing match or region.  Must be
+				given before the pattern. |:syn-excludenl|
+	keepend			Don't allow contained matches to go past a
+				match with the end pattern.  See
+				|:syn-keepend|.
+	{pattern}		The search pattern that defines the match.
+				See |:syn-pattern| below.
+				Note that the pattern may match more than one
+				line, which makes the match depend on where
+				Vim starts searching for the pattern.  You
+				need to make sure syncing takes care of this.
+
+	Example (match a character constant): >
+  :syntax match Character /'.'/hs=s+1,he=e-1
+<
+
+DEFINING REGIONS	*:syn-region* *:syn-start* *:syn-skip* *:syn-end*
+							*E398* *E399*
+:sy[ntax] region {group-name} [{options}]
+		[matchgroup={group-name}]
+		[keepend]
+		[extend]
+		[excludenl]
+		start={start_pattern} ..
+		[skip={skip_pattern}]
+		end={end_pattern} ..
+		[{options}]
+
+	This defines one region.  It may span several lines.
+
+	{group-name}		A syntax group name such as "Comment".
+	[{options}]		See |:syn-arguments| below.
+	[matchgroup={group-name}]  The syntax group to use for the following
+				start or end pattern matches only.  Not used
+				for the text in between the matched start and
+				end patterns.  Use NONE to reset to not using
+				a different group for the start or end match.
+				See |:syn-matchgroup|.
+	keepend			Don't allow contained matches to go past a
+				match with the end pattern.  See
+				|:syn-keepend|.
+	extend			Override a "keepend" for an item this region
+				is contained in.  See |:syn-extend|.
+	excludenl		Don't make a pattern with the end-of-line "$"
+				extend a containing match or item.  Only
+				useful for end patterns.  Must be given before
+				the patterns it applies to. |:syn-excludenl|
+	start={start_pattern}	The search pattern that defines the start of
+				the region.  See |:syn-pattern| below.
+	skip={skip_pattern}	The search pattern that defines text inside
+				the region where not to look for the end
+				pattern.  See |:syn-pattern| below.
+	end={end_pattern}	The search pattern that defines the end of
+				the region.  See |:syn-pattern| below.
+
+	Example: >
+  :syntax region String   start=+"+  skip=+\\"+  end=+"+
+<
+	The start/skip/end patterns and the options can be given in any order.
+	There can be zero or one skip pattern.	There must be one or more
+	start and end patterns.  This means that you can omit the skip
+	pattern, but you must give at least one start and one end pattern.  It
+	is allowed to have white space before and after the equal sign
+	(although it mostly looks better without white space).
+
+	When more than one start pattern is given, a match with one of these
+	is sufficient.	This means there is an OR relation between the start
+	patterns.  The last one that matches is used.  The same is true for
+	the end patterns.
+
+	The search for the end pattern starts right after the start pattern.
+	Offsets are not used for this.	This implies that the match for the
+	end pattern will never overlap with the start pattern.
+
+	The skip and end pattern can match across line breaks, but since the
+	search for the pattern can start in any line it often does not do what
+	you want.  The skip pattern doesn't avoid a match of an end pattern in
+	the next line.	Use single-line patterns to avoid trouble.
+
+	Note: The decision to start a region is only based on a matching start
+	pattern.  There is no check for a matching end pattern.  This does NOT
+	work: >
+		:syn region First  start="("  end=":"
+		:syn region Second start="("  end=";"
+<	The Second always matches before the First (last defined pattern has
+	higher priority).  The Second region then continues until the next
+	';', no matter if there is a ':' before it.  Using a match does work: >
+		:syn match First  "(\_.\{-}:"
+		:syn match Second "(\_.\{-};"
+<	This pattern matches any character or line break with "\_." and
+	repeats that with "\{-}" (repeat as few as possible).
+
+							*:syn-keepend*
+	By default, a contained match can obscure a match for the end pattern.
+	This is useful for nesting.  For example, a region that starts with
+	"{" and ends with "}", can contain another region.  An encountered "}"
+	will then end the contained region, but not the outer region:
+	    {		starts outer "{}" region
+		{	starts contained "{}" region
+		}	ends contained "{}" region
+	    }		ends outer "{} region
+	If you don't want this, the "keepend" argument will make the matching
+	of an end pattern of the outer region also end any contained item.
+	This makes it impossible to nest the same region, but allows for
+	contained items to highlight parts of the end pattern, without causing
+	that to skip the match with the end pattern.  Example: >
+  :syn match  vimComment +"[^"]\+$+
+  :syn region vimCommand start="set" end="$" contains=vimComment keepend
+<	The "keepend" makes the vimCommand always end at the end of the line,
+	even though the contained vimComment includes a match with the <EOL>.
+
+	When "keepend" is not used, a match with an end pattern is retried
+	after each contained match.  When "keepend" is included, the first
+	encountered match with an end pattern is used, truncating any
+	contained matches.
+							*:syn-extend*
+	The "keepend" behavior can be changed by using the "extend" argument.
+	When an item with "extend" is contained in an item that uses
+	"keepend", the "keepend" is ignored and the containing region will be
+	extended.
+	This can be used to have some contained items extend a region while
+	others don't.  Example: >
+
+   :syn region htmlRef start=+<a>+ end=+</a>+ keepend contains=htmlItem,htmlScript
+   :syn match htmlItem +<[^>]*>+ contained
+   :syn region htmlScript start=+<script+ end=+</script[^>]*>+ contained extend
+
+<	Here the htmlItem item does not make the htmlRef item continue
+	further, it is only used to highlight the <> items.  The htmlScript
+	item does extend the htmlRef item.
+
+	Another example: >
+   :syn region xmlFold start="<a>" end="</a>" fold transparent keepend extend
+<	This defines a region with "keepend", so that its end cannot be
+	changed by contained items, like when the "</a>" is matched to
+	highlight it differently.  But when the xmlFold region is nested (it
+	includes itself), the "extend" applies, so that the "</a>" of a nested
+	region only ends that region, and not the one it is contained in.
+
+							*:syn-excludenl*
+	When a pattern for a match or end pattern of a region includes a '$'
+	to match the end-of-line, it will make a region item that it is
+	contained in continue on the next line.  For example, a match with
+	"\\$" (backslash at the end of the line) can make a region continue
+	that would normally stop at the end of the line.  This is the default
+	behavior.  If this is not wanted, there are two ways to avoid it:
+	1. Use "keepend" for the containing item.  This will keep all
+	   contained matches from extending the match or region.  It can be
+	   used when all contained items must not extend the containing item.
+	2. Use "excludenl" in the contained item.  This will keep that match
+	   from extending the containing match or region.  It can be used if
+	   only some contained items must not extend the containing item.
+	   "excludenl" must be given before the pattern it applies to.
+
+							*:syn-matchgroup*
+	"matchgroup" can be used to highlight the start and/or end pattern
+	differently than the body of the region.  Example: >
+  :syntax region String matchgroup=Quote start=+"+  skip=+\\"+	end=+"+
+<	This will highlight the quotes with the "Quote" group, and the text in
+	between with the "String" group.
+	The "matchgroup" is used for all start and end patterns that follow,
+	until the next "matchgroup".  Use "matchgroup=NONE" to go back to not
+	using a matchgroup.
+
+	In a start or end pattern that is highlighted with "matchgroup" the
+	contained items of the region are not used.  This can be used to avoid
+	that a contained item matches in the start or end pattern match.  When
+	using "transparent", this does not apply to a start or end pattern
+	match that is highlighted with "matchgroup".
+
+	Here is an example, which highlights three levels of parentheses in
+	different colors: >
+   :sy region par1 matchgroup=par1 start=/(/ end=/)/ contains=par2
+   :sy region par2 matchgroup=par2 start=/(/ end=/)/ contains=par3 contained
+   :sy region par3 matchgroup=par3 start=/(/ end=/)/ contains=par1 contained
+   :hi par1 ctermfg=red guifg=red
+   :hi par2 ctermfg=blue guifg=blue
+   :hi par3 ctermfg=darkgreen guifg=darkgreen
+<
+						*E849*
+The maximum number of syntax groups is 19999.
+

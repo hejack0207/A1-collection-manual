@@ -1,0 +1,97 @@
+4. Examples						*popup-examples*
+
+TODO: more interesting examples
+					*popup_dialog-example*
+Prompt the user to press y/Y or n/N: >
+
+	func MyDialogHandler(id, result)
+	   if a:result
+	      " ... 'y' or 'Y' was pressed
+	   endif
+	endfunc
+
+	call popup_dialog('Continue? y/n', #{
+		\ filter: 'popup_filter_yesno',
+		\ callback: 'MyDialogHandler',
+		\ })
+<
+					*popup_menu-shortcut-example*
+Extend popup_filter_menu() with shortcut keys: >
+
+	call popup_menu(['Save', 'Cancel', 'Discard'], #{
+		\ filter: 'MyMenuFilter',
+		\ callback: 'MyMenuHandler',
+		\ })
+
+	func MyMenuFilter(id, key)
+	  " Handle shortcuts
+	  if a:key == 'S'
+	     call popup_close(a:id, 1)
+	     return 1
+	  endif
+	  if a:key == 'C'
+	     call popup_close(a:id, 2)
+	     return 1
+	  endif
+	  if a:key == 'D'
+	     call popup_close(a:id, 3)
+	     return 1
+	  endif
+
+	  " No shortcut, pass to generic filter
+	  return popup_filter_menu(a:id, a:key)
+	endfunc
+<
+					*popup_beval_example*
+Example for using a popup window for 'ballooneval': >
+
+	set ballooneval balloonevalterm
+	set balloonexpr=BalloonExpr()
+	let s:winid = 0
+	let s:last_text = ''
+
+	func BalloonExpr()
+	  if s:winid && popup_getpos(s:winid) != {}
+	    " previous popup window still shows
+	    if v:beval_text == s:last_text
+	      " Still the same text, keep the existing popup
+	      return ''
+	    endif
+	    call popup_close(s:winid)
+	  endif
+	  let s:winid = popup_beval(v:beval_text, #{mousemoved: 'word'})
+	  let s:last_text = v:beval_text
+	  return ''
+	endfunc
+<
+If the text has to be obtained asynchronously return an empty string from the
+expression function and call popup_beval() once the text is available.  In
+this example simulated with a timer callback: >
+
+	set ballooneval balloonevalterm
+	set balloonexpr=BalloonExpr()
+	let s:winid = 0
+	let s:balloonText = ''
+
+	func BalloonExpr()
+	  if s:winid && popup_getpos(s:winid) != {}
+	    " previous popup window still shows
+	    if  v:beval_text == s:balloonText
+	      " Still the same text, keep the existing popup
+	      return ''
+	    endif
+	    call popup_close(s:winid)
+	    let s:winid = 0
+	  endif
+	  " simulate an asynchronous lookup for the text to display
+	  let s:balloonText = v:beval_text
+	  call timer_start(100, 'ShowPopup')
+	  return ''
+	endfunc
+
+	func ShowPopup(id)
+	  let s:winid = popup_beval(s:balloonText, #{mousemoved: 'word'})
+	endfunc
+<
+
+ vim:tw=78:ts=8:noet:ft=help:norl:

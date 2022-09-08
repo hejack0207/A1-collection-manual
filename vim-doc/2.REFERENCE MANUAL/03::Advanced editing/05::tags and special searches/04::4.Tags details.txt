@@ -1,0 +1,155 @@
+4. Tags details						*tag-details*
+
+							*static-tag*
+A static tag is a tag that is defined for a specific file.  In a C program
+this could be a static function.
+
+In Vi jumping to a tag sets the current search pattern.  This means that the
+"n" command after jumping to a tag does not search for the same pattern that
+it did before jumping to the tag.  Vim does not do this as we consider it to
+be a bug.  If you really want the old Vi behavior, set the 't' flag in
+'cpoptions'.
+
+							*tag-binary-search*
+Vim uses binary searching in the tags file to find the desired tag quickly
+(when enabled at compile time |+tag_binary|).  But this only works if the
+tags file was sorted on ASCII byte value.  Therefore, if no match was found,
+another try is done with a linear search.  If you only want the linear search,
+reset the 'tagbsearch' option.  Or better: Sort the tags file!
+
+Note that the binary searching is disabled when not looking for a tag with a
+specific name.  This happens when ignoring case and when a regular expression
+is used that doesn't start with a fixed string.  Tag searching can be a lot
+slower then.  The former can be avoided by case-fold sorting the tags file.
+See 'tagbsearch' for details.
+
+							*tag-regexp*
+The ":tag" and ":tselect" commands accept a regular expression argument.  See
+|pattern| for the special characters that can be used.
+When the argument starts with '/', it is used as a pattern.  If the argument
+does not start with '/', it is taken literally, as a full tag name.
+Examples: >
+    :tag main
+<	jumps to the tag "main" that has the highest priority. >
+    :tag /^get
+<	jumps to the tag that starts with "get" and has the highest priority. >
+    :tag /norm
+<	lists all the tags that contain "norm", including "id_norm".
+When the argument both exists literally, and match when used as a regexp, a
+literal match has a higher priority.  For example, ":tag /open" matches "open"
+before "open_file" and "file_open".
+When using a pattern case is ignored.  If you want to match case use "\C" in
+the pattern.
+
+							*tag-!*
+If the tag is in the current file this will always work.  Otherwise the
+performed actions depend on whether the current file was changed, whether a !
+is added to the command and on the 'autowrite' option:
+
+  tag in       file	   autowrite			~
+current file  changed	!   option	  action	~
+-----------------------------------------------------------------------------
+    yes		 x	x     x	  goto tag
+    no		 no	x     x	  read other file, goto tag
+    no		yes    yes    x   abandon current file, read other file, goto
+				  tag
+    no		yes	no    on  write current file, read other file, goto
+				  tag
+    no		yes	no   off  fail
+-----------------------------------------------------------------------------
+
+- If the tag is in the current file, the command will always work.
+- If the tag is in another file and the current file was not changed, the
+  other file will be made the current file and read into the buffer.
+- If the tag is in another file, the current file was changed and a ! is
+  added to the command, the changes to the current file are lost, the other
+  file will be made the current file and read into the buffer.
+- If the tag is in another file, the current file was changed and the
+  'autowrite' option is on, the current file will be written, the other
+  file will be made the current file and read into the buffer.
+- If the tag is in another file, the current file was changed and the
+  'autowrite' option is off, the command will fail.  If you want to save
+  the changes, use the ":w" command and then use ":tag" without an argument.
+  This works because the tag is put on the stack anyway.  If you want to lose
+  the changes you can use the ":tag!" command.
+
+							*tag-security*
+Note that Vim forbids some commands, for security reasons.  This works like
+using the 'secure' option for exrc/vimrc files in the current directory.  See
+|trojan-horse| and |sandbox|.
+When the {tagaddress} changes a buffer, you will get a warning message:
+	"WARNING: tag command changed a buffer!!!"
+In a future version changing the buffer will be impossible.  All this for
+security reasons: Somebody might hide a nasty command in the tags file, which
+would otherwise go unnoticed.  Example: >
+	:$d|/tag-function-name/
+
+In Vi the ":tag" command sets the last search pattern when the tag is searched
+for.  In Vim this is not done, the previous search pattern is still remembered,
+unless the 't' flag is present in 'cpoptions'.
+
+					*emacs-tags* *emacs_tags* *E430*
+Emacs style tag files are only supported if Vim was compiled with the
+|+emacs_tags| feature enabled.  Sorry, there is no explanation about Emacs tag
+files here, it is only supported for backwards compatibility :-).
+
+Lines in Emacs tags files can be very long.  Vim only deals with lines of up
+to about 510 bytes.  To see whether lines are ignored set 'verbose' to 5 or
+higher. Non-Emacs tags file lines can be any length.
+
+							*tags-option*
+The 'tags' option is a list of file names.  Each of these files is searched
+for the tag.  This can be used to use a different tags file than the default
+file "tags".  It can also be used to access a common tags file.
+
+The next file in the list is not used when:
+- A matching static tag for the current buffer has been found.
+- A matching global tag has been found.
+This also depends on whether case is ignored.  Case is ignored when:
+- 'tagcase' is "followic" and 'ignorecase' is set
+- 'tagcase' is "ignore"
+- 'tagcase' is "smart" and the pattern only contains lower case
+  characters.
+- 'tagcase' is "followscs" and 'smartcase' is set and the pattern only
+  contains lower case characters.
+If case is not ignored, and the tags file only has a match without matching
+case, the next tags file is searched for a match with matching case.  If no
+tag with matching case is found, the first match without matching case is
+used.  If case is ignored, and a matching global tag with or without matching
+case is found, this one is used, no further tags files are searched.
+
+When a tag file name starts with "./", the '.' is replaced with the path of
+the current file.  This makes it possible to use a tags file in the directory
+where the current file is (no matter what the current directory is).  The idea
+of using "./" is that you can define which tag file is searched first: In the
+current directory ("tags,./tags") or in the directory of the current file
+("./tags,tags").
+
+For example: >
+	:set tags=./tags,tags,/home/user/commontags
+
+In this example the tag will first be searched for in the file "tags" in the
+directory where the current file is.  Next the "tags" file in the current
+directory.  If it is not found there, then the file "/home/user/commontags"
+will be searched for the tag.
+
+This can be switched off by including the 'd' flag in 'cpoptions', to make
+it Vi compatible.  "./tags" will then be the tags file in the current
+directory, instead of the tags file in the directory where the current file
+is.
+
+Instead of the comma a space may be used.  Then a backslash is required for
+the space to be included in the string option: >
+	:set tags=tags\ /home/user/commontags
+
+To include a space in a file name use three backslashes.  To include a comma
+in a file name use two backslashes.  For example, use: >
+	:set tags=tag\\\ file,/home/user/common\\,tags
+
+for the files "tag file" and "/home/user/common,tags".  The 'tags' option will
+have the value "tag\ file,/home/user/common\,tags".
+
+If the 'tagrelative' option is on (which is the default) and using a tag file
+in another directory, file names in that tag file are relative to the
+directory where the tag file is.
+

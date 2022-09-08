@@ -1,0 +1,136 @@
+7. vim.bindeval objects				*python-bindeval-objects*
+
+vim.Dictionary object				*python-Dictionary*
+    Dictionary-like object providing access to vim |Dictionary| type.
+    Attributes:
+        Attribute  Description ~
+        locked     One of                       *python-.locked*
+                    Value           Description ~
+                    zero            Variable is not locked
+                    vim.VAR_LOCKED  Variable is locked, but can be unlocked
+                    vim.VAR_FIXED   Variable is locked and can't be unlocked
+                   Read-write. You can unlock locked variable by assigning
+                   `True` or `False` to this attribute. No recursive locking
+                   is supported.
+        scope      One of
+                    Value              Description ~
+                    zero               Dictionary is not a scope one
+                    vim.VAR_DEF_SCOPE  |g:| or |l:| dictionary
+                    vim.VAR_SCOPE      Other scope dictionary,
+                                       see |internal-variables|
+    Methods (note: methods do not support keyword arguments):
+        Method      Description ~
+        keys()      Returns a list with dictionary keys.
+        values()    Returns a list with dictionary values.
+        items()     Returns a list of 2-tuples with dictionary contents.
+        update(iterable), update(dictionary), update(**kwargs)
+                    Adds keys to dictionary.
+        get(key[, default=None])
+                    Obtain key from dictionary, returning the default if it is
+                    not present.
+        pop(key[, default])
+                    Remove specified key from dictionary and return
+                    corresponding value. If key is not found and default is
+                    given returns the default, otherwise raises KeyError.
+        popitem()
+                    Remove random key from dictionary and return (key, value)
+                    pair.
+        has_key(key)
+                    Check whether dictionary contains specified key, similar
+                    to `key in dict`.
+
+        __new__(), __new__(iterable), __new__(dictionary), __new__(update)
+                    You can use `vim.Dictionary()` to create new vim
+                    dictionaries. `d=vim.Dictionary(arg)` is the same as
+                    `d=vim.bindeval('{}');d.update(arg)`. Without arguments
+                    constructs empty dictionary.
+
+    Examples: >
+        d = vim.Dictionary(food="bar")		# Constructor
+        d['a'] = 'b'				# Item assignment
+        print d['a']				# getting item
+        d.update({'c': 'd'})			# .update(dictionary)
+        d.update(e='f')				# .update(**kwargs)
+        d.update((('g', 'h'), ('i', 'j')))	# .update(iterable)
+        for key in d.keys():			# .keys()
+        for val in d.values():			# .values()
+        for key, val in d.items():		# .items()
+        print isinstance(d, vim.Dictionary)	# True
+        for key in d:				# Iteration over keys
+        class Dict(vim.Dictionary):		# Subclassing
+<
+    Note: when iterating over keys you should not modify dictionary.
+
+vim.List object					*python-List*
+    Sequence-like object providing access to vim |List| type.
+    Supports `.locked` attribute, see |python-.locked|. Also supports the
+    following methods:
+        Method          Description ~
+        extend(item)    Add items to the list.
+
+        __new__(), __new__(iterable)
+                        You can use `vim.List()` to create new vim lists.
+                        `l=vim.List(iterable)` is the same as
+                        `l=vim.bindeval('[]');l.extend(iterable)`. Without
+                        arguments constructs empty list.
+    Examples: >
+        l = vim.List("abc")		# Constructor, result: ['a', 'b', 'c']
+        l.extend(['abc', 'def'])	# .extend() method
+        print l[1:]			# slicing
+        l[:0] = ['ghi', 'jkl']		# slice assignment
+        print l[0]			# getting item
+        l[0] = 'mno'			# assignment
+        for i in l:			# iteration
+        print isinstance(l, vim.List)	# True
+        class List(vim.List):		# Subclassing
+
+vim.Function object				*python-Function*
+    Function-like object, acting like vim |Funcref| object. Accepts special
+    keyword argument `self`, see |Dictionary-function|. You can also use
+    `vim.Function(name)` constructor, it is the same as
+    `vim.bindeval('function(%s)'%json.dumps(name))`.
+
+    Attributes (read-only):
+        Attribute    Description ~
+        name         Function name.
+        args         `None` or a |python-List| object with arguments.  Note
+                     that this is a copy of the arguments list, constructed
+                     each time you request this attribute. Modifications made
+                     to the list will be ignored (but not to the containers
+                     inside argument list: this is like |copy()| and not
+                     |deepcopy()|).
+        self         `None` or a |python-Dictionary| object with self
+                     dictionary. Note that explicit `self` keyword used when
+                     calling resulting object overrides this attribute.
+        auto_rebind  Boolean. True if partial created from this Python object
+                     and stored in the Vim script dictionary should be
+                     automatically rebound to the dictionary it is stored in
+                     when this dictionary is indexed. Exposes Vim internal
+                     difference between `dict.func` (auto_rebind=True) and
+                     `function(dict.func,dict)` (auto_rebind=False). This
+                     attribute makes no sense if `self` attribute is `None`.
+
+    Constructor additionally accepts `args`, `self` and `auto_rebind`
+    keywords.  If `args` and/or `self` argument is given then it constructs
+    a partial, see |function()|.  `auto_rebind` is only used when `self`
+    argument is given, otherwise it is assumed to be `True` regardless of
+    whether it was given or not.  If `self` is given then it defaults to
+    `False`.
+
+    Examples: >
+        f = vim.Function('tr')			# Constructor
+        print f('abc', 'a', 'b')		# Calls tr('abc', 'a', 'b')
+        vim.command('''
+            function DictFun() dict
+                return self
+            endfunction
+        ''')
+        f = vim.bindeval('function("DictFun")')
+        print f(self={})			# Like call('DictFun', [], {})
+        print isinstance(f, vim.Function)	# True
+
+        p = vim.Function('DictFun', self={})
+        print f()
+        p = vim.Function('tr', args=['abc', 'a'])
+        print f('b')
+

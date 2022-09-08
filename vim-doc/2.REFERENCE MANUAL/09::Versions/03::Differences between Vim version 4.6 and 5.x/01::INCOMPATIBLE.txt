@@ -1,0 +1,241 @@
+				 INCOMPATIBLE		*incompatible-5*
+
+Default value for 'compatible' changed			*cp-default*
+--------------------------------------
+
+Vim version 5.0 tries to be more Vi compatible.  This helps people who use Vim
+as a drop-in replacement for Vi, but causes some things to be incompatible
+with version 4.x.
+
+In version 4.x the default value for the 'compatible' option was off.  Now the
+default is on.  The first thing you will notice is that the "u" command undoes
+itself.  Other side effects will be that mappings may work differently or not
+work at all.
+
+Since a lot of people switching from Vim 4.x to 5.0 will find this annoying,
+the 'compatible' option is switched off if Vim finds a vimrc file.  This is a
+bit of magic to make sure that 90% of the Vim users will not be bitten by
+this change.
+
+What does this mean?
+- If you prefer to run in 'compatible' mode and don't have a vimrc file, you
+  don't have to do anything.
+- If you prefer to run in 'nocompatible' mode and do have a vimrc file, you
+  don't have to do anything.
+- If you prefer to run in 'compatible' mode and do have a vimrc file, you
+  should put this line first in your vimrc file: >
+	:set compatible
+- If you prefer to run in 'nocompatible' mode and don't have a vimrc file,
+  you can do one of the following:
+    - Create an empty vimrc file (e.g.: "~/.vimrc" for Unix).
+    - Put this command in your .exrc file or $EXINIT: >
+		:set nocompatible
+<   - Start Vim with the "-N" argument.
+
+If you are new to Vi and Vim, using 'nocompatible' is strongly recommended,
+because Vi has a lot of unexpected side effects, which are avoided by this
+setting.  See 'compatible'.
+
+If you like some things from 'compatible' and some not, you can tune the
+compatibility with 'cpoptions'.
+
+When you invoke Vim as "ex" or "gex", Vim always starts in compatible mode.
+
+
+Text formatting command "Q" changed			*Q-command-changed*
+-----------------------------------
+
+The "Q" command formerly formatted lines to the width the 'textwidth' option
+specifies.  The command for this is now "gq" (see |gq| for more info).  The
+reason for this change is that "Q" is the standard Vi command to enter "Ex"
+mode, and Vim now does in fact have an "Ex" mode (see |Q| for more info).
+
+If you still want to use "Q" for formatting, use this mapping: >
+	:noremap Q gq
+And if you also want to use the functionality of "Q": >
+	:noremap gQ Q
+
+
+Command-line arguments changed				*cmdline-changed*
+------------------------------
+
+Command-line file-arguments and option-arguments can now be mixed.  You can
+give options after the file names.  Example: >
+   vim main.c -g
+
+This is not possible when editing a file that starts with a '-'.  Use the "--"
+argument then |---|: >
+   vim -g -- -main.c
+
+"-v" now means to start Ex in Vi mode, use "-R" for read-only mode.
+old: "vim -v file"	|-v|
+new: "vim -R file"	|-R|
+
+"-e" now means to start Vi in Ex mode, use "-q" for quickfix.
+old: "vim -e errorfile"	|-e|
+new: "vim -q errorfile" |-q|
+
+"-s" in Ex mode now means to run in silent (batch) mode. |-s-ex|
+
+"-x" reserved for crypt, use "-f" to avoid starting a new CLI (Amiga).
+old: "vim -x file"	|-x|
+new: "vim -f file"	|-f|
+
+Vim allows up to ten "+cmd" and "-c cmd" arguments.  Previously Vim executed
+only the last one.
+
+"-n" now overrides any setting for 'updatecount' in a vimrc file, but not in
+a gvimrc file.
+
+
+Autocommands are kept					*autocmds-kept*
+---------------------
+
+Before version 5.0, autocommands with the same event, file name pattern, and
+command could appear only once.  This was fine for simple autocommands (like
+setting option values), but for more complicated autocommands, where the same
+command might appear twice, this restriction caused problems.  Therefore
+Vim stores all autocommands and keeps them in the order that they are defined.
+
+The most obvious side effect of this change is that when you source a vimrc
+file twice, the autocommands in it will be defined twice.  To avoid this, do
+one of these:
+
+- Remove any autocommands that might already be defined before defining
+  them.  Example: >
+	:au! * *.ext
+	:au BufEnter *.ext ...
+
+- Put the autocommands inside an ":if" command.  Example: >
+	if !exists("did_ext_autocmds")
+	  let did_ext_autocmds = 1
+	  autocmd BufEnter *.ext ...
+	endif
+
+- Put your autocommands in a different autocommand group so you can remove
+  them before defining them |:augroup|: >
+	augroup uncompress
+	  au!
+	  au BufReadPost *.gz ...
+	augroup END
+
+
+Use of 'hidden' changed					*hidden-changed*
+-----------------------
+
+In version 4.x, only some commands used the 'hidden' option.  Now all commands
+uses it whenever a buffer disappears from a window.
+
+Previously you could do ":buf xxx" in a changed buffer and that buffer would
+then become hidden.  Now you must set the 'hidden' option for this to work.
+
+The new behavior is simpler: whether Vim hides buffers no longer depends on
+the specific command that you use.
+- with 'hidden' not set, you never get hidden buffers.  Exceptions are the
+  ":hide" and ":close!" commands and, in rare cases, where you would otherwise
+  lose changes to the buffer.
+- With 'hidden' set, you almost never unload a buffer.  Exceptions are the
+  ":bunload" or ":bdel" commands.
+
+":buffer" now supports a "!": abandon changes in current buffer.  So do
+":bnext", ":brewind", etc.
+
+
+Text object commands changed				*text-objects-changed*
+----------------------------
+
+Text object commands have new names.  This allows more text objects and makes
+characters available for other Visual mode commands.  Since no more single
+characters were available, text objects names now require two characters.
+The first one is always 'i' or 'a'.
+	OLD	NEW	~
+	a	aw	a word			|v_aw|
+	A	aW	a WORD			|v_aW|
+	s	as	a sentence		|v_as|
+	p	ap	a paragraph		|v_ap|
+	S	ab	a () block		|v_ab|
+	P	aB	a {} block		|v_aB|
+
+There is another set of text objects that starts with "i", for "inner".  These
+select the same objects, but exclude white space.
+
+
+X-Windows Resources removed				*x-resources*
+--------------------------
+
+Vim no longer supports the following X resources:
+- boldColor
+- italicColor
+- underlineColor
+- cursorColor
+
+Vim now uses highlight groups to set colors.  This avoids the confusion of
+using a bold Font, which would imply a certain color.  See |:highlight| and
+|gui-resources|.
+
+
+Use of $VIM						*$VIM-use*
+-----------
+
+Vim now uses the VIM environment variable to find all Vim system files.  This
+includes the global vimrc, gvimrc, and menu.vim files and all on-line help
+and syntax files.  See |$VIM|.  Starting with version 5.4, |$VIMRUNTIME| can
+also be used.
+For Unix, Vim sets a default value for $VIM when doing "make install".
+When $VIM is not set, its default value is the directory from 'helpfile',
+excluding "/doc/help.txt".
+
+
+Use of $HOME for MS-DOS and Win32			*$HOME-use*
+---------------------------------
+
+The MS-DOS and Win32 versions of Vim now first check $HOME when searching for
+a vimrc or exrc file and for reading/storing the viminfo file.  Previously Vim
+used $VIM for these systems, but this causes trouble on a system with several
+users.  Now Vim uses $VIM only when $HOME is not set or the file is not found
+in $HOME.  See |_vimrc|.
+
+
+Tags file format changed				*tags-file-changed*
+------------------------
+
+Only tabs are allowed to separate fields in a tags file.  This allows for
+spaces in a file name and is still Vi compatible.  In previous versions of
+Vim, any white space was allowed to separate the fields.  If you have a file
+which doesn't use a single tab between fields, edit the tags file and execute
+this command: >
+	:%s/\(\S*\)\s\+\(\S*\)\s\+\(.*\)/\1\t\2\t\3/
+
+
+Options changed						*options-changed*
+---------------
+
+The default value of 'errorfile' has changed from "errors.vim" to "errors.err".
+The reason is that only Vim scripts should have the ".vim" extensions.
+
+The ":make" command no longer uses the 'errorfile' option.  This prevents the
+output of the ":make" command from overwriting a manually saved error file.
+":make" uses the 'makeef' option instead.  This also allows for generating a
+unique name, to prevent concurrently running ":make" commands from overwriting
+each other's files.
+
+With 'insertmode' set, a few more things change:
+- <Esc> in Normal mode goes to Insert mode.
+- <Esc> in Insert mode doesn't leave Insert mode.
+- When doing ":set im", go to Insert mode immediately.
+
+Vim considers a buffer to be changed when the 'fileformat' (formerly the
+'textmode' option) is different from the buffer's initial format.
+
+
+CTRL-B in Insert mode gone				*i_CTRL-B-gone*
+--------------------------
+
+When Vim was compiled with the |+rightleft| feature, you could use CTRL-B to
+toggle the 'revins' option.  Unfortunately, some people hit the 'B' key
+accidentally when trying to type CTRL-V or CTRL-N and then didn't know how to
+undo this.  Since toggling the 'revins' option can easily be done with the
+mapping below, this use of the CTRL-B key is disabled.  You can still use the
+CTRL-_ key for this |i_CTRL-_|. >
+   :imap <C-B> <C-O>:set revins!<CR>
+

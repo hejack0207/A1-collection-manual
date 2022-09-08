@@ -1,0 +1,223 @@
+1. Startup						*startup-terminal*
+
+When Vim is started a default terminal type is assumed.  For the Amiga this is
+a standard CLI window, for MS-Windows the pc terminal, for Unix an ansi
+terminal.  A few other terminal types are always available, see below
+|builtin-terms|.
+
+You can give the terminal name with the '-T' Vim argument.  If it is not given
+Vim will try to get the name from the TERM environment variable.
+
+				*termcap* *terminfo* *E557* *E558* *E559*
+On Unix the terminfo database or termcap file is used.  This is referred to as
+"termcap" in all the documentation.  At compile time, when running configure,
+the choice whether to use terminfo or termcap is done automatically.  When
+running Vim the output of ":version" will show |+terminfo| if terminfo is
+used.  Also see |xterm-screens|.
+
+On non-Unix systems a termcap is only available if Vim was compiled with
+TERMCAP defined.
+
+					*builtin-terms* *builtin_terms*
+Which builtin terminals are available depends on a few defines in feature.h,
+which need to be set at compile time:
+    define		output of ":version"	terminals builtin	~
+NO_BUILTIN_TCAPS	-builtin_terms		none
+SOME_BUILTIN_TCAPS	+builtin_terms		most common ones (default)
+ALL_BUILTIN_TCAPS	++builtin_terms		all available
+
+You can see a list of available builtin terminals with ":set term=xxx" (when
+not running the GUI).  Also see |+builtin_terms|.
+
+If the termcap code is included Vim will try to get the strings for the
+terminal you are using from the termcap file and the builtin termcaps.  Both
+are always used, if an entry for the terminal you are using is present.  Which
+one is used first depends on the 'ttybuiltin' option:
+
+'ttybuiltin' on		1: builtin termcap	2: external termcap
+'ttybuiltin' off	1: external termcap	2: builtin termcap
+
+If an option is missing in one of them, it will be obtained from the other
+one.  If an option is present in both, the one first encountered is used.
+
+Which external termcap file is used varies from system to system and may
+depend on the environment variables "TERMCAP" and "TERMPATH".  See "man
+tgetent".
+
+Settings depending on terminal			*term-dependent-settings*
+
+If you want to set options or mappings, depending on the terminal name, you
+can do this best in your .vimrc.  Example: >
+
+   if &term == "xterm"
+     ... xterm maps and settings ...
+   elseif &term =~ "vt10."
+     ... vt100, vt102 maps and settings ...
+   endif
+<
+						*raw-terminal-mode*
+For normal editing the terminal will be put into "raw" mode.  The strings
+defined with 't_ti', 't_TI' and 't_ks' will be sent to the terminal.  Normally
+this puts the terminal in a state where the termcap codes are valid and
+activates the cursor and function keys.
+When Vim exits the terminal will be put back into the mode it was before Vim
+started.  The strings defined with 't_te', 't_TE' and 't_ke' will be sent to
+the terminal.  On the Amiga, with commands that execute an external command
+(e.g., "!!"), the terminal will be put into Normal mode for a moment.  This
+means that you can stop the output to the screen by hitting a printing key.
+Output resumes when you hit <BS>.
+
+Note: When 't_ti' is not empty, Vim assumes that it causes switching to the
+alternate screen.  This may slightly change what happens when executing a
+shell command or exiting Vim.  To avoid this use 't_TI' and 't_TE'.
+
+						*xterm-bracketed-paste*
+When the 't_BE' option is set then 't_BE' will be sent to the
+terminal when entering "raw" mode and 't_BD' when leaving "raw" mode.  The
+terminal is then expected to put 't_PS' before pasted text and 't_PE' after
+pasted text.  This way Vim can separate text that is pasted from characters
+that are typed.  The pasted text is handled like when the middle mouse button
+is used, it is inserted literally and not interpreted as commands.
+
+When the cursor is in the first column, the pasted text will be inserted
+before it.  Otherwise the pasted text is appended after the cursor position.
+This means one cannot paste after the first column.  Unfortunately Vim does
+not have a way to tell where the mouse pointer was.
+
+Note that in some situations Vim will not recognize the bracketed paste and
+you will get the raw text.  In other situations Vim will only get the first
+pasted character and drop the rest, e.g. when using the "r" command.  If you
+have a problem with this, disable bracketed paste by putting this in your
+.vimrc: >
+	set t_BE=
+If this is done while Vim is running the 't_BD' will be sent to the terminal
+to disable bracketed paste.
+
+If your terminal supports bracketed paste, but the options are not set
+automatically, you can try using something like this: >
+
+	if &term =~ "screen"
+	  let &t_BE = "\e[?2004h"
+	  let &t_BD = "\e[?2004l"
+	  exec "set t_PS=\e[200~"
+	  exec "set t_PE=\e[201~"
+	endif
+<
+							*cs7-problem*
+Note: If the terminal settings are changed after running Vim, you might have
+an illegal combination of settings.  This has been reported on Solaris 2.5
+with "stty cs8 parenb", which is restored as "stty cs7 parenb".  Use
+"stty cs8 -parenb -istrip" instead, this is restored correctly.
+
+Some termcap entries are wrong in the sense that after sending 't_ks' the
+cursor keys send codes different from the codes defined in the termcap.  To
+avoid this you can set 't_ks' (and 't_ke') to empty strings.  This must be
+done during initialization (see |initialization|), otherwise it's too late.
+
+Some termcap entries assume that the highest bit is always reset.  For
+example: The cursor-up entry for the Amiga could be ":ku=\E[A:".  But the
+Amiga really sends "\233A".  This works fine if the highest bit is reset,
+e.g., when using an Amiga over a serial line.  If the cursor keys don't work,
+try the entry ":ku=\233A:".
+
+Some termcap entries have the entry ":ku=\E[A:".  But the Amiga really sends
+"\233A".  On output "\E[" and "\233" are often equivalent, on input they
+aren't.  You will have to change the termcap entry, or change the key code with
+the :set command to fix this.
+
+Many cursor key codes start with an <Esc>.  Vim must find out if this is a
+single hit of the <Esc> key or the start of a cursor key sequence.  It waits
+for a next character to arrive.  If it does not arrive within one second a
+single <Esc> is assumed.  On very slow systems this may fail, causing cursor
+keys not to work sometimes.  If you discover this problem reset the 'timeout'
+option.  Vim will wait for the next character to arrive after an <Esc>.  If
+you want to enter a single <Esc> you must type it twice.  Resetting the
+'esckeys' option avoids this problem in Insert mode, but you lose the
+possibility to use cursor and function keys in Insert mode.
+
+On the Amiga the recognition of window resizing is activated only when the
+terminal name is "amiga" or "builtin_amiga".
+
+Some terminals have confusing codes for the cursor keys.  The televideo 925 is
+such a terminal.  It sends a CTRL-H for cursor-left.  This would make it
+impossible to distinguish a backspace and cursor-left.  To avoid this problem
+CTRL-H is never recognized as cursor-left.
+
+					*vt100-cursor-keys* *xterm-cursor-keys*
+Other terminals (e.g., vt100 and xterm) have cursor keys that send <Esc>OA,
+<Esc>OB, etc.  Unfortunately these are valid commands in insert mode: Stop
+insert, Open a new line above the new one, start inserting 'A', 'B', etc.
+Instead of performing these commands Vim will erroneously recognize this typed
+key sequence as a cursor key movement.  To avoid this and make Vim do what you
+want in either case you could use these settings: >
+	:set notimeout		" don't timeout on mappings
+	:set ttimeout		" do timeout on terminal key codes
+	:set timeoutlen=100	" timeout after 100 msec
+This requires the key-codes to be sent within 100 msec in order to recognize
+them as a cursor key.  When you type you normally are not that fast, so they
+are recognized as individual typed commands, even though Vim receives the same
+sequence of bytes.
+
+				*vt100-function-keys* *xterm-function-keys*
+An xterm can send function keys F1 to F4 in two modes: vt100 compatible or
+not.  Because Vim may not know what the xterm is sending, both types of keys
+are recognized.  The same happens for the <Home> and <End> keys.
+			normal			vt100 ~
+	<F1>	t_k1	<Esc>[11~	<xF1>	<Esc>OP	    *<xF1>-xterm*
+	<F2>	t_k2	<Esc>[12~	<xF2>	<Esc>OQ	    *<xF2>-xterm*
+	<F3>	t_k3	<Esc>[13~	<xF3>	<Esc>OR	    *<xF3>-xterm*
+	<F4>	t_k4	<Esc>[14~	<xF4>	<Esc>OS	    *<xF4>-xterm*
+	<Home>	t_kh	<Esc>[7~	<xHome>	<Esc>OH	    *<xHome>-xterm*
+	<End>	t_@7	<Esc>[4~	<xEnd>	<Esc>OF	    *<xEnd>-xterm*
+
+When Vim starts, <xF1> is mapped to <F1>, <xF2> to <F2> etc.  This means that
+by default both codes do the same thing.  If you make a mapping for <xF2>,
+because your terminal does have two keys, the default mapping is overwritten,
+thus you can use the <F2> and <xF2> keys for something different.
+
+							*xterm-shifted-keys*
+Newer versions of xterm support shifted function keys and special keys.  Vim
+recognizes most of them.  Use ":set termcap" to check which are supported and
+what the codes are.  Mostly these are not in a termcap, they are only
+supported by the builtin_xterm termcap.
+
+							*xterm-modifier-keys*
+Newer versions of xterm support Alt and Ctrl for most function keys.  To avoid
+having to add all combinations of Alt, Ctrl and Shift for every key a special
+sequence is recognized at the end of a termcap entry: ";*X".  The "X" can be
+any character, often '~' is used.  The ";*" stands for an optional modifier
+argument.  ";2" is Shift, ";3" is Alt, ";5" is Ctrl and ";9" is Meta (when
+it's different from Alt).  They can be combined.  Examples: >
+	:set <F8>=^[[19;*~
+	:set <Home>=^[[1;*H
+Another speciality about these codes is that they are not overwritten by
+another code.  That is to avoid that the codes obtained from xterm directly
+|t_RV| overwrite them.
+							*xterm-scroll-region*
+The default termcap entry for xterm on Sun and other platforms does not
+contain the entry for scroll regions.  Add ":cs=\E[%i%d;%dr:" to the xterm
+entry in /etc/termcap and everything should work.
+
+							*xterm-end-home-keys*
+On some systems (at least on FreeBSD with XFree86 3.1.2) the codes that the
+<End> and <Home> keys send contain a <Nul> character.  To make these keys send
+the proper key code, add these lines to your ~/.Xdefaults file:
+
+*VT100.Translations:		#override \n\
+		<Key>Home: string("0x1b") string("[7~") \n\
+		<Key>End: string("0x1b") string("[8~")
+
+						*xterm-8bit* *xterm-8-bit*
+Xterm can be run in a mode where it uses 8-bit escape sequences.  The CSI code
+is used instead of <Esc>[.  The advantage is that an <Esc> can quickly be
+recognized in Insert mode, because it can't be confused with the start of a
+special key.
+For the builtin termcap entries, Vim checks if the 'term' option contains
+"8bit" anywhere.  It then uses 8-bit characters for the termcap entries, the
+mouse and a few other things.  You would normally set $TERM in your shell to
+"xterm-8bit" and Vim picks this up and adjusts to the 8-bit setting
+automatically.
+When Vim receives a response to the |t_RV| (request version) sequence and it
+starts with CSI, it assumes that the terminal is in 8-bit mode and will
+convert all key sequences to their 8-bit variants.
+

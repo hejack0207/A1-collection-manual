@@ -1,0 +1,201 @@
+5.  Fonts on X11					*mbyte-fonts-X11*
+
+Unfortunately, using fonts in X11 is complicated.  The name of a single-byte
+font is a long string.  For multi-byte fonts we need several of these...
+
+Note: Most of this is no longer relevant for GTK+ 2.  Selecting a font via
+its XLFD is not supported; see 'guifont' for an example of how to
+set the font.  Do yourself a favor and ignore the |XLFD| and |xfontset|
+sections below.
+
+First of all, Vim only accepts fixed-width fonts for displaying text.  You
+cannot use proportionally spaced fonts.  This excludes many of the available
+(and nicer looking) fonts.  However, for menus and tooltips any font can be
+used.
+
+Note that Display and Input are independent.  It is possible to see your
+language even though you have no input method for it.
+
+You should get a default font for menus and tooltips that works, but it might
+be ugly.  Read the following to find out how to select a better font.
+
+
+X LOGICAL FONT DESCRIPTION (XLFD)
+							*XLFD*
+XLFD is the X font name and contains the information about the font size,
+charset, etc.  The name is in this format:
+
+FOUNDRY-FAMILY-WEIGHT-SLANT-WIDTH-STYLE-PIXEL-POINT-X-Y-SPACE-AVE-CR-CE
+
+Each field means:
+
+- FOUNDRY:  FOUNDRY field.  The company that created the font.
+- FAMILY:   FAMILY_NAME field.  Basic font family name.  (helvetica, gothic,
+	    times, etc)
+- WEIGHT:   WEIGHT_NAME field.  How thick the letters are.  (light, medium,
+	    bold, etc)
+- SLANT:    SLANT field.
+		r:  Roman (no slant)
+		i:  Italic
+		o:  Oblique
+		ri: Reverse Italic
+		ro: Reverse Oblique
+		ot: Other
+		number:	Scaled font
+- WIDTH:    SETWIDTH_NAME field.  Width of characters.  (normal, condensed,
+	    narrow, double wide)
+- STYLE:    ADD_STYLE_NAME field.  Extra info to describe font.  (Serif, Sans
+	    Serif, Informal, Decorated, etc)
+- PIXEL:    PIXEL_SIZE field.  Height, in pixels, of characters.
+- POINT:    POINT_SIZE field.  Ten times height of characters in points.
+- X:	    RESOLUTION_X field.  X resolution (dots per inch).
+- Y:	    RESOLUTION_Y field.  Y resolution (dots per inch).
+- SPACE:    SPACING field.
+		p:  Proportional
+		m:  Monospaced
+		c:  CharCell
+- AVE:	    AVERAGE_WIDTH field.  Ten times average width in pixels.
+- CR:	    CHARSET_REGISTRY field.  The name of the charset group.
+- CE:	    CHARSET_ENCODING field.  The rest of the charset name.  For some
+	    charsets, such as JIS X 0208, if this field is 0, code points has
+	    the same value as GL, and GR if 1.
+
+For example, in case of a 16 dots font corresponding to JIS X 0208, it is
+written like:
+    -misc-fixed-medium-r-normal--16-110-100-100-c-160-jisx0208.1990-0
+
+
+X FONTSET
+						*fontset* *xfontset*
+A single-byte charset is typically associated with one font.  For multi-byte
+charsets a combination of fonts is often used.  This means that one group of
+characters are used from one font and another group from another font (which
+might be double wide).  This collection of fonts is called a fontset.
+
+Which fonts are required in a fontset depends on the current locale.  X
+windows maintains a table of which groups of characters are required for a
+locale.  You have to specify all the fonts that a locale requires in the
+'guifontset' option.
+
+Setting the 'guifontset' option also means that all font names will be handled
+as a fontset name.  Also the ones used for the "font" argument of the
+|:highlight| command.
+
+Note the difference between 'guifont' and 'guifontset': In 'guifont'
+the comma-separated names are alternative names, one of which will be
+used.  In 'guifontset' the whole string is one fontset name,
+including the commas.  It is not possible to specify alternative
+fontset names.
+This example works on many X11 systems: >
+	:set guifontset=-*-*-medium-r-normal--16-*-*-*-c-*-*-*
+<
+The fonts must match with the current locale.  If fonts for the character sets
+that the current locale uses are not included, setting 'guifontset' will fail.
+
+NOTE: The fontset always uses the current locale, even though 'encoding' may
+be set to use a different charset.  In that situation you might want to use
+'guifont' and 'guifontwide' instead of 'guifontset'.
+
+Example:
+    |charset| language		    "groups of characters" ~
+    GB2312    Chinese (simplified)  ISO-8859-1 and GB 2312
+    Big5      Chinese (traditional) ISO-8859-1 and Big5
+    CNS-11643 Chinese (traditional) ISO-8859-1, CNS 11643-1 and CNS 11643-2
+    EUC-JP    Japanese		    JIS X 0201 and JIS X 0208
+    EUC-KR    Korean		    ISO-8859-1 and KS C 5601 (KS X 1001)
+
+You can search for fonts using the xlsfonts command.  For example, when you're
+searching for a font for KS C 5601: >
+    xlsfonts | grep ksc5601
+
+This is complicated and confusing.  You might want to consult the X-Windows
+documentation if there is something you don't understand.
+
+						*base_font_name_list*
+When you have found the names of the fonts you want to use, you need to set
+the 'guifontset' option.  You specify the list by concatenating the font names
+and putting a comma in between them.
+
+For example, when you use the ja_JP.eucJP locale, this requires JIS X 0201
+and JIS X 0208.  You could supply a list of fonts that explicitly specifies
+the charsets, like: >
+
+ :set guifontset=-misc-fixed-medium-r-normal--14-130-75-75-c-140-jisx0208.1983-0,
+	\-misc-fixed-medium-r-normal--14-130-75-75-c-70-jisx0201.1976-0
+
+Alternatively, you can supply a base font name list that omits the charset
+name, letting X-Windows select font characters required for the locale.  For
+example: >
+
+ :set guifontset=-misc-fixed-medium-r-normal--14-130-75-75-c-140,
+	\-misc-fixed-medium-r-normal--14-130-75-75-c-70
+
+Alternatively, you can supply a single base font name that allows X-Windows to
+select from all available fonts.  For example: >
+
+ :set guifontset=-misc-fixed-medium-r-normal--14-*
+
+Alternatively, you can specify alias names.  See the fonts.alias file in the
+fonts directory (e.g., /usr/X11R6/lib/X11/fonts/).  For example: >
+
+ :set guifontset=k14,r14
+<
+							*E253*
+Note that in East Asian fonts, the standard character cell is square.  When
+mixing a Latin font and an East Asian font, the East Asian font width should
+be twice the Latin font width.
+
+If 'guifontset' is not empty, the "font" argument of the |:highlight| command
+is also interpreted as a fontset.  For example, you should use for
+highlighting: >
+	:hi Comment font=english_font,your_font
+If you use a wrong "font" argument you will get an error message.
+Also make sure that you set 'guifontset' before setting fonts for highlight
+groups.
+
+
+USING RESOURCE FILES
+
+Instead of specifying 'guifontset', you can set X11 resources and Vim will
+pick them up.  This is only for people who know how X resource files work.
+
+For Motif and Athena insert these three lines in your $HOME/.Xdefaults file:
+
+	Vim.font: |base_font_name_list|
+	Vim*fontSet: |base_font_name_list|
+	Vim*fontList: your_language_font
+
+Note: Vim.font is for text area.
+      Vim*fontSet is for menu.
+      Vim*fontList is for menu (for Motif GUI)
+
+For example, when you are using Japanese and a 14 dots font, >
+
+	Vim.font: -misc-fixed-medium-r-normal--14-*
+	Vim*fontSet: -misc-fixed-medium-r-normal--14-*
+	Vim*fontList: -misc-fixed-medium-r-normal--14-*
+<
+or: >
+
+	Vim*font: k14,r14
+	Vim*fontSet: k14,r14
+	Vim*fontList: k14,r14
+<
+To have them take effect immediately you will have to do >
+
+	xrdb -merge ~/.Xdefaults
+
+Otherwise you will have to stop and restart the X server before the changes
+take effect.
+
+
+The GTK+ version of GUI Vim does not use .Xdefaults, use ~/.gtkrc instead.
+The default mostly works OK.  But for the menus you might have to change
+it.  Example: >
+
+	style "default"
+	{
+		fontset="-*-*-medium-r-normal--14-*-*-*-c-*-*-*"
+	}
+	widget_class "*" style "default"
+

@@ -1,0 +1,356 @@
+5. Copying and moving text				*copy-move*
+
+							*quote*
+"{register}		Use {register} for next delete, yank or put.  Use
+			an uppercase character to append with delete and yank.
+			Registers ".", "%", "#" and ":" only work with put.
+
+							*:reg* *:registers*
+:reg[isters]		Display the type and contents of all numbered and
+			named registers.  If a register is written to for
+			|:redir| it will not be listed.
+			Type can be one of:
+			"c"	for |characterwise| text
+			"l"	for |linewise| text
+			"b"	for |blockwise-visual| text
+
+
+:reg[isters] {arg}	Display the contents of the numbered and named
+			registers that are mentioned in {arg}.  For example: >
+				:reg 1a
+<			to display registers '1' and 'a'.  Spaces are allowed
+			in {arg}.
+
+							*:di* *:display*
+:di[splay] [arg]	Same as :registers.
+
+							*y* *yank*
+["x]y{motion}		Yank {motion} text [into register x].  When no
+			characters are to be yanked (e.g., "y0" in column 1),
+			this is an error when 'cpoptions' includes the 'E'
+			flag.
+
+							*yy*
+["x]yy			Yank [count] lines [into register x] |linewise|.
+
+							*Y*
+["x]Y			yank [count] lines [into register x] (synonym for
+			yy, |linewise|).  If you like "Y" to work from the
+			cursor to the end of line (which is more logical,
+			but not Vi-compatible) use ":map Y y$".
+
+							*v_y*
+{Visual}["x]y		Yank the highlighted text [into register x] (for
+			{Visual} see |Visual-mode|).
+
+							*v_Y*
+{Visual}["x]Y		Yank the highlighted lines [into register x] (for
+			{Visual} see |Visual-mode|).
+
+							*:y* *:yank* *E850*
+:[range]y[ank] [x]	Yank [range] lines [into register x]. Yanking to the
+			"* or "+ registers is possible only when the
+			|+clipboard| feature is included.
+
+:[range]y[ank] [x] {count}
+			Yank {count} lines, starting with last line number
+			in [range] (default: current line |cmdline-ranges|),
+			[into register x].
+
+							*p* *put* *E353*
+["x]p			Put the text [from register x] after the cursor
+			[count] times.
+
+							*P*
+["x]P			Put the text [from register x] before the cursor
+			[count] times.
+
+							*<MiddleMouse>*
+["x]<MiddleMouse>	Put the text from a register before the cursor [count]
+			times.  Uses the "* register, unless another is
+			specified.
+			Leaves the cursor at the end of the new text.
+			Using the mouse only works when 'mouse' contains 'n'
+			or 'a'.
+			If you have a scrollwheel and often accidentally paste
+			text, you can use these mappings to disable the
+			pasting with the middle mouse button: >
+				:map <MiddleMouse> <Nop>
+				:imap <MiddleMouse> <Nop>
+<			You might want to disable the multi-click versions
+			too, see |double-click|.
+
+							*gp*
+["x]gp			Just like "p", but leave the cursor just after the new
+			text.
+
+							*gP*
+["x]gP			Just like "P", but leave the cursor just after the new
+			text.
+
+							*:pu* *:put*
+:[line]pu[t] [x]	Put the text [from register x] after [line] (default
+			current line).  This always works |linewise|, thus
+			this command can be used to put a yanked block as new
+			lines.
+			If no register is specified, it depends on the 'cb'
+			option: If 'cb' contains "unnamedplus", paste from the
+			+ register |quoteplus|.  Otherwise, if 'cb' contains
+			"unnamed", paste from the * register |quotestar|.
+			Otherwise, paste from the unnamed register
+			|quote_quote|.
+			The register can also be '=' followed by an optional
+			expression.  The expression continues until the end of
+			the command.  You need to escape the '|' and '"'
+			characters to prevent them from terminating the
+			command.  Example: >
+				:put ='path' . \",/test\"
+<			If there is no expression after '=', Vim uses the
+			previous expression.  You can see it with ":dis =".
+
+:[line]pu[t]! [x]	Put the text [from register x] before [line] (default
+			current line).
+
+["x]]p		    or					*]p* *]<MiddleMouse>*
+["x]]<MiddleMouse>	Like "p", but adjust the indent to the current line.
+			Using the mouse only works when 'mouse' contains 'n'
+			or 'a'.
+
+["x][P		    or					*[P*
+["x]]P		    or					*]P*
+["x][p		    or					*[p* *[<MiddleMouse>*
+["x][<MiddleMouse>	Like "P", but adjust the indent to the current line.
+			Using the mouse only works when 'mouse' contains 'n'
+			or 'a'.
+
+You can use these commands to copy text from one place to another.  Do this
+by first getting the text into a register with a yank, delete or change
+command, then inserting the register contents with a put command.  You can
+also use these commands to move text from one file to another, because Vim
+preserves all registers when changing buffers (the CTRL-^ command is a quick
+way to toggle between two files).
+
+				*linewise-register* *characterwise-register*
+You can repeat the put commands with "." (except for :put) and undo them.  If
+the command that was used to get the text into the register was |linewise|,
+Vim inserts the text below ("p") or above ("P") the line where the cursor is.
+Otherwise Vim inserts the text after ("p") or before ("P") the cursor.  With
+the ":put" command, Vim always inserts the text in the next line.  You can
+exchange two characters with the command sequence "xp".  You can exchange two
+lines with the command sequence "ddp".  You can exchange two words with the
+command sequence "deep" (start with the cursor in the blank space before the
+first word).  You can use the "']" or "`]" command after the put command to
+move the cursor to the end of the inserted text, or use "'[" or "`[" to move
+the cursor to the start.
+
+						*put-Visual-mode* *v_p* *v_P*
+When using a put command like |p| or |P| in Visual mode, Vim will try to
+replace the selected text with the contents of the register.  Whether this
+works well depends on the type of selection and the type of the text in the
+register.  With blockwise selection it also depends on the size of the block
+and whether the corners are on an existing character.  (Implementation detail:
+it actually works by first putting the register after the selection and then
+deleting the selection.)
+The previously selected text is put in the unnamed register.  If you want to
+put the same text into a Visual selection several times you need to use
+another register.  E.g., yank the text to copy, Visually select the text to
+replace and use "0p .  You can repeat this as many times as you like, the
+unnamed register will be changed each time.
+
+When you use a blockwise Visual mode command and yank only a single line into
+a register, a paste on a visual selected area will paste that single line on
+each of the selected lines (thus replacing the blockwise selected region by a
+block of the pasted line).
+
+							*blockwise-register*
+If you use a blockwise Visual mode command to get the text into the register,
+the block of text will be inserted before ("P") or after ("p") the cursor
+column in the current and next lines.  Vim makes the whole block of text start
+in the same column.  Thus the inserted text looks the same as when it was
+yanked or deleted.  Vim may replace some <Tab> characters with spaces to make
+this happen.  However, if the width of the block is not a multiple of a <Tab>
+width and the text after the inserted block contains <Tab>s, that text may be
+misaligned.
+
+Note that after a characterwise yank command, Vim leaves the cursor on the
+first yanked character that is closest to the start of the buffer.  This means
+that "yl" doesn't move the cursor, but "yh" moves the cursor one character
+left.
+Rationale:	In Vi the "y" command followed by a backwards motion would
+		sometimes not move the cursor to the first yanked character,
+		because redisplaying was skipped.  In Vim it always moves to
+		the first character, as specified by Posix.
+With a linewise yank command the cursor is put in the first line, but the
+column is unmodified, thus it may not be on the first yanked character.
+
+There are ten types of registers:		*registers* *{register}* *E354*
+1. The unnamed register ""
+2. 10 numbered registers "0 to "9
+3. The small delete register "-
+4. 26 named registers "a to "z or "A to "Z
+5. Three read-only registers ":, "., "%
+6. Alternate buffer register "#
+7. The expression register "=
+8. The selection and drop registers "*, "+ and "~ 
+9. The black hole register "_
+10. Last search pattern register "/
+
+1. Unnamed register ""				*quote_quote* *quotequote*
+Vim fills this register with text deleted with the "d", "c", "s", "x" commands
+or copied with the yank "y" command, regardless of whether or not a specific
+register was used (e.g.  "xdd).  This is like the unnamed register is pointing
+to the last used register.  Thus when appending using an uppercase register
+name, the unnamed register contains the same text as the named register.
+An exception is the '_' register: "_dd does not store the deleted text in any
+register.
+Vim uses the contents of the unnamed register for any put command (p or P)
+which does not specify a register.  Additionally you can access it with the
+name '"'.  This means you have to type two double quotes.  Writing to the ""
+register writes to register "0.
+{Vi: register contents are lost when changing files, no '"'}
+
+2. Numbered registers "0 to "9		*quote_number* *quote0* *quote1*
+					*quote2* *quote3* *quote4* *quote9*
+Vim fills these registers with text from yank and delete commands.
+   Numbered register 0 contains the text from the most recent yank command,
+unless the command specified another register with ["x].
+   Numbered register 1 contains the text deleted by the most recent delete or
+change command, unless the command specified another register or the text is
+less than one line (the small delete register is used then).  An exception is
+made for the delete operator with these movement commands: |%|, |(|, |)|, |`|,
+|/|, |?|, |n|, |N|, |{| and |}|.  Register "1 is always used then (this is Vi
+compatible).  The "- register is used as well if the delete is within a line.
+Note that these characters may be mapped.  E.g. |%| is mapped by the matchit
+plugin.
+   With each successive deletion or change, Vim shifts the previous contents
+of register 1 into register 2, 2 into 3, and so forth, losing the previous
+contents of register 9.
+{Vi: numbered register contents are lost when changing files; register 0 does
+not exist}
+
+3. Small delete register "-				*quote_-* *quote-*
+This register contains text from commands that delete less than one line,
+except when the command specifies a register with ["x].
+
+4. Named registers "a to "z or "A to "Z			*quote_alpha* *quotea*
+Vim fills these registers only when you say so.  Specify them as lowercase
+letters to replace their previous contents or as uppercase letters to append
+to their previous contents.  When the '>' flag is present in 'cpoptions' then
+a line break is inserted before the appended text.
+
+5. Read-only registers ":, ". and "%
+These are '%', '#', ':' and '.'.  You can use them only with the "p", "P",
+and ":put" commands and with CTRL-R.
+						*quote_.* *quote.* *E29*
+	".	Contains the last inserted text (the same as what is inserted
+		with the insert mode commands CTRL-A and CTRL-@).  Note: this
+		doesn't work with CTRL-R on the command-line.  It works a bit
+		differently, like inserting the text instead of putting it
+		('textwidth' and other options affect what is inserted).
+							*quote_%* *quote%*
+	"%	Contains the name of the current file.
+						*quote_:* *quote:* *E30*
+	":	Contains the most recent executed command-line.  Example: Use
+		"@:" to repeat the previous command-line command.
+		The command-line is only stored in this register when at least
+		one character of it was typed.  Thus it remains unchanged if
+		the command was completely from a mapping.
+		{not available when compiled without the |+cmdline_hist|
+		feature}
+							*quote_#* *quote#*
+6. Alternate file register "#
+Contains the name of the alternate file for the current window.  It will
+change how the |CTRL-^| command works.
+This register is writable, mainly to allow for restoring it after a plugin has
+changed it.  It accepts buffer number: >
+    let altbuf = bufnr(@#)
+    ...
+    let @# = altbuf
+It will give error |E86| if you pass buffer number and this buffer does not
+exist.
+It can also accept a match with an existing buffer name: >
+    let @# = 'buffer_name'
+Error |E93| if there is more than one buffer matching the given name or |E94|
+if none of buffers matches the given name.
+
+7. Expression register "=			*quote_=* *quote=* *@=*
+This is not really a register that stores text, but is a way to use an
+expression in commands which use a register.  The expression register is
+read-write.
+
+When typing the '=' after " or CTRL-R the cursor moves to the command-line,
+where you can enter any expression (see |expression|).  All normal
+command-line editing commands are available, including a special history for
+expressions.  When you end the command-line by typing <CR>, Vim computes the
+result of the expression.  If you end it with <Esc>, Vim abandons the
+expression.  If you do not enter an expression, Vim uses the previous
+expression (like with the "/" command).
+
+The expression must evaluate to a String.  A Number is always automatically
+converted to a String.  For the "p" and ":put" command, if the result is a
+Float it's converted into a String.  If the result is a List each element is
+turned into a String and used as a line.  A Dictionary or FuncRef results in
+an error message (use string() to convert).
+
+If the "= register is used for the "p" command, the String is split up at <NL>
+characters.  If the String ends in a <NL>, it is regarded as a linewise
+register.
+
+8. Selection and drop registers "*, "+ and "~ 
+Use these registers for storing and retrieving the selected text for the GUI.
+See |quotestar| and |quoteplus|.  When the clipboard is not available or not
+working, the unnamed register is used instead.  For Unix systems the clipboard
+is only available when the |+xterm_clipboard| feature is present.
+
+Note that there is only a distinction between "* and "+ for X11 systems.  For
+an explanation of the difference, see |x11-selection|.  Under MS-Windows, use
+of "* and "+ is actually synonymous and refers to the |gui-clipboard|.
+
+						*quote_~* *quote~* *<Drop>*
+The read-only "~ register stores the dropped text from the last drag'n'drop
+operation.  When something has been dropped onto Vim, the "~ register is
+filled in and the <Drop> pseudo key is sent for notification.  You can remap
+this key if you want; the default action (for all modes) is to insert the
+contents of the "~ register at the cursor position.
+{only available when compiled with the |+dnd| feature, currently only with the
+GTK GUI}
+
+Note: The "~ register is only used when dropping plain text onto Vim.
+Drag'n'drop of URI lists is handled internally.
+
+9. Black hole register "_				*quote_*
+When writing to this register, nothing happens.  This can be used to delete
+text without affecting the normal registers.  When reading from this register,
+nothing is returned.
+
+10. Last search pattern register	"/		*quote_/* *quote/*
+Contains the most recent search-pattern.  This is used for "n" and 'hlsearch'.
+It is writable with `:let`, you can change it to have 'hlsearch' highlight
+other matches without actually searching.  You can't yank or delete into this
+register.  The search direction is available in |v:searchforward|.
+Note that the value is restored when returning from a function
+|function-search-undo|.
+
+							*@/*
+You can write to a register with a `:let` command |:let-@|.  Example: >
+	:let @/ = "the"
+
+If you use a put command without specifying a register, Vim uses the register
+that was last filled (this is also the contents of the unnamed register).  If
+you are confused, use the `:dis` command to find out what Vim will put (this
+command displays all named and numbered registers; the unnamed register is
+labelled '"').
+
+The next three commands always work on whole lines.
+
+:[range]co[py] {address}				*:co* *:copy*
+			Copy the lines given by [range] to below the line
+			given by {address}.
+
+							*:t*
+:t			Synonym for copy.
+
+:[range]m[ove] {address}			*:m* *:mo* *:move* *E134*
+			Move the lines given by [range] to below the line
+			given by {address}.
+
