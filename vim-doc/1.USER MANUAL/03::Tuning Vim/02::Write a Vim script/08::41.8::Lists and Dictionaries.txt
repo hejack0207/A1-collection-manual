@@ -1,0 +1,285 @@
+*41.8*	Lists and Dictionaries
+
+So far we have used the basic types String and Number.  Vim also supports two
+composite types: List and Dictionary.
+
+A List is an ordered sequence of things.  The things can be any kind of value,
+thus you can make a List of numbers, a List of Lists and even a List of mixed
+items.  To create a List with three strings: >
+
+	:let alist = ['aap', 'mies', 'noot']
+
+The List items are enclosed in square brackets and separated by commas.  To
+create an empty List: >
+
+	:let alist = []
+
+You can add items to a List with the add() function: >
+
+	:let alist = []
+	:call add(alist, 'foo')
+	:call add(alist, 'bar')
+	:echo alist
+<	['foo', 'bar'] ~
+
+List concatenation is done with +: >
+
+	:echo alist + ['foo', 'bar']
+<	['foo', 'bar', 'foo', 'bar'] ~
+
+Or, if you want to extend a List directly: >
+
+	:let alist = ['one']
+	:call extend(alist, ['two', 'three'])
+	:echo alist
+<	['one', 'two', 'three'] ~
+
+Notice that using add() will have a different effect: >
+
+	:let alist = ['one']
+	:call add(alist, ['two', 'three'])
+	:echo alist
+<	['one', ['two', 'three']] ~
+
+The second argument of add() is added as a single item.
+
+
+FOR LOOP
+
+One of the nice things you can do with a List is iterate over it: >
+
+	:let alist = ['one', 'two', 'three']
+	:for n in alist
+	:  echo n
+	:endfor
+<	one ~
+	two ~
+	three ~
+
+This will loop over each element in List "alist", assigning the value to
+variable "n".  The generic form of a for loop is: >
+
+	:for {varname} in {listexpression}
+	:  {commands}
+	:endfor
+
+To loop a certain number of times you need a List of a specific length.  The
+range() function creates one for you: >
+
+	:for a in range(3)
+	:  echo a
+	:endfor
+<	0 ~
+	1 ~
+	2 ~
+
+Notice that the first item of the List that range() produces is zero, thus the
+last item is one less than the length of the list.
+   You can also specify the maximum value, the stride and even go backwards: >
+
+	:for a in range(8, 4, -2)
+	:  echo a
+	:endfor
+<	8 ~
+	6 ~
+	4 ~
+
+A more useful example, looping over lines in the buffer: >
+
+	:for line in getline(1, 20)
+	:  if line =~ "Date: "
+	:    echo matchstr(line, 'Date: \zs.*')
+	:  endif
+	:endfor
+
+This looks into lines 1 to 20 (inclusive) and echoes any date found in there.
+
+
+DICTIONARIES
+
+A Dictionary stores key-value pairs.  You can quickly lookup a value if you
+know the key.  A Dictionary is created with curly braces: >
+
+	:let uk2nl = {'one': 'een', 'two': 'twee', 'three': 'drie'}
+
+Now you can lookup words by putting the key in square brackets: >
+
+	:echo uk2nl['two']
+<	twee ~
+
+The generic form for defining a Dictionary is: >
+
+	{<key> : <value>, ...}
+
+An empty Dictionary is one without any keys: >
+
+	{}
+
+The possibilities with Dictionaries are numerous.  There are various functions
+for them as well.  For example, you can obtain a list of the keys and loop
+over them: >
+
+	:for key in keys(uk2nl)
+	:  echo key
+	:endfor
+<	three ~
+	one ~
+	two ~
+
+You will notice the keys are not ordered.  You can sort the list to get a
+specific order: >
+
+	:for key in sort(keys(uk2nl))
+	:  echo key
+	:endfor
+<	one ~
+	three ~
+	two ~
+
+But you can never get back the order in which items are defined.  For that you
+need to use a List, it stores items in an ordered sequence.
+
+
+DICTIONARY FUNCTIONS
+
+The items in a Dictionary can normally be obtained with an index in square
+brackets: >
+
+	:echo uk2nl['one']
+<	een ~
+
+A method that does the same, but without so many punctuation characters: >
+
+	:echo uk2nl.one
+<	een ~
+
+This only works for a key that is made of ASCII letters, digits and the
+underscore.  You can also assign a new value this way: >
+
+	:let uk2nl.four = 'vier'
+	:echo uk2nl
+<	{'three': 'drie', 'four': 'vier', 'one': 'een', 'two': 'twee'} ~
+
+And now for something special: you can directly define a function and store a
+reference to it in the dictionary: >
+
+	:function uk2nl.translate(line) dict
+	:  return join(map(split(a:line), 'get(self, v:val, "???")'))
+	:endfunction
+
+Let's first try it out: >
+
+	:echo uk2nl.translate('three two five one')
+<	drie twee ??? een ~
+
+The first special thing you notice is the "dict" at the end of the ":function"
+line.  This marks the function as being used from a Dictionary.  The "self"
+local variable will then refer to that Dictionary.
+   Now let's break up the complicated return command: >
+
+	split(a:line)
+
+The split() function takes a string, chops it into whitespace separated words
+and returns a list with these words.  Thus in the example it returns: >
+
+	:echo split('three two five one')
+<	['three', 'two', 'five', 'one'] ~
+
+This list is the first argument to the map() function.  This will go through
+the list, evaluating its second argument with "v:val" set to the value of each
+item.  This is a shortcut to using a for loop.  This command: >
+
+	:let alist = map(split(a:line), 'get(self, v:val, "???")')
+
+Is equivalent to: >
+
+	:let alist = split(a:line)
+	:for idx in range(len(alist))
+	:  let alist[idx] = get(self, alist[idx], "???")
+	:endfor
+
+The get() function checks if a key is present in a Dictionary.  If it is, then
+the value is retrieved.  If it isn't, then the default value is returned, in
+the example it's '???'.  This is a convenient way to handle situations where a
+key may not be present and you don't want an error message.
+
+The join() function does the opposite of split(): it joins together a list of
+words, putting a space in between.
+  This combination of split(), map() and join() is a nice way to filter a line
+of words in a very compact way.
+
+
+OBJECT ORIENTED PROGRAMMING
+
+Now that you can put both values and functions in a Dictionary, you can
+actually use a Dictionary like an object.
+   Above we used a Dictionary for translating Dutch to English.  We might want
+to do the same for other languages.  Let's first make an object (aka
+Dictionary) that has the translate function, but no words to translate: >
+
+	:let transdict = {}
+	:function transdict.translate(line) dict
+	:  return join(map(split(a:line), 'get(self.words, v:val, "???")'))
+	:endfunction
+
+It's slightly different from the function above, using 'self.words' to lookup
+word translations.  But we don't have a self.words.  Thus you could call this
+an abstract class.
+
+Now we can instantiate a Dutch translation object: >
+
+	:let uk2nl = copy(transdict)
+	:let uk2nl.words = {'one': 'een', 'two': 'twee', 'three': 'drie'}
+	:echo uk2nl.translate('three one')
+<	drie een ~
+
+And a German translator: >
+
+	:let uk2de = copy(transdict)
+	:let uk2de.words = {'one': 'eins', 'two': 'zwei', 'three': 'drei'}
+	:echo uk2de.translate('three one')
+<	drei eins ~
+
+You see that the copy() function is used to make a copy of the "transdict"
+Dictionary and then the copy is changed to add the words.  The original
+remains the same, of course.
+
+Now you can go one step further, and use your preferred translator: >
+
+	:if $LANG =~ "de"
+	:  let trans = uk2de
+	:else
+	:  let trans = uk2nl
+	:endif
+	:echo trans.translate('one two three')
+<	een twee drie ~
+
+Here "trans" refers to one of the two objects (Dictionaries).  No copy is
+made.  More about List and Dictionary identity can be found at |list-identity|
+and |dict-identity|.
+
+Now you might use a language that isn't supported.  You can overrule the
+translate() function to do nothing: >
+
+	:let uk2uk = copy(transdict)
+	:function! uk2uk.translate(line)
+	:  return a:line
+	:endfunction
+	:echo uk2uk.translate('three one wladiwostok')
+<	three one wladiwostok ~
+
+Notice that a ! was used to overwrite the existing function reference.  Now
+use "uk2uk" when no recognized language is found: >
+
+	:if $LANG =~ "de"
+	:  let trans = uk2de
+	:elseif $LANG =~ "nl"
+	:  let trans = uk2nl
+	:else
+	:  let trans = uk2uk
+	:endif
+	:echo trans.translate('one two three')
+<	one two three ~
+
+For further reading see |Lists| and |Dictionaries|.
+

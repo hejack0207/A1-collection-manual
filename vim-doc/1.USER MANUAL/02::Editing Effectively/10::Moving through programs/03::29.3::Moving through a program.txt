@@ -1,0 +1,120 @@
+*29.3*	Moving through a program
+
+Since a program is structured, Vim can recognize items in it.  Specific
+commands can be used to move around.
+   C programs often contain constructs like this:
+
+	#ifdef USE_POPEN ~
+	    fd = popen("ls", "r") ~
+	#else ~
+	    fd = fopen("tmp", "w") ~
+	#endif ~
+
+But then much longer, and possibly nested.  Position the cursor on the
+"#ifdef" and press %.  Vim will jump to the "#else".  Pressing % again takes
+you to the "#endif".  Another % takes you to the "#ifdef" again.
+   When the construct is nested, Vim will find the matching items.  This is a
+good way to check if you didn't forget an "#endif".
+   When you are somewhere inside a "#if" - "#endif", you can jump to the start
+of it with: >
+
+	[#
+
+If you are not after a "#if" or "#ifdef" Vim will beep.  To jump forward to
+the next "#else" or "#endif" use: >
+
+	]#
+
+These two commands skip any "#if" - "#endif" blocks that they encounter.
+Example:
+
+	#if defined(HAS_INC_H) ~
+	    a = a + inc(); ~
+	# ifdef USE_THEME ~
+	    a += 3; ~
+	# endif ~
+	    set_width(a); ~
+
+With the cursor in the last line, "[#" moves to the first line.  The "#ifdef"
+- "#endif" block in the middle is skipped.
+
+
+MOVING IN CODE BLOCKS
+
+In C code blocks are enclosed in {}.  These can get pretty long.  To move to
+the start of the outer block use the "[[" command.  Use "][" to find the end.
+This assumes that the "{" and "}" are in the first column.
+   The "[{" command moves to the start of the current block.  It skips over
+pairs of {} at the same level.  "]}" jumps to the end.
+   An overview:
+
+			function(int a)
+	   +->		{
+	   |		    if (a)
+	   |	   +->	    {
+	[[ |	   |		for (;;)	       --+
+	   |	   |	  +->	{			 |
+	   |	[{ |	  |	    foo(32);		 |     --+
+	   |	   |   [{ |	    if (bar(a))  --+	 | ]}	 |
+	   +--	   |	  +--		break;	   | ]}  |	 |
+		   |		}		 <-+	 |	 | ][
+		   +--		foobar(a)		 |	 |
+			    }			       <-+	 |
+			}				       <-+
+
+When writing C++ or Java, the outer {} block is for the class.  The next level
+of {} is for a method.  When somewhere inside a class use "[m" to find the
+previous start of a method.  "]m" finds the next start of a method.
+
+Additionally, "[]" moves backward to the end of a function and "]]" moves
+forward to the start of the next function.  The end of a function is defined
+by a "}" in the first column.
+
+				int func1(void)
+				{
+					return 1;
+		  +---------->  }
+		  |
+	      []  |		int func2(void)
+		  |	   +->	{
+		  |    [[  |		if (flag)
+	start	  +--	   +--			return flag;
+		  |    ][  |		return 2;
+		  |	   +->	}
+	      ]]  |
+		  |		int func3(void)
+		  +---------->	{
+					return 3;
+				}
+
+Don't forget you can also use "%" to move between matching (), {} and [].
+That also works when they are many lines apart.
+
+
+MOVING IN BRACES
+
+The "[(" and "])" commands work similar to "[{" and "]}", except that they
+work on () pairs instead of {} pairs.
+>
+				  [(
+<		    <--------------------------------
+			      <-------
+		if (a == b && (c == d || (e > f)) && x > y) ~
+				  -------------->
+			  --------------------------------> >
+				       ])
+
+MOVING IN COMMENTS
+
+To move back to the start of a comment use "[/".  Move forward to the end of a
+comment with "]/".  This only works for /* - */ comments.
+
+	  +->	  +-> /*
+	  |    [/ |    * A comment about      --+
+       [/ |	  +--  * wonderful life.	| ]/
+	  |	       */		      <-+
+	  |
+	  +--	       foo = bar * 3;	      --+
+						| ]/
+		       /* a short comment */  <-+
+

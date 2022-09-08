@@ -3,7 +3,8 @@ BEGINFILE {
     filename["name"]=FILENAME
     filename["index"]=0
     nameneeded=0
-    fn=sprintf("%02d##%s", filename["index"], filename["name"])
+    fn=sprintf("%02d::%s", filename["index"], filename["name"])
+    filename["index"]++
 }
 
 /={20,}/{
@@ -14,20 +15,22 @@ BEGINFILE {
 nameneeded && match($0, /^\*([^*]+)\*[[:space:]]+([^*]+).*$/, m) {
     gsub(/^[[:space:]]+/,"",m[2])
     gsub(/[[:space:]]+$/,"",m[2])
-    filename["name"]=sprintf("%s::%s.txt", m[1], m[2])
+    filename["name"]=sprintf("%02d::%s::%s.txt", filename["index"], m[1], m[2])
     nameneeded=0
     fn=filename["name"]
+    filename["index"]++
 }
 
 nameneeded && ! match($0, /^\*([^*]+)\*[[:space:]]+([^*]+).*$/, m) {
     filename["name"]=FILENAME
-    filename["index"]++
     nameneeded=0
-    fn=sprintf("%02d##%s", filename["index"], filename["name"])
+    fn=sprintf("%02d::%s", filename["index"], filename["name"])
+    filename["index"]++
 }
 
 {
-    print fn "      " $0
+    print $0 >> fn
+    # print fn "    " $0
 }
 
 ENDFILE {

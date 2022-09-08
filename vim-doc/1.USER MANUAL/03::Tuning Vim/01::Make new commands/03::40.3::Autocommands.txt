@@ -1,0 +1,228 @@
+*40.3*	Autocommands
+
+An autocommand is a command that is executed automatically in response to some
+event, such as a file being read or written or a buffer change.  Through the
+use of autocommands you can train Vim to edit compressed files, for example.
+That is used in the |gzip| plugin.
+   Autocommands are very powerful.  Use them with care and they will help you
+avoid typing many commands.  Use them carelessly and they will cause a lot of
+trouble.
+
+Suppose you want to replace a datestamp on the end of a file every time it is
+written.  First you define a function: >
+
+	:function DateInsert()
+	:  $delete
+	:  read !date
+	:endfunction
+
+You want this function to be called each time, just before a buffer is written
+to a file.  This will make that happen: >
+
+	:autocmd BufWritePre *  call DateInsert()
+
+"BufWritePre" is the event for which this autocommand is triggered: Just
+before (pre) writing a buffer to a file.  The "*" is a pattern to match with
+the file name.  In this case it matches all files.
+   With this command enabled, when you do a ":write", Vim checks for any
+matching BufWritePre autocommands and executes them, and then it
+performs the ":write".
+   The general form of the :autocmd command is as follows: >
+
+	:autocmd [group] {events} {file_pattern} [nested] {command}
+
+The [group] name is optional.  It is used in managing and calling the commands
+(more on this later).  The {events} parameter is a list of events (comma
+separated) that trigger the command.
+   {file_pattern} is a filename, usually with wildcards.  For example, using
+"*.txt" makes the autocommand be used for all files whose name end in ".txt".
+The optional [nested] flag allows for nesting of autocommands (see below), and
+finally, {command} is the command to be executed.
+
+
+EVENTS
+
+One of the most useful events is BufReadPost.  It is triggered after a new
+file is being edited.  It is commonly used to set option values.  For example,
+you know that "*.gsm" files are GNU assembly language.  To get the syntax file
+right, define this autocommand: >
+
+	:autocmd BufReadPost *.gsm  set filetype=asm
+
+If Vim is able to detect the type of file, it will set the 'filetype' option
+for you.  This triggers the Filetype event.  Use this to do something when a
+certain type of file is edited.  For example, to load a list of abbreviations
+for text files: >
+
+	:autocmd Filetype text  source ~/.vim/abbrevs.vim
+
+When starting to edit a new file, you could make Vim insert a skeleton: >
+
+	:autocmd BufNewFile *.[ch]  0read ~/skeletons/skel.c
+
+See |autocmd-events| for a complete list of events.
+
+
+PATTERNS
+
+The {file_pattern} argument can actually be a comma-separated list of file
+patterns.  For example: "*.c,*.h" matches files ending in ".c" and ".h".
+   The usual file wildcards can be used.  Here is a summary of the most often
+used ones:
+
+	*		Match any character any number of times
+	?		Match any character once
+	[abc]		Match the character a, b or c
+	.		Matches a dot
+	a{b,c}		Matches "ab" and "ac"
+
+When the pattern includes a slash (/) Vim will compare directory names.
+Without the slash only the last part of a file name is used.  For example,
+"*.txt" matches "/home/biep/readme.txt".  The pattern "/home/biep/*" would
+also match it.  But "home/foo/*.txt" wouldn't.
+   When including a slash, Vim matches the pattern against both the full path
+of the file ("/home/biep/readme.txt") and the relative path (e.g.,
+"biep/readme.txt").
+
+	Note:
+	When working on a system that uses a backslash as file separator, such
+	as MS-Windows, you still use forward slashes in autocommands.  This
+	makes it easier to write the pattern, since a backslash has a special
+	meaning.  It also makes the autocommands portable.
+
+
+DELETING
+
+To delete an autocommand, use the same command as what it was defined with,
+but leave out the {command} at the end and use a !.  Example: >
+
+	:autocmd! FileWritePre *
+
+This will delete all autocommands for the "FileWritePre" event that use the
+"*" pattern.
+
+
+LISTING
+
+To list all the currently defined autocommands, use this: >
+
+	:autocmd
+
+The list can be very long, especially when filetype detection is used.  To
+list only part of the commands, specify the group, event and/or pattern.  For
+example, to list all BufNewFile autocommands: >
+
+	:autocmd BufNewFile
+
+To list all autocommands for the pattern "*.c": >
+
+	:autocmd * *.c
+
+Using "*" for the event will list all the events.  To list all autocommands
+for the cprograms group: >
+
+	:autocmd cprograms
+
+
+GROUPS
+
+The {group} item, used when defining an autocommand, groups related autocommands
+together.  This can be used to delete all the autocommands in a certain group,
+for example.
+   When defining several autocommands for a certain group, use the ":augroup"
+command.  For example, let's define autocommands for C programs: >
+
+	:augroup cprograms
+	:  autocmd BufReadPost *.c,*.h :set sw=4 sts=4
+	:  autocmd BufReadPost *.cpp   :set sw=3 sts=3
+	:augroup END
+
+This will do the same as: >
+
+	:autocmd cprograms BufReadPost *.c,*.h :set sw=4 sts=4
+	:autocmd cprograms BufReadPost *.cpp   :set sw=3 sts=3
+
+To delete all autocommands in the "cprograms" group: >
+
+	:autocmd! cprograms
+
+
+NESTING
+
+Generally, commands executed as the result of an autocommand event will not
+trigger any new events.  If you read a file in response to a FileChangedShell
+event, it will not trigger the autocommands that would set the syntax, for
+example.  To make the events triggered, add the "nested" argument: >
+
+	:autocmd FileChangedShell * nested  edit
+
+
+EXECUTING AUTOCOMMANDS
+
+It is possible to trigger an autocommand by pretending an event has occurred.
+This is useful to have one autocommand trigger another one.  Example: >
+
+	:autocmd BufReadPost *.new  execute "doautocmd BufReadPost " . expand("<afile>:r")
+
+This defines an autocommand that is triggered when a new file has been edited.
+The file name must end in ".new".  The ":execute" command uses expression
+evaluation to form a new command and execute it.  When editing the file
+"tryout.c.new" the executed command will be: >
+
+	:doautocmd BufReadPost tryout.c
+
+The expand() function takes the "<afile>" argument, which stands for the file
+name the autocommand was executed for, and takes the root of the file name
+with ":r".
+
+":doautocmd" executes on the current buffer.  The ":doautoall" command works
+like "doautocmd" except it executes on all the buffers.
+
+
+USING NORMAL MODE COMMANDS
+
+The commands executed by an autocommand are Command-line commands.  If you
+want to use a Normal mode command, the ":normal" command can be used.
+Example: >
+
+	:autocmd BufReadPost *.log normal G
+
+This will make the cursor jump to the last line of *.log files when you start
+to edit it.
+   Using the ":normal" command is a bit tricky.  First of all, make sure its
+argument is a complete command, including all the arguments.  When you use "i"
+to go to Insert mode, there must also be a <Esc> to leave Insert mode again.
+If you use a "/" to start a search pattern, there must be a <CR> to execute
+it.
+   The ":normal" command uses all the text after it as commands.  Thus there
+can be no | and another command following.  To work around this, put the
+":normal" command inside an ":execute" command.  This also makes it possible
+to pass unprintable characters in a convenient way.  Example: >
+
+	:autocmd BufReadPost *.chg execute "normal ONew entry:\<Esc>" |
+		\ 1read !date
+
+This also shows the use of a backslash to break a long command into more
+lines.  This can be used in Vim scripts (not at the command line).
+
+When you want the autocommand do something complicated, which involves jumping
+around in the file and then returning to the original position, you may want
+to restore the view on the file.  See |restore-position| for an example.
+
+
+IGNORING EVENTS
+
+At times, you will not want to trigger an autocommand.  The 'eventignore'
+option contains a list of events that will be totally ignored.  For example,
+the following causes events for entering and leaving a window to be ignored: >
+
+	:set eventignore=WinEnter,WinLeave
+
+To ignore all events, use the following command: >
+
+	:set eventignore=all
+
+To set it back to the normal behavior, make 'eventignore' empty: >
+
+	:set eventignore=
+

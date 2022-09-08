@@ -1,12 +1,20 @@
 # vim: sts=-1 sw=4 fdm=marker
 
 if [[ -e help.txt ]]; then
-    cat help.txt | ./org.awk
+    cat help.txt | ./organize.awk
 fi
 
-awkscript="$(pwd)/split-text.awk"
+awkscript="$(pwd)/split-txt.awk"
 
 while read f; do
-    cd ${f:A:h}
-    awk -f $awkscript ${f:A:t}
-done <<<$(find "1.USER MANUAL" "2.REFERENCE MANUAL/" -name '*.txt')
+    dir=$(dirname "$f")
+    pushd "$dir"
+    awk -f $awkscript $(basename "$f")
+    popd
+    mv "$f" "$f".rm
+done <<<$(find "1.USER MANUAL" -name '*.txt')
+
+# while read f; do
+#     cd ${f:A:h}
+#     awk -f $awkscript ${f:A:t}
+# done <<<$(find "2.REFERENCE MANUAL/" -name '*.txt')

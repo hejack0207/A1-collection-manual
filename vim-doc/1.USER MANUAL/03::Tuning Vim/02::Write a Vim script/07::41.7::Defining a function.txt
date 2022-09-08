@@ -1,0 +1,226 @@
+*41.7*	Defining a function
+
+Vim enables you to define your own functions.  The basic function declaration
+begins as follows: >
+
+	:function {name}({var1}, {var2}, ...)
+	:  {body}
+	:endfunction
+<
+	Note:
+	Function names must begin with a capital letter.
+
+Let's define a short function to return the smaller of two numbers.  It starts
+with this line: >
+
+	:function Min(num1, num2)
+
+This tells Vim that the function is named "Min" and it takes two arguments:
+"num1" and "num2".
+   The first thing you need to do is to check to see which number is smaller:
+   >
+	:  if a:num1 < a:num2
+
+The special prefix "a:" tells Vim that the variable is a function argument.
+Let's assign the variable "smaller" the value of the smallest number: >
+
+	:  if a:num1 < a:num2
+	:    let smaller = a:num1
+	:  else
+	:    let smaller = a:num2
+	:  endif
+
+The variable "smaller" is a local variable.  Variables used inside a function
+are local unless prefixed by something like "g:", "a:", or "s:".
+
+	Note:
+	To access a global variable from inside a function you must prepend
+	"g:" to it.  Thus "g:today" inside a function is used for the global
+	variable "today", and "today" is another variable, local to the
+	function.
+
+You now use the ":return" statement to return the smallest number to the user.
+Finally, you end the function: >
+
+	:  return smaller
+	:endfunction
+
+The complete function definition is as follows: >
+
+	:function Min(num1, num2)
+	:  if a:num1 < a:num2
+	:    let smaller = a:num1
+	:  else
+	:    let smaller = a:num2
+	:  endif
+	:  return smaller
+	:endfunction
+
+For people who like short functions, this does the same thing: >
+
+	:function Min(num1, num2)
+	:  if a:num1 < a:num2
+	:    return a:num1
+	:  endif
+	:  return a:num2
+	:endfunction
+
+A user defined function is called in exactly the same way as a built-in
+function.  Only the name is different.  The Min function can be used like
+this: >
+
+	:echo Min(5, 8)
+
+Only now will the function be executed and the lines be interpreted by Vim.
+If there are mistakes, like using an undefined variable or function, you will
+now get an error message.  When defining the function these errors are not
+detected.
+
+When a function reaches ":endfunction" or ":return" is used without an
+argument, the function returns zero.
+
+To redefine a function that already exists, use the ! for the ":function"
+command: >
+
+	:function!  Min(num1, num2, num3)
+
+
+USING A RANGE
+
+The ":call" command can be given a line range.  This can have one of two
+meanings.  When a function has been defined with the "range" keyword, it will
+take care of the line range itself.
+  The function will be passed the variables "a:firstline" and "a:lastline".
+These will have the line numbers from the range the function was called with.
+Example: >
+
+	:function Count_words() range
+	:  let lnum = a:firstline
+	:  let n = 0
+	:  while lnum <= a:lastline
+	:    let n = n + len(split(getline(lnum)))
+	:    let lnum = lnum + 1
+	:  endwhile
+	:  echo "found " . n . " words"
+	:endfunction
+
+You can call this function with: >
+
+	:10,30call Count_words()
+
+It will be executed once and echo the number of words.
+   The other way to use a line range is by defining a function without the
+"range" keyword.  The function will be called once for every line in the
+range, with the cursor in that line.  Example: >
+
+	:function  Number()
+	:  echo "line " . line(".") . " contains: " . getline(".")
+	:endfunction
+
+If you call this function with: >
+
+	:10,15call Number()
+
+The function will be called six times.
+
+
+VARIABLE NUMBER OF ARGUMENTS
+
+Vim enables you to define functions that have a variable number of arguments.
+The following command, for instance, defines a function that must have 1
+argument (start) and can have up to 20 additional arguments: >
+
+	:function Show(start, ...)
+
+The variable "a:1" contains the first optional argument, "a:2" the second, and
+so on.  The variable "a:0" contains the number of extra arguments.
+   For example: >
+
+	:function Show(start, ...)
+	:  echohl Title
+	:  echo "start is " . a:start
+	:  echohl None
+	:  let index = 1
+	:  while index <= a:0
+	:    echo "  Arg " . index . " is " . a:{index}
+	:    let index = index + 1
+	:  endwhile
+	:  echo ""
+	:endfunction
+
+This uses the ":echohl" command to specify the highlighting used for the
+following ":echo" command.  ":echohl None" stops it again.  The ":echon"
+command works like ":echo", but doesn't output a line break.
+
+You can also use the a:000 variable, it is a List of all the "..." arguments.
+See |a:000|.
+
+
+LISTING FUNCTIONS
+
+The ":function" command lists the names and arguments of all user-defined
+functions: >
+
+	:function
+<	function Show(start, ...) ~
+	function GetVimIndent() ~
+	function SetSyn(name) ~
+
+To see what a function does, use its name as an argument for ":function": >
+
+	:function SetSyn
+<	1     if &syntax == '' ~
+	2       let &syntax = a:name ~
+	3     endif ~
+	   endfunction ~
+
+
+DEBUGGING
+
+The line number is useful for when you get an error message or when debugging.
+See |debug-scripts| about debugging mode.
+   You can also set the 'verbose' option to 12 or higher to see all function
+calls.  Set it to 15 or higher to see every executed line.
+
+
+DELETING A FUNCTION
+
+To delete the Show() function: >
+
+	:delfunction Show
+
+You get an error when the function doesn't exist.
+
+
+FUNCTION REFERENCES
+
+Sometimes it can be useful to have a variable point to one function or
+another.  You can do it with the function() function.  It turns the name of a
+function into a reference: >
+
+	:let result = 0		" or 1
+	:function! Right()
+	:  return 'Right!'
+	:endfunc
+	:function! Wrong()
+	:  return 'Wrong!'
+	:endfunc
+	:
+	:if result == 1
+	:  let Afunc = function('Right')
+	:else
+	:  let Afunc = function('Wrong')
+	:endif
+	:echo call(Afunc, [])
+<	Wrong! ~
+
+Note that the name of a variable that holds a function reference must start
+with a capital.  Otherwise it could be confused with the name of a builtin
+function.
+   The way to invoke a function that a variable refers to is with the call()
+function.  Its first argument is the function reference, the second argument
+is a List with arguments.
+
+Function references are most useful in combination with a Dictionary, as is
+explained in the next section.
+
