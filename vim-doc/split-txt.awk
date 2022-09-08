@@ -7,7 +7,7 @@ BEGINFILE {
     filename["index"]++
 }
 
-/={20,}/{
+/^={20,}$/{
     nameneeded=1
     next
 }

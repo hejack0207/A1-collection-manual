@@ -11,7 +11,6 @@ while read f; do
     pushd "$dir"
     awk -f $awkscript $(basename "$f")
     popd
-    mv "$f" "$f".rm
 done <<<$(find "1.USER MANUAL" -name '*.txt')
 
 # while read f; do
