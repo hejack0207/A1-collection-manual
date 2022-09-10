@@ -1,8 +1,9 @@
 # vim: sts=-1 sw=4 fdm=marker
+set -x
 
 awkscript="$(pwd)/split-txt.awk"
 
-if ! find rcfs -regextype awk -regex '.*/rfc[[:digit:]]+.*' -type d &>/dev/null; then
+if ! find rfcs -regextype awk -regex '.*/rfc[[:digit:]]+.*' -type d &>/dev/null; then
     while read f; do
 	if [[ "$f" != *rfc0826* ]]; then
 	    dir=$(dirname "$f")
@@ -19,7 +20,7 @@ if ! find | grep -q Abstract; then
 	if [[ "$f" != *rfc0826* ]]; then
 	    dir=$(dirname "$f")
 	    pushd "$dir"
-	    awk -f "$awkscript" $(basename "$f")
+	    awk -f "$awkscript" "$(basename \"$f\")"
 	    popd
 	fi
     done <<<$(find rfcs -type f -name '*.txt')
