@@ -1,0 +1,112 @@
+4.3.1. Queries and responses
+
+The principal activity of name servers is to answer standard queries.
+Both the query and its response are carried in a standard message format
+which is described in [RFC-1035].  The query contains a QTYPE, QCLASS,
+and QNAME, which describe the types and classes of desired information
+and the name of interest.
+
+The way that the name server answers the query depends upon whether it
+is operating in recursive mode or not:
+
+   - The simplest mode for the server is non-recursive, since it
+     can answer queries using only local information: the response
+     contains an error, the answer, or a referral to some other
+     server "closer" to the answer.  All name servers must
+     implement non-recursive queries.
+
+   - The simplest mode for the client is recursive, since in this
+     mode the name server acts in the role of a resolver and
+     returns either an error or the answer, but never referrals.
+     This service is optional in a name server, and the name server
+     may also choose to restrict the clients which can use
+     recursive mode.
+
+Recursive service is helpful in several situations:
+
+   - a relatively simple requester that lacks the ability to use
+     anything other than a direct answer to the question.
+
+   - a request that needs to cross protocol or other boundaries and
+     can be sent to a server which can act as intermediary.
+
+   - a network where we want to concentrate the cache rather than
+     having a separate cache for each client.
+
+Non-recursive service is appropriate if the requester is capable of
+pursuing referrals and interested in information which will aid future
+requests.
+
+The use of recursive mode is limited to cases where both the client and
+the name server agree to its use.  The agreement is negotiated through
+the use of two bits in query and response messages:
+
+   - The recursion available, or RA bit, is set or cleared by a
+     name server in all responses.  The bit is true if the name
+     server is willing to provide recursive service for the client,
+     regardless of whether the client requested recursive service.
+     That is, RA signals availability rather than use.
+
+
+
+Mockapetris                                                    [Page 22]
+
+RFC 1034             Domain Concepts and Facilities        November 1987
+
+
+   - Queries contain a bit called recursion desired or RD.  This
+     bit specifies specifies whether the requester wants recursive
+     service for this query.  Clients may request recursive service
+     from any name server, though they should depend upon receiving
+     it only from servers which have previously sent an RA, or
+     servers which have agreed to provide service through private
+     agreement or some other means outside of the DNS protocol.
+
+The recursive mode occurs when a query with RD set arrives at a server
+which is willing to provide recursive service; the client can verify
+that recursive mode was used by checking that both RA and RD are set in
+the reply.  Note that the name server should never perform recursive
+service unless asked via RD, since this interferes with trouble shooting
+of name servers and their databases.
+
+If recursive service is requested and available, the recursive response
+to a query will be one of the following:
+
+   - The answer to the query, possibly preface by one or more CNAME
+     RRs that specify aliases encountered on the way to an answer.
+
+   - A name error indicating that the name does not exist.  This
+     may include CNAME RRs that indicate that the original query
+     name was an alias for a name which does not exist.
+
+   - A temporary error indication.
+
+If recursive service is not requested or is not available, the non-
+recursive response will be one of the following:
+
+   - An authoritative name error indicating that the name does not
+     exist.
+
+   - A temporary error indication.
+
+   - Some combination of:
+
+     RRs that answer the question, together with an indication
+     whether the data comes from a zone or is cached.
+
+     A referral to name servers which have zones which are closer
+     ancestors to the name than the server sending the reply.
+
+   - RRs that the name server thinks will prove useful to the
+     requester.
+
+
+
+
+
+
+Mockapetris                                                    [Page 23]
+
+RFC 1034             Domain Concepts and Facilities        November 1987
+
+

@@ -1,0 +1,307 @@
+9.2 BIND
+
+   While not the first attempt to get negative caching into BIND, in
+   July 1993, BIND 4.9.2 ALPHA, Anant Kumar of ISI supplied code that
+   implemented, validation and negative caching (NCACHE).  This code had
+   a 10 minute TTL for negative caching and only cached the indication
+   that there was a negative response, NXDOMAIN or NOERROR_NODATA. This
+   is the origin of the NODATA pseudo response code mentioned above.
+
+   Mark Andrews of CSIRO added code (RETURNSOA) that stored the SOA
+   record such that it could be retrieved by a similar query.  UUnet
+   complained that they were getting old answers after loading a new
+   zone, and the option was turned off, BIND 4.9.3-alpha5, April 1994.
+   In reality this indicated that the named needed to purge the space
+   the zone would occupy.  Functionality to do this was added in BIND
+   4.9.3 BETA11 patch2, December 1994.
+
+   RETURNSOA was re-enabled by default, BIND 4.9.5-T1A, August 1996.
+
+
+
+
+
+
+
+Andrews                     Standards Track                    [Page 14]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+10 Example
+
+   The following example is based on a signed zone that is empty apart
+   from the nameservers.  We will query for WWW.XX.EXAMPLE showing
+   initial response and again 10 minutes later.  Note 1: during the
+   intervening 10 minutes the NS records for XX.EXAMPLE have expired.
+   Note 2: the TTL of the SIG records are not explicitly set in the zone
+   file and are hence the TTL of the RRset they are the signature for.
+
+        Zone File:
+
+        $TTL 86400
+        $ORIGIN XX.EXAMPLE.
+        @       IN      SOA     NS1.XX.EXAMPLE. HOSTMATER.XX.EXAMPLE. (
+                                1997102000      ; serial
+                                1800    ; refresh (30 mins)
+                                900     ; retry (15 mins)
+                                604800  ; expire (7 days)
+                                1200 ) ; minimum (20 mins)
+                IN      SIG     SOA ...
+          1200  IN      NXT     NS1.XX.EXAMPLE. A NXT SIG SOA NS KEY
+                IN      SIG     NXT ... XX.EXAMPLE. ...
+           300  IN      NS      NS1.XX.EXAMPLE.
+           300  IN      NS      NS2.XX.EXAMPLE.
+                IN      SIG     NS ... XX.EXAMPLE. ...
+                IN      KEY     0x4100 1 1 ...
+                IN      SIG     KEY ... XX.EXAMPLE. ...
+                IN      SIG     KEY ... EXAMPLE. ...
+        NS1     IN      A       10.0.0.1
+                IN      SIG     A ... XX.EXAMPLE. ...
+          1200  IN      NXT     NS2.XX.EXAMPLE. A NXT SIG
+                IN      SIG     NXT ...
+        NS2     IN      A       10.0.0.2
+                IN      SIG     A ... XX.EXAMPLE. ...
+          1200  IN      NXT     XX.EXAMPLE. A NXT SIG
+                IN      SIG     NXT ... XX.EXAMPLE. ...
+
+        Initial Response:
+
+        Header:
+            RDCODE=NXDOMAIN, AA=1, QR=1, TC=0
+        Query:
+            WWW.XX.EXAMPLE. IN A
+        Answer:
+            <empty>
+        Authority:
+            XX.EXAMPLE.      1200 IN SOA NS1.XX.EXAMPLE. ...
+            XX.EXAMPLE.      1200 IN SIG SOA ... XX.EXAMPLE. ...
+
+
+
+Andrews                     Standards Track                    [Page 15]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+            NS2.XX.EXAMPLE.  1200 IN NXT XX.EXAMPLE. NXT A NXT SIG
+            NS2.XX.EXAMPLE.  1200 IN SIG NXT ... XX.EXAMPLE. ...
+            XX.EXAMPLE.     86400 IN NS  NS1.XX.EXAMPLE.
+            XX.EXAMPLE.     86400 IN NS  NS2.XX.EXAMPLE.
+            XX.EXAMPLE.     86400 IN SIG NS ... XX.EXAMPLE. ...
+        Additional
+            XX.EXAMPLE.     86400 IN KEY 0x4100 1 1 ...
+            XX.EXAMPLE.     86400 IN SIG KEY ... EXAMPLE. ...
+            NS1.XX.EXAMPLE. 86400 IN A   10.0.0.1
+            NS1.XX.EXAMPLE. 86400 IN SIG A ... XX.EXAMPLE. ...
+            NS2.XX.EXAMPLE. 86400 IN A   10.0.0.2
+            NS3.XX.EXAMPLE. 86400 IN SIG A ... XX.EXAMPLE. ...
+
+         After 10 Minutes:
+
+         Header:
+             RDCODE=NXDOMAIN, AA=0, QR=1, TC=0
+         Query:
+             WWW.XX.EXAMPLE. IN A
+         Answer:
+             <empty>
+         Authority:
+             XX.EXAMPLE.       600 IN SOA NS1.XX.EXAMPLE. ...
+             XX.EXAMPLE.       600 IN SIG SOA ... XX.EXAMPLE. ...
+             NS2.XX.EXAMPLE.   600 IN NXT XX.EXAMPLE. NXT A NXT SIG
+             NS2.XX.EXAMPLE.   600 IN SIG NXT ... XX.EXAMPLE. ...
+             EXAMPLE.        65799 IN NS  NS1.YY.EXAMPLE.
+             EXAMPLE.        65799 IN NS  NS2.YY.EXAMPLE.
+             EXAMPLE.        65799 IN SIG NS ... XX.EXAMPLE. ...
+         Additional
+             XX.EXAMPLE.     65800 IN KEY 0x4100 1 1 ...
+             XX.EXAMPLE.     65800 IN SIG KEY ... EXAMPLE. ...
+             NS1.YY.EXAMPLE. 65799 IN A   10.100.0.1
+             NS1.YY.EXAMPLE. 65799 IN SIG A ... EXAMPLE. ...
+             NS2.YY.EXAMPLE. 65799 IN A   10.100.0.2
+             NS3.YY.EXAMPLE. 65799 IN SIG A ... EXAMPLE. ...
+             EXAMPLE.        65799 IN KEY 0x4100 1 1 ...
+             EXAMPLE.        65799 IN SIG KEY ... . ...
+
+
+11 Security Considerations
+
+   It is believed that this document does not introduce any significant
+   additional security threats other that those that already exist when
+   using data from the DNS.
+
+
+
+
+
+
+Andrews                     Standards Track                    [Page 16]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+   With negative caching it might be possible to propagate a denial of
+   service attack by spreading a NXDOMAIN message with a very high TTL.
+   Without negative caching that would be much harder.  A similar effect
+   could be achieved previously by spreading a bad A record, so that the
+   server could not be reached - which is almost the same.  It has the
+   same effect as far as what the end user is able to do, but with a
+   different psychological effect.  With the bad A, I feel "damn the
+   network is broken again" and try again tomorrow.  With the "NXDOMAIN"
+   I feel "Oh, they've turned off the server and it doesn't exist any
+   more" and probably never bother trying this server again.
+
+   A practical example of this is a SMTP server where this behaviour is
+   encoded.  With a NXDOMAIN attack the mail message would bounce
+   immediately, where as with a bad A attack the mail would be queued
+   and could potentially get through after the attack was suspended.
+
+   For such an attack to be successful, the NXDOMAIN indiction must be
+   injected into a parent server (or a busy caching resolver).  One way
+   this might be done by the use of a CNAME which results in the parent
+   server querying an attackers server.  Resolvers that wish to prevent
+   such attacks can query again the final QNAME ignoring any NS data in
+   the query responses it has received for this query.
+
+   Implementing TTL sanity checking will reduce the effectiveness of
+   such an attack, because a successful attack would require re-
+   injection of the bogus data at more frequent intervals.
+
+   DNS Security [RFC2065] provides a mechanism to verify whether a
+   negative response is valid or not, through the use of NXT and SIG
+   records.  This document supports the use of that mechanism by
+   promoting the transmission of the relevant security records even in a
+   non security aware server.
+
+Acknowledgments
+
+   I would like to thank Rob Austein for his history of the CHIVES
+   nameserver. The DNSIND working group, in particular Robert Elz for
+   his valuable technical and editorial contributions to this document.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Andrews                     Standards Track                    [Page 17]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+References
+
+   [RFC1034]
+           Mockapetris, P., "DOMAIN NAMES - CONCEPTS AND FACILITIES,"
+           STD 13, RFC 1034, November 1987.
+
+   [RFC1035]
+           Mockapetris, P., "DOMAIN NAMES - IMPLEMENTATION AND
+           SPECIFICATION," STD 13, RFC 1035, November 1987.
+
+   [RFC2065]
+           Eastlake, D., and C. Kaufman, "Domain Name System Security
+           Extensions," RFC 2065, January 1997.
+
+   [RFC2119]
+           Bradner, S., "Key words for use in RFCs to Indicate
+           Requirement Levels," BCP 14, RFC 2119, March 1997.
+
+   [RFC2181]
+           Elz, R., and R. Bush, "Clarifications to the DNS
+           Specification," RFC 2181, July 1997.
+
+Author's Address
+
+   Mark Andrews
+   CSIRO - Mathematical and Information Sciences
+   Locked Bag 17
+   North Ryde NSW 2113
+   AUSTRALIA
+
+   Phone: +61 2 9325 3148
+   EMail: Mark.Andrews@cmis.csiro.au
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Andrews                     Standards Track                    [Page 18]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+Full Copyright Statement
+
+   Copyright (C) The Internet Society (1998).  All Rights Reserved.
+
+   This document and translations of it may be copied and furnished to
+   others, and derivative works that comment on or otherwise explain it
+   or assist in its implementation may be prepared, copied, published
+   and distributed, in whole or in part, without restriction of any
+   kind, provided that the above copyright notice and this paragraph are
+   included on all such copies and derivative works.  However, this
+   document itself may not be modified in any way, such as by removing
+   the copyright notice or references to the Internet Society or other
+   Internet organizations, except as needed for the purpose of
+   developing Internet standards in which case the procedures for
+   copyrights defined in the Internet Standards process must be
+   followed, or as required to translate it into languages other than
+   English.
+
+   The limited permissions granted above are perpetual and will not be
+   revoked by the Internet Society or its successors or assigns.
+
+   This document and the information contained herein is provided on an
+   "AS IS" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING
+   TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING
+   BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION
+   HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Andrews                     Standards Track                    [Page 19]
+

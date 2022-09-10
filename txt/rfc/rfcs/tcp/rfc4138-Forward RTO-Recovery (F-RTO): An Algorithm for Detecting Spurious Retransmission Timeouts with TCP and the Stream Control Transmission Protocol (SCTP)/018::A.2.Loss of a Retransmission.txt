@@ -1,0 +1,86 @@
+A.2.  Loss of a Retransmission
+
+   If a retransmitted segment is lost, the only way to retransmit it is
+   to wait for the timeout to trigger the retransmission.  Once the
+   segment is successfully received, the receiver usually acknowledges
+   several segments at once, because other segments in the same window
+   have been successfully delivered before the retransmission arrives at
+   the receiver.  The example below shows a scenario where
+   retransmission (of segment 6) is lost, as well as a later segment
+   (segment 9) in the same window.  The limited transmit [ABF01] or SACK
+   TCP [MMFR96] enhancements are not in use in this example.
+
+         ...
+          (cwnd = 6, ssthresh < 6, FlightSize = 6)
+             <segment 6 lost>
+             <segment 9 lost>
+         1.          <---------------------------- ACK 5
+         2.  SEND 10 ---------------------------->
+          (cwnd = 6, ssthresh < 6, FlightSize = 6)
+         3.          <---------------------------- ACK 6
+         4.  SEND 11 ---------------------------->
+          (cwnd = 6, ssthresh < 6, FlightSize = 6)
+
+
+
+Sarolahti & Kojo              Experimental                     [Page 16]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+         5.          <---------------------------- ACK 6
+         6.          <---------------------------- ACK 6
+         7.          <---------------------------- ACK 6
+         8.  SEND 6  --------------X
+          (cwnd = 6, ssthresh = 3, FlightSize = 6)
+             <segment 6 lost>
+         9.          <---------------------------- ACK 6
+         10. SEND 12 ---------------------------->
+          (cwnd = 7, ssthresh = 3, FlightSize = 7)
+         11.         <---------------------------- ACK 6
+         12. SEND 13 ---------------------------->
+          (cwnd = 8, ssthresh = 3, FlightSize = 8)
+             [RTO]
+         13. SEND 6  ---------------------------->
+          (cwnd = 8, ssthresh = 2, FlightSize = 8)
+         14.         <---------------------------- ACK 9
+             [F-RTO step (2b)]
+         15. SEND 14 ---------------------------->
+         16. SEND 15 ---------------------------->
+          (cwnd = 7, ssthresh = 2, FlightSize = 7)
+         17.         <---------------------------- ACK 9
+             [F-RTO step (3a)]
+             [SpuriousRecovery <- FALSE]
+          (cwnd = 3, ssthresh = 2, FlightSize = 7)
+         18. SEND 9  ---------------------------->
+         19. SEND 10 ---------------------------->
+         20. SEND 11 ---------------------------->
+         ...
+
+   In the example above, segment 6 is lost and the sender retransmits it
+   after three duplicate ACKs in step 8.  However, the retransmission is
+   also lost, and the sender has to wait for the RTO to expire before
+   retransmitting it again.  Because the first ACK following the RTO
+   retransmission acknowledges the RTO retransmission (step 14), the
+   sender transmits two new segments.  The second ACK in step 17 does
+   not acknowledge any previously unacknowledged data.  Therefore, the
+   F-RTO sender enters the slow start and sets cwnd to 3 * MSS.  The
+   congestion window can be set to three segments, because two round-
+   trips have elapsed after the retransmission timeout.  Finally, the
+   receiver acknowledges all segments transmitted prior to entering
+   recovery and the sender can continue transmitting new data in
+   congestion avoidance.
+
+
+
+
+
+
+
+
+
+Sarolahti & Kojo              Experimental                     [Page 17]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+

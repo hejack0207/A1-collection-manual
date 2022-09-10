@@ -5,7 +5,7 @@
 awkscript="$(pwd)/split-txt.awk"
 
 while read f; do
-    if [[ "$f" != *rfc0826* ]]; then
+    if [[ "$f" != *rfc0826* && "$f" != *rfc2136* ]]; then
 	dir=$(dirname "$f")
 	subdir=$(basename "$f")
 	subdir=${subdir%*.txt}
@@ -17,7 +17,7 @@ while read f; do
 done <<<$(find "rfcs" -maxdepth 2 -name '*.txt')
 
 while read f; do
-    if [[ "$f" != *rfc0826* ]]; then
+    if [[ "$f" != *rfc0826* && "$f" != *rfc2136* ]]; then
 	dir=$(dirname "$f")
 	pushd "$dir"
 	fn=$(basename ${f})

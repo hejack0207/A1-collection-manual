@@ -1,0 +1,268 @@
+B.2 ICMP Messages
+
+   The most controversial aspect of encapsulation is the handling of
+   ICMP messages. [1] Because the Encapsulation Header contains the
+   source address of the Encapsulator in the Encapsulation Space, ICMP
+   messages which occur within the Encapsulation Space will be sent back
+   to the Encapsulator.  Once the Encapsulator receives the ICMP
+   message, the question is what should the next action be.  Since the
+   original source of the Clear Datagram knows nothing about the
+   Encapsulation Space, it does not make sense to forward an ICMP
+   message on to it and ICMP message are not supposed to beget ICMP
+   messages.  Yet not sending the original source something may break
+   some important mechanisms.
+
+   In addition to deciding what to forward to the source of the Clear
+   Datagram, there is the problem of possibly not having enough
+   information to send anything at all back to the source.  An ICMP
+   message returns the header of the offending message and the first
+   eight octets of the data after the header.  For the case of the
+   encapsulation protocol, this translates to the IP portion of the
+   Encapsulation Header, the first eight octets of the Encapsulation
+   Protocol Header, and nothing else.  The contents of the Clear
+   Datagram are completely lost.  Therefore, for the Encapsulator to
+   send an ICMP message back to the source it has to reconstruct the
+   Clear Header.  However, it is essentially impossible to reproduce the
+   exact header.
+
+   For the purpose of this specification, the Flow ID has been assumed
+   to be a unique one way mapping from a Clear Header.  There is no
+   guarantee that the Flow ID could be used to map back to the Clear
+   Header, since several headers potentially map to the same flow.  With
+   there being no effective way to regenerate the original datagram,
+   some compromises must be examined.
+
+   For each of the possible ICMP messages, the alternatives and impact
+   will be assessed.  There are three categories of ICMP message
+   involved.  The first is those ICMP messages which are not applicable
+   in the context of Encapsulation.  These are: Echo/Echo Reply and
+   Timestamp/Timestamp Reply.
+
+
+
+Woodburn & Mills                                               [Page 13]
+
+RFC 1241                 Internet Encapsulation                July 1991
+
+
+   The second category are those ICMP messages which concern mechanisms
+   local to the encapsulation domain.  These are messages which would
+   not make sense to the original source if it did receive them.  In
+   these cases the encapsulator will have to decide what to do, but no
+   ICMP message need be sent back to the original source.  The datagram
+   will simply be lost, IP is not meant to be a reliable protocol.
+   Subsequent messages received for encapsulation may cause the
+   encapsulator to generate ICMP Destination Unreachable messages back
+   to the original source if the encapsulator can no longer send
+   messages to the destination decapsulator.  This requires that ICMP
+   messages inside the encapsulation domain affect the mapping from the
+   Flow ID.  ICMP messages in the second category are: Parameter
+   Problem, Redirect, Destination Unreachable, Time Exceeded.
+
+   Finally there is one ICMP message which has direct bearing on the
+   operation of the original source of datagrams destined for
+   encapsulation, the ICMP Source Quench message.  The only possible
+   mechanism available to the Encapsulator to handle this message is for
+   the source quench message set a flag for the offending Flow ID such
+   that subsequent messages that map the Flow cause the generation of a
+   source quench back to the original source before the datagram is
+   encapsulated.
+
+   This last mechanism may be a solution for the more general problem.
+   The rule of thumb could be that when an ICMP message is received for
+   a given flow, then flag the Flow so that then next message
+   encapsulated will cause the next message encapsulated on that flow to
+   force an ICMP message to the source.  After the ICMP message is sent
+   to the source, the mechanism could be reset.  This would effectively
+   cause every other packet to receive an ICMP message if there were a
+   persistent problem.  This mechanism is probably only safe for
+   Unreachable messages and Source Quench.
+
+C. Reception of Clear Datagrams
+
+   In order to use the encapsulation protocol a modification is required
+   to IP forwarding.  There must be some way for the IP module in a
+   system to pass Clear Datagrams to the encapsulation protocol.  A
+   suggested means of doing this is to make an addition to a system's
+   routing table structures.  A flag could be added to a route that
+   tells the forwarding function to use encapsulation.  Note that the
+   default route could also be set to use encapsulation.
+
+   With this mechanism in place, a system's IP forwarding mechanism
+   would examine its routing tables to try and match the IP destination
+   to a specific route.  If a route was found, it would be then checked
+   to see if encapsulation should be used.  If not the packet would be
+   handled normally.  If encapsulation was turned on for the route, then
+
+
+
+Woodburn & Mills                                               [Page 14]
+
+RFC 1241                 Internet Encapsulation                July 1991
+
+
+   the datagram would be sent to encapsulation for forwarding.
+
+   In addition  to snagging packets as they are forwarded, something
+   must be  done at  the last  Decapsulator on  a given flow so that
+   packets that  are decapsulated  are properly  dumped into  the IP
+   module for  delivery.   Because the packets are encapsulated just
+   before forwarding,  it should be a simple matter for decapsulated
+   datagrams to be injected into the output portion of IP.  However, the
+   source  address in  the Clear  Header must  not change.   The address
+   must  remain the address of the source in the source User Space and
+   not be overwritten with that of the Decapsulator.
+
+D. Construction of Virtual Networks with Encapsulation
+
+   Because of the modification to the routing table to permit
+   encapsulation, it becomes possible to specify a virtual interface
+   whose sole purpose is encapsulation.  Using this mechanism, it would
+   become possible to link topologically distant entities with Flows.
+   This would allow the construction of a Virtual Network which would
+   overlay the actual routing topology.  An example of such a virtual
+   network is shown in Fig. 4.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Woodburn & Mills                                               [Page 15]
+
+RFC 1241                 Internet Encapsulation                July 1991
+
+
+                                      ++++++  Virtual Network A
+                                      ******  Virtual Network B
+                                           #  Encapsulator/Decapsulator
+                                      ------  Common Routing Space
+
+           ------------                     ------------
+          /            \                   /            \
+         /      +++ #   \                 /              \
+        |  # +++    +    |               |    # ***** #   |
+        |  +        +    |               |    *       *   |
+        |  +       +     |               |     *     *    |
+        |   +      +     |               |      *   *     |
+        |   # ++++ # +   |               |       * *      |
+         \            + /  -------------  \       # **   /  ---------
+          \           + # ++            \ # ******   *** # **        \
+           ------------  /  +++          *  ------------  /  ***      \
+                        |      #        * |              |      # *** #|
+                        |      +      **  |              |      *     *|
+                        |      +     #    |              |     *    ** |
+                        |      + ++++ *   |              |    *    *   |
+                        |       #+     *  |              |   *    *    |
+           ------------  \  ++++        */  ------------  \ *    #     /
+          /            \ # +             # **           * # *****     /
+         /              +  -------------  /  # ****** # *\   --------
+        |   # +++++++   +|               |   *        *   |
+        |   +        + + |               |   *         *  |
+        |    +         # |               |   *          * |
+        |    +       ++  |               |   *          # |
+        |    # ++++++    |               |   * *********  |
+         \              /                 \   #          /
+          \            /                   \            /
+           ------------                     ------------
+
+
+                       Fig. 4.  Virtual Networks Example
+
+   Each Encapsulator shown has an virtual interface on one of the
+   virtual networks.  The lines represent individual links in the flows
+   that connect each member of the virtual network.  Note that new links
+   could be added between any points as long as the two entities are
+   visible to each other in a common Encapsulation Space.  The routing
+   within the virtual network would be handled by the encapsulation
+   mechanism.  The programming of the routing tables could be a variant
+   of any of the currently existing routing protocols, an encapsulated
+   OSPF for example.
+
+   With this in mind, it would be possible to have special encapsulation
+   gateways with virtual interfaces on two virtual networks to form an
+
+
+
+Woodburn & Mills                                               [Page 16]
+
+RFC 1241                 Internet Encapsulation                July 1991
+
+
+   entire virtual internet.  This is the role of the Encapsulators
+   joining Virtual Network A and Virtual Network B.
+
+E. Encapsulation and OSI
+
+   It is intended that the encapsulation mechanism described in the memo
+   be extensible to other environments outside of the Internet.  It
+   should be possible to encapsulate many different protocols within IP
+   and IP within many other protocols.
+
+   The key concepts defined in this memo are the mapping of a header to
+   a Flow ID and the mapping of fields in the original header to the
+   encapsulating header.  Special mappings between protocols would have
+   to be defined, i.e. for the QoS bits, and some sort of translation of
+   meanings carefully crafted, but it would be possible, none the less.
+
+F. Security Considerations
+
+   No means of authentication or integrity checking is specifically
+   defined for this protocol apart from the checksum for the header
+   information.  However for authentication or integrity checking to be
+   used with this protocol, it is suggested that the authentication
+   information be appended to the Encapsulated Datagram.  Information
+   regarding the type of authentication or integrity check in use would
+   have to be included in the flow management protocol which is used to
+   distribute the flow information.
+
+G. Authors' Addresses
+
+   Robert A. Woodburn
+   SAIC
+   8619 Westwood Center Drive
+   Vienna, VA  22182
+
+   Phone:  (703) 734-9000 or (703) 448-0210
+   EMail:  woody@cseic.saic.com
+
+
+   David L. Mills
+   Electrical Engineering Department
+   University of Delaware
+   Newark, DE  19716
+
+   Phone:  (302) 451-8247
+   EMail:  mills@udel.edu
+
+
+
+
+
+
+Woodburn & Mills                                               [Page 17]
+

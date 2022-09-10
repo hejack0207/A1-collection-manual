@@ -1,0 +1,102 @@
+2.2.  Discussion
+
+   The F-RTO sender takes cautious actions when it receives duplicate
+   acknowledgments after a retransmission timeout.  Because duplicate
+   ACKs may indicate that segments have been lost, reliably detecting a
+   spurious timeout is difficult due to the lack of additional
+   information.  Therefore, it is prudent to follow the conventional TCP
+   recovery in those cases.
+
+   If the first acknowledgment after the RTO retransmission covers the
+   "recover" point at algorithm step (2a), there is not enough evidence
+   that a non-retransmitted segment has arrived at the receiver after
+   the timeout.  This is a common case when a fast retransmission is
+   lost and has been retransmitted again after an RTO, while the rest of
+   the unacknowledged segments were successfully delivered to the TCP
+   receiver before the retransmission timeout.  Therefore, the timeout
+   cannot be declared spurious in this case.
+
+   If the first acknowledgment after the RTO retransmission does not
+   acknowledge all of the data that was retransmitted in step 1, the TCP
+   sender reverts to the conventional RTO recovery.  Otherwise, a
+   malicious receiver acknowledging partial segments could cause the
+   sender to declare the timeout spurious in a case where data was lost.
+
+   The TCP sender is allowed to send two new segments in algorithm
+   branch (2b) because the conventional TCP sender would transmit two
+   segments when the first new ACK arrives after the RTO retransmission.
+   If sending new data is not possible in algorithm branch (2b), or if
+   the receiver window limits the transmission, the TCP sender has to
+   send something in order to prevent the TCP transfer from stalling.
+   If no segments were sent, the pipe between sender and receiver might
+   run out of segments, and no further acknowledgments would arrive.
+   Therefore, in the window-limited case, the recommendation is to
+
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 6]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   revert to the conventional RTO recovery with slow start
+   retransmissions.  Appendix C discusses some alternative solutions for
+   window-limited situations.
+
+   If the retransmission timeout is declared spurious, the TCP sender
+   sets the value of the "recover" variable to SND.UNA in order to allow
+   fast retransmit [FHG04].  The "recover" variable was proposed for
+   avoiding unnecessary, multiple fast retransmits when RTO expires
+   during fast recovery with NewReno TCP.  Because the sender
+   retransmits only the segment that triggered the timeout, the problem
+   of unnecessary multiple fast retransmits [FHG04] cannot occur.
+   Therefore, if three duplicate ACKs arrive at the sender after the
+   timeout, they probably indicate a packet loss, and thus fast
+   retransmit should be used to allow efficient recovery.  If there are
+   not enough duplicate ACKs arriving at the sender after a packet loss,
+   the retransmission timer expires again and the sender enters step 1
+   of this algorithm.
+
+   When the timeout is declared spurious, the TCP sender cannot detect
+   whether the unnecessary RTO retransmission was lost.  In principle,
+   the loss of the RTO retransmission should be taken as a congestion
+   signal.  Thus, there is a small possibility that the F-RTO sender
+   will violate the congestion control rules, if it chooses to fully
+   revert congestion control parameters after detecting a spurious
+   timeout.  The Eifel detection algorithm has a similar property, while
+   the DSACK option can be used to detect whether the retransmitted
+   segment was successfully delivered to the receiver.
+
+   The F-RTO algorithm has a side-effect on the TCP round-trip time
+   measurement.  Because the TCP sender can avoid most of the
+   unnecessary retransmissions after detecting a spurious timeout, the
+   sender is able to take round-trip time samples on the delayed
+   segments.  If the regular RTO recovery was used without TCP
+   timestamps, this would not be possible due to the retransmission
+   ambiguity.  As a result, the RTO is likely to have more accurate and
+   larger values with F-RTO than with the regular TCP after a spurious
+   timeout that was triggered due to delayed segments.  We believe this
+   is an advantage in the networks that are prone to delay spikes.
+
+   There are some situations where the F-RTO algorithm may not avoid
+   unnecessary retransmissions after a spurious timeout.  If packet
+   reordering or packet duplication occurs on the segment that triggered
+   the spurious timeout, the F-RTO algorithm may not detect the spurious
+   timeout due to incoming duplicate ACKs.  Additionally, if a spurious
+   timeout occurs during fast recovery, the F-RTO algorithm often cannot
+   detect the spurious timeout because the segments that were
+   transmitted before the fast recovery trigger duplicate ACKs.
+   However, we consider these cases rare, and note that in cases where
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 7]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   F-RTO fails to detect the spurious timeout, it retransmits the
+   unacknowledged segments in slow start, and thus performs similarly to
+   the regular RTO recovery.
+

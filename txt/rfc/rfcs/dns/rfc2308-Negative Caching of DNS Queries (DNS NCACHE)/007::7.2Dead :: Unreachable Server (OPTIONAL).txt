@@ -1,0 +1,184 @@
+7.2 Dead / Unreachable Server (OPTIONAL)
+
+   Dead / Unreachable servers are servers that fail to respond in any
+   way to a query or where the transport layer has provided an
+   indication that the server does not exist or is unreachable.  A
+   server may be deemed to be dead or unreachable if it has not
+   responded to an outstanding query within 120 seconds.
+
+   Examples of transport layer indications are:
+
+      ICMP error messages indicating host, net or port unreachable.
+      TCP resets
+      IP stack error messages providing similar indications to those above.
+
+   A server MAY cache a dead server indication.  If it does so it MUST
+   NOT be deemed dead for longer than five (5) minutes.  The indication
+   MUST be stored against query tuple <query name, type, class, server
+   IP address> unless there was a transport layer indication that the
+   server does not exist, in which case it applies to all queries to
+   that specific IP address.
+
+8 - Changes from RFC 1034
+
+   Negative caching in resolvers is no-longer optional, if a resolver
+   caches anything it must also cache negative answers.
+
+   Non-authoritative negative answers MAY be cached.
+
+   The SOA record from the authority section MUST be cached.  Name error
+   indications must be cached against the tuple <query name, QCLASS>.
+   No data indications must be cached against <query name, QTYPE,
+   QCLASS> tuple.
+
+   A cached SOA record must be added to the response.  This was
+   explicitly not allowed because previously the distinction between a
+   normal cached SOA record, and the SOA cached as a result of a
+   negative response was not made, and simply extracting a normal cached
+   SOA and adding that to a cached negative response causes problems.
+
+
+
+Andrews                     Standards Track                    [Page 11]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+   The $TTL TTL directive was added to the master file format.
+
+9 - History of Negative Caching
+
+   This section presents a potted history of negative caching in the DNS
+   and forms no part of the technical specification of negative caching.
+
+   It is interesting to note that the same concepts were re-invented in
+   both the CHIVES and BIND servers.
+
+   The history of the early CHIVES work (Section 9.1) was supplied by
+   Rob Austein <sra@epilogue.com> and is reproduced here in the form in
+   which he supplied it [MPA].
+
+   Sometime around the spring of 1985, I mentioned to Paul Mockapetris
+   that our experience with his JEEVES DNS resolver had pointed out the
+   need for some kind of negative caching scheme.  Paul suggested that
+   we simply cache authoritative errors, using the SOA MINIMUM value for
+   the zone that would have contained the target RRs.  I'm pretty sure
+   that this conversation took place before RFC-973 was written, but it
+   was never clear to me whether this idea was something that Paul came
+   up with on the spot in response to my question or something he'd
+   already been planning to put into the document that became RFC-973.
+   In any case, neither of us was entirely sure that the SOA MINIMUM
+   value was really the right metric to use, but it was available and
+   was under the control of the administrator of the target zone, both
+   of which seemed to us at the time to be important feature.
+
+   Late in 1987, I released the initial beta-test version of CHIVES, the
+   DNS resolver I'd written to replace Paul's JEEVES resolver.  CHIVES
+   included a search path mechanism that was used pretty heavily at
+   several sites (including my own), so CHIVES also included a negative
+   caching mechanism based on SOA MINIMUM values.  The basic strategy
+   was to cache authoritative error codes keyed by the exact query
+   parameters (QNAME, QCLASS, and QTYPE), with a cache TTL equal to the
+   SOA MINIMUM value.  CHIVES did not attempt to track down SOA RRs if
+   they weren't supplied in the authoritative response, so it never
+   managed to completely eliminate the gratuitous DNS error message
+   traffic, but it did help considerably.  Keep in mind that this was
+   happening at about the same time as the near-collapse of the ARPANET
+   due to congestion caused by exponential growth and the the "old"
+   (pre-VJ) TCP retransmission algorithm, so negative caching resulted
+   in drasticly better DNS response time for our users, mailer daemons,
+   etcetera.
+
+
+
+
+
+
+
+Andrews                     Standards Track                    [Page 12]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+   As far as I know, CHIVES was the first resolver to implement negative
+   caching.  CHIVES was developed during the twilight years of TOPS-20,
+   so it never ran on very many machines, but the few machines that it
+   did run on were the ones that were too critical to shut down quickly
+   no matter how much it cost to keep them running.  So what few users
+   we did have tended to drive CHIVES pretty hard.  Several interesting
+   bits of DNS technology resulted from that, but the one that's
+   relevant here is the MAXTTL configuration parameter.
+
+   Experience with JEEVES had already shown that RRs often showed up
+   with ridiculously long TTLs (99999999 was particularly popular for
+   many years, due to bugs in the code and documentation of several
+   early versions of BIND), and that robust software that blindly
+   believed such TTLs could create so many strange failures that it was
+   often necessary to reboot the resolver frequently just to clear this
+   garbage out of the cache.  So CHIVES had a configuration parameter
+   "MAXTTL", which specified the maximum "reasonable" TTL in a received
+   RR.  RRs with TTLs greater than MAXTTL would either have their TTLs
+   reduced to MAXTTL or would be discarded entirely, depending on the
+   setting of another configuration parameter.
+
+   When we started getting field experience with CHIVES's negative
+   caching code, it became clear that the SOA MINIMUM value was often
+   large enough to cause the same kinds of problems for negative caching
+   as the huge TTLs in RRs had for normal caching (again, this was in
+   part due to a bug in several early versions of BIND, where a
+   secondary server would authoritatively deny all knowledge of its
+   zones if it couldn't contact the primaries on reboot).  So we started
+   running the negative cache TTLs through the MAXTTL check too, and
+   continued to experiment.
+
+   The configuration that seemed to work best on WSMR-SIMTEL20.ARMY.MIL
+   (last of the major Internet TOPS-20 machines to be shut down, thus
+   the last major user of CHIVES, thus the place where we had the
+   longest experimental baseline) was to set MAXTTL to about three days.
+   Most of the traffic initiated by SIMTEL20 in its last years was
+   mail-related, and the mail queue timeout was set to one week, so this
+   gave a "stuck" message several tries at complete DNS resolution,
+   without bogging down the system with a lot of useless queries.  Since
+   (for reasons that now escape me) we only had the single MAXTTL
+   parameter rather than separate ones for positive and negative
+   caching, it's not clear how much effect this setting of MAXTTL had on
+   the negative caching code.
+
+   CHIVES also included a second, somewhat controversial mechanism which
+   took the place of negative caching in some cases.  The CHIVES
+   resolver daemon could be configured to load DNS master files, giving
+   it the ability to act as what today would be called a "stealth
+
+
+
+Andrews                     Standards Track                    [Page 13]
+
+RFC 2308                       DNS NCACHE                     March 1998
+
+
+   secondary".  That is, when configured in this way, the resolver had
+   direct access to authoritative information for heavily-used zones.
+   The search path mechanisms in CHIVES reflected this: there were
+   actually two separate search paths, one of which only searched local
+   authoritative zone data, and one which could generate normal
+   iterative queries.  This cut down on the need for negative caching in
+   cases where usage was predictably heavy (e.g., the resolver on
+   XX.LCS.MIT.EDU always loaded the zone files for both LCS.MIT.EDU and
+   AI.MIT.EDU and put both of these suffixes into the "local" search
+   path, since between them the hosts in these two zones accounted for
+   the bulk of the DNS traffic).  Not all sites running CHIVES chose to
+   use this feature; C.CS.CMU.EDU, for example, chose to use the
+   "remote" search path for everything because there were too many
+   different sub-zones at CMU for zone shadowing to be practical for
+   them, so they relied pretty heavily on negative caching even for
+   local traffic.
+
+   Overall, I still think the basic design we used for negative caching
+   was pretty reasonable: the zone administrator specified how long to
+   cache negative answers, and the resolver configuration chose the
+   actual cache time from the range between zero and the period
+   specified by the zone administrator.  There are a lot of details I'd
+   do differently now (like using a new SOA field instead of overloading
+   the MINIMUM field), but after more than a decade, I'd be more worried
+   if we couldn't think of at least a few improvements.
+

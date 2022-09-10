@@ -1,0 +1,355 @@
+Appendix G.
+
+It is important to note that the particular implementation described is
+only one of possibly many implementations that provide equivalent
+functionality. However, it is equally important to note that the clock
+model described in Appendix G and which is the basis of the
+implementation involves a particular kind of control-feedback loop that
+is potentially unstable if the design rules are broken. The model and
+parameter described in Appendix G are designed to provide accurate and
+stable time under typical operating conditions using conventional
+hardware and in the face of disruptions in hardware or network
+connectivity. The parameters have been engineered for reliable operation
+in a multi-level hierarchical subnet where unstable operation at one
+level can disrupt possibly many other levels.
+
+Fuzzball Implementation
+
+The Fuzzball local clock consists of a collection of hardware and
+software registers, together with a set of algorithms, which implement a
+logical clock that functions as a disciplined oscillator and
+synchronizes to an external source. Following is a description of its
+components and manner of operation. Note that all arithmetic is two's
+complement integer and all shifts <169><<<<<170> and <169>>>>><170> are
+arithmetic (sign-fill for right shifts and zero-fill for left shifts).
+Also note that <$Ex~<< <<~n> is equivalent to <$Ex~>> >>~-~n>.
+
+The principal components of the local clock are shown in Figure
+3,<$&fig3> in which the fraction points shown are relative to whole
+milliseconds. The 48-bit Clock register and 32-bit Prescaler function as
+a disciplined oscillator which increments in milliseconds relative to
+midnight at the fraction point. The 32-bit Clock-Adjust register is used
+to adjust the oscillator phase in gradual steps to avoid discontinuities
+in the indicated timescale. Its contents are designated x in the
+following. The 32-bit Skew-Compensation register is used to trim the
+oscillator frequency by adding small phase increments at periodic
+adjustment intervals and can compensate for frequency errors as much as
+.01% or <F128M>æ<F255D>100 ppm. Its contents are designated y in the
+following. The 16-bit Watchdog counter and 32-bit Compliance register
+are used to determine validity, as well as establish the PLL bandwidth
+and poll interval (see Appendix G). The contents of the Compliance
+register are designated z in the following. The 32-bit PPS-Adjust
+register is used to hold a precision time adjustment when a source of 1-
+pps pulses is available, while the 8-bit PPS counter is used to verify
+presence of these pulses. The two-bit Flags register contains the two
+leap bits described elsewhere (leap).
+
+All registers except the Prescaler register are ordinarily implemented
+in memory. In typical clock interface designs such as the DEC KWV11-C,
+the Prescaler register is implemented as a 16-bit buffered counter
+driven by a quartz-controlled oscillator at some multiple of 1000 Hz. A
+counter overflow is signalled by an interrupt, which results in an
+increment of the Clock register at the bit corresponding to the
+overflow. The time of day is determined by reading the Prescaler
+register, which does not disturb the counting process, and adding its
+value to that of the Clock register with fraction points aligned as
+shown and with unimplemented low-order bits set to zero. In other
+interface designs, such as the LSI-11 event-line mechanism, each tick of
+the clock is signalled by an interrupt at intervals of 16-2/3 ms or 20
+ms, depending on interface and mains frequency. When this occurs the
+appropriate increment in fractional milliseconds is added to the Clock
+register.
+
+The various parameters used are summarized in Table 6, in which certain
+parameters have been rescaled from those given in Appendix G due to the
+units here being in milliseconds.<$&tab6> When the system is
+initialized, all registers and counters are cleared and the leap bits
+set to 112 (unsynchronized). At adjustment intervals of CLOCK.ADJ
+seconds CLOCK.ADJ is subtracted from the PPS counter, but only if the
+previous contents of the PPS counter are greater than zero. Also,
+CLOCK.ADJ is added to the Watchdog counter, but the latter is clamped
+not to exceed NTP.MAXAGE divided by CLOCK.ADJ (one full day). In
+addition, if the Watchdog counter reaches this value, the leap bits are
+set to 112 (unsynchronized).
+
+In some system configurations a precise source of timing information is
+available in the form of a train of timing pulses spaced at one-second
+intervals. Usually, this is in addition to a source of timecode
+information, such as a radio clock or even NTP itself, to number the
+seconds, minutes, hours and days. In typical clock interface designs
+such as the DEC KWV11-C, a special input is provided which can trigger
+an interrupt as each pulse is received. When this happens the PPS
+counter is set to CLOCK.PPS and the current time offset is determined in
+the usual way. Then, the PPS-Adjust register is set to the time offset
+scaled to milliseconds. Finally, if the PPS-Adjust register is greater
+than or equal to 500, 1000 is subtracted from its contents. As described
+below, the PPS-Adjust register and PPS counters can be used in
+conjunction with an ordinary timecode to produce an extremely accurate
+local clock.
+
+Gradual Phase Adjustments
+
+Left uncorrected, the local clock runs at the offset and frequency
+resulting from its last update. An update is produced by an event that
+results in a valid clock selection. It consists of a signed 48-bit
+integer in whole milliseconds and fraction, with fraction point to the
+left of bit 32. If the magnitude is greater than the maximum aperture
+CLOCK.MAX, a step adjustment is required, in which case proceed as
+described later. Otherwise, a gradual phase adjustment is performed.
+Normally, the update is computed by the NTP algorithms described
+previously; however, if the PPS counter is greater than zero, the value
+of the PPS-Adjust register is used instead. Let u be a 32-bit quantity
+with bits 0-31 set as bits 16-47 of the update. If some of the low-order
+bits of the update are unimplemented, they are set as the value of the
+sign bit. These operations move the fraction point of u to the left of
+bit 16 and minimize the effects of truncation and roundoff errors. Let b
+be the number of leading zeros of the absolute value of the Compliance
+register and let c be the number of leading zeros of the Watchdog
+counter, both of which are easily computed by compact loops. Then, set b
+to
+<$Eb~=~b~-~16~+~roman CLOCK.COMP>
+
+and clamp it to be not less than zero. This represents the logarithm of
+the loop time constant. Then, set c to
+
+<$Ec~=~10~-~c>
+
+and clamp it to be not greater than NTP.MAXPOLL <196> NTP.MINPOLL. This
+represents the logarithm of the integration interval since the last
+update. The clamps insure stable operation under typical conditions
+encountered in the Internet. Then, compute new values for the Clock-
+Adjust and Skew-Compensation registers
+
+<$Ex~=~u~>> >>~b> ,
+<$Ey~=~y~+~(u~>> >>~(b~+~b~-~c))> .
+
+Finally, compute the exponential average
+
+<$Ez~=~z~+~(u~<< <<~(b~+~ roman CLOCK.MULT)~-~z)~>> >>~ roman
+CLOCK.WEIGHT> ,
+
+where the left shift realigns the fraction point for greater precision
+and ease of computation.
+
+At each adjustment interval the final clock correction consisting of two
+components is determined. The first (phase) component consists of the
+quantity
+
+<$Ex~>> >>~ roman CLOCK.PHASE> ,
+
+which is then subtracted from the previous contents of the Clock-Adjust
+register to form the new contents of that register. The second
+(frequency) component consists of the quantity
+
+<$Ey~>> >>~ roman CLOCK.FREQ> .
+
+The sum of the phase and frequency components is the final clock
+correction, which is then added to the Clock register. FInally, the
+Watchdog counter is set to zero. Operation continues in this way until a
+new correction is introduced.
+
+The value of b computed above can be used to update the poll interval
+system variable (sys.poll). This functions as an adaptive parameter that
+provides a very valuable feature which reduces the polling overhead,
+especially if the clock-combining algorithm described in Appendix F is
+used:
+
+<$Eroman sys.poll~<<-~b~+~roman NTP.MINPOLL> .
+
+Under conditions when update noise is high or the hardware oscillator
+frequency is changing relatively rapidly due to environmental
+conditions, the magnitude of the compliance increases. With the
+parameters specified, this causes the loop bandwidth (reciprocal of time
+constant) to increase and the poll interval to decrease, eventually to
+NTP.MINPOLL seconds. When noise is low and the hardware oscillator very
+stable, the compliance decreases, which causes the loop bandwidth to
+decrease and the poll interval to increase, eventually to NTP.MAXPOLL
+seconds.
+
+The parameters in Table 6 have been selected so that, under good
+conditions with updates in the order of a few milliseconds, a precision
+of a millisecond per day (about .01 ppm or 10-8), can be achieved. Care
+is required in the implementation to insure monotonicity of the Clock
+register and to preserve the highest precision while minimizing the
+propagation of roundoff errors. Since all of the multiply/divide
+operations (except those involved with the 1-pps pulses) computed in
+real time can be approximated by bitwise-shift operations, it is not
+necessary to implement a full multiply/divide capability in hardware or
+software.
+
+In the various implementations of NTP for many Unix-based systems it has
+been the common experience that the single most important factor
+affecting local-clock stability is the matching of the phase and
+frequency coefficients to the particular kernel implementation. It is
+vital that these coefficients be engineered according to the model
+values, for otherwise the PLL can fail to track normal oscillator
+variations and can even become unstable.
+
+Step Phase Adjustments
+
+When the magnitude of a correction exceeds the maximum aperture
+CLOCK.MAX, the possibility exists that the clock is so far out of
+synchronization with the reference source that the best action is an
+immediate and wholesale replacement of Clock register contents, rather
+than in gradual adjustments as described above. However, in cases where
+the sample variance is extremely high, it is prudent to disbelieve a
+step change, unless a significant interval has elapsed since the last
+gradual adjustment. Therefore, if a step change is indicated and the
+Watchdog counter is less than the preconfigured value CLOCK.MINSTEP, the
+update is ignored and the local-clock procedure exits. These safeguards
+are especially useful in those system configurations using a calibrated
+atomic clock or LORAN-C receiver in conjunction with a separate source
+of seconds-numbering information, such as a radio clock or NTP peer.
+
+If a step change is indicated the update is added directly to the Clock
+register and the Clock-Adjust register and Watchdog counter both set to
+zero, but the other registers are left undisturbed. Since a step change
+invalidates data currently in the clock filters, the leap bits are set
+to 112 (unsynchronized) and, as described elsewhere, the clear procedure
+is called to purge the clock filters and state variables for all peers.
+In practice, the necessity to perform a step change is rare and usually
+occurs when the local host or reference source is rebooted, for example.
+This is fortunate, since step changes can result in the local clock
+apparently running backward, as well as incorrect delay and offset
+measurements of the synchronization mechanism itself.
+
+Considerable experience with the Internet environment suggests the
+values of CLOCK.MAX tabulated in Table 6 as appropriate. In practice,
+these values are exceeded with a single time-server source only under
+conditions of the most extreme congestion or when multiple failures of
+nodes or links have occurred. The most common case when the maximum is
+exceeded is when the time-server source is changed and the time
+indicated by the new and old sources exceeds the maximum due to
+systematic errors in the primary reference source or large differences
+in path delays. It is recommended that implementations include
+provisions to tailor CLOCK.MAX for specific situations. The amount that
+CLOCK.MAX can be increased without violating the monotonicity
+requirement depends on the Clock register increment. For an increment of
+10 ms, as used in many workstations, the value shown in Table 6 can be
+increased by a factor of five.
+
+Implementation Issues
+
+The basic NTP robustness model is that a host has no other means to
+verify time other than NTP itself. In some equipment a battery-backed
+clock/calendar is available for a sanity check. If such a device is
+available, it should be used only to confirm sanity of the timekeeping
+system, not as the source of system time. In the common assumption (not
+always justified) that the clock/calendar is more reliable, but less
+accurate, than the NTP synchronization subnet, the recommended approach
+at initialization is to set the Clock register as determined from the
+clock/calendar and the other registers, counters and flags as described
+above. On subsequent updates if the time offset is greater than a
+configuration parameter (e.g., 1000 seconds), then the update should be
+discarded and an error condition reported. Some implementations
+periodically record the contents of the Skew-Compensation register in
+stable storage such as a system file or NVRAM and retrieve this value at
+initialization. This can significantly reduce the time to converge to
+the nominal stability and accuracy regime.
+
+Conversion from NTP format to the common date and time formats used by
+application programs is simplified if the internal local-clock format
+uses separate date and time variables. The time variable is designed to
+roll over at 24 hours, give or take a leap second as determined by the
+leap-indicator bits, with its overflows (underflows) incrementing
+(decrementing) the date variable. The date and time variables then
+indicate the number of days and seconds since some previous reference
+time, but uncorrected for intervening leap seconds.
+
+On the day prior to the insertion of a leap second the leap bits
+(sys.leap) are set at the primary servers, presumably by manual means.
+Subsequently, these bits show up at the local host and are passed to the
+local-clock procedure. This causes the modulus of the time variable,
+which is the length of the current day, to be increased or decreased by
+one second as appropriate. Immediately following insertion the leap bits
+are reset. Additional discussion on this issue can be found in Appendix
+E.
+
+Lack of a comprehensive mechanism to administer the leap bits in the
+primary servers is presently an awkward problem better suited to a
+comprehensive network-management mechanism yet to be developed. As a
+practical matter and unless specific provisions have been made
+otherwise, currently manufactured radio clocks have no provisions for
+leap seconds, either automatic or manual. Thus, when a leap actually
+occurs, the radio must resynchronize to the broadcast timecode, which
+may take from a few minutes to some hours. Unless special provisions are
+made, a primary server might leap to the new timescale, only to be
+yanked back to the previous timescale when it next synchronizes to the
+radio. Subsequently, the server will be yanked forward again when the
+radio itself resynchronizes to the broadcast timecode.
+
+This problem can not be reliably avoided using any selection algorithm,
+since there will always exist an interval of at least a couple of
+minutes and possibly as much as some hours when some or all radios will
+be out of synchronization with the broadcast timecode and only after the
+majority of them have resynchronized will the subnet settle down. The
+CLOCK.MINSTEP delay is designed to cope with this problem by forcing a
+minimum interval since the last gradual adjustment was made before
+allowing a step change to occur. Therefore, until the radio
+resynchronizes, it will continue on the old timescale, which is one
+second off the local clock after the leap and outside the maximum
+aperture CLOCK.MAX permitted for gradual phase adjustments. When the
+radio eventually resynchronizes, it will almost certainly come up within
+the aperture and again become the reference source. Thus, even in the
+unlikely case when the local clock incorrectly leaps, the server will go
+no longer than CLOCK.MINSTEP seconds before resynchronizing.
+
+Acknowledgments
+
+Many people contributed to the contents of this document, which was
+thoroughly debated by electronic mail and debugged using two different
+prototype implementations for the Unix 4.3bsd operating system, one
+written by Louis Mamakos and Michael Petry of the University of Maryland
+and the other by Dennis Ferguson of the University of Toronto. Another
+implementation for the Fuzzball operating system [MIL88b] was written by
+the author. Many individuals to numerous to mention meticulously tested
+the several beta-test prototype versions and ruthlessly smoked out the
+bugs, both in the code and the specification. Especially useful were
+comments from Dennis Ferguson and Bill Sommerfeld, as well as
+discussions with Joe Comuzzi and others at Digital Equipment
+Corporation.
+
+References
+
+[ABA89]
+
+Abate, et al. AT&T's new approach to the synchronization of
+telecommunication networks. IEEE Communications Magazine (April 1989),
+35-45.
+
+[ALL74a]
+
+Allan, D.W., J.H. Shoaf and D. Halford. Statistics of time and frequency
+data analysis. In: Blair, B.E. (Ed.). Time and Frequency Theory and
+Fundamentals. National Bureau of Standards Monograph 140, U.S.
+Department of Commerce, 1974, 151-204.
+
+[ALL74b]
+
+Allan, D.W., J.E. Gray and H.E. Machlan. The National Bureau of
+Standards atomic time scale: generation, stability, accuracy and
+accessibility. In: Blair, B.E. (Ed.). Time and Frequency Theory and
+Fundamentals. National Bureau of Standards Monograph 140, U.S.
+Department of Commerce, 1974, 205-231.
+
+[BEL86]
+
+Bell Communications Research. Digital Synchronization Network Plan.
+Technical Advisory TA-NPL-000436, 1 November 1986.
+
+[BER87]
+
+Bertsekas, D., and R. Gallager. Data Networks. Prentice-Hall, Englewood
+Cliffs, NJ, 1987.
+
+[BLA74]
+
+Blair, B.E. Time and frequency dissemination: an overview of principles
+and techniques. In: Blair, B.E. (Ed.). Time and Frequency Theory and
+Fundamentals. National Bureau of Standards Monograph 140, U.S.
+Department of Commerce, 1974, 233-314.
+
+[BRA80]
+
+Braun, W.B. Short term frequency effects in networks of coupled
+oscillators. IEEE Trans. Communications COM-28, 8 (August 1980), 1269-

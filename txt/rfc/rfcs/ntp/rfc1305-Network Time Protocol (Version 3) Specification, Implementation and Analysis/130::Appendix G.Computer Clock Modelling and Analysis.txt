@@ -1,0 +1,361 @@
+Appendix G. Computer Clock Modelling and Analysis
+
+A computer clock includes some kind of reference oscillator, which is
+stabilized by a quartz crystal or some other means, such as the power
+grid. Usually, the clock includes a prescaler, which divides the
+oscillator frequency to a standard value, such as 1 MHz or 100 Hz, and a
+counter, implemented in hardware, software or some combination of the
+two, which can be read by the processor. For systems intended to be
+synchronized to an external source of standard time, there must be some
+means to correct the phase and frequency by occasional vernier
+adjustments produced by the timekeeping protocol. Special care is
+necessary in all timekeeping system designs to insure that the clock
+indications are always monotonically increasing; that is, system time
+never <169>runs backwards.<170>
+
+Computer Clock Models
+
+The simplest computer clock consists of a hardware latch which is set by
+overflow of a hardware counter or prescaler, and causes a processor
+interrupt or tick. The latch is reset when acknowledged by the
+processor, which then increments the value of a software clock counter.
+The phase of the clock is adjusted by adding periodic corrections to the
+counter as necessary. The frequency of the clock can be adjusted by
+changing the value of the increment itself, in order to make the clock
+run faster or slower. The precision of this simple clock model is
+limited to the tick interval, usually in the order of 10 ms; although in
+some systems the tick interval can be changed using a kernel variable.
+
+This software clock model requires a processor interrupt on every tick,
+which can cause significant overhead if the tick interval is small, say
+in the order less 1 ms with the newer RISC processors. Thus, in order to
+achieve timekeeping precisions less than 1 ms, some kind of hardware
+assist is required. A straightforward design consists of a voltage-
+controlled oscillator (VCO), in which the frequency is controlled by a
+buffered, digital/analog converter (DAC). Under the assumption that the
+VCO tolerance is 10-4 or 100 parts-per-million (ppm) (a reasonable value
+for inexpensive crystals) and the precision required is 100 <$Emu roman
+s> (a reasonable goal for a RISC processor), the DAC must include at
+least ten bits.
+
+A design sketch of a computer clock constructed entirely of hardware
+logic components is shown in Figure 10a<$&fig10>. The clock is read by
+first pulsing the read signal, which latches the current value of the
+clock counter, then adding the contents of the clock-counter latch and a
+64-bit clock-offset variable, which is maintained in processor memory.
+The clock phase is adjusted by adding a correction to the clock-offset
+variable, while the clock frequency is adjusted by loading a correction
+to the DAC latch. In principle, this clock model can be adapted to any
+precision by changing the number of bits of the prescaler or clock
+counter or changing the VCO frequency. However, it does not seem useful
+to reduce precision much below the minimum interrupt latency, which is
+in the low microseconds for a modern RISC processor.
+
+If it is not possible to vary the oscillator frequency, which might be
+the case if the oscillator is an external frequency standard, a design
+such as shown in Figure 10b may be used. It includes a fixed-frequency
+oscillator and prescaler which includes a dual-modulus swallow counter
+that can be operated in either divide-by-10 or divide-by-11 modes as
+controlled by a pulse produced by a programmable divider (PD). The PD is
+loaded with a value representing the frequency offset. Each time the
+divider overflows a pulse is produced which switches the swallow counter
+from the divide-by-10 mode to the divide-by-11 mode and then back again,
+which in effect <169>swallows<170> or deletes a single pulse of the
+prescaler pulse train.
+
+The pulse train produced by the prescaler is controlled precisely over a
+small range by the contents of the PD. If programmed to emit pulses at a
+low rate, relatively few pulses are swallowed per second and the
+frequency counted is near the upper limit of its range; while, if
+programmed to emit pulses at a high rate, relatively many pulses are
+swallowed and the frequency counted is near the lower limit. Assuming
+some degree of freedom in the choice of oscillator frequency and
+prescaler ratios, this design can compensate for a wide range of
+oscillator frequency tolerances.
+
+In all of the above designs it is necessary to limit the amount of
+adjustment incorporated in any step to insure that the system clock
+indications are always monotonically increasing. With the software clock
+model this is assured as long as the increment is never negative. When
+the magnitude of a phase adjustment exceeds the tick interval (as
+corrected for the frequency adjustment), it is necessary to spread the
+adjustments over mulitple tick intervals. This strategy amounts to a
+deliberate frequency offset sustained for an interval equal to the total
+number of ticks required and, in fact, is a feature of the Unix clock
+model discussed below.
+
+In the hardware clock models the same considerations apply; however, in
+these designs the tick interval amounts to a single pulse at the
+prescaler output, which may be in the order of 1 ms. In order to avoid
+decreasing the indicated time when a negative phase correction occurs,
+it is necessary to avoid modifying the clock-offset variable in
+processor memory and to confine all adjustments to the VCO or prescaler.
+Thus, all phase adjustments must be performed by means of programmed
+frequency adjustments in much the same way as with the software clock
+model described previously.
+
+It is interesting to conjecture on the design of a processor assist that
+could provide all of the above functions in a compact, general-purpose
+hardware interface. The interface might consist of a multifunction timer
+chip such as the AMD 9513A, which includes five 16-bit counters, each
+with programmable load and hold registers, plus an onboard crystal
+oscillator, prescaler and control circuitry. A 48-bit hardware clock
+counter would utilize three of the 16-bit counters, while the fourth
+would be used as the swallow counter and the fifth as the programmable
+divider. With the addition of a programmable-array logic device and
+architecture-specific host interface, this compact design could provide
+all the functions necessary for a comprehensive timekeeping system.
+
+The Fuzzball Clock Model
+
+The Fuzzball clock model uses a combination of hardware and software to
+provide precision timing with a minimum of software and processor
+overhead. The model includes an oscillator, prescaler and hardware
+counter; however, the oscillator frequency remains constant and the
+hardware counter produces only a fraction of the total number of bits
+required by the clock counter. A typical design uses a 64-bit software
+clock counter and a 16-bit hardware counter which counts the prescaler
+output. A hardware-counter overflow causes the processor to increment
+the software counter at the bit corresponding to the frequency <$E2 sup
+N f sub p>, where N is the number of bits of the hardware counter and fp
+is the counted frequency at the prescaler output. The processor reads
+the clock counter by first generating a read pulse, which latches the
+hardware counter, and then adding its contents, suitably aligned, to the
+software counter.
+
+The Fuzzball clock can be corrected in phase by adding a (signed)
+adjustment to the software clock counter. In practice, this is done only
+when the local time is substantially different from the time indicated
+by the clock and may violate the monotonicity requirement. Vernier phase
+adjustments determined in normal system operation must be limited to no
+more than the period of the counted frequency, which is 1 kHz for LSI-11
+Fuzzballs. In the Fuzzball model these adjustments are performed at
+intervals of 4 s, called the adjustment interval, which provides a
+maximum frequency adjustment range of 250 ppm. The adjustment
+opportunities are created using the interval-timer facility, which is a
+feature of most operating systems and independent of the time-of-day
+clock. However,  if the counted frequency is increased from 1 kHz to 1
+MHz for enhanced precision, the adjustment frequency must be increased
+to 250 Hz, which substantially increases processor overhead. A modified
+design suitable for high precision clocks is presented in the next
+section.
+
+In some applications involving the Fuzzball model, an external pulse-
+per-second (pps) signal is available from a reference source such as a
+cesium clock or GPS receiver. Such a signal generally provides much
+higher accuracy than the serial character string produced by a radio
+timecode receiver, typically in the low nanoseconds. In the Fuzzball
+model this signal is processed by an interface which produces a hardware
+interrupt coincident with the arrival of the pps pulse. The processor
+then reads the clock counter and computes the residual modulo 1 s of the
+clock counter. This represents the local-clock error relative to the pps
+signal.
+
+Assuming the seconds numbering of the clock counter has been determined
+by a reliable source, such as a timecode receiver, the offset within the
+second is determined by the residual computed above. In the NTP local-
+clock model the timecode receiver or NTP establishes the time to within
+<F128M>æ<F255D>128 ms, called the aperture, which guarantees the seconds
+numbering to within the second. Then, the pps residual can be used
+directly to correct the oscillator, since the offset must be less than
+the aperture for a correctly operating timecode receiver and pps signal.
+
+The above technique has an inherent error equal to the latency of the
+interrupt system, which in modern RISC processors is in the low tens of
+microseconds. It is possible to improve accuracy by latching the
+hardware time-of-day counter directly by the pps pulse and then reading
+the counter in the same way as usual. This requires additional circuitry
+to prioritize the pps signal relative to the pulse generated by the
+program to latch the counter.
+The Unix Clock Model
+
+The Unix 4.3bsd clock model is based on two system calls, settimeofday
+and adjtime, together with two kernel variables tick and tickadj. The
+settimeofday call unceremoniously resets the kernel clock to the value
+given, while the adjtime call slews the kernel clock to a new value
+numerically equal to the sum of the present time of day and the (signed)
+argument given in the adjtime call. In order to understand the behavior
+of the Unix clock as controlled by the Fuzzball clock model described
+above, it is helpful to explore the operations of adjtime in more
+detail.
+
+The Unix clock model assumes an interrupt produced by an onboard
+frequency source, such as the clock counter and prescaler described
+previously, to deliver a pulse train in the 100-Hz range. In priniciple,
+the power grid frequency can be used, although it is much less stable
+than a crystal oscillator. Each interrupt causes an increment called
+tick to be added to the clock counter. The value of the increment is
+chosen so that the clock counter, plus an initial offset established by
+the settimeofday call, is equal to the time of day in microseconds.
+
+The Unix clock can actually run at three different rates, one
+corresponding to tick, which is related to the intrinsic frequency of
+the particular oscillator used as the clock source, one to
+<$Etick~+~tickadj> and the third to <$Etick~-~tickadj>. Normally the
+rate corresponding to tick is used; but, if adjtime is called, the
+argument <$Edelta> given is used to calculate an interval <$EDELTA
+t~=~delta~tick over tickadj> during which one or the other of the two
+rates are used, depending on the sign of <$Edelta>. The effect is to
+slew the clock to a new value at a small, constant rate, rather than
+incorporate the adjustment all at once, which could cause the clock to
+be set backward. With common values of <$Etick~=~10> ms and
+<$Etickadj~=~5~mu roman s>, the maximum frequency adjustment range is
+<$E+- tickadj over tick~=~+- {5~roman x~10 sup -6} over {10 sup -2}> or
+<F128M>æ<F255D>500 ppm. Even larger ranges may be required in the case
+of some workstations (e.g., SPARCstations) with extremely poor component
+tolerances.
+
+When precisions not less than about 1 ms are required, the Fuzzball
+clock model can be adapted to the Unix model by software simulation, as
+described in Section 5 of the NTP specification, and calling adjtime at
+each adjustment interval. When precisions substantially better than this
+are required, the hardware microsecond clock provided in some
+workstations can be used together with certain refinements of the
+Fuzzball and Unix clock models. The particular design described below is
+appropriate for a maximum oscillator frequency tolerance of 100 ppm
+(.01%), which can be obtained using a relatively inexpensive quartz
+crystal oscillator, but is readily scalable for other assumed
+tolerances.
+
+The clock model requires the capability to slew the clock frequency over
+the range <F128M>æ<F255D>100 ppm with an intrinsic oscillator frequency
+error as great as <F128M>æ<F255D>100 ppm. Figure 11<$&fig11> shows the
+timing relationships at the extremes of the requirements envelope.
+Starting from an assumed offset of nominal zero and an assumed error of
++100 ppm at time 0 s, the line AC shows how the uncorrected offset grows
+with time. Let <$Esigma> represent the adjustment interval and a the
+interval AB, in seconds, and let r be the slew, or rate at which
+corrections are introduced, in ppm. For an accuracy specification of 100
+<$Emu roman s>, then
+
+<$Esigma~<<=~{100~mu roman s} over {100~roman ppm}~+~{100~mu roman s}
+over {(r~-~100)~roman ppm}~=~r over {r~-~100}> .
+The line AE represents the extreme case where the clock is to be steered
+<F128M>-<F255D>100 ppm. Since the slew must be complete at the end of
+the adjustment interval,
+
+<$Ea~<<=~{(r~-~200)~sigma} over r>.
+
+These relationships are satisfied only if <$Er~>>~200~roman ppm> and
+<$Esigma~<<~2~roman s>. Using <$Er~=~300~roman ppm> for convenience,
+<$Esigma~=~1.5~roman s> and <$Ea~<<=~0.5~roman s>. For the Unix clock
+model with <$Etick~=~10~roman ms>, this results in the value of
+<$Etickadj~=~3~mu roman s>.
+
+One of the assumptions made in the Unix clock model is that the period
+of adjustment computed in the adjtime call must be completed before the
+next call is made. If not, this results in an error message to the
+system log. However, in order to correct for the intrinsic frequency
+offset of the clock oscillator, the NTP clock model requires adjtime to
+be called at regular adjustment intervals of <$Esigma> s. Using the
+algorithms described here and the architecture constants in the NTP
+specification, these adjustments will always complete.
+
+Mathematical Model of the NTP Logical Clock
+
+The NTP logical clock can be represented by the feedback-control model
+shown in Figure 12<$&fig12>. The model consists of an adaptive-
+parameter, phase-lock loop (PLL), which continuously adjusts the phase
+and frequency of an oscillator to compensate for its intrinsic jitter,
+wander and drift. A mathematical analysis of this model developed along
+the lines of [SMI86] is presented in following sections, along with a
+design example useful for implementation guidance in operating-systems
+environments such as Unix and Fuzzball. Table 9<$&tab9> summarizes the
+quantities ordinarily treated as variables in the model. By convention,
+<$Ev> is used for internal loop variables, <$Etheta> for phase,
+<$Eomega> for frequency and <$Etau> for time. Table 10<$&tab10>
+summarizes those quantities ordinarily fixed as constants in the model.
+Note that these are all expressed as a power of two in order to simplify
+the implementation.
+
+In Figure 12 the variable <$Etheta sub r> represents the phase of the
+reference signal and <$Etheta sub o> the phase of the voltage-controlled
+oscillator (VCO). The phase detector (PD) produces a voltage <$Ev sub d>
+representing the phase difference <$Etheta sub r~-~theta sub o> . The
+clock filter functions as a tapped delay line, with the output <$Ev sub
+s> taken at the tap selected by the clock-filter algorithm described in
+the NTP specification. The loop filter, represented by the equations
+given below, produces a VCO correction voltage <$Ev sub c>, which
+controls the oscillator frequency and thus the phase <$Etheta sub o>.
+
+The PLL behavior is completely determined by its open-loop, Laplace
+transfer function <$EG(s)> in the s domain. Since both frequency and
+phase corrections are required, an appropriate design consists of a
+type-II PLL, which is defined by the function
+
+<$EG(s)~=~{omega sub c sup 2} over {tau sup 2 s sup 2}~( 1 ~+~{tau s}
+over omega sub z )> ,
+
+where <$Eomega sub c> is the crossover frequency (also called loop
+gain), <$Eomega sub z> is the corner frequency (required for loop
+stability) and <$Etau> determines the PLL time constant and thus the
+bandwidth. While this is a first-order function and some improvement in
+phase noise might be gained from a higher-order function, in practice
+the improvement is lost due to the effects of the clock-filter delay, as
+described below.
+
+The open-loop transfer function <$EG(s)> is constructed by breaking the
+loop at point a on Figure 12 and computing the ratio of the output phase
+<$Etheta sub o (s)> to the reference phase <$Etheta sub r (s)>. This
+function is the product of the individual transfer functions for the
+phase detector, clock filter, loop filter and VCO. The phase detector
+delivers a voltage <$Ev sub d (t)~=~ theta sub r (t)>, so its transfer
+function is simply <$EF sub d (s)~=~1>, expressed in V/rad. The VCO
+delivers a frequency change <$EDELTA omega ~=~{roman d~theta sub o (t)}
+over {roman dt}~=~alpha {v sub c (t)}>, where <$Ealpha> is the VCO gain
+in rad/V-sec and <$Etheta sub o (t)~=~alpha~int v sub c (t)~dt>. Its
+transfer function is the Laplace transform of the integral, <$EF sub o
+(s)~=~alpha over s>, expressed in rad/V. The clock filter contributes a
+stochastic delay due to the clock-filter algorithm; but, for present
+purposes, this delay will be assumed a constant T, so its transfer
+function is the Laplace transform of the delay, <$EF sub s (s)~=~e sup
+{- Ts}>. Let <$EF(s)> be the transfer function of the loop filter, which
+has yet to be determined. The open-loop transfer function <$EG(s)> is
+the product of these four individual transfer functions:
+
+<$EG(s)~=~{omega sub c sup 2} over {tau sup 2 s sup 2}~( 1 ~+~{tau s}
+over omega sub z )~=~F sub d (s) F sub s (s) F(s) F sub o (s)~=~1e sup
+{-Ts}~F(s)~alpha over s> .
+
+For the moment, assume that the product <$ETs> is small, so that <$Ee
+sup {-Ts}~approx ~1>. Making the following substitutions,
+
+<$Eomega sub c sup 2~=~alpha over { K sub f}~~~~> and <$E~~~~omega sub
+z~=~K sub g over {K sub f}>
+
+and rearranging yields
+
+<$EF(s)~=~1 over {K sub g~tau}~+~1 over {K sub f~tau sup 2 s }> ,
+
+which corresponds to a constant term plus an integrating term scaled by
+the PLL time constant <$Etau>. This form is convenient for
+implementation as a sampled-data system, as described later.
+
+With the parameter values given in Table 10, the Bode plot of the open-
+loop transfer function <$EG(s)> consists of a <196>12 dB/octave line
+which intersects the 0-dB baseline at <$Eomega sub c~=~2 sup -12> rad/s,
+together with a +6 dB/octave line at the corner frequency <$Eomega sub
+z~=~2 sup -14> rad/s. The damping factor <$Ezeta~=~omega sub c over {2
+omega sub z}~=~2> suggests the PLL will be stable and have a large phase
+margin together with a low overshoot. However, if the clock-filter delay
+T is not small compared to the loop delay, which is approximately equal
+to <$E1 over omega sub c>, the above analysis becomes unreliable and the
+loop can become unstable. With the values determined as above, T is
+ordinarily small enough to be neglected.
+
+Assuming the output is taken at <$Ev sub s>, the closed-loop transfer
+function <$EH(s)> is
+
+<$EH(s)~==~{v sub s (s)} over {theta sub r (s)}~=~{F sub d (s) e sup {-
+Ts}} over {1~+~G(s)}> .
+
+If only the relative response is needed and the clock-filter delay can
+be neglected, <$EH(s)> can be written
+
+<$EH(s)~=~1 over {1~+~G(s)}~=~s sup 2 over {s sup 2~+~omega sub c sup 2
+over {omega sub z~tau} s~+~omega sub c sup 2 over tau sup 2}> .
+
+For some input function <$EI(s)> the output function <$EI(s)H(s)> can be
+inverted to find the time response. Using a unit-step input <$EI(s)~=~1
+over s> and the values determined as above, This yields a PLL risetime
+of about 52 minutes, a maximum overshoot of about 4.8 percent in about

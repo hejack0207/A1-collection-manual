@@ -1,0 +1,693 @@
+Appendix A for comprehensive list):
+
+@Z_TBL_BEG = COLUMNS(3), DIMENSION(IN), COLWIDTHS(E2,E2,E5),
+WIDTH(4.1700), ABOVE(.1670), BELOW(.0830), HGUTTER(.3330),
+BOX(Z_SINGLE), KEEP(ON), ALIGN(CT), L1(R1C0..R1C3)
+
+@Z_TBL_BODY = TABLE CENTER, TABLE HEADER, TABLE HEADER
+
+Stratum, Code, Meaning
+
+@Z_TBL_BODY = TABLE CENTER, TABLE TEXT, TABLE TEXT
+
+0, DCN, DCN routing protocol
+
+0, TSP, TSP time protocol
+
+1, ATOM, Atomic clock (calibrated)
+
+1, WWVB, WWVB LF (band 5) radio
+
+1, GOES, GOES UHF (band 9) satellite
+
+@Z_TBL_BODY = TABLE CENTER, TABLE HEADER, TABLE HEADER
+
+1, WWV, WWV HF (band 7) radio
+
+@Z_TBL_END =
+
+In the case of stratum 2 and greater (secondary reference) this is the
+four-octet Internet address of the peer selected for synchronization.
+
+Reference Timestamp (sys.reftime, peer.reftime, pkt.reftime): This is
+the local time, in timestamp format, when the local clock was last
+updated. If the local clock has never been synchronized, the value is
+zero.
+
+Originate Timestamp (peer.org, pkt.org): This is the local time, in
+timestamp format, at the peer when its latest NTP message was sent. If
+the peer becomes unreachable the value is set to zero.
+
+Receive Timestamp (peer.rec, pkt.rec): This is the local time, in
+timestamp format, when the latest NTP message from the peer arrived. If
+the peer becomes unreachable the value is set to zero.
+
+Transmit Timestamp (peer.xmt, pkt.xmt): This is the local time, in
+timestamp format, at which the NTP message departed the sender.
+
+System Variables
+
+Table 1<$&tab1> shows the complete set of system variables. In addition
+to the common variables described previously, the following variables
+are used by the operating system in order to synchronize the local
+clock.
+
+Local Clock (sys.clock): This is the current local time, in timestamp
+format. Local time is derived from the hardware clock of the particular
+machine and increments at intervals depending on the design used. An
+appropriate design, including slewing and skew-Compensation mechanisms,
+is described in Section 5.
+
+Clock Source (sys.peer): This is a selector identifying the current
+synchronization source. Usually this will be a pointer to a structure
+containing the peer variables. The special value NULL indicates there is
+no currently valid synchronization source.
+
+Peer Variables
+
+Table 2 shows the complete set of peer variables. In addition to the
+common variables described previously, the following variables are used
+by the peer management and measurement functions.
+
+Configured Bit (peer.config): This is a bit indicating that the
+association was created from configuration information and should not be
+demobilized if the peer becomes unreachable.
+
+Update Timestamp (peer.update): This is the local time, in timestamp
+format, when the most recent NTP message was received. It is used in
+calculating the skew dispersion.
+
+Reachability Register (peer.reach): This is a shift register of
+NTP.WINDOW bits used to determine the reachability status of the peer,
+with bits entering from the least significant (rightmost) end. A peer is
+considered reachable if at least one bit in this register is set to one.
+
+Peer Timer (peer.timer): This is an integer counter used to control the
+interval between transmitted NTP messages. Once set to a nonzero value,
+the counter decrements at one-second intervals until reaching zero, at
+which time the transmit procedure is called. Note that the operation of
+this timer is independent of local-clock updates, which implies that the
+timekeeping system and interval-timer system architecture must be
+independent of each other.<$&tab2>
+
+Packet Variables
+
+Table 3<$&tab3> shows the complete set of packet variables. In addition
+to the common variables described previously, the following variables
+are defined.
+
+Version Number (pkt.version): This is an integer indicating the version
+number of the sender. NTP messages will always be sent with the current
+version number NTP.VERSION and will always be accepted if the version
+number matches NTP.VERSION. Exceptions may be advised on a case-by-case
+basis at times when the version number is changed. Specific guidelines
+for interoperation between this version and previous versions of NTP are
+summarized in Appendix D.
+
+Clock-Filter Variables
+
+When the filter and selection algorithms suggested in Section 4 are
+used, the following state variables are defined in addition to the
+variables described previously.
+
+Filter Register (peer.filter): This is a shift register of NTP.SHIFT
+stages, where each stage stores a 3-tuple consisting of the measured
+delay, measured offset and calculated dispersion associated with a
+single observation. These 3-tuples enter from the most significant
+(leftmost) right and are shifted towards the least significant
+(rightmost) end and eventually discarded as new observations arrive.
+
+Valid Data Counter (peer.valid): This is an integer counter indicating
+the valid samples remaining in the filter register. It is used to
+determine the reachability state and when the poll interval should be
+increased or decreased.
+
+Offset (peer.offset): This is a signed, fixed-point number indicating
+the offset of the peer clock relative to the local clock, in seconds.
+
+Delay (peer.delay): This is a signed fixed-point number indicating the
+roundtrip delay of the peer clock relative to the local clock over the
+network path between them, in seconds. Note that this variable can take
+on both positive and negative values, depending on clock precision and
+skew-error accumulation.
+
+Dispersion (peer.dispersion): This is a signed fixed-point number
+indicating the maximum error of the peer clock relative to the local
+clock over the network path between them, in seconds. Only positive
+values greater than zero are possible.
+
+Authentication Variables
+
+When the authentication mechanism suggested in Appendix C is used, the
+following state variables are defined in addition to the variables
+described previously. These variables are used only if the optional
+authentication mechanism described in Appendix C is implemented.
+
+Authentication Enabled Bit (peer.authenable): This is a bit indicating
+that the association is to operate in the authenticated mode.
+
+Authenticated Bit (peer.authentic): This is a bit indicating that the
+last message received from the peer has been correctly authenticated.
+
+Key Identifier (peer.hostkeyid, peer.peerkeyid, pkt.keyid): This is an
+integer identifying the cryptographic key used to generate the message-
+authentication code.
+
+Cryptographic Keys (sys.key): This is a set of 64-bit DES keys. Each key
+is constructed as in the Berkeley Unix distributions, which consists of
+eight octets, where the seven low-order bits of each octet correspond to
+the DES bits 1-7 and the high-order bit corresponds to the DES odd-
+parity bit 8.
+
+Crypto-Checksum (pkt.check): This is a crypto-checksum computed by the
+encryption procedure.
+
+Parameters
+
+Table 4<$&tab4> shows the parameters assumed for all implementations
+operating in the Internet system. It is necessary to agree on the values
+for these parameters in order to avoid unnecessary network overheads and
+stable peer associations. The following parameters are assumed fixed and
+applicable to all associations.
+
+Version Number (NTP.VERSION): This is the current NTP version number
+(3).
+
+NTP Port (NTP.PORT): This is the port number (123) assigned by the
+Internet Assigned Numbers Authority to NTP.
+
+Maximum Stratum (NTP.MAXSTRATUM): This is the maximum stratum value that
+can be encoded as a packet variable, also interpreted as
+<169>infinity<170> or unreachable by the subnet routing algorithm.
+
+Maximum Clock Age (NTP.MAXAGE): This is the maximum interval a reference
+clock will be considered valid after its last update, in seconds.
+
+Maximum Skew (NTP.MAXSKEW): This is the maximum offset error due to skew
+of the local clock over the interval determined by NTP.MAXAGE, in
+seconds. The ratio <$Ephi~=~roman {NTP.MAXSKEW over NTP.MAXAGE}> is
+interpreted as the maximum possible skew rate due to all causes.
+
+Maximum Distance (NTP.MAXDISTANCE): When the selection algorithm
+suggested in Section 4 is used, this is the maximum synchronization
+distance for peers acceptable for synchronization.
+
+Minimum Poll Interval (NTP.MINPOLL): This is the minimum poll interval
+allowed by any peer of the Internet system, in seconds to a power of
+two.
+
+Maximum Poll Interval (NTP.MAXPOLL): This is the maximum poll interval
+allowed by any peer of the Internet system, in seconds to a power of
+two.
+
+Minimum Select Clocks (NTP.MINCLOCK): When the selection algorithm
+suggested in Section 4 is used, this is the minimum number of peers
+acceptable for synchronization.
+
+Maximum Select Clocks (NTP.MAXCLOCK): When the selection algorithm
+suggested in Section 4 is used, this is the maximum number of peers
+considered for selection.
+
+Minimum Dispersion (NTP.MINDISPERSE): When the filter algorithm
+suggested in Section 4 is used, this is the minimum dispersion increment
+for each stratum level, in seconds.
+
+Maximum Dispersion (NTP.MAXDISPERSE): When the filter algorithm
+suggested in Section 4 is used, this is the maximum peer dispersion and
+the dispersion assumed for missing data, in seconds.
+
+Reachability Register Size (NTP.WINDOW): This is the size of the
+reachability register (peer.reach), in bits.
+
+Filter Size (NTP.SHIFT): When the filter algorithm suggested in Section
+4 is used, this is the size of the clock filter (peer.filter) shift
+register, in stages.
+Filter Weight (NTP.FILTER): When the filter algorithm suggested in
+Section 4 is used, this is the weight used to compute the filter
+dispersion.
+
+Select Weight (NTP.SELECT): When the selection algorithm suggested in
+Section 4 is used, this is the weight used to compute the select
+dispersion.
+
+Modes of Operation
+
+Except in broadcast mode, an NTP association is formed when two peers
+exchange messages and one or both of them create and maintain an
+instantiation of the protocol machine, called an association. The
+association can operate in one of five modes as indicated by the host-
+mode variable (peer.mode): symmetric active, symmetric passive, client,
+server and broadcast, which are defined as follows:
+
+Symmetric Active (1): A host operating in this mode sends periodic
+messages regardless of the reachability state or stratum of its peer. By
+operating in this mode the host announces its willingness to synchronize
+and be synchronized by the peer.
+
+Symmetric Passive (2): This type of association is ordinarily created
+upon arrival of a message from a peer operating in the symmetric active
+mode and persists only as long as the peer is reachable and operating at
+a stratum level less than or equal to the host; otherwise, the
+association is dissolved. However, the association will always persist
+until at least one message has been sent in reply. By operating in this
+mode the host announces its willingness to synchronize and be
+synchronized by the peer.
+
+Client (3): A host operating in this mode sends periodic messages
+regardless of the reachability state or stratum of its peer. By
+operating in this mode the host, usually a LAN workstation, announces
+its willingness to be synchronized by, but not to synchronize the peer.
+
+Server (4): This type of association is ordinarily created upon arrival
+of a client request message and exists only in order to reply to that
+request, after which the association is dissolved. By operating in this
+mode the host, usually a LAN time server, announces its willingness to
+synchronize, but not to be synchronized by the peer.
+
+Broadcast (5): A host operating in this mode sends periodic messages
+regardless of the reachability state or stratum of the peers. By
+operating in this mode the host, usually a LAN time server operating on
+a high-speed broadcast medium, announces its willingness to synchronize
+all of the peers, but not to be synchronized by any of them.
+
+A host operating in client mode occasionally sends an NTP message to a
+host operating in server mode, perhaps right after rebooting and at
+periodic intervals thereafter. The server responds by simply
+interchanging addresses and ports, filling in the required information
+and returning the message to the client. Servers need retain no state
+information between client requests, while clients are free to manage
+the intervals between sending NTP messages to suit local conditions. In
+these modes the protocol machine described in this document can be
+considerably simplified to a simple remote-procedure-call mechanism
+without significant loss of accuracy or robustness, especially when
+operating over high-speed LANs.
+
+In the symmetric modes the client/server distinction (almost)
+disappears. Symmetric passive mode is intended for use by time servers
+operating near the root nodes (lowest stratum) of the synchronization
+subnet and with a relatively large number of peers on an intermittent
+basis. In this mode the identity of the peer need not be known in
+advance, since the association with its state variables is created only
+when an NTP message arrives. Furthermore, the state storage can be
+reused when the peer becomes unreachable or is operating at a higher
+stratum level and thus ineligible as a synchronization source.
+
+Symmetric active mode is intended for use by time servers operating near
+the end nodes (highest stratum) of the synchronization subnet. Reliable
+time service can usually be maintained with two peers at the next lower
+stratum level and one peer at the same stratum level, so the rate of
+ongoing polls is usually not significant, even when connectivity is lost
+and error messages are being returned for every poll.
+
+Normally, one peer operates in an active mode (symmetric active, client
+or broadcast modes) as configured by a startup file, while the other
+operates in a passive mode (symmetric passive or server modes), often
+without prior configuration. However, both peers can be configured to
+operate in the symmetric active mode. An error condition results when
+both peers operate in the same mode, but not symmetric active mode. In
+such cases each peer will ignore messages from the other, so that prior
+associations, if any, will be demobilized due to reachability failure.
+
+Broadcast mode is intended for operation on high-speed LANs with
+numerous workstations and where the highest accuracies are not required.
+In the typical scenario one or more time servers on the LAN send
+periodic broadcasts to the workstations, which then determine the time
+on the basis of a preconfigured latency in the order of a few
+milliseconds. As in the client/server modes the protocol machine can be
+considerably simplified in this mode; however, a modified form of the
+clock selection algorithm may prove useful in cases where multiple time
+servers are used for enhanced reliability.
+
+Event Processing
+
+The significant events of interest in NTP occur upon expiration of a
+peer timer (peer.timer), one of which is dedicated to each peer with an
+active association, and upon arrival of an NTP message from the various
+peers. An event can also occur as the result of an operator command or
+detected system fault, such as a primary reference source failure. This
+section describes the procedures invoked when these events occur.
+
+Notation Conventions
+
+The NTP filtering and selection algorithms act upon a set of variables
+for clock offset (<$Etheta ,~THETA>), roundtrip delay (<$Edelta
+,~DELTA>) and dispersion (<$Eepsilon ,~EPSILON>). When necessary to
+distinguish between them, lower-case Greek letters are used for
+variables relative to a peer, while upper-case Greek letters are used
+for variables relative to the primary reference source(s), i.e., via the
+peer to the root of the synchronization subnet. Subscripts will be used
+to identify the particular peer when this is not clear from context. The
+algorithms are based on a quantity called the synchronization distance
+(<$Elambda ,~LAMBDA>), which is computed from the roundtrip delay and
+dispersion as described below.
+
+As described in Appendix H, the peer dispersion <$Eepsilon> includes
+contributions due to measurement error <$Erho~=~1~<< <<~roman
+sys.precision>, skew-error accumulation <$Ephi tau>, where
+<$Ephi~=~roman {NTP.MAXSKEW over NTP.MAXAGE}> is the maximum skew rate
+and <$Etau~=~roman {sys.clock~-~peer.update}> is the interval since the
+last update, and filter (sample) dispersion <$Eepsilon sub sigma>
+computed by the clock-filter algorithm. The root dispersion <$EEPSILON>
+includes contributions due to the selected peer dispersion <$Eepsilon>
+and skew-error accumulation <$Ephi tau>, together with the root
+dispersion for the peer itself. The system dispersion includes the
+select (sample) dispersion <$Eepsilon sub xi> computed by the clock-
+select algorithm and the absolute initial clock offset <$E| THETA |>
+provided to the local-clock algorithm. Both <$Eepsilon> and <$EEPSILON>
+are dynamic quantities, since they depend on the elapsed time <$Etau>
+since the last update, as well as the sample dispersions calculated by
+the algorithms.
+
+Each time the relevant peer variables are updated, all dispersions
+associated with that peer are updated to reflect the skew-error
+accumulation. The computations can be summarized as follows:
+
+<$Etheta~==~roman peer.offset> ,
+<$Edelta~==~roman peer.delay> ,
+<$Eepsilon~==~roman peer.dispersion~=~rho~+~phi tau~+~epsilon sub sigma>
+,
+<$Elambda~==~epsilon~+~{| delta |} over 2> ,
+
+where <$Etau> is the interval since the original timestamp (from which
+<$Etheta> and <$Edelta> were determined) was transmitted to the present
+time and <$Eepsilon sub sigma> is the filter dispersion (see clock-
+filter procedure below). The variables relative to the root of the
+synchronization subnet via peer i are determined as follows:
+
+<$ETHETA sub i~==~theta sub i> ,
+<$EDELTA sub i~==~roman peer.rootdelay~+~delta sub i> ,
+<$EEPSILON sub i~==~roman peer.rootdispersion~+~epsilon sub i~+~phi tau
+sub i> ,
+<$ELAMBDA sub i~==~EPSILON sub i~+~{| DELTA sub i |} over 2> ,
+
+where all variables are understood to pertain to the ith peer. Finally,
+assuming the ith peer is selected for synchronization, the system
+variables are determined as follows:
+
+<$ETHETA~=~>combined final offset ,
+<$EDELTA~=~DELTA sub i> ,
+<$EEPSILON~=~EPSILON sub i~+~epsilon sub xi~+~| THETA |> ,
+<$ELAMBDA~=~LAMBDA sub i> ,
+
+where <$Eepsilon sub xi> is the select dispersion (see clock-selection
+procedure below).
+
+Informal pseudo-code which accomplishes these computations is presented
+below. Note that the pseudo-code is represented in no particular
+language, although it has many similarities to the C language. Specific
+details on the important algorithms are further illustrated in the C-
+language routines in Appendix I.
+
+Transmit Procedure
+
+The transmit procedure is executed when the peer timer decrements to
+zero for all modes except client mode with a broadcast server and server
+mode in all cases. In client mode with a broadcast server messages are
+never sent. In server mode messages are sent only in response to
+received messages. This procedure is also called by the receive
+procedure when an NTP message arrives that does not result in a
+persistent association.
+
+begin transmit procedure
+
+The following initializes the packet buffer and copies the packet
+variables. The value skew is necessary to account for the skew-error
+accumulated over the interval since the local clock was last set.
+
+        <$Eroman pkt.peeraddr~<<-~roman peer.hostaddr>;         /* copy
+system and peer variables */
+        <$Eroman pkt.peerport~<<-~roman peer.hostport>;
+        <$Eroman pkt.hostaddr~<<-~roman peer.peeraddr>;
+        <$Eroman pkt.hostport~<<-~roman peer.peerport>;
+        <$Eroman pkt.leap~<<-~roman sys.leap>;
+        <$Eroman pkt.version~<<-~roman NTP.VERSION>;
+        <$Eroman pkt.mode~<<-~roman peer.mode>;
+        <$Eroman pkt.stratum~<<-~roman sys.stratum>;
+        <$Eroman pkt.poll~<<-~roman peer.hostpoll>;
+        <$Eroman pkt.precision~<<-~roman sys.precision>;
+        <$Eroman pkt.rootdelay~<<-~roman sys.rootdelay>;
+        if (sys.leap = 112 or (sys.clock <196> sys.reftime) >>
+NTP.MAXAGE)
+                <$Eskew~<<-~roman NTP.MAXSKEW>;
+        else
+                <$Eskew~<<-~phi roman {(sys.clock~-~sys.reftime)}>;
+        <$Eroman {pkt.rootdispersion~<<-~roman
+sys.rootdispersion~+~(1~<< <<~sys.precision)}~+~skew>;
+        <$Eroman pkt.refid~<<-~roman sys.refid>;
+        <$Eroman pkt.reftime~<<-~roman sys.reftime>;
+
+The transmit timestamp pkt.xmt will be used later in order to validate
+the reply; thus, implementations must save the exact value transmitted.
+In addition, the order of copying the timestamps should be designed so
+that the time to format and copy the data does not degrade accuracy.
+
+        <$Eroman pkt.org~<<-~roman peer.org>;                           
+/* copy timestamps */
+        <$Eroman pkt.rec~<<-~roman peer.rec>;
+        <$Eroman pkt.xmt~<<-~roman sys.clock>;
+        <$Eroman peer.xmt~<<-~roman pkt.xmt>;
+
+The call to encrypt is implemented only if authentication is
+implemented. If authentication is enabled, the delay to encrypt the
+authenticator may degrade accuracy. Therefore, implementations should
+include a system state variable (not mentioned elsewhere in this
+specification) which contains an offset calculated to match the expected
+encryption delay and correct the transmit timestamp as obtained from the
+local clock.
+
+        #ifdef (authentication implemented)     /* see Appendix C */
+                call encrypt;
+                #endef
+        send packet;
+
+The reachability register is shifted one position to the left, with zero
+replacing the vacated bit. If all bits of this register are zero, the
+clear procedure is called to purge the clock filter and reselect the
+synchronization source, if necessary. If the association was not
+configured by the initialization procedure, the association is
+demobilized.
+
+        <$Eroman peer.reach~<<-~roman peer.reach~<< <<~1>;              
+/* update reachability */
+        if (<$Eroman peer.reach~=~0> and <$Eroman peer.config~=~0>)
+begin
+                demobilize association;
+                exit;
+                endif
+
+If valid data have been shifted into the filter register at least once
+during the preceding two poll intervals (low-order bit of peer.reach set
+to one), the valid data counter is incremented. After eight such valid
+intervals the poll interval is incremented. Otherwise, the valid data
+counter and poll interval are both decremented and the clock-filter
+procedure called with zero values for offset and delay and
+NTP.MAXDISPERSE for dispersion. The clock-select procedure is called to
+reselect the synchronization source, if necessary.
+
+        if (<$Eroman peer.reach~&~6~!=~0>)                      /* test
+two low-order bits (shifted) */ 
+                if (<$Eroman peer.valid~<<~roman NTP.SHIFT>)    /* valid
+data received */
+                        <$Eroman peer.valid~<<-~roman peer.valid~+~1>;
+                        else <$Eroman peer.hostpoll~<<-~roman
+peer.hostpoll~+~1>;
+        else begin
+                <$Eroman peer.valid~<<-~roman peer.valid~-~1>;  /*
+nothing heard */
+                <$Eroman peer.hostpoll~<<-~roman peer.hostpoll~-~1>);
+                call clock-filter(0, 0, NTP.MAXDISPERSE);
+                call clock-select;                      /* select clock
+source */
+                endif
+        call poll-update;
+        end transmit procedure;
+
+Receive Procedure
+
+The receive procedure is executed upon arrival of an NTP message. It
+validates the message, interprets the various modes and calls other
+procedures to filter the data and select the synchronization source. If
+the version number in the packet does not match the current version, the
+message may be discarded; however, exceptions may be advised on a case-
+by-case basis at times when the version is changed. If the NTP control
+messages described in Appendix B are implemented and the packet mode is
+6 (control), the control-message procedure is called. The source and
+destination Internet addresses and ports in the IP and UDP headers are
+matched to the correct peer. If there is no match a new instantiation of
+the protocol machine is created and the association mobilized.
+
+begin receive procedure
+        if (<$Eroman pkt.version~!=~roman NTP.VERSION>) exit;
+        #ifdef (control messages implemented)
+                if (<$Eroman pkt.mode~=~6>) call control-message;
+                #endef
+        for (all associations)                  /* access control goes
+here */
+                match addresses and ports to associations;
+        if (no matching association)
+                call receive-instantiation procedure;   /* create
+association */
+
+The call to decrypt is implemented only if authentication is
+implemented.
+
+        #ifdef (authentication implemented)     /* see Appendix C */
+                call decrypt;
+                #endef
+
+If the packet mode is nonzero, this becomes the value of mode used in
+the following step; otherwise, the peer is an old NTP version and mode
+is determined from the port numbers as described in Section 3.3.
+
+        if (pkt.mode = 0)                               /* for
+compatibility with old versions */
+                <$Emode~<<-~>(see Section 3.3);
+        else
+                <$Emode~<<-~roman pkt.mode>;
+
+Table 5<$&tab5> shows for each combination of peer.mode and mode the
+resulting case labels.
+
+        case (mode, peer.hostmode)              /* see Table 5 */
+
+If error the packet is simply ignored and the association demobilized,
+if not previously configured.
+error:          if (<$Eroman peer.config~=~0>) demobilize association;  
+/* see no evil */
+                break;
+
+If recv the packet is processed and the association marked reachable if
+tests five through eight (valid header) enumerated in the packet
+procedure succeed. If, in addition, tests one through four succeed
+(valid data), the clock-update procedure is called to update the local
+clock. Otherwise, if the association was not previously configured, it
+is demobilized.
+
+recv:           call packet;                            /* process
+packet */
+                if (valid header) begin         /* if valid header,
+update local clock */
+                        <$Eroman peer.reach~<<-~roman peer.reach~|~1>;
+                        if (valid data) call clock-update;
+                        endif
+                else
+                        if (<$Eroman peer.config~=~0>) demobilize
+association;
+                break;
+
+If xmit the packet is processed and an immediate reply is sent. The
+association is then demobilized if not previously configured.
+
+xmit:           call packet;                            /* process
+packet */
+                <$Eroman peer.hostpoll~<<-~roman peer.peerpoll>;        
+/* send immediate reply */
+                call poll-update;
+                call transmit;
+                if (<$Eroman peer.config~=~0>) demobilize association;
+                break;
+
+If pkt the packet is processed and the association marked reachable if
+tests five through eight (valid header) enumerated in the packet
+procedure succeed. If, in addition, tests one through four succeed
+(valid data), the clock-update procedure is called to update the local
+clock. Otherwise, if the association was not previously configured, an
+immediate reply is sent and the association demobilized.
+
+pkt:            call packet;                            /* process
+packet */
+                if (valid header) begin         /* if valid header,
+update local clock */
+                        <$Eroman peer.reach~<<-~roman peer.reach~|~1>;
+                        if (valid data) call clock-update;
+                        endif
+                else if (<$Eroman peer.config~=~0>) begin
+                        <$Eroman peer.hostpoll~<<-~roman
+peer.peerpoll>; /* send immediate reply */
+                        call poll-update;
+                        call transmit;
+                        demobilize association;
+                        endif
+                endcase
+        end receive procedure;
+
+Packet Procedure
+
+The packet procedure checks the message validity, computes delay/offset
+samples and calls other procedures to filter the data and select the
+synchronization source. Test 1 requires the transmit timestamp not match
+the last one received from the same peer; otherwise, the message might
+be an old duplicate. Test 2 requires the originate timestamp match the
+last one sent to the same peer; otherwise, the message might be out of
+order, bogus or worse. In case of broadcast mode (5) the apparent
+roundtrip delay will be zero and the full accuracy of the time-transfer
+operation may not be achievable. However, the accuracy achieved may be
+adequate for most purposes. The poll-update procedure is called with
+argument peer.hostpoll (peer.peerpoll may have changed).
+
+begin packet procedure
+        <$Eroman peer.rec~<<-~roman sys.clock>;                 /*
+capture receive timestamp */
+        if (<$Eroman pkt.mode ~!=~5>) begin
+                <$Etest1~<<-~( roman {pkt.xmt~!=~peer.org})>;   /* test
+1 */
+                <$Etest2~<<-~( roman {pkt.org~=~peer.xmt})>;    /* test
+2 */
+                endif
+        else begin
+                <$Eroman pkt.org~<<-~roman peer.rec>;                   
+/* fudge missing timestamps */
+                <$Eroman pkt.rec~<<-~roman pkt.xmt>;
+                <$Etest1~<<-~bold roman true>;                          
+/* fake tests */
+                <$Etest2~<<-~bold roman true>;
+                endif
+        <$Eroman peer.org~<<-~roman pkt.xmt>;                           
+/* update originate timestamp */
+        <$Eroman peer.peerpoll~<<-~roman pkt.poll>;                     
+/* adjust poll interval */
+        call poll-update(peer.hostpoll);
+
+Test 3 requires that both the originate and receive timestamps are
+nonzero. If either of the timestamps are zero, the association has not
+synchronized or has lost reachability in one or both directions.
+
+        <$Etest3~<<-~( roman pkt.org~!=~0> and <$Eroman pkt.rec~!=~0)>; 
+/* test 3 */
+
+The roundtrip delay and clock offset relative to the peer are calculated
+as follows. Number the times of sending and receiving NTP messages as
+shown in Figure 2<$&fig2> and let i be an even integer. Then Ti-3, Ti-2,
+Ti-1 and Ti are the contents of the pkt.org, pkt.rec, pkt.xmt and
+peer.rec variables, respectively. The clock offset <$Etheta>, roundtrip
+delay <$Edelta> and dispersion <$Eepsilon> of the host relative to the
+peer is:
+
+<$Edelta~=~(T sub i~-~T sub {i - 3} )~-~(T sub {i - 1}~-~T sub {i - 2}
+)> ,
+<$Etheta~=~{(T sub {i - 2}~-~T sub {i-3})~+~(T sub {i-1}~-~T sub i ) }
+over 2> ,
+<$Eepsilon~=~roman {(1~<< <<~sys.precision})~+~phi (T sub i ~-~T sub {i-
+3} )> ,
+
+where, as before, <$Ephi~=~roman{ NTP.MAXSKEW over NTP.MAXAGE}>. The
+quantity <$Eepsilon> represents the maximum error or dispersion due to
+measurement error at the host and local-clock skew accumulation over the
+interval since the last message was transmitted to the peer.
+Subsequently, the dispersion will be updated by the clock-filter
+procedure.
+
+The above method amounts to a continuously sampled, returnable-time
+system, which is used in some digital telephone networks [BEL86]. Among
+the advantages are that the order and timing of the messages are
+unimportant and that reliable delivery is not required. Obviously, the
+accuracies achievable depend upon the statistical properties of the
+outbound and inbound data paths. Further analysis and experimental
+results bearing on this issue can be found in [MIL90] and in Appendix H.
+Test 4 requires that the calculated delay be within <169>reasonable<170>
+bounds:
+
+        <$Etest4~<<-~(| delta |~<<~roman NTP.MAXDISPERSE~bold
+and~epsilon~<<~roman NTP.MAXDISPERSE)>;  /* test 4 */
+
+Test 5 is implemented only if the authentication mechanism described in
