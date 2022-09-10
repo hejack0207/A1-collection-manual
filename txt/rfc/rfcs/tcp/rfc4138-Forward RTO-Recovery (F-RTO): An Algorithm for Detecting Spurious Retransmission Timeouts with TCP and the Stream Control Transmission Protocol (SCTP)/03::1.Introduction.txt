@@ -1,0 +1,220 @@
+1.  Introduction
+
+   The Transmission Control Protocol (TCP) [Pos81] has two methods for
+   triggering retransmissions.  First, the TCP sender relies on incoming
+   duplicate ACKs, which indicate that the receiver is missing some of
+   the data.  After a required number of successive duplicate ACKs have
+   arrived at the sender, it retransmits the first unacknowledged
+   segment [APS99] and continues with a loss recovery algorithm such as
+   NewReno [FHG04] or SACK-based loss recovery [BAFW03].  Second, the
+   TCP sender maintains a retransmission timer which triggers
+   retransmission of segments, if they have not been acknowledged before
+   the retransmission timeout (RTO) expires.  When the retransmission
+   timeout occurs, the TCP sender enters the RTO recovery where the
+   congestion window is initialized to one segment and unacknowledged
+   segments are retransmitted using the slow-start algorithm.  The
+   retransmission timer is adjusted dynamically, based on the measured
+   round-trip times [PA00].
+
+   It has been pointed out that the retransmission timer can expire
+   spuriously and cause unnecessary retransmissions when no segments
+   have been lost [LK00, GL02, LM03].  After a spurious retransmission
+   timeout, the late acknowledgments of the original segments arrive at
+   the sender, usually triggering unnecessary retransmissions of a whole
+   window of segments during the RTO recovery.  Furthermore, after a
+   spurious retransmission timeout, a conventional TCP sender increases
+   the congestion window on each late acknowledgment in slow start.
+   This injects a large number of data segments into the network within
+   one round-trip time, thus violating the packet conservation principle
+   [Jac88].
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 2]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   There are a number of potential reasons for spurious retransmission
+   timeouts.  First, some mobile networking technologies involve sudden
+   delay spikes on transmission because of actions taken during a
+   hand-off.  Second, given a low-bandwidth link or some other change in
+   available bandwidth, arrival of competing traffic (possibly with
+   higher priority) can cause a sudden increase of round-trip time.
+   This may trigger a spurious retransmission timeout.  A persistently
+   reliable link layer can also cause a sudden delay when a data frame
+   and several retransmissions of it are lost for some reason.  This
+   document does not distinguish between the different causes of such a
+   delay spike.  Rather, it discusses the spurious retransmission
+   timeouts caused by a delay spike in general.
+
+   This document describes the F-RTO detection algorithm.  It is based
+   on the detection mechanism of the "Forward RTO-Recovery" (F-RTO)
+   algorithm [SKR03] that is used for detecting spurious retransmission
+   timeouts and thus avoids unnecessary retransmissions following the
+   retransmission timeout.  When the timeout is not spurious, the F-RTO
+   algorithm reverts back to the conventional RTO recovery algorithm,
+   and therefore has similar behavior and performance.  In contrast to
+   alternative algorithms proposed for detecting unnecessary
+   retransmissions (Eifel [LK00], [LM03] and DSACK-based algorithms
+   [BA04]), F-RTO does not require any TCP options for its operation,
+   and it can be implemented by modifying only the TCP sender.  The
+   Eifel algorithm uses TCP timestamps [BBJ92] for detecting a spurious
+   timeout upon arrival of the first acknowledgment after the
+   retransmission.  The DSACK-based algorithms require that the TCP
+   Selective Acknowledgment Option [MMFR96], with the DSACK extension
+   [FMMP00], is in use.  With DSACK, the TCP receiver can report if it
+   has received a duplicate segment, enabling the sender to detect
+   afterwards whether it has retransmitted segments unnecessarily.  The
+   F-RTO algorithm only attempts to detect and avoid unnecessary
+   retransmissions after an RTO.  Eifel and DSACK can also be used for
+   detecting unnecessary retransmissions caused by other events, such as
+   packet reordering.
+
+   When an RTO expires, the F-RTO sender retransmits the first
+   unacknowledged segment as usual [APS99].  Deviating from the normal
+   operation after a timeout, it then tries to transmit new, previously
+   unsent data, for the first acknowledgment that arrives after the
+   timeout, given that the acknowledgment advances the window.  If the
+   second acknowledgment that arrives after the timeout advances the
+   window (i.e., acknowledges data that was not retransmitted), the F-
+   RTO sender declares the timeout spurious and exits the RTO recovery.
+   However, if either of these two acknowledgments is a duplicate ACK,
+   there will not be sufficient evidence of a spurious timeout.
+   Therefore, the F-RTO sender retransmits the unacknowledged segments
+   in slow start similarly to the traditional algorithm.  With a
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 3]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   SACK-enhanced version of the F-RTO algorithm, spurious timeouts may
+   be detected even if duplicate ACKs arrive after an RTO
+   retransmission.
+
+   The F-RTO algorithm can also be applied to the Stream Control
+   Transmission Protocol (SCTP) [Ste00], because SCTP has acknowledgment
+   and packet retransmission concepts similar to TCP.  For convenience,
+   this document mostly refers to TCP, but the algorithms and other
+   discussion are valid for SCTP as well.
+
+   This document is organized as follows.  Section 2 describes the basic
+   F-RTO algorithm.  Section 3 outlines an optional enhancement to the
+   F-RTO algorithm that takes advantage of the TCP SACK option.  Section
+   4 discusses the possible actions to be taken after detecting a
+   spurious RTO.  Section 5 gives considerations on applying F-RTO with
+   SCTP, and Section 6 discusses the security considerations.
+
+1.  Introduction
+
+   The Transmission Control Protocol (TCP) [Pos81] has two methods for
+   triggering retransmissions.  First, the TCP sender relies on incoming
+   duplicate ACKs, which indicate that the receiver is missing some of
+   the data.  After a required number of successive duplicate ACKs have
+   arrived at the sender, it retransmits the first unacknowledged
+   segment [APS99] and continues with a loss recovery algorithm such as
+   NewReno [FHG04] or SACK-based loss recovery [BAFW03].  Second, the
+   TCP sender maintains a retransmission timer which triggers
+   retransmission of segments, if they have not been acknowledged before
+   the retransmission timeout (RTO) expires.  When the retransmission
+   timeout occurs, the TCP sender enters the RTO recovery where the
+   congestion window is initialized to one segment and unacknowledged
+   segments are retransmitted using the slow-start algorithm.  The
+   retransmission timer is adjusted dynamically, based on the measured
+   round-trip times [PA00].
+
+   It has been pointed out that the retransmission timer can expire
+   spuriously and cause unnecessary retransmissions when no segments
+   have been lost [LK00, GL02, LM03].  After a spurious retransmission
+   timeout, the late acknowledgments of the original segments arrive at
+   the sender, usually triggering unnecessary retransmissions of a whole
+   window of segments during the RTO recovery.  Furthermore, after a
+   spurious retransmission timeout, a conventional TCP sender increases
+   the congestion window on each late acknowledgment in slow start.
+   This injects a large number of data segments into the network within
+   one round-trip time, thus violating the packet conservation principle
+   [Jac88].
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 2]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   There are a number of potential reasons for spurious retransmission
+   timeouts.  First, some mobile networking technologies involve sudden
+   delay spikes on transmission because of actions taken during a
+   hand-off.  Second, given a low-bandwidth link or some other change in
+   available bandwidth, arrival of competing traffic (possibly with
+   higher priority) can cause a sudden increase of round-trip time.
+   This may trigger a spurious retransmission timeout.  A persistently
+   reliable link layer can also cause a sudden delay when a data frame
+   and several retransmissions of it are lost for some reason.  This
+   document does not distinguish between the different causes of such a
+   delay spike.  Rather, it discusses the spurious retransmission
+   timeouts caused by a delay spike in general.
+
+   This document describes the F-RTO detection algorithm.  It is based
+   on the detection mechanism of the "Forward RTO-Recovery" (F-RTO)
+   algorithm [SKR03] that is used for detecting spurious retransmission
+   timeouts and thus avoids unnecessary retransmissions following the
+   retransmission timeout.  When the timeout is not spurious, the F-RTO
+   algorithm reverts back to the conventional RTO recovery algorithm,
+   and therefore has similar behavior and performance.  In contrast to
+   alternative algorithms proposed for detecting unnecessary
+   retransmissions (Eifel [LK00], [LM03] and DSACK-based algorithms
+   [BA04]), F-RTO does not require any TCP options for its operation,
+   and it can be implemented by modifying only the TCP sender.  The
+   Eifel algorithm uses TCP timestamps [BBJ92] for detecting a spurious
+   timeout upon arrival of the first acknowledgment after the
+   retransmission.  The DSACK-based algorithms require that the TCP
+   Selective Acknowledgment Option [MMFR96], with the DSACK extension
+   [FMMP00], is in use.  With DSACK, the TCP receiver can report if it
+   has received a duplicate segment, enabling the sender to detect
+   afterwards whether it has retransmitted segments unnecessarily.  The
+   F-RTO algorithm only attempts to detect and avoid unnecessary
+   retransmissions after an RTO.  Eifel and DSACK can also be used for
+   detecting unnecessary retransmissions caused by other events, such as
+   packet reordering.
+
+   When an RTO expires, the F-RTO sender retransmits the first
+   unacknowledged segment as usual [APS99].  Deviating from the normal
+   operation after a timeout, it then tries to transmit new, previously
+   unsent data, for the first acknowledgment that arrives after the
+   timeout, given that the acknowledgment advances the window.  If the
+   second acknowledgment that arrives after the timeout advances the
+   window (i.e., acknowledges data that was not retransmitted), the F-
+   RTO sender declares the timeout spurious and exits the RTO recovery.
+   However, if either of these two acknowledgments is a duplicate ACK,
+   there will not be sufficient evidence of a spurious timeout.
+   Therefore, the F-RTO sender retransmits the unacknowledged segments
+   in slow start similarly to the traditional algorithm.  With a
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 3]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   SACK-enhanced version of the F-RTO algorithm, spurious timeouts may
+   be detected even if duplicate ACKs arrive after an RTO
+   retransmission.
+
+   The F-RTO algorithm can also be applied to the Stream Control
+   Transmission Protocol (SCTP) [Ste00], because SCTP has acknowledgment
+   and packet retransmission concepts similar to TCP.  For convenience,
+   this document mostly refers to TCP, but the algorithms and other
+   discussion are valid for SCTP as well.
+
+   This document is organized as follows.  Section 2 describes the basic
+   F-RTO algorithm.  Section 3 outlines an optional enhancement to the
+   F-RTO algorithm that takes advantage of the TCP SACK option.  Section
+   4 discusses the possible actions to be taken after detecting a
+   spurious RTO.  Section 5 gives considerations on applying F-RTO with
+   SCTP, and Section 6 discusses the security considerations.
+

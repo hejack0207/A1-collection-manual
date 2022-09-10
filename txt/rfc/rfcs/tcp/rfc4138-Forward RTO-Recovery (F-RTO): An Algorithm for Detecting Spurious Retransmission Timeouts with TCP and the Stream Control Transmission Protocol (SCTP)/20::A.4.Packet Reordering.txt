@@ -1,0 +1,162 @@
+A.4.  Packet Reordering
+
+   Because F-RTO modifies the TCP sender behavior only after a
+   retransmission timeout and it is intended to avoid unnecessary
+   retransmissions only after spurious timeout, we limit the discussion
+   on the effects of packet reordering on F-RTO behavior to the cases
+   where it occurs immediately after the retransmission timeout.  When
+
+
+
+Sarolahti & Kojo              Experimental                     [Page 18]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   the TCP receiver gets an out-of-order segment, it generates a
+   duplicate ACK.  If the TCP sender implements the basic F-RTO
+   algorithm, this may prevent the sender from detecting a spurious
+   timeout.
+
+   However, if the TCP sender applies the SACK-enhanced F-RTO, it is
+   possible to detect a spurious timeout when packet reordering occurs.
+   Below, we illustrate the behavior of SACK-enhanced F-RTO when segment
+   8 arrives before segments 6 and 7, and segments starting from segment
+   6 are delayed in the network.  In this example the TCP sender reduces
+   the congestion window and slow start threshold in response to
+   spurious timeout.
+
+         ...
+          (cwnd = 6, ssthresh < 6, FlightSize = 6)
+         1.          <---------------------------- ACK 5
+         2.  SEND 10 ---------------------------->
+          (cwnd = 6, ssthresh < 6, FlightSize = 6)
+         3.          <---------------------------- ACK 6
+         4.  SEND 11 ---------------------------->
+         5.                       |
+                               [delay]
+                                  |
+             [RTO]
+         6.  SEND 6  ---------------------------->
+          (cwnd = 6, ssthresh = 3, FlightSize = 6)
+                     <earlier xmitted SEG 8>  --->
+         7.          <---------------------------- ACK 6
+                                                   [SACK 8]
+             [SACK F-RTO stays in step 2]
+         8.          <earlier xmitted SEG 6>  --->
+         9.          <---------------------------- ACK 7
+                                                   [SACK 8]
+             [SACK F-RTO step (2b)]
+         10. SEND 12 ---------------------------->
+         11. SEND 13 ---------------------------->
+           (cwnd = 7, ssthresh = 3, FlightSize = 7)
+         12.         <earlier xmitted SEG 7>  --->
+         13.         <---------------------------- ACK 9
+             [SACK F-RTO step (3b)]
+             [SpuriousRecovery <- SPUR_TO]
+           (cwnd = 7, ssthresh = 6, FlightSize = 6)
+         14. SEND 14 ---------------------------->
+           (cwnd = 7, ssthresh = 6, FlightSize = 7)
+         15.         <---------------------------- ACK 10
+         16. SEND 15 ---------------------------->
+         ...
+
+
+
+
+Sarolahti & Kojo              Experimental                     [Page 19]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   After RTO expires and the sender retransmits segment 6 (step 6), the
+   receiver gets segment 8 and generates duplicate ACK with SACK for
+   segment 8.  In response to the acknowledgment, the TCP sender does
+   not send anything but stays in F-RTO step 2.  Because the next
+   acknowledgment advances the cumulative ACK point (step 9), the sender
+   can transmit two new segments according to SACK-enhanced F-RTO.  The
+   next segment acknowledges new data between 7 and 11 that was not
+   acknowledged earlier (segment 7), so the F-RTO sender declares the
+   timeout spurious.
+
+A.4.  Packet Reordering
+
+   Because F-RTO modifies the TCP sender behavior only after a
+   retransmission timeout and it is intended to avoid unnecessary
+   retransmissions only after spurious timeout, we limit the discussion
+   on the effects of packet reordering on F-RTO behavior to the cases
+   where it occurs immediately after the retransmission timeout.  When
+
+
+
+Sarolahti & Kojo              Experimental                     [Page 18]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   the TCP receiver gets an out-of-order segment, it generates a
+   duplicate ACK.  If the TCP sender implements the basic F-RTO
+   algorithm, this may prevent the sender from detecting a spurious
+   timeout.
+
+   However, if the TCP sender applies the SACK-enhanced F-RTO, it is
+   possible to detect a spurious timeout when packet reordering occurs.
+   Below, we illustrate the behavior of SACK-enhanced F-RTO when segment
+   8 arrives before segments 6 and 7, and segments starting from segment
+   6 are delayed in the network.  In this example the TCP sender reduces
+   the congestion window and slow start threshold in response to
+   spurious timeout.
+
+         ...
+          (cwnd = 6, ssthresh < 6, FlightSize = 6)
+         1.          <---------------------------- ACK 5
+         2.  SEND 10 ---------------------------->
+          (cwnd = 6, ssthresh < 6, FlightSize = 6)
+         3.          <---------------------------- ACK 6
+         4.  SEND 11 ---------------------------->
+         5.                       |
+                               [delay]
+                                  |
+             [RTO]
+         6.  SEND 6  ---------------------------->
+          (cwnd = 6, ssthresh = 3, FlightSize = 6)
+                     <earlier xmitted SEG 8>  --->
+         7.          <---------------------------- ACK 6
+                                                   [SACK 8]
+             [SACK F-RTO stays in step 2]
+         8.          <earlier xmitted SEG 6>  --->
+         9.          <---------------------------- ACK 7
+                                                   [SACK 8]
+             [SACK F-RTO step (2b)]
+         10. SEND 12 ---------------------------->
+         11. SEND 13 ---------------------------->
+           (cwnd = 7, ssthresh = 3, FlightSize = 7)
+         12.         <earlier xmitted SEG 7>  --->
+         13.         <---------------------------- ACK 9
+             [SACK F-RTO step (3b)]
+             [SpuriousRecovery <- SPUR_TO]
+           (cwnd = 7, ssthresh = 6, FlightSize = 6)
+         14. SEND 14 ---------------------------->
+           (cwnd = 7, ssthresh = 6, FlightSize = 7)
+         15.         <---------------------------- ACK 10
+         16. SEND 15 ---------------------------->
+         ...
+
+
+
+
+Sarolahti & Kojo              Experimental                     [Page 19]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+   After RTO expires and the sender retransmits segment 6 (step 6), the
+   receiver gets segment 8 and generates duplicate ACK with SACK for
+   segment 8.  In response to the acknowledgment, the TCP sender does
+   not send anything but stays in F-RTO step 2.  Because the next
+   acknowledgment advances the cumulative ACK point (step 9), the sender
+   can transmit two new segments according to SACK-enhanced F-RTO.  The
+   next segment acknowledges new data between 7 and 11 that was not
+   acknowledged earlier (segment 7), so the F-RTO sender declares the
+   timeout spurious.
+

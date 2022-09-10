@@ -1,0 +1,216 @@
+3.  SACK-Enhanced Version of the F-RTO Algorithm
+
+   This section describes an alternative version of the F-RTO algorithm
+   that uses the TCP Selective Acknowledgment Option [MMFR96].  By using
+   the SACK option, the TCP sender detects spurious timeouts in most of
+   the cases when packet reordering or packet duplication is present.
+   If the SACK blocks acknowledge new data that was not transmitted
+   after the RTO retransmission, the sender may declare the timeout
+   spurious, even when duplicate ACKs follow the RTO.
+
+   Given that the TCP Selective Acknowledgment Option [MMFR96] is
+   enabled for a TCP connection, a TCP sender MAY implement the
+   SACK-enhanced F-RTO algorithm.  If the sender applies the
+   SACK-enhanced F-RTO algorithm, it MUST follow the steps below.  This
+   algorithm SHOULD NOT be applied if the TCP sender is already in SACK
+   loss recovery when retransmission timeout occurs.  However, when
+   retransmission timeout occurs during existing loss recovery, it
+   should be possible to apply the principle of F-RTO within certain
+   limitations.  This is a topic for further research.  Appendix B
+   briefly discusses the related issues.
+
+   The steps of the SACK-enhanced version of the F-RTO algorithm are as
+   follows.
+
+   1) When the RTO expires, retransmit the first unacknowledged segment
+      and set SpuriousRecovery to FALSE.  Set variable "recover" to
+      indicate the highest segment transmitted so far.  Following the
+      recommendation in SACK specification [MMFR96], reset the SACK
+      scoreboard.
+
+   2) Wait until the acknowledgment of the data retransmitted due to the
+      timeout arrives at the sender.  If duplicate ACKs arrive before
+      the cumulative acknowledgment for retransmitted data, adjust the
+      scoreboard according to the incoming SACK information.  Stay in
+      step 2 and wait for the next new acknowledgment.  If RTO expires
+      again, go to step 1 of the algorithm.
+
+      a) if a cumulative ACK acknowledges a sequence number equal to
+         "recover", revert to the conventional RTO recovery and set the
+         congestion window to no more than 2 * MSS, like a regular TCP
+         would do.  Do not enter step 3 of this algorithm.
+
+
+
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 8]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+      b) else, if a cumulative ACK acknowledges a sequence number
+         (smaller than "recover", but larger than SND.UNA) transmit up
+         to two new (previously unsent) segments and proceed to step 3.
+         If the TCP sender is not able to transmit any previously unsent
+         data -- either due to receiver window limitation, or because it
+         does not have any new data to send -- the recommended action is
+         to refrain from entering step 3 of this algorithm.  Rather,
+         continue with slow start retransmissions following the
+         conventional RTO recovery algorithm.
+
+         It is also possible to apply some of the alternatives for
+         handling window-limited cases discussed in Appendix C.  In this
+         case, the TCP sender should follow the recommendations
+         concerning acknowledgments of retransmitted segments given in
+         Appendix B.
+
+   3) The next acknowledgment arrives at the sender.  Either a duplicate
+      ACK or a new cumulative ACK (advancing the window) applies in this
+      step.
+
+      a) if the ACK acknowledges a sequence number above "recover",
+         either in SACK blocks or as a cumulative ACK, set the
+         congestion window to no more than 3 * MSS and proceed with the
+         conventional RTO recovery, retransmitting unacknowledged
+         segments.  Take this branch also when the acknowledgment is a
+         duplicate ACK and it does not acknowledge any new, previously
+         unacknowledged data below "recover" in the SACK blocks.  Leave
+         SpuriousRecovery set to FALSE.
+
+      b) if the ACK does not acknowledge sequence numbers above
+         "recover" AND it acknowledges data that was not acknowledged
+         earlier (either with cumulative acknowledgment or using SACK
+         blocks), declare the timeout spurious and set SpuriousRecovery
+         to SPUR_TO.  The retransmission timeout can be declared
+         spurious, because the segment acknowledged with this ACK was
+         transmitted before the timeout.
+
+   If there are unacknowledged holes between the received SACK blocks,
+   those segments are retransmitted similarly to the conventional SACK
+   recovery algorithm [BAFW03].  If the algorithm exits with
+   SpuriousRecovery set to SPUR_TO, "recover" is set to SND.UNA, thus
+   allowing fast recovery on incoming duplicate acknowledgments.
+
+
+
+
+
+
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 9]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+3.  SACK-Enhanced Version of the F-RTO Algorithm
+
+   This section describes an alternative version of the F-RTO algorithm
+   that uses the TCP Selective Acknowledgment Option [MMFR96].  By using
+   the SACK option, the TCP sender detects spurious timeouts in most of
+   the cases when packet reordering or packet duplication is present.
+   If the SACK blocks acknowledge new data that was not transmitted
+   after the RTO retransmission, the sender may declare the timeout
+   spurious, even when duplicate ACKs follow the RTO.
+
+   Given that the TCP Selective Acknowledgment Option [MMFR96] is
+   enabled for a TCP connection, a TCP sender MAY implement the
+   SACK-enhanced F-RTO algorithm.  If the sender applies the
+   SACK-enhanced F-RTO algorithm, it MUST follow the steps below.  This
+   algorithm SHOULD NOT be applied if the TCP sender is already in SACK
+   loss recovery when retransmission timeout occurs.  However, when
+   retransmission timeout occurs during existing loss recovery, it
+   should be possible to apply the principle of F-RTO within certain
+   limitations.  This is a topic for further research.  Appendix B
+   briefly discusses the related issues.
+
+   The steps of the SACK-enhanced version of the F-RTO algorithm are as
+   follows.
+
+   1) When the RTO expires, retransmit the first unacknowledged segment
+      and set SpuriousRecovery to FALSE.  Set variable "recover" to
+      indicate the highest segment transmitted so far.  Following the
+      recommendation in SACK specification [MMFR96], reset the SACK
+      scoreboard.
+
+   2) Wait until the acknowledgment of the data retransmitted due to the
+      timeout arrives at the sender.  If duplicate ACKs arrive before
+      the cumulative acknowledgment for retransmitted data, adjust the
+      scoreboard according to the incoming SACK information.  Stay in
+      step 2 and wait for the next new acknowledgment.  If RTO expires
+      again, go to step 1 of the algorithm.
+
+      a) if a cumulative ACK acknowledges a sequence number equal to
+         "recover", revert to the conventional RTO recovery and set the
+         congestion window to no more than 2 * MSS, like a regular TCP
+         would do.  Do not enter step 3 of this algorithm.
+
+
+
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 8]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+
+      b) else, if a cumulative ACK acknowledges a sequence number
+         (smaller than "recover", but larger than SND.UNA) transmit up
+         to two new (previously unsent) segments and proceed to step 3.
+         If the TCP sender is not able to transmit any previously unsent
+         data -- either due to receiver window limitation, or because it
+         does not have any new data to send -- the recommended action is
+         to refrain from entering step 3 of this algorithm.  Rather,
+         continue with slow start retransmissions following the
+         conventional RTO recovery algorithm.
+
+         It is also possible to apply some of the alternatives for
+         handling window-limited cases discussed in Appendix C.  In this
+         case, the TCP sender should follow the recommendations
+         concerning acknowledgments of retransmitted segments given in
+         Appendix B.
+
+   3) The next acknowledgment arrives at the sender.  Either a duplicate
+      ACK or a new cumulative ACK (advancing the window) applies in this
+      step.
+
+      a) if the ACK acknowledges a sequence number above "recover",
+         either in SACK blocks or as a cumulative ACK, set the
+         congestion window to no more than 3 * MSS and proceed with the
+         conventional RTO recovery, retransmitting unacknowledged
+         segments.  Take this branch also when the acknowledgment is a
+         duplicate ACK and it does not acknowledge any new, previously
+         unacknowledged data below "recover" in the SACK blocks.  Leave
+         SpuriousRecovery set to FALSE.
+
+      b) if the ACK does not acknowledge sequence numbers above
+         "recover" AND it acknowledges data that was not acknowledged
+         earlier (either with cumulative acknowledgment or using SACK
+         blocks), declare the timeout spurious and set SpuriousRecovery
+         to SPUR_TO.  The retransmission timeout can be declared
+         spurious, because the segment acknowledged with this ACK was
+         transmitted before the timeout.
+
+   If there are unacknowledged holes between the received SACK blocks,
+   those segments are retransmitted similarly to the conventional SACK
+   recovery algorithm [BAFW03].  If the algorithm exits with
+   SpuriousRecovery set to SPUR_TO, "recover" is set to SND.UNA, thus
+   allowing fast recovery on incoming duplicate acknowledgments.
+
+
+
+
+
+
+
+
+
+Sarolahti & Kojo              Experimental                      [Page 9]
+
+RFC 4138                  Forward RTO-Recovery               August 2005
+
+

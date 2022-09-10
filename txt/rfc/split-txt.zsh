@@ -22,7 +22,7 @@ while read f; do
 	pushd "$dir"
 	fn=$(basename ${f})
 	awk -f "$awkscript" "$fn"
-	rm "$f"
 	popd
+	rm "$f"
     fi
 done <<<$(find rfcs -mindepth 3 -type f -regextype awk -regex '.*/[^[:digit:]]+[^/]*\.txt')
