@@ -1,5 +1,6 @@
+#!/usr/bin/env zsh
 # vim: sts=-1 sw=4 fdm=marker
-set -x
+# set -x
 
 awkscript="$(pwd)/split-txt.awk"
 
@@ -20,7 +21,7 @@ if ! find | grep -q Abstract; then
 	if [[ "$f" != *rfc0826* ]]; then
 	    dir=$(dirname "$f")
 	    pushd "$dir"
-	    awk -f "$awkscript" "$(basename \"$f\")"
+	    awk -f "$awkscript" "$(basename ${(q)f})"
 	    popd
 	fi
     done <<<$(find rfcs -type f -name '*.txt')
