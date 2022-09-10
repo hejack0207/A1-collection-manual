@@ -1,16 +1,13 @@
 all: rfcs
 
-rfcs: rfcs.tsv
-	./migt.zsh
+rfcs: rfcs.json mig.zsh
+	./mig.zsh
 
-rfcs.json: rfcnums.tsv rfcs.yml
+rfcs.json: rfcnums.tsv rfcs.yml genjson.zsh
 	./genjson.zsh
 
-rfcs.tsv: rfcnums.tsv rfcs.yml
-	./gentsv.zsh
-
-rfcnums.tsv: rfcs
+rfcnums.tsv: rfcnums.zsh
 	./rfcnums.zsh
 
-rfcs.yml: rfc-index.txt
+rfcs.yml: rfc-index.txt titles.awk titles.zsh
 	./titles.zsh
