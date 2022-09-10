@@ -16,7 +16,7 @@ if ! find rfcs -regextype awk -regex '.*/rfc[[:digit:]]+.*' -type d &>/dev/null;
     done <<<$(find "rfcs" -name '*.txt')
 fi
 
-if ! find | grep -q Abstract; then
+if ! find rfcs | grep -q Abstract; then
     while read f; do
 	if [[ "$f" != *rfc0826* ]]; then
 	    dir=$(dirname "$f")
@@ -29,3 +29,8 @@ if ! find | grep -q Abstract; then
     done <<<$(find rfcs -type f -name '*.txt')
 fi
 
+while read f; do
+    if [[ "$f" != *rfc0826* ]]; then
+	print "$f"
+    fi
+done <<<$(find rfcs -regextype awk -regex '^[^[:digit:]]+*.txt')
