@@ -3,6 +3,9 @@ all: rfcs
 rfcs: rfcs.tsv
 	./migt.zsh
 
+rfcs.json: rfcnums.tsv rfcs.yml
+	./genjson.zsh
+
 rfcs.tsv: rfcnums.tsv rfcs.yml
 	./gentsv.zsh
 
