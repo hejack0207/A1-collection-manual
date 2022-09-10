@@ -10,10 +10,10 @@ if ! find rfcs -regextype awk -regex '.*/rfc[[:digit:]]+.*' -type d &>/dev/null;
 	    dir=$(dirname "$f")
 	    subdir=$(basename "$f")
 	    subdir=${subdir%*.txt}
-	    mkdir "$dir/$subdir"
-	    mv "$f" "$dir/$subdir"
+	    test -e "$dir/$subdir" || mkdir "$dir/$subdir"
+	    cp "$f" "$dir/$subdir"
 	fi
-    done <<<$(find "rfcs" -name '*.txt')
+    done <<<$(find "rfcs" -maxdepth 2 -name '*.txt')
 fi
 
 if ! find rfcs | grep -q Abstract; then
@@ -23,21 +23,8 @@ if ! find rfcs | grep -q Abstract; then
 	    pushd "$dir"
 	    fn=$(basename ${f})
 	    awk -f "$awkscript" "$fn"
-	    # test -f "$fn" || { echo "$fn not exists"; echo * }
+	    rm "$f"
 	    popd
 	fi
-    done <<<$(find rfcs -type f -name '*.txt')
+    done <<<$(find rfcs -mindepth 3 -type f -regextype awk -regex '.*/[^[:digit:]]+[^/]*\.txt')
 fi
-
-while read f; do
-    if [[ "$f" != *rfc0826* ]]; then
-	# print "$f"
-	pp=$(dirname $f)
-	fn=$(basename $f)
-	fb=${fn%.txt}
-	if [[ "$(basename $pp)" == "$fb" ]]; then
-	    # echo "$f"
-	    mv "$f" "$pp/.."
-	fi
-    fi
-done <<<$(find rfcs -regextype awk -regex '.*/[^[:digit:]]+[^/]*\.txt')
