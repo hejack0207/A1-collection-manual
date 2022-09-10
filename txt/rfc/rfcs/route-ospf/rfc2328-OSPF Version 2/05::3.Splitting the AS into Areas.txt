@@ -1,0 +1,687 @@
+3.  Splitting the AS into Areas
+
+    OSPF allows collections of contiguous networks and hosts to be
+    grouped together.  Such a group, together with the routers having
+    interfaces to any one of the included networks, is called an area.
+    Each area runs a separate copy of the basic link-state routing
+    algorithm.  This means that each area has its own link-state
+    database and corresponding graph, as explained in the previous
+    section.
+
+    The topology of an area is invisible from the outside of the area.
+    Conversely, routers internal to a given area know nothing of the
+    detailed topology external to the area.  This isolation of knowledge
+    enables the protocol to effect a marked reduction in routing traffic
+    as compared to treating the entire Autonomous System as a single
+    link-state domain.
+
+    With the introduction of areas, it is no longer true that all
+    routers in the AS have an identical link-state database.  A router
+    actually has a separate link-state database for each area it is
+    connected to.  (Routers connected to multiple areas are called area
+    border routers).  Two routers belonging to the same area have, for
+    that area, identical area link-state databases.
+
+    Routing in the Autonomous System takes place on two levels,
+    depending on whether the source and destination of a packet reside
+    in the same area (intra-area routing is used) or different areas
+    (inter-area routing is used).  In intra-area routing, the packet is
+    routed solely on information obtained within the area; no routing
+
+
+
+Moy                         Standards Track                    [Page 26]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    information obtained from outside the area can be used.  This
+    protects intra-area routing from the injection of bad routing
+    information.  We discuss inter-area routing in Section 3.2.
+
+
+    3.1.  The backbone of the Autonomous System
+
+        The OSPF backbone is the special OSPF Area 0 (often written as
+        Area 0.0.0.0, since OSPF Area ID's are typically formatted as IP
+        addresses). The OSPF backbone always contains all area border
+        routers. The backbone is responsible for distributing routing
+        information between non-backbone areas. The backbone must be
+        contiguous. However, it need not be physically contiguous;
+        backbone connectivity can be established/maintained through the
+        configuration of virtual links.
+
+        Virtual links can be configured between any two backbone routers
+        that have an interface to a common non-backbone area.  Virtual
+        links belong to the backbone.  The protocol treats two routers
+        joined by a virtual link as if they were connected by an
+        unnumbered point-to-point backbone network.  On the graph of the
+        backbone, two such routers are joined by arcs whose costs are
+        the intra-area distances between the two routers.  The routing
+        protocol traffic that flows along the virtual link uses intra-
+        area routing only.
+
+
+    3.2.  Inter-area routing
+
+        When routing a packet between two non-backbone areas the
+        backbone is used.  The path that the packet will travel can be
+        broken up into three contiguous pieces: an intra-area path from
+        the source to an area border router, a backbone path between the
+        source and destination areas, and then another intra-area path
+        to the destination.  The algorithm finds the set of such paths
+        that have the smallest cost.
+
+        Looking at this another way, inter-area routing can be pictured
+        as forcing a star configuration on the Autonomous System, with
+        the backbone as hub and each of the non-backbone areas as
+        spokes.
+
+
+
+
+Moy                         Standards Track                    [Page 27]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        The topology of the backbone dictates the backbone paths used
+        between areas.  The topology of the backbone can be enhanced by
+        adding virtual links.  This gives the system administrator some
+        control over the routes taken by inter-area traffic.
+
+        The correct area border router to use as the packet exits the
+        source area is chosen in exactly the same way routers
+        advertising external routes are chosen.  Each area border router
+        in an area summarizes for the area its cost to all networks
+        external to the area.  After the SPF tree is calculated for the
+        area, routes to all inter-area destinations are calculated by
+        examining the summaries of the area border routers.
+
+
+    3.3.  Classification of routers
+
+        Before the introduction of areas, the only OSPF routers having a
+        specialized function were those advertising external routing
+        information, such as Router RT5 in Figure 2.  When the AS is
+        split into OSPF areas, the routers are further divided according
+        to function into the following four overlapping categories:
+
+
+        Internal routers
+            A router with all directly connected networks belonging to
+            the same area. These routers run a single copy of the basic
+            routing algorithm.
+
+        Area border routers
+            A router that attaches to multiple areas.  Area border
+            routers run multiple copies of the basic algorithm, one copy
+            for each attached area. Area border routers condense the
+            topological information of their attached areas for
+            distribution to the backbone.  The backbone in turn
+            distributes the information to the other areas.
+
+        Backbone routers
+            A router that has an interface to the backbone area.  This
+            includes all routers that interface to more than one area
+            (i.e., area border routers).  However, backbone routers do
+            not have to be area border routers.  Routers with all
+            interfaces connecting to the backbone area are supported.
+
+
+
+Moy                         Standards Track                    [Page 28]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        AS boundary routers
+            A router that exchanges routing information with routers
+            belonging to other Autonomous Systems.  Such a router
+            advertises AS external routing information throughout the
+            Autonomous System.  The paths to each AS boundary router are
+            known by every router in the AS.  This classification is
+            completely independent of the previous classifications: AS
+            boundary routers may be internal or area border routers, and
+            may or may not participate in the backbone.
+
+
+    3.4.  A sample area configuration
+
+        Figure 6 shows a sample area configuration.  The first area
+        consists of networks N1-N4, along with their attached routers
+        RT1-RT4.  The second area consists of networks N6-N8, along with
+        their attached routers RT7, RT8, RT10 and RT11.  The third area
+        consists of networks N9-N11 and Host H1, along with their
+        attached routers RT9, RT11 and RT12.  The third area has been
+        configured so that networks N9-N11 and Host H1 will all be
+        grouped into a single route, when advertised external to the
+        area (see Section 3.5 for more details).
+
+        In Figure 6, Routers RT1, RT2, RT5, RT6, RT8, RT9 and RT12 are
+        internal routers.  Routers RT3, RT4, RT7, RT10 and RT11 are area
+        border routers.  Finally, as before, Routers RT5 and RT7 are AS
+        boundary routers.
+
+        Figure 7 shows the resulting link-state database for the Area 1.
+        The figure completely describes that area's intra-area routing.
+        It also shows the complete view of the internet for the two
+        internal routers RT1 and RT2.  It is the job of the area border
+        routers, RT3 and RT4, to advertise into Area 1 the distances to
+        all destinations external to the area.  These are indicated in
+        Figure 7 by the dashed stub routes.  Also, RT3 and RT4 must
+        advertise into Area 1 the location of the AS boundary routers
+        RT5 and RT7.  Finally, AS-external-LSAs from RT5 and RT7 are
+        flooded throughout the entire AS, and in particular throughout
+        Area 1.  These LSAs are included in Area 1's database, and yield
+        routes to Networks N12-N15.
+
+        Routers RT3 and RT4 must also summarize Area 1's topology for
+
+
+
+Moy                         Standards Track                    [Page 29]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+             ...........................
+             .   +                     .
+             .   | 3+---+              .      N12      N14
+             . N1|--|RT1|\ 1           .        \ N13 /
+             .   |  +---+ \            .        8\ |8/8
+             .   +         \ ____      .          \|/
+             .              /    \   1+---+8    8+---+6
+             .             *  N3  *---|RT4|------|RT5|--------+
+             .              \____/    +---+      +---+        |
+             .    +         /      \   .           |7         |
+             .    | 3+---+ /        \  .           |          |
+             .  N2|--|RT2|/1        1\ .           |6         |
+             .    |  +---+            +---+8    6+---+        |
+             .    +                   |RT3|------|RT6|        |
+             .                        +---+      +---+        |
+             .                      2/ .         Ia|7         |
+             .                      /  .           |          |
+             .             +---------+ .           |          |
+             .Area 1           N4      .           |          |
+             ...........................           |          |
+          ..........................               |          |
+          .            N11         .               |          |
+          .        +---------+     .               |          |
+          .             |          .               |          |    N12
+          .             |3         .             Ib|5         |6 2/
+          .           +---+        .             +----+     +---+/
+          .           |RT9|        .    .........|RT10|.....|RT7|---N15.
+          .           +---+        .    .        +----+     +---+ 9    .
+          .             |1         .    .    +  /3    1\      |1       .
+          .            _|__        .    .    | /        \   __|_       .
+          .           /    \      1+----+2   |/          \ /    \      .
+          .          *  N9  *------|RT11|----|            *  N6  *     .
+          .           \____/       +----+    |             \____/      .
+          .             |          .    .    |                |        .
+          .             |1         .    .    +                |1       .
+          .  +--+   10+----+       .    .   N8              +---+      .
+          .  |H1|-----|RT12|       .    .                   |RT8|      .
+          .  +--+SLIP +----+       .    .                   +---+      .
+          .             |2         .    .                     |4       .
+          .             |          .    .                     |        .
+          .        +---------+     .    .                 +--------+   .
+
+
+
+Moy                         Standards Track                    [Page 30]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+          .            N10         .    .                     N7       .
+          .                        .    .Area 2                        .
+          .Area 3                  .    ................................
+          ..........................
+
+                    Figure 6: A sample OSPF area configuration
+
+        distribution to the backbone.  Their backbone LSAs are shown in
+        Table 4.  These summaries show which networks are contained in
+        Area 1 (i.e., Networks N1-N4), and the distance to these
+        networks from the routers RT3 and RT4 respectively.
+
+
+        The link-state database for the backbone is shown in Figure 8.
+        The set of routers pictured are the backbone routers.  Router
+        RT11 is a backbone router because it belongs to two areas.  In
+        order to make the backbone connected, a virtual link has been
+        configured between Routers R10 and R11.
+
+        The area border routers RT3, RT4, RT7, RT10 and RT11 condense
+        the routing information of their attached non-backbone areas for
+        distribution via the backbone; these are the dashed stubs that
+        appear in Figure 8.  Remember that the third area has been
+        configured to condense Networks N9-N11 and Host H1 into a single
+        route.  This yields a single dashed line for networks N9-N11 and
+        Host H1 in Figure 8.  Routers RT5 and RT7 are AS boundary
+        routers; their externally derived information also appears on
+        the graph in Figure 8 as stubs.
+
+
+
+                     Network   RT3 adv.   RT4 adv.
+                     _____________________________
+                     N1        4          4
+                     N2        4          4
+                     N3        1          1
+                     N4        2          3
+
+              Table 4: Networks advertised to the backbone
+                        by Routers RT3 and RT4.
+
+
+
+
+
+Moy                         Standards Track                    [Page 31]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+                               **FROM**
+
+                          |RT|RT|RT|RT|RT|RT|
+                          |1 |2 |3 |4 |5 |7 |N3|
+                       ----- -------------------
+                       RT1|  |  |  |  |  |  |0 |
+                       RT2|  |  |  |  |  |  |0 |
+                       RT3|  |  |  |  |  |  |0 |
+                   *   RT4|  |  |  |  |  |  |0 |
+                   *   RT5|  |  |14|8 |  |  |  |
+                   T   RT7|  |  |20|14|  |  |  |
+                   O    N1|3 |  |  |  |  |  |  |
+                   *    N2|  |3 |  |  |  |  |  |
+                   *    N3|1 |1 |1 |1 |  |  |  |
+                        N4|  |  |2 |  |  |  |  |
+                     Ia,Ib|  |  |20|27|  |  |  |
+                        N6|  |  |16|15|  |  |  |
+                        N7|  |  |20|19|  |  |  |
+                        N8|  |  |18|18|  |  |  |
+                 N9-N11,H1|  |  |29|36|  |  |  |
+                       N12|  |  |  |  |8 |2 |  |
+                       N13|  |  |  |  |8 |  |  |
+                       N14|  |  |  |  |8 |  |  |
+                       N15|  |  |  |  |  |9 |  |
+
+                      Figure 7: Area 1's Database.
+
+              Networks and routers are represented by vertices.
+              An edge of cost X connects Vertex A to Vertex B iff
+              the intersection of Column A and Row B is marked
+                               with an X.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Moy                         Standards Track                    [Page 32]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+                                  **FROM**
+
+                            |RT|RT|RT|RT|RT|RT|RT
+                            |3 |4 |5 |6 |7 |10|11|
+                         ------------------------
+                         RT3|  |  |  |6 |  |  |  |
+                         RT4|  |  |8 |  |  |  |  |
+                         RT5|  |8 |  |6 |6 |  |  |
+                         RT6|8 |  |7 |  |  |5 |  |
+                         RT7|  |  |6 |  |  |  |  |
+                     *  RT10|  |  |  |7 |  |  |2 |
+                     *  RT11|  |  |  |  |  |3 |  |
+                     T    N1|4 |4 |  |  |  |  |  |
+                     O    N2|4 |4 |  |  |  |  |  |
+                     *    N3|1 |1 |  |  |  |  |  |
+                     *    N4|2 |3 |  |  |  |  |  |
+                          Ia|  |  |  |  |  |5 |  |
+                          Ib|  |  |  |7 |  |  |  |
+                          N6|  |  |  |  |1 |1 |3 |
+                          N7|  |  |  |  |5 |5 |7 |
+                          N8|  |  |  |  |4 |3 |2 |
+                   N9-N11,H1|  |  |  |  |  |  |11|
+                         N12|  |  |8 |  |2 |  |  |
+                         N13|  |  |8 |  |  |  |  |
+                         N14|  |  |8 |  |  |  |  |
+                         N15|  |  |  |  |9 |  |  |
+
+
+                     Figure 8: The backbone's database.
+
+              Networks and routers are represented by vertices.
+              An edge of cost X connects Vertex A to Vertex B iff
+              the intersection of Column A and Row B is marked
+                                 with an X.
+
+        The backbone enables the exchange of summary information between
+        area border routers.  Every area border router hears the area
+        summaries from all other area border routers.  It then forms a
+        picture of the distance to all networks outside of its area by
+        examining the collected LSAs, and adding in the backbone
+        distance to each advertising router.
+
+
+
+
+Moy                         Standards Track                    [Page 33]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        Again using Routers RT3 and RT4 as an example, the procedure
+        goes as follows: They first calculate the SPF tree for the
+        backbone.  This gives the distances to all other area border
+        routers.  Also noted are the distances to networks (Ia and Ib)
+        and AS boundary routers (RT5 and RT7) that belong to the
+        backbone.  This calculation is shown in Table 5.
+
+
+        Next, by looking at the area summaries from these area border
+        routers, RT3 and RT4 can determine the distance to all networks
+        outside their area.  These distances are then advertised
+        internally to the area by RT3 and RT4.  The advertisements that
+        Router RT3 and RT4 will make into Area 1 are shown in Table 6.
+        Note that Table 6 assumes that an area range has been configured
+        for the backbone which groups Ia and Ib into a single LSA.
+
+
+        The information imported into Area 1 by Routers RT3 and RT4
+        enables an internal router, such as RT1, to choose an area
+        border router intelligently.  Router RT1 would use RT4 for
+        traffic to Network N6, RT3 for traffic to Network N10, and would
+
+
+                              dist  from   dist  from
+                              RT3          RT4
+                   __________________________________
+                   to  RT3    *            21
+                   to  RT4    22           *
+                   to  RT7    20           14
+                   to  RT10   15           22
+                   to  RT11   18           25
+                   __________________________________
+                   to  Ia     20           27
+                   to  Ib     15           22
+                   __________________________________
+                   to  RT5    14           8
+                   to  RT7    20           14
+
+                 Table 5: Backbone distances calculated
+                        by Routers RT3 and RT4.
+
+
+
+
+
+Moy                         Standards Track                    [Page 34]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+
+                   Destination   RT3 adv.   RT4 adv.
+                   _________________________________
+                   Ia,Ib         20         27
+                   N6            16         15
+                   N7            20         19
+                   N8            18         18
+                   N9-N11,H1     29         36
+                   _________________________________
+                   RT5           14         8
+                   RT7           20         14
+
+              Table 6: Destinations advertised into Area 1
+                        by Routers RT3 and RT4.
+
+        load share between the two for traffic to Network N8.
+
+        Router RT1 can also determine in this manner the shortest path
+        to the AS boundary routers RT5 and RT7.  Then, by looking at RT5
+        and RT7's AS-external-LSAs, Router RT1 can decide between RT5 or
+        RT7 when sending to a destination in another Autonomous System
+        (one of the networks N12-N15).
+
+        Note that a failure of the line between Routers RT6 and RT10
+        will cause the backbone to become disconnected.  Configuring a
+        virtual link between Routers RT7 and RT10 will give the backbone
+        more connectivity and more resistance to such failures.
+
+
+    3.5.  IP subnetting support
+
+        OSPF attaches an IP address mask to each advertised route.  The
+        mask indicates the range of addresses being described by the
+        particular route.  For example, a summary-LSA for the
+        destination 128.185.0.0 with a mask of 0xffff0000 actually is
+        describing a single route to the collection of destinations
+        128.185.0.0 - 128.185.255.255.  Similarly, host routes are
+        always advertised with a mask of 0xffffffff, indicating the
+        presence of only a single destination.
+
+
+
+
+
+Moy                         Standards Track                    [Page 35]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        Including the mask with each advertised destination enables the
+        implementation of what is commonly referred to as variable-
+        length subnetting.  This means that a single IP class A, B, or C
+        network number can be broken up into many subnets of various
+        sizes.  For example, the network 128.185.0.0 could be broken up
+        into 62 variable-sized subnets: 15 subnets of size 4K, 15
+        subnets of size 256, and 32 subnets of size 8.  Table 7 shows
+        some of the resulting network addresses together with their
+        masks.
+
+
+
+                  Network address   IP address mask   Subnet size
+                  _______________________________________________
+                  128.185.16.0      0xfffff000        4K
+                  128.185.1.0       0xffffff00        256
+                  128.185.0.8       0xfffffff8        8
+
+
+                         Table 7: Some sample subnet sizes.
+
+
+        There are many possible ways of dividing up a class A, B, and C
+        network into variable sized subnets.  The precise procedure for
+        doing so is beyond the scope of this specification.  This
+        specification however establishes the following guideline: When
+        an IP packet is forwarded, it is always forwarded to the network
+        that is the best match for the packet's destination.  Here best
+        match is synonymous with the longest or most specific match.
+        For example, the default route with destination of 0.0.0.0 and
+        mask 0x00000000 is always a match for every IP destination.  Yet
+        it is always less specific than any other match.  Subnet masks
+        must be assigned so that the best match for any IP destination
+        is unambiguous.
+
+        Attaching an address mask to each route also enables the support
+        of IP supernetting. For example, a single physical network
+        segment could be assigned the [address,mask] pair
+        [192.9.4.0,0xfffffc00]. The segment would then be single IP
+        network, containing addresses from the four consecutive class C
+        network numbers 192.9.4.0 through 192.9.7.0. Such addressing is
+        now becoming commonplace with the advent of CIDR (see [Ref10]).
+
+
+
+Moy                         Standards Track                    [Page 36]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        In order to get better aggregation at area boundaries, area
+        address ranges can be employed (see Section C.2 for more
+        details).  Each address range is defined as an [address,mask]
+        pair.  Many separate networks may then be contained in a single
+        address range, just as a subnetted network is composed of many
+        separate subnets.  Area border routers then summarize the area
+        contents (for distribution to the backbone) by advertising a
+        single route for each address range.  The cost of the route is
+        the maximum cost to any of the networks falling in the specified
+        range.
+
+        For example, an IP subnetted network might be configured as a
+        single OSPF area.  In that case, a single address range could be
+        configured:  a class A, B, or C network number along with its
+        natural IP mask.  Inside the area, any number of variable sized
+        subnets could be defined.  However, external to the area a
+        single route for the entire subnetted network would be
+        distributed, hiding even the fact that the network is subnetted
+        at all.  The cost of this route is the maximum of the set of
+        costs to the component subnets.
+
+
+    3.6.  Supporting stub areas
+
+        In some Autonomous Systems, the majority of the link-state
+        database may consist of AS-external-LSAs.  An OSPF AS-external-
+        LSA is usually flooded throughout the entire AS.  However, OSPF
+        allows certain areas to be configured as "stub areas".  AS-
+        external-LSAs are not flooded into/throughout stub areas;
+        routing to AS external destinations in these areas is based on a
+        (per-area) default only.  This reduces the link-state database
+        size, and therefore the memory requirements, for a stub area's
+        internal routers.
+
+        In order to take advantage of the OSPF stub area support,
+        default routing must be used in the stub area.  This is
+        accomplished as follows.  One or more of the stub area's area
+        border routers must advertise a default route into the stub area
+        via summary-LSAs.  These summary defaults are flooded throughout
+        the stub area, but no further.  (For this reason these defaults
+        pertain only to the particular stub area).  These summary
+        default routes will be used for any destination that is not
+
+
+
+Moy                         Standards Track                    [Page 37]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        explicitly reachable by an intra-area or inter-area path (i.e.,
+        AS external destinations).
+
+        An area can be configured as a stub when there is a single exit
+        point from the area, or when the choice of exit point need not
+        be made on a per-external-destination basis.  For example, Area
+        3 in Figure 6 could be configured as a stub area, because all
+        external traffic must travel though its single area border
+        router RT11.  If Area 3 were configured as a stub, Router RT11
+        would advertise a default route for distribution inside Area 3
+        (in a summary-LSA), instead of flooding the AS-external-LSAs for
+        Networks N12-N15 into/throughout the area.
+
+        The OSPF protocol ensures that all routers belonging to an area
+        agree on whether the area has been configured as a stub.  This
+        guarantees that no confusion will arise in the flooding of AS-
+        external-LSAs.
+
+        There are a couple of restrictions on the use of stub areas.
+        Virtual links cannot be configured through stub areas.  In
+        addition, AS boundary routers cannot be placed internal to stub
+        areas.
+
+
+    3.7.  Partitions of areas
+
+        OSPF does not actively attempt to repair area partitions.  When
+        an area becomes partitioned, each component simply becomes a
+        separate area.  The backbone then performs routing between the
+        new areas.  Some destinations reachable via intra-area routing
+        before the partition will now require inter-area routing.
+
+        However, in order to maintain full routing after the partition,
+        an address range must not be split across multiple components of
+        the area partition. Also, the backbone itself must not
+        partition.  If it does, parts of the Autonomous System will
+        become unreachable.  Backbone partitions can be repaired by
+        configuring virtual links (see Section 15).
+
+        Another way to think about area partitions is to look at the
+        Autonomous System graph that was introduced in Section 2.  Area
+        IDs can be viewed as colors for the graph's edges.[1] Each edge
+
+
+
+Moy                         Standards Track                    [Page 38]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        of the graph connects to a network, or is itself a point-to-
+        point network.  In either case, the edge is colored with the
+        network's Area ID.
+
+        A group of edges, all having the same color, and interconnected
+        by vertices, represents an area.  If the topology of the
+        Autonomous System is intact, the graph will have several regions
+        of color, each color being a distinct Area ID.
+
+        When the AS topology changes, one of the areas may become
+        partitioned.  The graph of the AS will then have multiple
+        regions of the same color (Area ID).  The routing in the
+        Autonomous System will continue to function as long as these
+        regions of same color are connected by the single backbone
+        region.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Moy                         Standards Track                    [Page 39]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+

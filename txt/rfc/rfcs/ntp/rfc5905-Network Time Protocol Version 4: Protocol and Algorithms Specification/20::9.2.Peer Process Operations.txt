@@ -1,0 +1,243 @@
+9.2.  Peer Process Operations
+
+   The receive routine defines the process flow upon the arrival of a
+   packet.  An example is described by the receive() routine in
+   Appendix A.5.1.  There is no specific method required for access
+   control, although it is recommended that implementations include such
+   a scheme, which is similar to many others now in widespread use.  The
+   access() routine in Appendix A.5.4 describes a method of implementing
+   access restrictions using an access control list (ACL).  Format
+   checks require correct field length and alignment, acceptable version
+   number (1-4), and correct extension field syntax, if present.
+
+   There is no specific requirement for authentication; however, if
+   authentication is implemented, then the MD5-keyed hash algorithm
+   described in [RFC1321] must be supported.
+
+   Next, the association table is searched for matching source address
+   and source port, for example, using the find_assoc() routine in
+   Appendix A.5.1.  Figure 20 is a dispatch table where the columns
+   correspond to the packet mode and rows correspond to the association
+   mode.  The intersection of the association and packet modes
+   dispatches processing to one of the following steps.
+
+           +------------------+---------------------------------------+
+           |                  |              Packet Mode              |
+           +------------------+-------+-------+-------+-------+-------+
+           | Association Mode |   1   |   2   |   3   |   4   |   5   |
+           +------------------+-------+-------+-------+-------+-------+
+           | No Association 0 | NEWPS | DSCRD | FXMIT | MANY  | NEWBC |
+           | Symm. Active   1 | PROC  | PROC  | DSCRD | DSCRD | DSCRD |
+           | Symm. Passive  2 | PROC  | ERR   | DSCRD | DSCRD | DSCRD |
+           | Client         3 | DSCRD | DSCRD | DSCRD | PROC  | DSCRD |
+           | Server         4 | DSCRD | DSCRD | DSCRD | DSCRD | DSCRD |
+           | Broadcast      5 | DSCRD | DSCRD | DSCRD | DSCRD | DSCRD |
+           | Bcast Client   6 | DSCRD | DSCRD | DSCRD | DSCRD | PROC  |
+           +------------------+-------+-------+-------+-------+-------+
+
+                      Figure 20: Peer Dispatch Table
+
+   DSCRD.  This indicates a non-fatal violation of protocol as the
+   result of a programming error, long-delayed packet, or replayed
+   packet.  The peer process discards the packet and exits.
+
+
+
+
+Mills, et al.                Standards Track                   [Page 33]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   ERR.  This indicates a fatal violation of protocol as the result of a
+   programming error, long-delayed packet, or replayed packet.  The peer
+   process discards the packet, demobilizes the symmetric passive
+   association, and exits.
+
+   FXMIT.  This indicates a client (mode 3) packet matching no
+   association (mode 0).  If the destination address is not a broadcast
+   address, the server constructs a server (mode 4) packet and returns
+   it to the client without retaining state.  The server packet header
+   is constructed.  An example is described by the fast_xmit() routine
+   in Appendix A.5.3.  The packet header is assembled from the receive
+   packet and system variables as shown in Figure 21.  If the
+   s.rootdelay and s.rootdisp system variables are stored in floating
+   double, they must be converted to NTP short format first.
+
+                   +-----------------------------------+
+                   | Packet Variable -->   Variable    |
+                   +-----------------------------------+
+                   | r.leap        -->     p.leap      |
+                   | r.mode        -->     p.mode      |
+                   | r.stratum     -->     p.stratum   |
+                   | r.poll        -->     p.ppoll     |
+                   | r.rootdelay   -->     p.rootdelay |
+                   | r.rootdisp    -->     p.rootdisp  |
+                   | r.refid       -->     p.refid     |
+                   | r.reftime     -->     p.reftime   |
+                   | r.keyid       -->     p.keyid     |
+                   +-----------------------------------+
+
+                     Figure 21: Receive Packet Header
+
+   Note that, if authentication fails, the server returns a special
+   message called a crypto-NAK.  This message includes the normal NTP
+   header data shown in Figure 8, but with a MAC consisting of four
+   octets of zeros.  The client MAY accept or reject the data in the
+   message.  After these actions, the peer process exits.
+
+   If the destination address is a multicast address, the sender is
+   operating in manycast client mode.  If the packet is valid and the
+   server stratum is less than the client stratum, the server sends an
+   ordinary server (mode 4) packet, but one which uses its unicast
+   destination address.  A crypto-NAK is not sent if authentication
+   fails.  After these actions, the peer process exits.
+
+   MANY: This indicates a server (mode 4) packet matching no
+   association.  Ordinarily, this can happen only as the result of a
+   manycast server reply to a previously sent multicast client packet.
+
+
+
+
+Mills, et al.                Standards Track                   [Page 34]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   If the packet is valid, an ordinary client (mode 3) association is
+   mobilized and operation continues as if the association was mobilized
+   by the configuration file.
+
+   NEWBC.  This indicates a broadcast (mode 5) packet matching no
+   association.  The client mobilizes either a client (mode 3) or
+   broadcast client (mode 6) association.  Examples are shown in the
+   mobilize() and clear() routines in Appendix A.2.  Then, the packet is
+   validated and the peer variables initialized.  An example is provided
+   by the packet() routine in Appendix A.5.1.1.
+
+   If the implementation supports no additional security or calibration
+   functions, the association mode is set to broadcast client (mode 6)
+   and the peer process exits.  Implementations supporting public key
+   authentication MAY run the Autokey or equivalent security protocol.
+   Implementations SHOULD set the association mode to 3 and run a short
+   client/server exchange to determine the propagation delay.  Following
+   the exchange, the association mode is set to 6 and the peer process
+   continues in listen-only mode.  Note the distinction between a mode-6
+   packet, which is reserved for the NTP monitor and control functions,
+   and a mode-6 association.
+
+   NEWPS.  This indicates a symmetric active (mode 1) packet matching no
+   association.  The client mobilizes a symmetric passive (mode 2)
+   association.  An example is shown in the mobilize() and clear()
+   routines in Appendix A.2.  Processing continues in the PROC section
+   below.
+
+   PROC.  This indicates a packet matching an existing association.  The
+   packet timestamps are carefully checked to avoid invalid, duplicate,
+   or bogus packets.  Additional checks are summarized in Figure 22.
+   Note that all packets, including a crypto-NAK, are considered valid
+   only if they survive these tests.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 35]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   +--------------------------+----------------------------------------+
+   | Packet Type              | Description                            |
+   +--------------------------+----------------------------------------+
+   | 1 duplicate packet       | The packet is at best an old duplicate |
+   |                          | or at worst a replay by a hacker.      |
+   |                          | This can happen in symmetric modes if  |
+   |                          | the poll intervals are uneven.         |
+   | 2 bogus packet           |                                        |
+   | 3 invalid                | One or more timestamp fields are       |
+   |                          | invalid. This normally happens in      |
+   |                          | symmetric modes when one peer sends    |
+   |                          | the first packet to the other and      |
+   |                          | before the other has received its      |
+   |                          | first reply.                           |
+   | 4 access denied          | The access controls have blacklisted   |
+   |                          | the source.                            |
+   | 5 authentication failure | The cryptographic message digest does  |
+   |                          | not match the MAC.                     |
+   | 6 unsynchronized         | The server is not synchronized to a    |
+   |                          | valid source.                          |
+   | 7 bad header data        | One or more header fields are invalid. |
+   +--------------------------+----------------------------------------+
+
+                      Figure 22: Packet Error Checks
+
+   Processing continues by copying the packet variables to the peer
+   variables as shown in Figure 21.  An example is described by the
+   packet() routine in Appendix A.5.1.1.  The receive() routine
+   implements tests 1-5 in Figure 22; the packet() routine implements
+   tests 6-7.  If errors are found, the packet is discarded and the peer
+   process exits.
+
+   The on-wire protocol calculates the clock offset theta and round-trip
+   delay delta from the four most recent timestamps as described in
+   Section 8.  While it is, in principle, possible to do all
+   calculations except the first-order timestamp differences in fixed-
+   point arithmetic, it is much easier to convert the first-order
+   differences to floating doubles and do the remaining calculations in
+   that arithmetic, and this will be assumed in the following
+   description.
+
+   Next, the 8-bit p.reach shift register in the poll process described
+   in Section 13 is used to determine whether the server is reachable
+   and the data are fresh.  The register is shifted left by one bit when
+   a packet is sent and the rightmost bit is set to zero.  As valid
+   packets arrive, the rightmost bit is set to one.  If the register
+   contains any nonzero bits, the server is considered reachable;
+   otherwise, it is unreachable.  Since the peer poll interval might
+
+
+
+Mills, et al.                Standards Track                   [Page 36]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   have changed since the last packet, the host poll interval is
+   reviewed.  An example is provided by the poll_update() routine in
+   Appendix A.5.7.2.
+
+   The dispersion statistic epsilon(t) represents the maximum error due
+   to the frequency tolerance and time since the last packet was sent.
+   It is initialized
+
+   epsilon(t_0) = r.rho + s.rho + PHI * (T4-T1)
+
+   when the measurement is made at t_0 according to the seconds counter.
+   Here, r.rho is the packet precision described in Section 7.3 and
+   s.rho is the system precision described in Section 11.1, both
+   expressed in seconds.  These terms are necessary to account for the
+   uncertainty in reading the system clock in both the server and the
+   client.
+
+   The dispersion then grows at constant rate PHI; in other words, at
+   time t, epsilon(t) = epsilon(t_0) + PHI * (t-t_0).  With the default
+   value PHI = 15 ppm, this amounts to about 1.3 s per day.  With this
+   understanding, the argument t will be dropped and the dispersion
+   represented simply as epsilon.  The remaining statistics are computed
+   by the clock filter algorithm described in the next section.
+

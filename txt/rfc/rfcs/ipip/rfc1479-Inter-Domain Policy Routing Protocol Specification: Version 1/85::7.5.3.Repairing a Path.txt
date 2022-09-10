@@ -1,0 +1,135 @@
+7.5.3.  Repairing a Path
+
+   When an IDPR entity detects through an ERROR message that the next
+   policy gateway has no knowledge of a given path, it generates a
+   REPAIR message and forwards it to the next policy gateway.  This
+   REPAIR message will reestablish the path through the next policy
+   gateway.
+
+   When an entity detects that the next policy gateway on a path is no
+   longer reachable, it takes one of the following actions, depending
+   upon whether the entity is a member of the next policy gateway's
+   virtual gateway.
+
+   - If the entity is not a member of the next policy gateway's virtual
+     gateway, then one of the following two conditions must be true:
+
+      o The next policy gateway has a peer that is reachable via an
+        intra-domain route consistent with the requested services.  In
+        this case, the entity generates a REPAIR message containing the
+        original SETUP message and forwards it to the next policy
+        gateway's peer.
+
+      o The next policy gateway has no peers that are reachable via
+        intra-domain routes consistent with the requested services.  In
+        this case, the entity tears down the path back to the
+        originator.
+
+   - If the entity is a member of the next policy gateway's virtual
+
+
+
+Steenstrup                                                     [Page 98]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   gateway, then one of the following four conditions must be true:
+
+      o The next policy gateway has a peer that belongs to the same
+        domain component and is directly-connected to and reachable from
+        the entity.  In this case, the entity generates a REPAIR message
+        and forwards it to the next policy gateway's peer.
+
+      o The next policy gateway has a peer that belongs to the same
+        domain component, is not directly-connected to the entity, but
+        is directly-connected to and reachable from one of the entity's
+        peers, which in turn is reachable from the entity via an intra-
+        domain route consistent with the requested services.  In this
+        case, the entity generates a REPAIR message and forwards it to
+        its peer.
+
+      o The next policy gateway has no operational peers within its
+        domain component, but is directly-connected to and reachable
+        from one of the entity's peers, which in turn is reachable from
+        the entity via an intra-domain route consistent with the
+        requested services.  In this case, the entity generates a REPAIR
+        message and forwards it to its peer.
+
+      o The next policy gateway has no operational peers within its
+        domain component, and the entity has no operational peers which
+        are both reachable via intra-domain routes consistent with the
+        requested services and directly-connected to and reachable from
+        the next policy gateway.  In this case, the entity tears down
+        the path back to the originator.
+
+   A recipient of a REPAIR message takes the following steps, depending
+   upon its relationship to the entity that issued the REPAIR message.
+
+   - The recipient and the issuing entity are in the same domain or in
+     same virtual gateway.  In this case, the recipient extracts the
+     SETUP message contained within the REPAIR message and treats the
+     message as it would any other SETUP message.  Specifically, the
+     recipient checks consistency of the path with its domain's transit
+     policies and virtual gateway reachability.  If there are
+     unrecognized portions of the SETUP message, the recipient generates
+     an ERROR message, and if there are path inconsistencies, the
+     recipient generates a REFUSE message.  In either case, the
+     recipient returns the corresponding message to the policy gateway
+     from which it received the REPAIR message.  Otherwise, if the
+     recipient accepts the REPAIR message, it updates its local
+     forwarding information database accordingly and forwards the REPAIR
+     message to a potential next policy gateway, according to the
+     information contained in the enclosed SETUP message.
+
+
+
+
+Steenstrup                                                     [Page 99]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   - The recipient and the issuing entity are in different domains and
+     different virtual gateways.  In this case, the recipient extracts
+     the SETUP message from the REPAIR message and determines whether
+     the associated path matches any of its established paths.  If the
+     path does not match an established path, the recipient generates a
+     REFUSE message and returns it to the policy gateway from which it
+     received the REPAIR message.  In response to the receipt of a
+     REFUSE message, the policy gateway tries a different next policy
+     gateway.
+
+   The path is reparable, if a path match is discovered.  In this case,
+   the recipient updates the path entry in the local forwarding
+   information database and issues an ACCEPT message to the policy
+   gateway from which it received the REPAIR message, which in turn
+   returns the message to the entity that issued the REPAIR message.
+   The path is irreparable if all potential next policy gateways have
+   been exhausted and a path match has yet to be discovered.  In this
+   case, the policy gateway that fails to locate a next policy gateway
+   issues a TEARDOWN message to return to the originator.
+
+   An IDPR entity expects to receive an ACCEPT, TEARDOWN, REFUSE, or
+   ERROR message in response to a REPAIR message and reacts to these
+   responses differently as follows:
+
+   - The entity always returns a TEARDOWN message to the originator via
+     previous policy gateway.
+
+   - The entity does not return an ACCEPT message to the originator, but
+     receipt of such a message indicates that the path has been
+     successfully repaired.
+
+   - The entity infers that the path is irreparable and subsequently
+     tears down the path and logs the event for network management, upon
+     receipt of a REFUSE or ERROR message or when no response to the
+     REPAIR message arrives within setup_int microseconds.
+
+   When an entity detects that the previous policy gateway on a path
+   becomes unreachable, it expects to receive a REPAIR message within
+   setup_wait microseconds.  If the entity does not receive a REPAIR
+   message for the path within that time, it infers that the path is
+   irreparable and subsequently tears down the path and logs the event
+   for network management.
+

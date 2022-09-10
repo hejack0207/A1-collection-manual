@@ -1,0 +1,87 @@
+5.1.  Uniform Phase Adjustments
+
+   Left uncorrected, the logical clock runs at the rate of its intrinsic
+   oscillator.  A correction is introduced as a signed 32-bit integer in
+   milliseconds, which is added to the Drift-Compensation Register and
+   also replaces bits 0-15 of the Clock-Adjust Register, with bits 16-31
+   set to zero.  At adjustment intervals of CLOCK.ADJ a correction
+   consisting of two components is computed.  The first (phase)
+   component consists of the Clock-Adjust Register shifted right
+   CLOCK.PHASE bits, which is then subtracted from the Clock-Adjust
+   Register.  The second (frequency) component consists of the Drift-
+   Compensation Register shifted right CLOCK.FREQ bits.  The sum of the
+   phase and frequency components is the correction, which is then added
+   to the Clock Register.  Operation continues in this way until a new
+   correction is introduced.
+
+   Care is required in the implementation to insure monotonicity of the
+   Clock Register and to preserve the highest precision while minimizing
+   the propagation of roundoff errors.  This can be done by buffering
+   the corrections and adding them to the increment at the time the
+   Clock Register is next updated.  Monotonicity is insured with the
+   parameters shown in Table 5.1, as long as the increment is at least 2
+   ms.  This table shows the above parameters and others discussed below
+   for both a crystal-stabilized oscillator and a mains-frequency
+   oscillator.
+
+   Parameter               Name            Crystal         Mains
+   -------------------------------------------------------------------
+   Update Interval         CLOCK.ADJ       4 sec           1 sec
+   Phase Shift             CLOCK.PHASE     -8              -9
+   Frequency Shift         CLOCK.FREQ      -16             -16
+   Maximum Aperture        CLOCK.MAX       +-128 ms        +-256 ms
+   Shift Register Size     PEER.SHIFT      8               4
+   Host Poll Interval      peer.hpoll      NTP.MINPOLL     NTP.MINPOLL
+                                            (64 sec)        (64 sec)
+
+                        Table 5.1. Clock Parameters
+
+   The above design constitutes a second-order phase-lock loop which
+   adjusts the logical clock phase and frequency to compensate for the
+   intrinsic oscillator jitter, wander and drift.  Simulation of a loop
+
+
+
+Mills                                                          [Page 35]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+   with parameters chosen from Table 5.1 for a crystal-stabilized
+   oscillator and the clock filter described in Section 4 results in the
+   following transient response:  For a phase correction of 100 ms the
+   loop reaches zero error in 34 minutes, overshoots 7 ms in 76 minutes
+   and settles to less than 1 ms in about four hours.  The maximum
+   frequency error is about 6 ppm at 40 minutes and returns to less than
+   1 ppm in about eight hours.  For a frequency correction of 10 ppm the
+   loop settles to within 1 ppm in about nine hours and to within 0.1
+   ppm in about a day.  These characteristics are appropriate for
+   typical computing equipment using board-mounted crystals without oven
+   temperature control.
+
+   In those cases where mains-frequency oscillators must be used, the
+   loop parameters must be adapted for the relatively high jitter and
+   wander characteristics of the national power grid, in which diurnal
+   peak-to-peak phase excursions can exceed four seconds.  Simulation of
+   a loop with parameters chosen from Table 5.1 for a mains-frequency
+   oscillator and the clock filter described in Section 4 results in a
+   transient response similar to the crystal-stabilized case, but with
+   time constants only one-fourth those in that case.  When presented
+   with actual phase-offset data for typical Summer days when the jitter
+   and wander are the largest, the loop errors are in the order of a few
+   tens of milliseconds, but not greater than 150 ms.
+
+   The above simulations assume the clock filter algorithm operates to
+   select the oldest sample in the shift register at each step;  that
+   is, the filter operates as a delay line with delay equal to the
+   polling interval times the number of stages.  This is a worst-case
+   scenario, since the larger the overall delay the harder it is to
+   maintain low loop errors together with good transient response.  The
+   parameters in Table 5.1 were experimentally determined with this
+   scenario and the constraint that the polling interval could not be
+   reduced below 64 seconds.  With these parameters it is not possible
+   to increase the polling interval above 64 seconds without significant
+   increase in loop error or degradation of transient response.  Thus,
+   when a clock is selected according to the algorithms of Section 4,
+   the polling interval peer.hpoll is always set at NTP.MINPOLL.
+

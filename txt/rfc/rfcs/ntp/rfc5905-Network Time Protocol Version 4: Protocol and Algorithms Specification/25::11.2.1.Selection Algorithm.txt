@@ -1,0 +1,75 @@
+11.2.1.  Selection Algorithm
+
+   Note that the selection and cluster algorithms are described
+   separately, but combined in the code skeleton.  The selection
+   algorithm operates to find an intersection interval containing a
+   majority clique of truechimers using Byzantine agreement principles
+   originally proposed by Marzullo [ref6], but modified to improve
+   accuracy.  An overview of the algorithm is given below and described
+   in the first half of the clock_select() routine in Appendix A.5.5.1.
+
+   First, those servers that are unusable according to the rules of the
+   protocol are detected and discarded as shown by the accept() routine
+   in Appendix A.5.5.3.  Next, a set of tuples (p, type, edge) is
+   generated for the remaining candidates.  Here, p is the association
+   identifier and type identifies the upper (+1), middle (0), and lower
+   (-1) endpoints of a correctness interval centered on theta for that
+   candidate.  This results in three tuples, lowpoint (p, -1, theta -
+   lambda), midpoint (p, 0, theta), and highpoint (p, +1, theta +
+   lambda), where lambda is the root synchronization distance.  An
+   example of this calculation is shown by the rootdist() routine in
+   Appendix A.5.1.1.  The steps of the algorithm are:
+
+   1.  For each of m associations, place three tuples as defined above
+   on the candidate list.
+
+   2.  Sort the tuples on the list by the edge component.  Order the
+   lowpoint, midpoint, and highpoint of these intervals from lowest to
+   highest.  Set the number of falsetickers f = 0.
+
+   3.  Set the number of midpoints d = 0.  Set c = 0.  Scan from lowest
+   endpoint to highest.  Add one to c for every lowpoint, subtract one
+   for every highpoint, add one to d for every midpoint.  If c >= m - f,
+   stop; set l = current lowpoint.
+
+   4.  Set c = 0.  Scan from highest endpoint to lowest.  Add one to c
+   for every highpoint, subtract one for every lowpoint, add one to d
+   for every midpoint.  If c >= m - f, stop; set u = current highpoint.
+
+   5.  Is d = f and l < u?  If yes, then follow step 5A; else, follow
+   step 5B.
+
+   5A. Success: the intersection interval is [l, u].
+
+   5B. Add one to f.  Is f < (m / 2)?  If yes, then go to step 3 again.
+   If no, then go to step 6.
+
+   6.  Failure; a majority clique could not be found.  There are no
+   suitable candidates to discipline the system clock.
+
+
+
+Mills, et al.                Standards Track                   [Page 43]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   The algorithm is described in detail in Appendix A.5.5.1.  Note that
+   it starts with the assumption that there are no falsetickers (f = 0)
+   and attempts to find a non-empty intersection interval containing the
+   midpoints of all correct servers, i.e., truechimers.  If a non-empty
+   interval cannot be found, it increases the number of assumed
+   falsetickers by one and tries again.  If a non-empty interval is
+   found and the number of falsetickers is less than the number of
+   truechimers, a majority clique has been found and the midpoint of
+   each truechimer (theta) represents the candidates available to the
+   cluster algorithm.
+
+   If a majority clique is not found, or if the number of truechimers is
+   less than CMIN, there are insufficient candidates to discipline the
+   system clock.  CMIN defines the minimum number of servers consistent
+   with the correctness requirements.  Suspicious operators would set
+   CMIN to ensure multiple redundant servers are available for the
+   algorithms to mitigate properly.  However, for historic reasons the
+   default value for CMIN is one.
+

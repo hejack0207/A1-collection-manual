@@ -1,0 +1,127 @@
+1. INTRODUCTION
+
+   Experiments to validate the recently-proposed TCP extensions [RFC-
+   1323] have led to the discovery of a new class of TCP failures, which
+   have been dubbed the "TIME-WAIT Assassination hazards".  This note
+   describes these hazards, gives examples, and discusses possible
+   prevention measures.
+
+   The failures in question all result from old duplicate segments.  In
+   brief, the TCP mechanisms to protect against old duplicate segments
+   are [RFC-793]:
+
+   (1)  The 3-way handshake rejects old duplicate initial <SYN>
+        segments, avoiding the hazard of replaying a connection.
+
+   (2)  Sequence numbers are used to reject old duplicate data and ACK
+        segments from the current incarnation of a given connection
+        (defined by a particular host and port pair).  Sequence numbers
+        are also used to reject old duplicate <SYN,ACK> segments.
+
+        For very high-speed connections, Jacobson's PAWS ("Protect
+        Against Wrapped Sequences") mechanism [RFC-1323] effectively
+        extends the sequence numbers so wrap-around will not introduce a
+        hazard within the same incarnation.
+
+   (3)  There are two mechanisms to avoid hazards due to old duplicate
+        segments from an earlier instance of the same connection; see
+        the Appendix to [RFC-1185] for details.
+
+
+
+
+Braden                                                          [Page 1]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+        For "short and slow" connections [RFC-1185], the clock-driven
+        ISN (initial sequence number) selection prevents the overlap of
+        the sequence spaces of the old and new incarnations [RFC-793].
+        (The algorithm used by Berkeley BSD TCP for stepping ISN
+        complicates the analysis slightly but does not change the
+        conclusions.)
+
+   (4)  TIME-WAIT state removes the hazard of old duplicates for "fast"
+        or "long" connections, in which clock-driven ISN selection is
+        unable to prevent overlap of the old and new sequence spaces.
+        The TIME-WAIT delay allows all old duplicate segments time
+        enough to die in the Internet before the connection is reopened.
+
+   (5)  After a system crash, the Quiet Time at system startup allows
+        old duplicates to disappear before any connections are opened.
+
+   Our new observation is that (4) is unreliable: TIME-WAIT state can be
+   prematurely terminated ("assassinated") by an old duplicate data or
+   ACK segment from the current or an earlier incarnation of the same
+   connection.  We refer to this as "TIME-WAIT Assassination" (TWA).
+
+   Figure 1 shows an example of TIME-WAIT assassination.  Segments 1-5
+   are copied exactly from Figure 13 of RFC-793, showing a normal close
+   handshake.  Packets 5.1, 5.2, and 5.3 are an extension to this
+   sequence, illustrating TWA.   Here 5.1 is *any* old segment that is
+   unacceptable to TCP A.  It might be unacceptable because of its
+   sequence number or because of an old PAWS timestamp.  In either case,
+   TCP A sends an ACK segment 5.2 for its current SND.NXT and RCV.NXT.
+   Since it has no state for this connection, TCP B reflects this as RST
+   segment 5.3, which assassinates the TIME-WAIT state at A!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Braden                                                          [Page 2]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+
+       TCP A                                                TCP B
+
+   1.  ESTABLISHED                                          ESTABLISHED
+
+       (Close)
+   2.  FIN-WAIT-1  --> <SEQ=100><ACK=300><CTL=FIN,ACK>  --> CLOSE-WAIT
+
+   3.  FIN-WAIT-2  <-- <SEQ=300><ACK=101><CTL=ACK>      <-- CLOSE-WAIT
+
+                                                            (Close)
+   4.  TIME-WAIT   <-- <SEQ=300><ACK=101><CTL=FIN,ACK>  <-- LAST-ACK
+
+   5.  TIME-WAIT   --> <SEQ=101><ACK=301><CTL=ACK>      --> CLOSED
+
+  - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+   5.1. TIME-WAIT   <--  <SEQ=255><ACK=33> ... old duplicate
+
+   5.2  TIME-WAIT   --> <SEQ=101><ACK=301><CTL=ACK>    -->  ????
+
+   5.3  CLOSED      <-- <SEQ=301><CTL=RST>             <--  ????
+      (prematurely)
+
+                         Figure 1.  TWA Example
+
+
+   Note that TWA is not at all an unlikely event if there are any
+   duplicate segments that may be delayed in the network.  Furthermore,
+   TWA cannot be prevented by PAWS timestamps; the event may happen
+   within the same tick of the timestamp clock.  TWA is a consequence of
+   TCP's half-open connection discovery mechanism (see pp 33-34 of
+   [RFC-793]), which is designed to clean up after a system crash.
+

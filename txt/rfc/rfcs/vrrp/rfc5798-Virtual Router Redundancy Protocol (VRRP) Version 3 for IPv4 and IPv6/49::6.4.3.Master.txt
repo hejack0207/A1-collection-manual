@@ -1,0 +1,120 @@
+6.4.3.  Master
+
+   While in the {Master} state, the router functions as the forwarding
+   router for the IPvX address(es) associated with the virtual router.
+
+   Note that in the Master state, the Preempt_Mode Flag is not
+   considered.
+
+   (600) While in this state, a VRRP router MUST do the following:
+
+      (605) - If the protected IPvX address is an IPv4 address, then:
+
+         (610) + MUST respond to ARP requests for the IPv4 address(es)
+         associated with the virtual router.
+
+      (615) - else // ipv6
+
+         (620) + MUST be a member of the Solicited-Node multicast
+         address for the IPv6 address(es) associated with the virtual
+         router.
+
+
+
+
+
+Nadas                        Standards Track                   [Page 24]
+
+RFC 5798                VRRPv3 for IPv4 and IPv6              March 2010
+
+
+         (625) + MUST respond to ND Neighbor Solicitation message for
+         the IPv6 address(es) associated with the virtual router.
+
+         (630) ++ MUST send ND Router Advertisements for the virtual
+         router.
+
+         (635) ++ If Accept_Mode is False:  MUST NOT drop IPv6 Neighbor
+         Solicitations and Neighbor Advertisements.
+
+      (640) +-endif // ipv4?
+
+      (645) - MUST forward packets with a destination link-layer MAC
+      address equal to the virtual router MAC address.
+
+      (650) - MUST accept packets addressed to the IPvX address(es)
+      associated with the virtual router if it is the IPvX address owner
+      or if Accept_Mode is True.  Otherwise, MUST NOT accept these
+      packets.
+
+      (655) - If a Shutdown event is received, then:
+
+         (660) + Cancel the Adver_Timer
+
+         (665) + Send an ADVERTISEMENT with Priority = 0
+
+         (670) + Transition to the {Initialize} state
+
+      (675) -endif // shutdown recv
+
+      (680) - If the Adver_Timer fires, then:
+
+         (685) + Send an ADVERTISEMENT
+
+         (690) + Reset the Adver_Timer to Advertisement_Interval
+
+      (695) -endif // advertisement timer fired
+
+      (700) - If an ADVERTISEMENT is received, then:
+
+         (705) -+ If the Priority in the ADVERTISEMENT is zero, then:
+
+            (710) -* Send an ADVERTISEMENT
+
+            (715) -* Reset the Adver_Timer to Advertisement_Interval
+
+         (720) -+ else // priority was non-zero
+
+
+
+
+
+Nadas                        Standards Track                   [Page 25]
+
+RFC 5798                VRRPv3 for IPv4 and IPv6              March 2010
+
+
+            (725) -* If the Priority in the ADVERTISEMENT is greater
+            than the local Priority,
+
+            (730) -* or
+
+            (735) -* If the Priority in the ADVERTISEMENT is equal to
+            the local Priority and the primary IPvX Address of the
+            sender is greater than the local primary IPvX Address, then:
+
+               (740) -@ Cancel Adver_Timer
+
+               (745) -@ Set Master_Adver_Interval to Adver Interval
+               contained in the ADVERTISEMENT
+
+               (750) -@ Recompute the Skew_Time
+
+               (755) @ Recompute the Master_Down_Interval
+
+               (760) @ Set Master_Down_Timer to Master_Down_Interval
+
+               (765) @ Transition to the {Backup} state
+
+            (770) * else // new Master logic
+
+               (775) @ Discard ADVERTISEMENT
+
+            (780) *endif // new Master detected
+
+         (785) +endif // was priority zero?
+
+      (790) -endif // advert recv
+
+   (795) endwhile // in Master
+

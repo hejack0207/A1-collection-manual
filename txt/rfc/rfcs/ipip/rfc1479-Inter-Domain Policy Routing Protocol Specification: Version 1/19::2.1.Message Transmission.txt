@@ -1,0 +1,110 @@
+2.1.  Message Transmission
+
+   At the transmitting entity, when an IDPR protocol is ready to issue a
+   control message, it passes a copy of the message to CMTP; it also
+   passes a set of parameters to CMTP for inclusion in the CMTP header
+   and for proper CMTP message handling.  In turn, CMTP converts the
+   control message and associated parameters into a DATAGRAM by
+   prepending the appropriate header to the control message.  The CMTP
+   header contains several pieces of information to aid the message
+   recipient in detecting errors (see section 2.4).  Each IDPR protocol
+   can specify all of the following CMTP parameters applicable to its
+   control message:
+
+   -   IDPR protocol and message type.
+
+   -   Destination.
+
+   -   Integrity/authentication scheme.
+
+   -   Timestamp.
+
+   -   Maximum number of transmissions allotted.
+
+   -   Retransmission interval in microseconds.
+
+   One of these parameters, the timestamp, can be specified directly by
+   CMTP as the internal clock time at which the message is transmitted.
+   However, two of the IDPR protocols, namely flooding and path control,
+   themselves require message generation timestamps for proper protocol
+   operation.  Thus, instead of requiring CMTP to pass back a timestamp
+   to an IDPR protocol, we simplify the service interface between CMTP
+   and the IDPR protocols by allowing an IDPR protocol to specify the
+   timestamp in the first place.
+
+   Using the control message and accompanying parameters supplied by the
+   IDPR protocol, CMTP constructs a DATAGRAM, adding to the header
+   CMTP-specific parameters.  In particular, CMTP assigns a "transaction
+   identifier" to each DATAGRAM generated, which it uses to associate
+   acknowledgements with DATAGRAM messages.  Each DATAGRAM recipient
+   includes the received transaction identifier in its returned ACK or
+   NAK, and each DATAGRAM sender uses the transaction identifier to
+   match the received ACK or NAK with the original DATAGRAM.
+
+   A single DATAGRAM, for example a routing information message or a
+   path control message, may be handled by CMTP at many different policy
+   gateways.  Within a pair of consecutive IDPR entities, the DATAGRAM
+
+
+
+Steenstrup                                                     [Page 20]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   sender expects to receive an acknowledgement from the DATAGRAM
+   recipient.  However, only the IDPR entity that actually generated the
+   original CMTP DATAGRAM has control over the transaction identifier,
+   because that entity may supply a digital signature that covers the
+   entire DATAGRAM.  The intermediate policy gateways that transmit the
+   DATAGRAM do not change the transaction identifier.  Nevertheless, at
+   each DATAGRAM recipient, the transaction identifier must uniquely
+   distinguish the DATAGRAM so that only one acknowledgement from the
+   next DATAGRAM recipient matches the original DATAGRAM.  Therefore,
+   the transaction identifier must be globally unique.
+
+   The transaction identifier consists of the numeric identifiers for
+   the domain and IDPR entity (policy gateway or route server) issuing
+   the original DATAGRAM, together with a 32-bit local identifier
+   assigned by CMTP operating within that IDPR entity.  We recommend
+   implementing the 32-bit local identifier either as a simple counter
+   incremented for each DATAGRAM generated or as a fine granularity
+   clock.  The former always guarantees uniqueness of transaction
+   identifiers; the latter guarantees uniqueness of transaction
+   identifiers, provided the clock granularity is finer than the minimum
+   possible interval between DATAGRAM generations and the clock wrapping
+   period is longer than the maximum round-trip delay to and from any
+   internetwork destination.
+
+   Before transmitting a DATAGRAM, CMTP computes the length of the
+   entire message, taking into account the prescribed
+   integrity/authentication scheme, and then computes the
+   integrity/authentication value over the whole message.  CMTP includes
+   both of these quantities, which are crucial for checking message
+   integrity and authenticity at the recipient, in the DATAGRAM header.
+   After sending a DATAGRAM, CMTP saves a copy and sets an associated
+   retransmission timer, as directed by the IDPR protocol parameters.
+   If the retransmission timer fires and CMTP has received neither an
+   ACK nor a NAK for the DATAGRAM, CMTP then retransmits the DATAGRAM,
+   provided this retransmission does not exceed the transmission
+   allotment.  Whenever a DATAGRAM exhausts its transmission allotment,
+   CMTP discards the DATAGRAM, informs the IDPR protocol that the
+   control message transmission was not successful, and logs the event
+   for network management.  In this case, the IDPR protocol may either
+   resubmit its control message to CMTP, specifying an alternate
+   destination, or discard the control message altogether.
+
+
+
+
+
+
+
+
+
+
+Steenstrup                                                     [Page 21]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+

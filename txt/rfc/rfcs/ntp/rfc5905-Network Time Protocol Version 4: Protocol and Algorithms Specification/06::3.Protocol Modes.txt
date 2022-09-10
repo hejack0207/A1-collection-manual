@@ -1,0 +1,83 @@
+3.  Protocol Modes
+
+   There are three NTP protocol variants: symmetric, client/server, and
+   broadcast.  Each is associated with an association mode (a
+   description of the relationship between two NTP speakers) as shown in
+   Figure 1.  In addition, persistent associations are mobilized upon
+   startup and are never demobilized.  Ephemeral associations are
+   mobilized upon the arrival of a packet and are demobilized upon error
+   or timeout.
+
+          +-------------------+-------------------+------------------+
+          |  Association Mode | Assoc. Mode Value | Packet Mode Value|
+          +-------------------+-------------------+------------------+
+          | Symmetric Active  |         1         | 1 or 2           |
+          | Symmetric Passive |         2         | 1                |
+          | Client            |         3         | 4                |
+          | Server            |         4         | 3                |
+          | Broadcast Server  |         5         | 5                |
+          | Broadcast Client  |         6         | N/A              |
+          +-------------------+-------------------+------------------+
+
+                  Figure 1: Association and Packet Modes
+
+   In the client/server variant, a persistent client sends packet mode 4
+   packets to a server, which returns packet mode 3 packets.  Servers
+   provide synchronization to one or more clients, but do not accept
+   synchronization from them.  A server can also be a reference clock
+   driver that obtains time directly from a standard source such as a
+   GPS receiver or telephone modem service.  In this variant, clients
+   pull synchronization from servers.
+
+
+
+
+
+
+Mills, et al.                Standards Track                    [Page 6]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   In the symmetric variant, a peer operates as both a server and client
+   using either a symmetric active or symmetric passive association.  A
+   persistent symmetric active association sends symmetric active (mode
+   1) packets to a symmetric active peer association.  Alternatively, an
+   ephemeral symmetric passive association can be mobilized upon the
+   arrival of a symmetric active packet with no matching association.
+   That association sends symmetric passive (mode 2) packets and
+   persists until error or timeout.  Peers both push and pull
+   synchronization to and from each other.  For the purposes of this
+   document, a peer operates like a client, so references to client
+   imply peer as well.
+
+   In the broadcast variant, a persistent broadcast server association
+   sends periodic broadcast server (mode 5) packets that can be received
+   by multiple clients.  Upon reception of a broadcast server packet
+   without a matching association, an ephemeral broadcast client (mode
+   6) association is mobilized and persists until error or timeout.  It
+   is useful to provide an initial volley where the client operating in
+   client mode exchanges several packets with the server, so as to
+   calibrate the propagation delay and to run the Autokey security
+   protocol, after which the client reverts to broadcast client mode.  A
+   broadcast server pushes synchronization to clients and other servers.
+
+   Loosely following the conventions established by the telephone
+   industry, the level of each server in the hierarchy is defined by a
+   stratum number.  Primary servers are assigned stratum one; secondary
+   servers at each lower level are assigned stratum numbers one greater
+   than the preceding level.  As the stratum number increases, its
+   accuracy degrades depending on the particular network path and system
+   clock stability.  Mean errors, measured by synchronization distances,
+   increase approximately in proportion to stratum numbers and measured
+   round-trip delay.
+
+   As a standard practice, timing network topology should be organized
+   to avoid timing loops and minimize the synchronization distance.  In
+   NTP, the subnet topology is determined using a variant of the
+   Bellman-Ford distributed routing algorithm, which computes the
+   shortest-path spanning tree rooted on the primary servers.  As a
+   result of this design, the algorithm automatically reorganizes the
+   subnet, so as to produce the most accurate and reliable time, even
+   when there are failures in the timing network.
+

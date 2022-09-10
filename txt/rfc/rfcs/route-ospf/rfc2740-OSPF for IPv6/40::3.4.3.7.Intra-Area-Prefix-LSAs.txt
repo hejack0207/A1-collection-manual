@@ -1,0 +1,179 @@
+3.4.3.7.  Intra-Area-Prefix-LSAs
+
+   The LS type of an intra-area-prefix-LSA is set to the value 0x2009.
+   Intra-area-prefix-LSAs have area flooding scope. An intra-area-
+   prefix-LSA has one of two functions. It associates a list of IPv6
+   address prefixes with a transit network link by referencing a
+   network- LSA, or associates a list of IPv6 address prefixes with a
+   router by referencing a router-LSA. A stub link's prefixes are
+   associated with its attached router.
+
+   A router may originate multiple intra-area-prefix-LSAs for a given
+   area, distinguished by their Link State ID fields. Each intra-area-
+   prefix-LSA contains an integral number of prefix descriptions.
+
+   A link's Designated Router originates one or more intra-area-prefix-
+   LSAs to advertise the link's prefixes throughout the area. For a link
+   L, L's Designated Router builds an intra-area-prefix-LSA in the
+   following fashion:
+
+   o  In order to indicate that the prefixes are to be associated with
+      the Link L, the fields Referenced LS type, Referenced Link State
+      ID, and Referenced
+
+      Advertising Router are set to the corresponding fields in Link L's
+      network-LSA (namely LS type, Link State ID, and Advertising Router
+      respectively). This means that Referenced LS Type is set to
+      0x2002, Referenced Link State ID is set to the Designated Router's
+      Interface ID on Link L, and Referenced Advertising Router is set
+      to the Designated Router's Router ID.
+
+   o  Each Link-LSA associated with Link L is examined (these are in the
+      Designated Router's interface structure for Link L). If the Link-
+      LSA's Advertising Router is fully adjacent to the Designated
+      Router, the list of prefixes in the Link-LSA is copied into the
+
+
+
+Coltun, et al.              Standards Track                    [Page 32]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+      intra-area-prefix-LSA that is being built.  Prefixes having the
+      NU-bit and/or LA-bit set in their Options field should not be
+      copied, nor should link-local addresses be copied.  Each prefix is
+      described by the PrefixLength, PrefixOptions, and Address Prefix
+      fields. Multiple prefixes having the same PrefixLength and Address
+      Prefix are considered to be duplicates; in this case their Prefix
+      Options fields should be merged by logically OR'ing the fields
+      together, and a single resulting prefix should be copied into the
+      intra-area-prefix-LSA. The Metric field for all prefixes is set to
+      0.
+
+   o  The "# prefixes" field is set to the number of prefixes that the
+      router has copied into the LSA. If necessary, the list of prefixes
+      can be spread across multiple intra-area-prefix-LSAs in order to
+      keep the LSA size small.
+
+      A router builds an intra-area-prefix-LSA to advertise its own
+      prefixes, and those of its attached stub links.  A Router RTX
+      would build its intra-area-prefix-LSA in the following fashion:
+
+   o  In order to indicate that the prefixes are to be associated with
+      the Router RTX itself, RTX sets Referenced LS type to 0x2001,
+      Referenced Link State ID to 0, and Referenced Advertising Router
+      to RTX's own Router ID.
+
+   o  Router RTX examines its list of interfaces to the area. If the
+      interface is in state Down, its prefixes are not included. If the
+      interface has been reported in RTX's router-LSA as a Type 2 link
+      description (link to transit network), its prefixes are not
+      included (they will be included in the intra-area-prefix-LSA for
+      the link instead). If the interface type is Point-to-MultiPoint,
+      or the interface is in state Loopback, or the interface connects
+      to a point-to-point link which has not been assigned a prefix,
+      then the site-local and global scope IPv6 addresses associated
+      with the interface (if any) are copied into the intra-area-
+      prefix-LSA, setting the LA-bit in the PrefixOptions field, and
+      setting the PrefixLength to 128 and the Metric to 0.  Otherwise,
+      the list of site-local and global prefixes configured in RTX for
+      the link are copied into the intra-area-prefix-LSA by specifying
+      the PrefixLength, PrefixOptions, and Address Prefix fields. The
+      Metric field for each of these prefixes is set to the interface's
+      output cost.
+
+   o  RTX adds the IPv6 prefixes for any directly attached hosts
+      belonging to the area (see Section C.7) to the intra-area-prefix-
+      LSA.
+
+
+
+
+
+Coltun, et al.              Standards Track                    [Page 33]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   o  If RTX has one or more virtual links configured through the area,
+      it includes one of its site-local or global scope IPv6 interface
+      addresses in the LSA (if it hasn't already), setting the LA-bit in
+      the PrefixOptions field, and setting the PrefixLength to 128 and
+      the Metric to 0. This information will be used later in the
+      routing calculation so that the two ends of the virtual link can
+      discover each other's IPv6 addresses.
+
+   o  The "# prefixes" field is set to the number of prefixes that the
+      router has copied into the LSA. If necessary, the list of prefixes
+      can be spread across multiple intra-area-prefix-LSAs in order to
+      keep the LSA size small.
+
+   For example, the intra-area-prefix-LSA originated by RT4 for Network
+   N3 (assuming that RT4 is N3's Designated Router), and the intra-
+   area-prefix-LSA originated into Area 1 by Router RT3 for its own
+   prefixes, are pictured below.
+
+     ; Intra-area-prefix-LSA
+     ; for network link N3
+
+     LS age = 0                  ;newly (re)originated
+     LS type = 0x2009            ;Intra-area-prefix-LSA
+     Link State ID = 5           ;or something
+     Advertising Router = 192.1.1.4 ;RT4's Router ID
+     # prefixes = 1
+     Referenced LS type = 0x2002 ;network-LSA reference
+     Referenced Link State ID = 1
+     Referenced Advertising Router = 192.1.1.4
+     PrefixLength = 56           ;N3's prefix
+     PrefixOptions = 0
+     Metric = 0
+     Address Prefix = 5f00:0000:c001:0100 ;pad
+
+     ; RT3's Intra-area-prefix-LSA
+     ; for its own prefixes
+
+     LS age = 0                  ;newly (re)originated
+     LS type = 0x2009            ;Intra-area-prefix-LSA
+     Link State ID = 177         ;or something
+     Advertising Router = 192.1.1.3 ;RT3's Router ID
+     # prefixes = 1
+     Referenced LS type = 0x2001 ;router-LSA reference
+     Referenced Link State ID = 0
+     Referenced Advertising Router = 192.1.1.3
+     PrefixLength = 56           ;N4's prefix
+
+
+
+
+
+Coltun, et al.              Standards Track                    [Page 34]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+     PrefixOptions = 0
+     Metric = 2                  ;N4 interface cost
+     Address Prefix = 5f00:0000:c001:0400 ;pad
+
+   When network conditions change, it may be necessary for a router to
+   move prefixes from one intra-area-prefix-LSA to another. For example,
+   if the router is Designated Router for a link but the link has no
+   other attached routers, the link's prefixes are advertised in an
+   intra-area-prefix-LSA referring to the Designated Router's router-
+   LSA.  When additional routers appear on the link, a network-LSA is
+   originated for the link and the link's prefixes are moved to an
+   intra-area-prefix-LSA referring to the network-LSA.
+
+   Note that in the intra-area-prefix-LSA, the "Referenced Advertising
+   Router" is always equal to the router that is originating the intra-
+   area-prefix-LSA (i.e., the LSA's Advertising Router). The reason that
+   the Referenced Advertising Router field appears is that, even though
+   it is currently redundant, it may not be in the future. We may
+   sometime want to use the same LSA format to advertise address
+   prefixes for other protocol suites. In that event, the Designated
+   Router may not be running the other protocol suite, and so another of
+   the link's routers may need to send out the prefix-LSA. In that case,
+   "Referenced Advertising Router" and "Advertising Router" would be
+   different.
+

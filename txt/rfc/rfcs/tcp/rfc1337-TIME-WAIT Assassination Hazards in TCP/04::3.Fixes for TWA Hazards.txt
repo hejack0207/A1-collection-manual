@@ -1,0 +1,109 @@
+3. Fixes for TWA Hazards
+
+   We discuss three possible fixes to TCP to avoid these hazards.
+
+   (F1) Ignore RST segments in TIME-WAIT state.
+
+        If the 2 minute MSL is enforced, this fix avoids all three
+        hazards.
+
+        This is the simplest fix.  One could also argue that it is
+        formally the correct thing to do; since allowing time for old
+        duplicate segments to die is one of TIME-WAIT state's functions,
+        the state should not be truncated by a RST segment.
+
+   (F2) Use PAWS to avoid the hazards.
+
+        Suppose that the TCP ignores RST segments in TIME-WAIT state,
+        but only long enough to guarantee that the timestamp clocks on
+        both ends have ticked.  Then the PAWS mechanism [RFC-1323] will
+        prevent old duplicate data segments from interfering with the
+        new incarnation, eliminating hazard H1.  For reasons explained
+        below, however, it may not eliminate all old duplicate ACK
+        segments, so hazards H2 and H3 will still exist.
+
+        In the language of the TCP Extensions RFC [RFC-1323]:
+
+           When processing a RST bit in TIME-WAIT state:
+
+               If (Snd.TS.OK is off) or (Time.in.TW.state() >= W)
+                   then enter the CLOSED state, delete the TCB,
+                   drop the RST segment, and return.
+
+               else simply drop the RST segment and return.
+
+        Here "Time.in.TW.state()" is a function returning the elapsed
+        time since TIME-WAIT state was entered, and W is a constant that
+        is at least twice the longest possible period for timestamp
+        clocks, i.e., W = 2 secs [RFC-1323].
+
+
+
+Braden                                                          [Page 7]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+        This assumes that the timestamp clock at each end continues to
+        advance at a constant rate whether or not there are any open
+        connections.  We do not have to consider what happens across a
+        system crash (e.g., the timestamp clock may jump randomly),
+        because of the assumed Quiet Time at system startup.
+
+        Once this change is in place, the initial timestamps that occur
+        on the SYN and {SYN,ACK} segments reopening the connection will
+        be larger than any timestamp on a segment from earlier
+        incarnations.  As a result, the PAWS mechanism operating in the
+        new connection incarnation will avoid the H1 hazard, ie.
+        acceptance of old duplicate data.
+
+        The effectiveness of fix (F2) in preventing acceptance of old
+        duplicate data segments, i.e., hazard H1, has been demonstrated
+        in the Sun OS TCP mentioned earlier.  Unfortunately, these tests
+        revealed a somewhat surprising fact:  old duplicate ACKs from
+        the earlier incarnation can still slip past PAWS, so that (F2)
+        will not prevent failures H2 or H3.  What happens is that TIME-
+        WAIT state effectively regenerates the timestamp of an old
+        duplicate ACK.  That is, when an old duplicate arrives in TIME-
+        WAIT state, an extended TCP will send out its own ACK with a
+        timestamp option containing its CURRENT timestamp clock value.
+        If this happens immediately before the TWA mechanism kills
+        TIME-WAIT state, the result will be a "new old duplicate"
+        segment with a current timestamp that may pass the PAWS test on
+        the reopened connection.
+
+        Whether H2 and H3 are critical depends upon how often they
+        happen and what assumptions the applications make about TCP
+        semantics.  In the case of the H3 hazard, merely trying the open
+        again is likely to succeed.  Furthermore, many production TCPs
+        have (despite the advice of the researchers who developed TCP)
+        incorporated a "keep-alive" mechanism, which may kill
+        connections unnecessarily.  The frequency of occurrence of H2
+        and H3 may well be much lower than keep-alive failures or
+        transient internet routing failures.
+
+   (F3) Use 64-bit Sequence Numbers
+
+        O'Malley and Peterson [RFC-1264] have suggested expansion of the
+        TCP sequence space to 64 bits as an alternative to PAWS for
+        avoiding the hazard of wrapped sequence numbers within the same
+        incarnation.  It is worthwhile to inquire whether 64-bit
+        sequence numbers could be used to avoid the TWA hazards as well.
+
+        Using 64 bit sequence numbers would not prevent TWA - the early
+        termination of TIME-WAIT state.  However, it appears that a
+
+
+
+Braden                                                          [Page 8]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+        combination of 64-bit sequence numbers with an appropriate
+        modification of the TCP parameters could defeat all of the TWA
+        hazards H1, H2, and H3.  The basis for this is explained in an
+        appendix to this memo.  In summary, it could be arranged that
+        the same sequence space would be reused only after a very long
+        period of time, so every connection would be "slow" and "short".
+

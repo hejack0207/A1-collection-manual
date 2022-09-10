@@ -1,0 +1,342 @@
+3.  RTTM: ROUND-TRIP TIME MEASUREMENT
+
+   3.1  Introduction
+
+      Accurate and current RTT estimates are necessary to adapt to
+      changing traffic conditions and to avoid an instability known as
+      "congestion collapse" [Nagle84] in a busy network.  However,
+      accurate measurement of RTT may be difficult both in theory and in
+      implementation.
+
+      Many TCP implementations base their RTT measurements upon a sample
+      of only one packet per window.  While this yields an adequate
+      approximation to the RTT for small windows, it results in an
+      unacceptably poor RTT estimate for an LFN.  If we look at RTT
+      estimation as a signal processing problem (which it is), a data
+      signal at some frequency, the packet rate, is being sampled at a
+      lower frequency, the window rate.  This lower sampling frequency
+      violates Nyquist's criteria and may therefore introduce "aliasing"
+      artifacts into the estimated RTT [Hamming77].
+
+      A good RTT estimator with a conservative retransmission timeout
+      calculation can tolerate aliasing when the sampling frequency is
+      "close" to the data frequency.   For example, with a window of 8
+      packets, the sample rate is 1/8 the data frequency -- less than an
+      order of magnitude different.  However, when the window is tens or
+      hundreds of packets, the RTT estimator may be seriously in error,
+      resulting in spurious retransmissions.
+
+      If there are dropped packets, the problem becomes worse.  Zhang
+
+
+
+Jacobson, Braden, & Borman                                     [Page 11]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      [Zhang86], Jain [Jain86] and Karn [Karn87] have shown that it is
+      not possible to accumulate reliable RTT estimates if retransmitted
+      segments are included in the estimate.  Since a full window of
+      data will have been transmitted prior to a retransmission, all of
+      the segments in that window will have to be ACKed before the next
+      RTT sample can be taken.  This means at least an additional
+      window's worth of time between RTT measurements and, as the error
+      rate approaches one per window of data (e.g., 10**-6 errors per
+      bit for the Wideband satellite network), it becomes effectively
+      impossible to obtain a valid RTT measurement.
+
+      A solution to these problems, which actually simplifies the sender
+      substantially, is as follows: using TCP options, the sender places
+      a timestamp in each data segment, and the receiver reflects these
+      timestamps back in ACK segments.  Then a single subtract gives the
+      sender an accurate RTT measurement for every ACK segment (which
+      will correspond to every other data segment, with a sensible
+      receiver).  We call this the RTTM (Round-Trip Time Measurement)
+      mechanism.
+
+      It is vitally important to use the RTTM mechanism with big
+      windows; otherwise, the door is opened to some dangerous
+      instabilities due to aliasing.  Furthermore, the option is
+      probably useful for all TCP's, since it simplifies the sender.
+
+   3.2  TCP Timestamps Option
+
+      TCP is a symmetric protocol, allowing data to be sent at any time
+      in either direction, and therefore timestamp echoing may occur in
+      either direction.  For simplicity and symmetry, we specify that
+      timestamps always be sent and echoed in both directions.  For
+      efficiency, we combine the timestamp and timestamp reply fields
+      into a single TCP Timestamps Option.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 12]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      TCP Timestamps Option (TSopt):
+
+         Kind: 8
+
+         Length: 10 bytes
+
+          +-------+-------+---------------------+---------------------+
+          |Kind=8 |  10   |   TS Value (TSval)  |TS Echo Reply (TSecr)|
+          +-------+-------+---------------------+---------------------+
+              1       1              4                     4
+
+         The Timestamps option carries two four-byte timestamp fields.
+         The Timestamp Value field (TSval) contains the current value of
+         the timestamp clock of the TCP sending the option.
+
+         The Timestamp Echo Reply field (TSecr) is only valid if the ACK
+         bit is set in the TCP header; if it is valid, it echos a times-
+         tamp value that was sent by the remote TCP in the TSval field
+         of a Timestamps option.  When TSecr is not valid, its value
+         must be zero.  The TSecr value will generally be from the most
+         recent Timestamp option that was received; however, there are
+         exceptions that are explained below.
+
+         A TCP may send the Timestamps option (TSopt) in an initial
+         <SYN> segment (i.e., segment containing a SYN bit and no ACK
+         bit), and may send a TSopt in other segments only if it re-
+         ceived a TSopt in the initial <SYN> segment for the connection.
+
+   3.3 The RTTM Mechanism
+
+      The timestamp value to be sent in TSval is to be obtained from a
+      (virtual) clock that we call the "timestamp clock".  Its values
+      must be at least approximately proportional to real time, in order
+      to measure actual RTT.
+
+      The following example illustrates a one-way data flow with
+      segments arriving in sequence without loss.  Here A, B, C...
+      represent data blocks occupying successive blocks of sequence
+      numbers, and ACK(A),...  represent the corresponding cumulative
+      acknowledgments.  The two timestamp fields of the Timestamps
+      option are shown symbolically as <TSval= x,TSecr=y>.  Each TSecr
+      field contains the value most recently received in a TSval field.
+
+
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 13]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+
+         TCP  A                                          TCP B
+
+                        <A,TSval=1,TSecr=120> ------>
+
+             <---- <ACK(A),TSval=127,TSecr=1>
+
+                        <B,TSval=5,TSecr=127> ------>
+
+             <---- <ACK(B),TSval=131,TSecr=5>
+
+             . . . . . . . . . . . . . . . . . . . . . .
+
+                        <C,TSval=65,TSecr=131> ------>
+
+             <---- <ACK(C),TSval=191,TSecr=65>
+
+                        (etc)
+
+
+      The dotted line marks a pause (60 time units long) in which A had
+      nothing to send.  Note that this pause inflates the RTT which B
+      could infer from receiving TSecr=131 in data segment C.  Thus, in
+      one-way data flows, RTTM in the reverse direction measures a value
+      that is inflated by gaps in sending data.  However, the following
+      rule prevents a resulting inflation of the measured RTT:
+
+           A TSecr value received in a segment is used to update the
+           averaged RTT measurement only if the segment acknowledges
+           some new data, i.e., only if it advances the left edge of the
+           send window.
+
+      Since TCP B is not sending data, the data segment C does not
+      acknowledge any new data when it arrives at B.  Thus, the inflated
+      RTTM measurement is not used to update B's RTTM measurement.
+
+   3.4  Which Timestamp to Echo
+
+      If more than one Timestamps option is received before a reply
+      segment is sent, the TCP must choose only one of the TSvals to
+      echo, ignoring the others.  To minimize the state kept in the
+      receiver (i.e., the number of unprocessed TSvals), the receiver
+      should be required to retain at most one timestamp in the
+      connection control block.
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 14]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      There are three situations to consider:
+
+      (A)  Delayed ACKs.
+
+           Many TCP's acknowledge only every Kth segment out of a group
+           of segments arriving within a short time interval; this
+           policy is known generally as "delayed ACKs".  The data-sender
+           TCP must measure the effective RTT, including the additional
+           time due to delayed ACKs, or else it will retransmit
+           unnecessarily.  Thus, when delayed ACKs are in use, the
+           receiver should reply with the TSval field from the earliest
+           unacknowledged segment.
+
+      (B)  A hole in the sequence space (segment(s) have been lost).
+
+           The sender will continue sending until the window is filled,
+           and the receiver may be generating ACKs as these out-of-order
+           segments arrive (e.g., to aid "fast retransmit").
+
+           The lost segment is probably a sign of congestion, and in
+           that situation the sender should be conservative about
+           retransmission.  Furthermore, it is better to overestimate
+           than underestimate the RTT.  An ACK for an out-of-order
+           segment should therefore contain the timestamp from the most
+           recent segment that advanced the window.
+
+           The same situation occurs if segments are re-ordered by the
+           network.
+
+      (C)  A filled hole in the sequence space.
+
+           The segment that fills the hole represents the most recent
+           measurement of the network characteristics.  On the other
+           hand, an RTT computed from an earlier segment would probably
+           include the sender's retransmit time-out, badly biasing the
+           sender's average RTT estimate.  Thus, the timestamp from the
+           latest segment (which filled the hole) must be echoed.
+
+      An algorithm that covers all three cases is described in the
+      following rules for Timestamps option processing on a synchronized
+      connection:
+
+      (1)  The connection state is augmented with two 32-bit slots:
+           TS.Recent holds a timestamp to be echoed in TSecr whenever a
+           segment is sent, and Last.ACK.sent holds the ACK field from
+           the last segment sent.  Last.ACK.sent will equal RCV.NXT
+           except when ACKs have been delayed.
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 15]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      (2)  If Last.ACK.sent falls within the range of sequence numbers
+           of an incoming segment:
+
+              SEG.SEQ <= Last.ACK.sent < SEG.SEQ + SEG.LEN
+
+           then the TSval from the segment is copied to TS.Recent;
+           otherwise, the TSval is ignored.
+
+      (3)  When a TSopt is sent, its TSecr field is set to the current
+           TS.Recent value.
+
+      The following examples illustrate these rules.  Here A, B, C...
+      represent data segments occupying successive blocks of sequence
+      numbers, and ACK(A),...  represent the corresponding
+      acknowledgment segments.  Note that ACK(A) has the same sequence
+      number as B.  We show only one direction of timestamp echoing, for
+      clarity.
+
+
+      o    Packets arrive in sequence, and some of the ACKs are delayed.
+
+           By Case (A), the timestamp from the oldest unacknowledged
+           segment is echoed.
+
+                                                      TS.Recent
+                    <A, TSval=1> ------------------->
+                                                          1
+                    <B, TSval=2> ------------------->
+                                                          1
+                    <C, TSval=3> ------------------->
+                                                          1
+                             <---- <ACK(C), TSecr=1>
+                    (etc)
+
+      o    Packets arrive out of order, and every packet is
+           acknowledged.
+
+           By Case (B), the timestamp from the last segment that
+           advanced the left window edge is echoed, until the missing
+           segment arrives; it is echoed according to Case (C).  The
+           same sequence would occur if segments B and D were lost and
+           retransmitted..
+
+
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 16]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+                                                      TS.Recent
+                    <A, TSval=1> ------------------->
+                                                          1
+                             <---- <ACK(A), TSecr=1>
+                                                          1
+                    <C, TSval=3> ------------------->
+                                                          1
+                             <---- <ACK(A), TSecr=1>
+                                                          1
+                    <B, TSval=2> ------------------->
+                                                          2
+                             <---- <ACK(C), TSecr=2>
+                                                          2
+                    <E, TSval=5> ------------------->
+                                                          2
+                             <---- <ACK(C), TSecr=2>
+                                                          2
+                    <D, TSval=4> ------------------->
+                                                          4
+                             <---- <ACK(E), TSecr=4>
+                    (etc)
+
+
+
+

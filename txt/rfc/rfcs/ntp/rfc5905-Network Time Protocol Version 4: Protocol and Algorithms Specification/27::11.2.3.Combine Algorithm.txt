@@ -1,0 +1,99 @@
+11.2.3.  Combine Algorithm
+
+   The clock combine route processes the remaining survivors to produce
+   the best and final data for the clock discipline algorithm.  The
+   routine processes peer offset and jitter statistics to produce the
+   combined system offset THETA and system peer jitter PSI_p, where each
+   server statistic is weighted by the reciprocal of the root
+   synchronization distance and the result normalized.  An example is
+   shown by the clock_combine() routine in Appendix A.5.5.5
+
+   The combined THETA is passed to the clock update routine.  The first
+   candidate on the survivor list is nominated as the system peer with
+   identifier p.  The system peer jitter PSI_p is a component of the
+   system jitter PSI.  It is used along with the selection jitter PSI_s
+   to produce the system jitter:
+
+   PSI = [(PSI_s)^2 + (PSI_p)^2]^1/2
+
+   Each time an update is received from the system peer, the clock
+   update routine is called.  By rule, an update is discarded if its
+   time of arrival p.t is not strictly later than the last update used
+   s.t.  The labels IGNOR, PANIC, ADJ, and STEP refer to return codes
+   from the local clock routine described in the next section.
+
+   IGNORE means the update has been ignored as an outlier.  PANIC means
+   the offset is greater than the panic threshold PANICT (1000 s) and
+   SHOULD cause the program to exit with a diagnostic message to the
+
+
+
+Mills, et al.                Standards Track                   [Page 45]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   system log.  STEP means the offset is less than the panic threshold,
+   but greater than the step threshold STEPT (125 ms).  In this case,
+   the clock is stepped to the correct offset, but since this means all
+   peer data have been invalidated, all associations MUST be reset and
+   the client begins as at initial start.
+
+   ADJ means the offset is less than the step threshold and thus a valid
+   update.  In this case, the system variables are updated from the peer
+   variables as shown in Figure 25.
+
+                  +-------------------------------------------+
+                  | System Variable <-- System Peer Variable  |        |
+                  +-------------------------------------------+
+                  | s.leap      <-- p.leap                    |
+                  | s.stratum   <-- p.stratum + 1             |
+                  | s.offset    <-- THETA                     |
+                  | s.jitter    <-- PSI                       |
+                  | s.rootdelay <-- p.delta_r + delta         |
+                  | s.rootdisp  <-- p.epsilon_r + p.epsilon + |
+                  |                 p.psi + PHI * (s.t - p.t) |
+                  |                 + |THETA|                 |
+                  | s.refid     <-- p.refid                   |
+                  | s.reftime   <-- p.reftime                 |
+                  | s.t         <-- p.t                       |
+                  +-------------------------------------------+
+
+                    Figure 25: System Variables Update
+
+   There is an important detail not shown.  The dispersion increment
+   (p.epsilon + p.psi + PHI * (s.t - p.t) + |THETA|) is bounded from
+   below by MINDISP.  In subnets with very fast processors and networks
+   and very small delay and dispersion this forces a monotone-definite
+   increase in s.rootdisp (EPSILON), which avoids loops between peers
+   operating at the same stratum.
+
+   The system variables are available to dependent application programs
+   as nominal performance statistics.  The system offset THETA is the
+   clock offset relative to the available synchronization sources.  The
+   system jitter PSI is an estimate of the error in determining this
+   value, elsewhere called the expected error.  The root delay DELTA is
+   the total round-trip delay relative to the primary server.  The root
+   dispersion EPSILON is the dispersion accumulated over the network
+   from the primary server.  Finally, the root synchronization distance
+   is defined as:
+
+
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 46]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   LAMBDA = EPSILON + DELTA / 2,
+
+   which represents the maximum error due all causes and is designated
+   the root synchronization distance.
+
+   An example of the clock update routine is provided in
+   Appendix A.5.5.4.
+

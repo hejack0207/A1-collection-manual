@@ -1,0 +1,97 @@
+9.1.  IP packets encapsulated in IP
+
+   The encapsulation of IP packet headers in tunnels is used in many
+   places, including IPsec and IP in IP [RFC2003].  This section
+   considers issues related to interactions between ECN and IP tunnels,
+   and specifies two alternative solutions.  This discussion is
+   complemented by RFC 2983's discussion of interactions between
+   Differentiated Services and IP tunnels of various forms [RFC 2983],
+   as Differentiated Services uses the remaining six bits of the IP
+   header octet that is used by ECN (see Figure 2 in Section 5).
+
+
+   Some IP tunnel modes are based on adding a new "outer" IP header that
+   encapsulates the original, or "inner" IP header and its associated
+   packet.  In many cases, the new "outer" IP header may be added and
+   removed at intermediate points along a connection, enabling the
+   network to establish a tunnel without requiring endpoint
+   participation.  We denote tunnels that specify that the outer header
+   be discarded at tunnel egress as "simple tunnels".
+
+   ECN uses the ECN field in the IP header for signaling between routers
+   and connection endpoints.  ECN interacts with IP tunnels based on the
+   treatment of the ECN field in the IP header.  In simple IP tunnels
+   the octet containing the ECN field is copied or mapped from the inner
+   IP header to the outer IP header at IP tunnel ingress, and the outer
+   header's copy of this field is discarded at IP tunnel egress.  If the
+   outer header were to be simply discarded without taking care to deal
+   with the ECN field, and an ECN-capable router were to set the CE
+
+
+
+Ramakrishnan, et al.        Standards Track                    [Page 25]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   (Congestion Experienced) codepoint within a packet in a simple IP
+   tunnel, this indication would be discarded at tunnel egress, losing
+   the indication of congestion.
+
+   Thus, the use of ECN over simple IP tunnels would result in routers
+   attempting to use the outer IP header to signal congestion to
+   endpoints, but those congestion warnings never arriving because the
+   outer header is discarded at the tunnel egress point.  This problem
+   was encountered with ECN and IPsec in tunnel mode, and RFC 2481
+   recommended that ECN not be used with the older simple IPsec tunnels
+   in order to avoid this behavior and its consequences.  When ECN
+   becomes widely deployed, then simple tunnels likely to carry ECN-
+   capable traffic will have to be changed.  If ECN-capable traffic is
+   carried by a simple tunnel through a congested, ECN-capable router,
+   this could result in subsequent packets being dropped for this flow
+   as the average queue size increases at the congested router, as
+   discussed in Section 8 above.
+
+   From a security point of view, the use of ECN in the outer header of
+   an IP tunnel might raise security concerns because an adversary could
+   tamper with the ECN information that propagates beyond the tunnel
+   endpoint.  Based on an analysis in Sections 18 and 19 of these
+   concerns and the resultant risks, our overall approach is to make
+   support for ECN an option for IP tunnels, so that an IP tunnel can be
+   specified or configured either to use ECN or not to use ECN in the
+   outer header of the tunnel.  Thus, in environments or tunneling
+   protocols where the risks of using ECN are judged to outweigh its
+   benefits, the tunnel can simply not use ECN in the outer header.
+   Then the only indication of congestion experienced at routers within
+   the tunnel would be through packet loss.
+
+   The result is that there are two viable options for the behavior of
+   ECN-capable connections over an IP tunnel, including IPsec tunnels:
+
+      * A limited-functionality option in which ECN is preserved in the
+        inner header, but disabled in the outer header.  The only
+        mechanism available for signaling congestion occurring within
+        the tunnel in this case is dropped packets.
+
+      * A full-functionality option that supports ECN in both the inner
+        and outer headers, and propagates congestion warnings from nodes
+        within the tunnel to endpoints.
+
+   Support for these options requires varying amounts of changes to IP
+   header processing at tunnel ingress and egress.  A small subset of
+   these changes sufficient to support only the limited-functionality
+   option would be sufficient to eliminate any incompatibility between
+   ECN and IP tunnels.
+
+
+
+Ramakrishnan, et al.        Standards Track                    [Page 26]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   One goal of this document is to give guidance about the tradeoffs
+   between the limited-functionality and full-functionality options.  A
+   full discussion of the potential effects of an adversary's
+   modifications of the ECN field is given in Sections 18 and 19.
+

@@ -1,0 +1,106 @@
+6.1.1  TCP Initialization
+
+   In the TCP connection setup phase, the source and destination TCPs
+   exchange information about their willingness to use ECN.  Subsequent
+   to the completion of this negotiation, the TCP sender sets an ECT
+   codepoint in the IP header of data packets to indicate to the network
+   that the transport is capable and willing to participate in ECN for
+   this packet. This indicates to the routers that they may mark this
+
+
+
+Ramakrishnan, et al.        Standards Track                    [Page 14]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   packet with the CE codepoint, if they would like to use that as a
+   method of congestion notification. If the TCP connection does not
+   wish to use ECN notification for a particular packet, the sending TCP
+   sets the ECN codepoint to not-ECT, and the TCP receiver ignores the
+   CE codepoint in the received packet.
+
+   For this discussion, we designate the initiating host as Host A and
+   the responding host as Host B.  We call a SYN packet with the ECE and
+   CWR flags set an "ECN-setup SYN packet", and we call a SYN packet
+   with at least one of the ECE and CWR flags not set a "non-ECN-setup
+   SYN packet".  Similarly, we call a SYN-ACK packet with only the ECE
+   flag set but the CWR flag not set an "ECN-setup SYN-ACK packet", and
+   we call a SYN-ACK packet with any other configuration of the ECE and
+   CWR flags a "non-ECN-setup SYN-ACK packet".
+
+   Before a TCP connection can use ECN, Host A sends an ECN-setup SYN
+   packet, and Host B sends an ECN-setup SYN-ACK packet.  For a SYN
+   packet, the setting of both ECE and CWR in the ECN-setup SYN packet
+   is defined as an indication that the sending TCP is ECN-Capable,
+   rather than as an indication of congestion or of response to
+   congestion. More precisely, an ECN-setup SYN packet indicates that
+   the TCP implementation transmitting the SYN packet will participate
+   in ECN as both a sender and receiver.  Specifically, as a receiver,
+   it will respond to incoming data packets that have the CE codepoint
+   set in the IP header by setting ECE in outgoing TCP Acknowledgement
+   (ACK) packets.  As a sender, it will respond to incoming packets that
+   have ECE set by reducing the congestion window and setting CWR when
+   appropriate.  An ECN-setup SYN packet does not commit the TCP sender
+   to setting the ECT codepoint in any or all of the packets it may
+   transmit.  However, the commitment to respond appropriately to
+   incoming packets with the CE codepoint set remains even if the TCP
+   sender in a later transmission, within this TCP connection, sends a
+   SYN packet without ECE and CWR set.
+
+   When Host B sends an ECN-setup SYN-ACK packet, it sets the ECE flag
+   but not the CWR flag.  An ECN-setup SYN-ACK packet is defined as an
+   indication that the TCP transmitting the SYN-ACK packet is ECN-
+   Capable.  As with the SYN packet, an ECN-setup SYN-ACK packet does
+   not commit the TCP host to setting the ECT codepoint in transmitted
+   packets.
+
+   The following rules apply to the sending of ECN-setup packets within
+   a TCP connection, where a TCP connection is defined by the standard
+   rules for TCP connection establishment and termination.
+
+      * If a host has received an ECN-setup SYN packet, then it MAY send
+        an ECN-setup SYN-ACK packet.  Otherwise, it MUST NOT send an
+        ECN-setup SYN-ACK packet.
+
+
+
+Ramakrishnan, et al.        Standards Track                    [Page 15]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+      * A host MUST NOT set ECT on data packets unless it has sent at
+        least one ECN-setup SYN or ECN-setup SYN-ACK packet, and has
+        received at least one ECN-setup SYN or ECN-setup SYN-ACK packet,
+        and has sent no non-ECN-setup SYN or non-ECN-setup SYN-ACK
+        packet.  If a host has received at least one non-ECN-setup SYN
+        or non-ECN-setup SYN-ACK packet, then it SHOULD NOT set ECT on
+        data packets.
+
+      * If a host ever sets the ECT codepoint on a data packet, then
+        that host MUST correctly set/clear the CWR TCP bit on all
+        subsequent packets in the connection.
+
+      * If a host has sent at least one ECN-setup SYN or ECN-setup SYN-
+        ACK packet, and has received no non-ECN-setup SYN or non-ECN-
+        setup SYN-ACK packet, then if that host receives TCP data
+        packets with ECT and CE codepoints set in the IP header, then
+        that host MUST process these packets as specified for an ECN-
+        capable connection.
+
+      * A host that is not willing to use ECN on a TCP connection SHOULD
+        clear both the ECE and CWR flags in all non-ECN-setup SYN and/or
+        SYN-ACK packets that it sends to indicate this unwillingness.
+        Receivers MUST correctly handle all forms of the non-ECN-setup
+        SYN and SYN-ACK packets.
+
+      * A host MUST NOT set ECT on SYN or SYN-ACK packets.
+
+   A TCP client enters TIME-WAIT state after receiving a FIN-ACK, and
+   transitions to CLOSED state after a timeout.  Many TCP
+   implementations create a new TCP connection if they receive an in-
+   window SYN packet during TIME-WAIT state.  When a TCP host enters
+   TIME-WAIT or CLOSED state, it should ignore any previous state about
+   the negotiation of ECN for that connection.
+

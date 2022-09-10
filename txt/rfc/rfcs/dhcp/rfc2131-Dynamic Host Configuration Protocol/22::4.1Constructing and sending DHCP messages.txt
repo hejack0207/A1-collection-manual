@@ -1,0 +1,163 @@
+4.1 Constructing and sending DHCP messages
+
+   DHCP clients and servers both construct DHCP messages by filling in
+   fields in the fixed format section of the message and appending
+   tagged data items in the variable length option area.  The options
+   area includes first a four-octet 'magic cookie' (which was described
+   in section 3), followed by the options.  The last option must always
+
+
+
+Droms                       Standards Track                    [Page 22]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+   be the 'end' option.
+
+   DHCP uses UDP as its transport protocol.  DHCP messages from a client
+   to a server are sent to the 'DHCP server' port (67), and DHCP
+   messages from a server to a client are sent to the 'DHCP client' port
+   (68). A server with multiple network address (e.g., a multi-homed
+   host) MAY use any of its network addresses in outgoing DHCP messages.
+
+   The 'server identifier' field is used both to identify a DHCP server
+   in a DHCP message and as a destination address from clients to
+   servers.  A server with multiple network addresses MUST be prepared
+   to to accept any of its network addresses as identifying that server
+   in a DHCP message.  To accommodate potentially incomplete network
+   connectivity, a server MUST choose an address as a 'server
+   identifier' that, to the best of the server's knowledge, is reachable
+   from the client.  For example, if the DHCP server and the DHCP client
+   are connected to the same subnet (i.e., the 'giaddr' field in the
+   message from the client is zero), the server SHOULD select the IP
+   address the server is using for communication on that subnet as the
+   'server identifier'.  If the server is using multiple IP addresses on
+   that subnet, any such address may be used.  If the server has
+   received a message through a DHCP relay agent, the server SHOULD
+   choose an address from the interface on which the message was
+   recieved as the 'server identifier' (unless the server has other,
+   better information on which to make its choice).  DHCP clients MUST
+   use the IP address provided in the 'server identifier' option for any
+   unicast requests to the DHCP server.
+
+   DHCP messages broadcast by a client prior to that client obtaining
+   its IP address must have the source address field in the IP header
+   set to 0.
+
+   If the 'giaddr' field in a DHCP message from a client is non-zero,
+   the server sends any return messages to the 'DHCP server' port on the
+   BOOTP relay agent whose address appears in 'giaddr'. If the 'giaddr'
+   field is zero and the 'ciaddr' field is nonzero, then the server
+   unicasts DHCPOFFER and DHCPACK messages to the address in 'ciaddr'.
+   If 'giaddr' is zero and 'ciaddr' is zero, and the broadcast bit is
+   set, then the server broadcasts DHCPOFFER and DHCPACK messages to
+   0xffffffff. If the broadcast bit is not set and 'giaddr' is zero and
+   'ciaddr' is zero, then the server unicasts DHCPOFFER and DHCPACK
+   messages to the client's hardware address and 'yiaddr' address.  In
+   all cases, when 'giaddr' is zero, the server broadcasts any DHCPNAK
+   messages to 0xffffffff.
+
+   If the options in a DHCP message extend into the 'sname' and 'file'
+   fields, the 'option overload' option MUST appear in the 'options'
+   field, with value 1, 2 or 3, as specified in RFC 1533.  If the
+
+
+
+Droms                       Standards Track                    [Page 23]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+   'option overload' option is present in the 'options' field, the
+   options in the 'options' field MUST be terminated by an 'end' option,
+   and MAY contain one or more 'pad' options to fill the options field.
+   The options in the 'sname' and 'file' fields (if in use as indicated
+   by the 'options overload' option) MUST begin with the first octet of
+   the field, MUST be terminated by an 'end' option, and MUST be
+   followed by 'pad' options to fill the remainder of the field.  Any
+   individual option in the 'options', 'sname' and 'file' fields MUST be
+   entirely contained in that field.  The options in the 'options' field
+   MUST be interpreted first, so that any 'option overload' options may
+   be interpreted.  The 'file' field MUST be interpreted next (if the
+   'option overload' option indicates that the 'file' field contains
+   DHCP options), followed by the 'sname' field.
+
+   The values to be passed in an 'option' tag may be too long to fit in
+   the 255 octets available to a single option (e.g., a list of routers
+   in a 'router' option [21]).  Options may appear only once, unless
+   otherwise specified in the options document.  The client concatenates
+   the values of multiple instances of the same option into a single
+   parameter list for configuration.
+
+   DHCP clients are responsible for all message retransmission.  The
+   client MUST adopt a retransmission strategy that incorporates a
+   randomized exponential backoff algorithm to determine the delay
+   between retransmissions.  The delay between retransmissions SHOULD be
+   chosen to allow sufficient time for replies from the server to be
+   delivered based on the characteristics of the internetwork between
+   the client and the server.  For example, in a 10Mb/sec Ethernet
+   internetwork, the delay before the first retransmission SHOULD be 4
+   seconds randomized by the value of a uniform random number chosen
+   from the range -1 to +1.  Clients with clocks that provide resolution
+   granularity of less than one second may choose a non-integer
+   randomization value.  The delay before the next retransmission SHOULD
+   be 8 seconds randomized by the value of a uniform number chosen from
+   the range -1 to +1.  The retransmission delay SHOULD be doubled with
+   subsequent retransmissions up to a maximum of 64 seconds.  The client
+   MAY provide an indication of retransmission attempts to the user as
+   an indication of the progress of the configuration process.
+
+   The 'xid' field is used by the client to match incoming DHCP messages
+   with pending requests.  A DHCP client MUST choose 'xid's in such a
+   way as to minimize the chance of using an 'xid' identical to one used
+   by another client. For example, a client may choose a different,
+   random initial 'xid' each time the client is rebooted, and
+   subsequently use sequential 'xid's until the next reboot.  Selecting
+   a new 'xid' for each retransmission is an implementation decision.  A
+   client may choose to reuse the same 'xid' or select a new 'xid' for
+   each retransmitted message.
+
+
+
+Droms                       Standards Track                    [Page 24]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+   Normally, DHCP servers and BOOTP relay agents attempt to deliver
+   DHCPOFFER, DHCPACK and DHCPNAK messages directly to the client using
+   uicast delivery.  The IP destination address (in the IP header) is
+   set to the DHCP 'yiaddr' address and the link-layer destination
+   address is set to the DHCP 'chaddr' address.  Unfortunately, some
+   client implementations are unable to receive such unicast IP
+   datagrams until the implementation has been configured with a valid
+   IP address (leading to a deadlock in which the client's IP address
+   cannot be delivered until the client has been configured with an IP
+   address).
+
+   A client that cannot receive unicast IP datagrams until its protocol
+   software has been configured with an IP address SHOULD set the
+   BROADCAST bit in the 'flags' field to 1 in any DHCPDISCOVER or
+   DHCPREQUEST messages that client sends.  The BROADCAST bit will
+   provide a hint to the DHCP server and BOOTP relay agent to broadcast
+   any messages to the client on the client's subnet.  A client that can
+   receive unicast IP datagrams before its protocol software has been
+   configured SHOULD clear the BROADCAST bit to 0.  The BOOTP
+   clarifications document discusses the ramifications of the use of the
+   BROADCAST bit [21].
+
+   A server or relay agent sending or relaying a DHCP message directly
+   to a DHCP client (i.e., not to a relay agent specified in the
+   'giaddr' field) SHOULD examine the BROADCAST bit in the 'flags'
+   field.  If this bit is set to 1, the DHCP message SHOULD be sent as
+   an IP broadcast using an IP broadcast address (preferably 0xffffffff)
+   as the IP destination address and the link-layer broadcast address as
+   the link-layer destination address.  If the BROADCAST bit is cleared
+   to 0, the message SHOULD be sent as an IP unicast to the IP address
+   specified in the 'yiaddr' field and the link-layer address specified
+   in the 'chaddr' field.  If unicasting is not possible, the message
+   MAY be sent as an IP broadcast using an IP broadcast address
+   (preferably 0xffffffff) as the IP destination address and the link-
+   layer broadcast address as the link-layer destination address.
+

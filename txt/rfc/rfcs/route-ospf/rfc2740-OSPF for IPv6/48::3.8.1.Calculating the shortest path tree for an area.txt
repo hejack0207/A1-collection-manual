@@ -1,0 +1,76 @@
+3.8.1.  Calculating the shortest path tree for an area
+
+   The IPv4 shortest path calculation is contained in Section 16.1 of
+   [Ref1].  The graph used by the shortest-path tree calculation is
+   identical for both IPv4 and IPv6. The graph's vertices are routers
+   and transit links, represented by router-LSAs and network-LSAs
+   respectively. A router is identified by its OSPF Router ID, while a
+   transit link is identified by its Designated Router's Interface ID
+   and OSPF Router ID. Both routers and transit links have associated
+   routing table entries within the area (see Section 3.3).
+
+   Section 16.1 of [Ref1] splits up the shortest path calculations into
+   two stages. First the Dijkstra calculation is performed, and then the
+   stub links are added onto the tree as leaves. The IPv6 calculation
+   maintains this split.
+
+   The Dijkstra calculation for IPv6 is identical to that specified for
+   IPv4, with the following exceptions (referencing the steps from the
+   Dijkstra calculation as described in Section 16.1 of [Ref1]):
+
+   o  The Vertex ID for a router is the OSPF Router ID. The Vertex ID
+      for a transit network is a combination of the Interface ID and
+      OSPF Router ID of the network's Designated Router.
+
+
+
+
+
+
+Coltun, et al.              Standards Track                    [Page 40]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   o  In Step 2, when a router Vertex V has just been added to the
+      shortest path tree, there may be multiple LSAs associated with the
+      router. All Router-LSAs with Advertising Router set to V's OSPF
+      Router ID must processed as an aggregate, treating them as
+      fragments of a single large router-LSA. The Options field and the
+      router type bits (bits W, V, E and B) should always be taken from
+      "fragment" with the smallest Link State ID.
+
+   o  Step 2a is not needed in IPv6, as there are no longer stub network
+      links in router-LSAs.
+
+   o  In Step 2b, if W is a router, there may again be multiple LSAs
+      associated with the router. All Router-LSAs with Advertising
+      Router set to W's OSPF Router ID must processed as an aggregate,
+      treating them as fragments of a single large router-LSA.
+
+   o  In Step 4, there are now per-area routing table entries for each
+      of an area's routers, instead of just the area border routers.
+      These entries subsume all the functionality of IPv4's area border
+      router routing table entries, including the maintenance of virtual
+      links.  When the router added to the area routing table in this
+      step is the other end of a virtual link, the virtual neighbor's IP
+      address is set as follows: The collection of intra-area-prefix-
+      LSAs originated by the virtual neighbor is examined, with the
+      virtual neighbor's IP address being set to the first prefix
+      encountered having the "LA-bit" set.
+
+   o  Routing table entries for transit networks, which are no longer
+      associated with IP networks, are also modified in Step 4.
+
+   The next stage of the shortest path calculation proceeds similarly to
+   the two steps of the second stage of Section 16.1 in [Ref1]. However,
+   instead of examining the stub links within router-LSAs, the list of
+   the area's intra-area-prefix-LSAs is examined. A prefix advertisement
+   whose "NU-bit" is set should not be included in the routing
+   calculation. The cost of any advertised prefix is the sum of the
+   prefix' advertised metric plus the cost to the transit vertex (either
+   router or transit network) identified by intra-area-prefix-LSA's
+   Referenced LS type, Referenced Link State ID and Referenced
+   Advertising Router fields. This latter cost is stored in the transit
+   vertex' routing table entry for the area.
+

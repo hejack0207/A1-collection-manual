@@ -1,0 +1,60 @@
+5 - Duplicate Detection, Ordering and Mutual Exclusion
+
+   5.1. For correct operation, mechanisms may be needed to ensure
+   idempotence, order UPDATE requests and provide mutual exclusion.  An
+   UPDATE message or response might be delivered zero times, one time,
+   or multiple times.  Datagram duplication is of particular interest
+   since it covers the case of the so-called "replay attack" where a
+   correct request is duplicated maliciously by an intruder.
+
+   5.2. Multiple UPDATE requests or responses in transit might be
+   delivered in any order, due to network topology changes or load
+   balancing, or to multipath forwarding graphs wherein several slave
+   servers all forward to the primary master.  In some cases, it might
+   be required that the earlier update not be applied after the later
+   update, where "earlier" and "later" are defined by an external time
+   base visible to some set of requestors, rather than by the order of
+   request receipt at the primary master.
+
+   5.3. A requestor can ensure transaction idempotence by explicitly
+   deleting some "marker RR" (rather than deleting the RRset of which it
+   is a part) and then adding a new "marker RR" with a different RDATA
+   field.  The Prerequisite Section should specify that the original
+   "marker RR" must be present in order for this UPDATE message to be
+   accepted by the server.
+
+   5.4. If the request is duplicated by a network error, all duplicate
+   requests will fail since only the first will find the original
+   "marker RR" present and having its known previous value.  The
+   decisions of whether to use such a "marker RR" and what RR to use are
+   left up to the application programmer, though one obvious choice is
+   the zone's SOA RR as described below.
+
+   5.5. Requestors can ensure update ordering by externally
+   synchronizing their use of successive values of the "marker RR."
+   Mutual exclusion can be addressed as a degenerate case, in that a
+   single succession of the "marker RR" is all that is needed.
+
+   5.6. A special case where update ordering and datagram duplication
+   intersect is when an RR validly changes to some new value and then
+   back to its previous value.  Without a "marker RR" as described
+   above, this sequence of updates can leave the zone in an undefined
+   state if datagrams are duplicated.
+
+   5.7. To achieve an atomic multitransaction "read-modify-write" cycle,
+   a requestor could first retrieve the SOA RR, and build an UPDATE
+   message one of whose prerequisites was the old SOA RR.  It would then
+   specify updates that would delete this SOA RR and add a new one with
+   an incremented SOA SERIAL, along with whatever actual prerequisites
+
+
+
+Vixie, et. al.              Standards Track                    [Page 19]
+
+RFC 2136                       DNS Update                     April 1997
+
+
+   and updates were the object of the transaction.  If the transaction
+   succeeds, the requestor knows that the RRs being changed were not
+   otherwise altered by any other requestor.
+

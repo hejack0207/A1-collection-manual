@@ -1,0 +1,89 @@
+7.1.4.2.2.     Index Allocation
+
+   Index allocation is a service provided by an AgentX master agent.  It
+   provides generic support for sharing MIB conceptual tables among
+   subagents who are assumed to have no knowledge of each other.
+
+   The master agent maintains a database of index objects (OIDs), and,
+   for each index, the values that have been allocated for it.  It is
+   unaware of what MIB variables (if any) the index objects represent.
+
+
+
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 51]
+
+RFC 2741                         AgentX                     January 2000
+
+
+   By convention, subagents use the MIB variable listed in the INDEX
+   clause as the index object for which values must be allocated.  For
+   tables indexed by multiple variables, values may be allocated for
+   each index (although this is frequently unnecessary; see example 2
+   below).  The subagent may request allocation of
+
+          a) a specific index value
+          b) an index value that is not currently allocated
+          c) an index value that has never been allocated
+
+   The last two alternatives reflect the uniqueness and constancy
+   requirements present in many MIB specifications for arbitrary integer
+   indexes (e.g., ifIndex in the IF-MIB (RFC 2233 [19]),
+   snmpFddiSMTIndex in the FDDI MIB (RFC 1285 [20]), or
+   sysApplInstallPkgIndex in the System Application MIB (RFC 2287
+   [21])).  The need for subagents to share tables using such indexes is
+   the main motivation for index allocation in AgentX.
+
+   It is important to note that index allocation and MIB region
+   registration are not coupled in the master agent. The current state
+   of index allocations is not considered when processing registration
+   requests, and the current registry is not considered when processing
+   index allocation requests.  (This is mainly to accommodate non-AgentX
+   subagents.)
+
+   AgentX subagents should follow the model of "first request allocation
+   of an index, then register the corresponding region".  Then a
+   successful index allocation request gives a subagent a good hint (but
+   no guarantee) of what it should be able to register.  The
+   registration may fail (with `duplicateRegistration') because some
+   other subagent session has already registered that row of the table.
+
+   The recommended mechanism for subagents to register conceptual rows
+   in a shared table is
+
+   1) Successfully allocate an index value.
+
+   2) Use that value to fully qualify the MIB region(s), and attempt to
+      register using the default priority.
+
+   3) If the registration fails with `duplicateRegistration' deallocate
+      the previously allocated index value(s) for this row and go to
+      step 1).
+
+
+
+
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 52]
+
+RFC 2741                         AgentX                     January 2000
+
+
+   Note that index allocation is necessary only when the index in
+   question is an arbitrary value, and hence the subagent has no other
+   reasonable way to determine which index values to use.  When index
+   values have intrinsic meaning it is not expected that subagents will
+   allocate their index values.
+
+   For example, RFC 1514's table of running software processes
+   (hrSWRunTable) is indexed by the system's native process identifier
+   (pid).  A subagent implementing the row of hrSWRunTable corresponding
+   to its own process would simply register the region defining that
+   row's object instances without allocating index values.
+

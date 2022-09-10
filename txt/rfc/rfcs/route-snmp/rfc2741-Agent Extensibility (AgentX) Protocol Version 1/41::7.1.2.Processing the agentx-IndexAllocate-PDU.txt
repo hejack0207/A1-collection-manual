@@ -1,0 +1,81 @@
+7.1.2. Processing the agentx-IndexAllocate-PDU
+
+   When the master agent receives an agentx-IndexAllocate-PDU, it
+   performs the common processing described in section 7.1, "Processing
+   AgentX Administrative Messages".  If as a result res.error is
+   `noAgentXError', processing continues as follows:
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 47]
+
+RFC 2741                         AgentX                     January 2000
+
+
+   1) Each VarBind in the VarBindList is processed until either all are
+      successful, or one fails.  If any VarBind fails, the agentx-
+      Response-PDU is sent in reply containing the original VarBindList,
+      with res.index set to indicate the failed VarBind, and with
+      res.error set as described subsequently.  All other VarBinds are
+      ignored; no index values are allocated.
+
+      VarBinds are processed as follows:
+
+      -  v.name is the OID prefix of the MIB OBJECT-TYPE for which a
+         value is to be allocated.
+
+      - v.type is the syntax of the MIB OBJECT-TYPE for which a value is
+         to be allocated.
+
+      -  v.data indicates the specific index value requested.  If the
+         NEW_INDEX or the ANY_INDEX bit is set, the actual value in
+         v.data is ignored and an appropriate index value is generated.
+
+      a) If there are no currently allocated index values for v.name in
+         the indicated context, and v.type does not correspond to a
+         valid index type value, the VarBind fails and res.error is set
+         to `indexWrongType'.
+
+      b) If there are currently allocated index values for v.name in the
+         indicated context, but the syntax of those values does not
+         match v.type, the VarBind fails and res.error is set to
+         `indexWrongType'.
+
+      c) Otherwise, if both the NEW_INDEX and ANY_INDEX bits are clear,
+         allocation of a specific index value is being requested.  If
+         the requested index is already allocated for v.name in the
+         indicated context, the VarBind fails and res.error is set to
+         `indexAlreadyAllocated'.
+
+      d) Otherwise, if the NEW_INDEX bit is set, the master agent should
+         generate the next available index value for v.name in the
+         indicated context, with the constraint that this value must not
+         have been allocated (even if subsequently released) to any
+         subagent since the last re-initialization of the master agent.
+         If no such value can be generated, the VarBind fails and
+         res.error is set to `indexNoneAvailable'.
+
+      e) Otherwise, if the ANY_INDEX bit is set, the master agent should
+         generate an index value for v.name in the indicated context,
+         with the constraint that this value is not currently allocated
+         to any subagent.  If no such value can be generated, then the
+         VarBind fails and res.error is set to `indexNoneAvailable'.
+
+
+
+Daniele, et al.             Standards Track                    [Page 48]
+
+RFC 2741                         AgentX                     January 2000
+
+
+   2) If all VarBinds are processed successfully, the agentx-Response-
+      PDU is sent in reply with res.error set to `noAgentXError'.  A
+      VarBindList is included that is identical to the one sent in the
+      agentx-IndexAllocate-PDU, except that VarBinds requesting a
+      NEW_INDEX or ANY_INDEX value are generated with an appropriate
+      value.
+
+      See section 7.1.4.2, "Registering Stuff" for more information on
+      how subagents should perform index allocations.
+

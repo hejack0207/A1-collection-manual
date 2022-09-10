@@ -1,0 +1,163 @@
+2.1.1.  LLMNR Header Format
+
+   LLMNR queries and responses utilize the DNS header format defined in
+   [RFC1035] with exceptions noted below:
+
+                                      1  1  1  1  1  1
+        0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+      +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+      |                      ID                       |
+      +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+      |QR|   Opcode  | C|TC| T| Z| Z| Z| Z|   RCODE   |
+      +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+      |                    QDCOUNT                    |
+      +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+      |                    ANCOUNT                    |
+      +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+      |                    NSCOUNT                    |
+      +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+      |                    ARCOUNT                    |
+      +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+
+
+
+Aboba, et al.                Informational                      [Page 5]
+
+RFC 4795                         LLMNR                      January 2007
+
+
+   where:
+
+   ID      A 16-bit identifier assigned by the program that generates
+           any kind of query.  This identifier is copied from the query
+           to the response and can be used by the sender to match
+           responses to outstanding queries.  The ID field in a query
+           SHOULD be set to a pseudo-random value.  For advice on
+           generation of pseudo-random values, please consult [RFC4086].
+
+   QR      Query/Response.  A 1-bit field, which, if set, indicates that
+           the message is an LLMNR response; if clear, then the message
+           is an LLMNR query.
+
+   OPCODE  A 4-bit field that specifies the kind of query in this
+           message.  This value is set by the originator of a query and
+           copied into the response.  This specification defines the
+           behavior of standard queries and responses (opcode value of
+           zero).  Future specifications may define the use of other
+           opcodes with LLMNR.  LLMNR senders and responders MUST
+           support standard queries (opcode value of zero).  LLMNR
+           queries with unsupported OPCODE values MUST be silently
+           discarded by responders.
+
+   C       Conflict.  When set within a query, the 'C'onflict bit
+           indicates that a sender has received multiple LLMNR responses
+           to this query.  In an LLMNR response, if the name is
+           considered UNIQUE, then the 'C' bit is clear; otherwise, it
+           is set.  LLMNR senders do not retransmit queries with the 'C'
+           bit set.  Responders MUST NOT respond to LLMNR queries with
+           the 'C' bit set, but may start the uniqueness verification
+           process, as described in Section 4.2.
+
+   TC      TrunCation.  The 'TC' bit specifies that this message was
+           truncated due to length greater than that permitted on the
+           transmission channel.  The 'TC' bit MUST NOT be set in an
+           LLMNR query and, if set, is ignored by an LLMNR responder.
+           If the 'TC' bit is set in an LLMNR response, then the sender
+           SHOULD resend the LLMNR query over TCP using the unicast
+           address of the responder as the destination address.  If the
+           sender receives a response to the TCP query, then it SHOULD
+           discard the UDP response with the TC bit set.  See  [RFC2181]
+           and Section 2.4 of this specification for further discussion
+           of the 'TC' bit.
+
+   T       Tentative.  The 'T'entative bit is set in a response if the
+           responder is authoritative for the name, but has not yet
+           verified the uniqueness of the name.  A responder MUST ignore
+           the 'T' bit in a query, if set.  A response with the 'T' bit
+
+
+
+Aboba, et al.                Informational                      [Page 6]
+
+RFC 4795                         LLMNR                      January 2007
+
+
+           set is silently discarded by the sender, except if it is a
+           uniqueness query, in which case, a conflict has been detected
+           and a responder MUST resolve the conflict as described in
+           Section 4.1.
+
+   Z       Reserved for future use.  Implementations of this
+           specification MUST set these bits to zero in both queries and
+           responses.  If these bits are set in a LLMNR query or
+           response, implementations of this specification MUST ignore
+           them.  Since reserved bits could conceivably be used for
+           different purposes than in DNS, implementers are advised not
+           to enable processing of these bits in an LLMNR implementation
+           starting from a DNS code base.
+
+   RCODE   Response code.  This 4-bit field is set as part of LLMNR
+           responses.  In an LLMNR query, the sender MUST set RCODE to
+           zero; the responder ignores the RCODE and assumes it to be
+           zero.  The response to a multicast LLMNR query MUST have
+           RCODE set to zero.  A sender MUST silently discard an LLMNR
+           response with a non-zero RCODE sent in response to a
+           multicast query.
+
+           If an LLMNR responder is authoritative for the name in a
+           multicast query, but an error is encountered, the responder
+           SHOULD send an LLMNR response with an RCODE of zero, no RRs
+           in the answer section, and the TC bit set.  This will cause
+           the query to be resent using TCP, and allow the inclusion of
+           a non-zero RCODE in the response to the TCP query.
+           Responding with the TC bit set is preferable to not sending a
+           response, since it enables errors to be diagnosed.  This may
+           be required, for example, when an LLMNR query includes a TSIG
+           RR in the additional section, and the responder encounters a
+           problem that requires returning a non-zero RCODE.  TSIG error
+           conditions defined in [RFC2845] include a TSIG RR in an
+           unacceptable position (RCODE=1) or a TSIG RR that does not
+           validate (RCODE=9 with TSIG ERROR 17 (BADKEY) or 16
+           (BADSIG)).
+
+           Since LLMNR responders only respond to LLMNR queries for
+           names for which they are authoritative, LLMNR responders MUST
+           NOT respond with an RCODE of 3; instead, they should not
+           respond at all.
+
+           LLMNR implementations MUST support EDNS0 [RFC2671] and
+           extended RCODE values.
+
+
+
+
+
+
+Aboba, et al.                Informational                      [Page 7]
+
+RFC 4795                         LLMNR                      January 2007
+
+
+   QDCOUNT An unsigned 16-bit integer specifying the number of entries
+           in the question section.  A sender MUST place only one
+           question into the question section of an LLMNR query.  LLMNR
+           responders MUST silently discard LLMNR queries with QDCOUNT
+           not equal to one.  LLMNR senders MUST silently discard LLMNR
+           responses with QDCOUNT not equal to one.
+
+   ANCOUNT An unsigned 16-bit integer specifying the number of resource
+           records in the answer section.  LLMNR responders MUST
+           silently discard LLMNR queries with ANCOUNT not equal to
+           zero.
+
+   NSCOUNT An unsigned 16-bit integer specifying the number of name
+           server resource records in the authority records section.
+           Authority record section processing is described in Section
+           2.9.  LLMNR responders MUST silently discard LLMNR queries
+           with NSCOUNT not equal to zero.
+
+   ARCOUNT An unsigned 16-bit integer specifying the number of resource
+           records in the additional records section.  Additional record
+           section processing is described in Section 2.9.
+

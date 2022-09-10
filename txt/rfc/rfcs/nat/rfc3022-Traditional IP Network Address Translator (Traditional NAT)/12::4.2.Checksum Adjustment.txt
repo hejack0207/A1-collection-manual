@@ -1,0 +1,52 @@
+4.2. Checksum Adjustment
+
+   NAT modifications are per packet based and can be very compute
+   intensive, as they involve one or more checksum modifications in
+   addition to simple field translations.  Luckily, we have an algorithm
+   below, which makes checksum adjustment to IP, TCP, UDP and ICMP
+   headers very simple and efficient.  Since all these headers use a
+   one's complement sum, it is sufficient to calculate the arithmetic
+   difference between the before-translation and after-translation
+   addresses and add this to the checksum.  The algorithm below is
+   applicable only for even offsets (i.e., optr below must be at an even
+   offset from start of header) and even lengths (i.e., olen and nlen
+   below must be even).  Sample code (in C) for this is as follows.
+
+   void checksumadjust(unsigned char *chksum, unsigned char *optr,
+   int olen, unsigned char *nptr, int nlen)
+   /* assuming: unsigned char is 8 bits, long is 32 bits.
+     - chksum points to the chksum in the packet
+     - optr points to the old data in the packet
+     - nptr points to the new data in the packet
+   */
+   {
+     long x, old, new;
+     x=chksum[0]*256+chksum[1];
+     x=~x & 0xFFFF;
+     while (olen)
+     {
+         old=optr[0]*256+optr[1]; optr+=2;
+         x-=old & 0xffff;
+         if (x<=0) { x--; x&=0xffff; }
+         olen-=2;
+     }
+     while (nlen)
+     {
+         new=nptr[0]*256+nptr[1]; nptr+=2;
+         x+=new & 0xffff;
+         if (x & 0x10000) { x++; x&=0xffff; }
+         nlen-=2;
+     }
+     x=~x & 0xFFFF;
+     chksum[0]=x/256; chksum[1]=x & 0xff;
+   }
+
+
+
+
+
+Srisuresh & Egevang          Informational                      [Page 9]
+
+RFC 3022                    Traditional NAT                 January 2001
+
+

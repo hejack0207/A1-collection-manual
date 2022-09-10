@@ -1,0 +1,653 @@
+2.  The Link-state Database: organization and calculations
+
+    The following subsections describe the organization of OSPF's link-
+    state database, and the routing calculations that are performed on
+    the database in order to produce a router's routing table.
+
+
+    2.1.  Representation of routers and networks
+
+        The Autonomous System's link-state database describes a directed
+        graph.  The vertices of the graph consist of routers and
+        networks.  A graph edge connects two routers when they are
+        attached via a physical point-to-point network.  An edge
+        connecting a router to a network indicates that the router has
+        an interface on the network. Networks can be either transit or
+        stub networks. Transit networks are those capable of carrying
+        data traffic that is neither locally originated nor locally
+        destined. A transit network is represented by a graph vertex
+        having both incoming and outgoing edges. A stub network's vertex
+        has only incoming edges.
+
+        The neighborhood of each network node in the graph depends on
+        the network's type (point-to-point, broadcast, NBMA or Point-
+        to-MultiPoint) and the number of routers having an interface to
+        the network.  Three cases are depicted in Figure 1a.  Rectangles
+        indicate routers.  Circles and oblongs indicate networks.
+        Router names are prefixed with the letters RT and network names
+        with the letter N.  Router interface names are prefixed by the
+        letter I.  Lines between routers indicate point-to-point
+        networks.  The left side of the figure shows networks with their
+        connected routers, with the resulting graphs shown on the right.
+
+
+
+
+Moy                         Standards Track                    [Page 13]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+
+
+                                                  **FROM**
+
+                                           *      |RT1|RT2|
+                +---+Ia    +---+           *   ------------
+                |RT1|------|RT2|           T   RT1|   | X |
+                +---+    Ib+---+           O   RT2| X |   |
+                                           *    Ia|   | X |
+                                           *    Ib| X |   |
+
+                     Physical point-to-point networks
+
+
+                                                  **FROM**
+                      +---+                *
+                      |RT7|                *      |RT7| N3|
+                      +---+                T   ------------
+                        |                  O   RT7|   |   |
+            +----------------------+       *    N3| X |   |
+                       N3                  *
+
+                              Stub networks
+
+                                                  **FROM**
+                +---+      +---+
+                |RT3|      |RT4|              |RT3|RT4|RT5|RT6|N2 |
+                +---+      +---+        *  ------------------------
+                  |    N2    |          *  RT3|   |   |   |   | X |
+            +----------------------+    T  RT4|   |   |   |   | X |
+                  |          |          O  RT5|   |   |   |   | X |
+                +---+      +---+        *  RT6|   |   |   |   | X |
+                |RT5|      |RT6|        *   N2| X | X | X | X |   |
+                +---+      +---+
+
+                          Broadcast or NBMA networks
+
+
+
+                    Figure 1a: Network map components
+
+
+
+
+Moy                         Standards Track                    [Page 14]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+             Networks and routers are represented by vertices.
+             An edge connects Vertex A to Vertex B iff the
+             intersection of Column A and Row B is marked with
+                                  an X.
+
+
+
+        The top of Figure 1a shows two routers connected by a point-to-
+        point link. In the resulting link-state database graph, the two
+        router vertices are directly connected by a pair of edges, one
+        in each direction. Interfaces to point-to-point networks need
+        not be assigned IP addresses.  When interface addresses are
+        assigned, they are modelled as stub links, with each router
+        advertising a stub connection to the other router's interface
+        address. Optionally, an IP subnet can be assigned to the point-
+        to-point network. In this case, both routers advertise a stub
+        link to the IP subnet, instead of advertising each others' IP
+        interface addresses.
+
+        The middle of Figure 1a shows a network with only one attached
+        router (i.e., a stub network). In this case, the network appears
+        on the end of a stub connection in the link-state database's
+        graph.
+
+        When multiple routers are attached to a broadcast network, the
+        link-state database graph shows all routers bidirectionally
+        connected to the network vertex. This is pictured at the bottom
+        of Figure 1a.
+
+        Each network (stub or transit) in the graph has an IP address
+        and associated network mask.  The mask indicates the number of
+        nodes on the network.  Hosts attached directly to routers
+        (referred to as host routes) appear on the graph as stub
+        networks.  The network mask for a host route is always
+        0xffffffff, which indicates the presence of a single node.
+
+
+        2.1.1.  Representation of non-broadcast networks
+
+            As mentioned previously, OSPF can run over non-broadcast
+            networks in one of two modes: NBMA or Point-to-MultiPoint.
+            The choice of mode determines the way that the Hello
+
+
+
+Moy                         Standards Track                    [Page 15]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            protocol and flooding work over the non-broadcast network,
+            and the way that the network is represented in the link-
+            state database.
+
+            In NBMA mode, OSPF emulates operation over a broadcast
+            network: a Designated Router is elected for the NBMA
+            network, and the Designated Router originates an LSA for the
+            network. The graph representation for broadcast networks and
+            NBMA networks is identical. This representation is pictured
+            in the middle of Figure 1a.
+
+            NBMA mode is the most efficient way to run OSPF over non-
+            broadcast networks, both in terms of link-state database
+            size and in terms of the amount of routing protocol traffic.
+            However, it has one significant restriction: it requires all
+            routers attached to the NBMA network to be able to
+            communicate directly. This restriction may be met on some
+            non-broadcast networks, such as an ATM subnet utilizing
+            SVCs. But it is often not met on other non-broadcast
+            networks, such as PVC-only Frame Relay networks. On non-
+            broadcast networks where not all routers can communicate
+            directly you can break the non-broadcast network into
+            logical subnets, with the routers on each subnet being able
+            to communicate directly, and then run each separate subnet
+            as an NBMA network (see [Ref15]). This however requires
+            quite a bit of administrative overhead, and is prone to
+            misconfiguration. It is probably better to run such a non-
+            broadcast network in Point-to-Multipoint mode.
+
+            In Point-to-MultiPoint mode, OSPF treats all router-to-
+            router connections over the non-broadcast network as if they
+            were point-to-point links. No Designated Router is elected
+            for the network, nor is there an LSA generated for the
+            network. In fact, a vertex for the Point-to-MultiPoint
+            network does not appear in the graph of the link-state
+            database.
+
+            Figure 1b illustrates the link-state database representation
+            of a Point-to-MultiPoint network. On the left side of the
+            figure, a Point-to-MultiPoint network is pictured. It is
+            assumed that all routers can communicate directly, except
+            for routers RT4 and RT5. I3 though I6 indicate the routers'
+
+
+
+Moy                         Standards Track                    [Page 16]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            IP interface addresses on the Point-to-MultiPoint network.
+            In the graphical representation of the link-state database,
+            routers that can communicate directly over the Point-to-
+            MultiPoint network are joined by bidirectional edges, and
+            each router also has a stub connection to its own IP
+            interface address (which is in contrast to the
+            representation of real point-to-point links; see Figure 1a).
+
+            On some non-broadcast networks, use of Point-to-MultiPoint
+            mode and data-link protocols such as Inverse ARP (see
+            [Ref14]) will allow autodiscovery of OSPF neighbors even
+            though broadcast support is not available.
+
+
+
+
+
+
+                                                  **FROM**
+                +---+      +---+
+                |RT3|      |RT4|              |RT3|RT4|RT5|RT6|
+                +---+      +---+        *  --------------------
+                I3|    N2    |I4        *  RT3|   | X | X | X |
+            +----------------------+    T  RT4| X |   |   | X |
+                I5|          |I6        O  RT5| X |   |   | X |
+                +---+      +---+        *  RT6| X | X | X |   |
+                |RT5|      |RT6|        *   I3| X |   |   |   |
+                +---+      +---+            I4|   | X |   |   |
+                                            I5|   |   | X |   |
+                                            I6|   |   |   | X |
+
+
+
+                    Figure 1b: Network map components
+                       Point-to-MultiPoint networks
+
+             All routers can communicate directly over N2, except
+                routers RT4 and RT5. I3 through I6 indicate IP
+                           interface addresses
+
+
+
+
+
+
+Moy                         Standards Track                    [Page 17]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        2.1.2.  An example link-state database
+
+            Figure 2 shows a sample map of an Autonomous System.  The
+            rectangle labelled H1 indicates a host, which has a SLIP
+            connection to Router RT12.  Router RT12 is therefore
+            advertising a host route.  Lines between routers indicate
+            physical point-to-point networks.  The only point-to-point
+            network that has been assigned interface addresses is the
+            one joining Routers RT6 and RT10.  Routers RT5 and RT7 have
+            BGP connections to other Autonomous Systems.  A set of BGP-
+            learned routes have been displayed for both of these
+            routers.
+
+            A cost is associated with the output side of each router
+            interface.  This cost is configurable by the system
+            administrator.  The lower the cost, the more likely the
+            interface is to be used to forward data traffic.  Costs are
+            also associated with the externally derived routing data
+            (e.g., the BGP-learned routes).
+
+            The directed graph resulting from the map in Figure 2 is
+            depicted in Figure 3.  Arcs are labelled with the cost of
+            the corresponding router output interface.  Arcs having no
+            labelled cost have a cost of 0.  Note that arcs leading from
+            networks to routers always have cost 0; they are significant
+            nonetheless.  Note also that the externally derived routing
+            data appears on the graph as stubs.
+
+            The link-state database is pieced together from LSAs
+            generated by the routers.  In the associated graphical
+            representation, the neighborhood of each router or transit
+            network is represented in a single, separate LSA.  Figure 4
+            shows these LSAs graphically. Router RT12 has an interface
+            to two broadcast networks and a SLIP line to a host.
+            Network N6 is a broadcast network with three attached
+            routers.  The cost of all links from Network N6 to its
+            attached routers is 0.  Note that the LSA for Network N6 is
+            actually generated by one of the network's attached routers:
+            the router that has been elected Designated Router for the
+            network.
+
+
+
+
+
+Moy                         Standards Track                    [Page 18]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+                 +
+                 | 3+---+                     N12      N14
+               N1|--|RT1|\ 1                    \ N13 /
+                 |  +---+ \                     8\ |8/8
+                 +         \ ____                 \|/
+                            /    \   1+---+8    8+---+6
+                           *  N3  *---|RT4|------|RT5|--------+
+                            \____/    +---+      +---+        |
+                  +         /   |                  |7         |
+                  | 3+---+ /    |                  |          |
+                N2|--|RT2|/1    |1                 |6         |
+                  |  +---+    +---+8            6+---+        |
+                  +           |RT3|--------------|RT6|        |
+                              +---+              +---+        |
+                                |2               Ia|7         |
+                                |                  |          |
+                           +---------+             |          |
+                               N4                  |          |
+                                                   |          |
+                                                   |          |
+                       N11                         |          |
+                   +---------+                     |          |
+                        |                          |          |    N12
+                        |3                         |          |6 2/
+                      +---+                        |        +---+/
+                      |RT9|                        |        |RT7|---N15
+                      +---+                        |        +---+ 9
+                        |1                   +     |          |1
+                       _|__                  |   Ib|5       __|_
+                      /    \      1+----+2   |  3+----+1   /    \
+                     *  N9  *------|RT11|----|---|RT10|---*  N6  *
+                      \____/       +----+    |   +----+    \____/
+                        |                    |                |
+                        |1                   +                |1
+             +--+   10+----+                N8              +---+
+             |H1|-----|RT12|                                |RT8|
+             +--+SLIP +----+                                +---+
+                        |2                                    |4
+                        |                                     |
+                   +---------+                            +--------+
+                       N10                                    N7
+
+
+
+Moy                         Standards Track                    [Page 19]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+                    Figure 2: A sample Autonomous System
+
+                                **FROM**
+
+                 |RT|RT|RT|RT|RT|RT|RT|RT|RT|RT|RT|RT|
+                 |1 |2 |3 |4 |5 |6 |7 |8 |9 |10|11|12|N3|N6|N8|N9|
+              ----- ---------------------------------------------
+              RT1|  |  |  |  |  |  |  |  |  |  |  |  |0 |  |  |  |
+              RT2|  |  |  |  |  |  |  |  |  |  |  |  |0 |  |  |  |
+              RT3|  |  |  |  |  |6 |  |  |  |  |  |  |0 |  |  |  |
+              RT4|  |  |  |  |8 |  |  |  |  |  |  |  |0 |  |  |  |
+              RT5|  |  |  |8 |  |6 |6 |  |  |  |  |  |  |  |  |  |
+              RT6|  |  |8 |  |7 |  |  |  |  |5 |  |  |  |  |  |  |
+              RT7|  |  |  |  |6 |  |  |  |  |  |  |  |  |0 |  |  |
+          *   RT8|  |  |  |  |  |  |  |  |  |  |  |  |  |0 |  |  |
+          *   RT9|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |0 |
+          T  RT10|  |  |  |  |  |7 |  |  |  |  |  |  |  |0 |0 |  |
+          O  RT11|  |  |  |  |  |  |  |  |  |  |  |  |  |  |0 |0 |
+          *  RT12|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |0 |
+          *    N1|3 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+               N2|  |3 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+               N3|1 |1 |1 |1 |  |  |  |  |  |  |  |  |  |  |  |  |
+               N4|  |  |2 |  |  |  |  |  |  |  |  |  |  |  |  |  |
+               N6|  |  |  |  |  |  |1 |1 |  |1 |  |  |  |  |  |  |
+               N7|  |  |  |  |  |  |  |4 |  |  |  |  |  |  |  |  |
+               N8|  |  |  |  |  |  |  |  |  |3 |2 |  |  |  |  |  |
+               N9|  |  |  |  |  |  |  |  |1 |  |1 |1 |  |  |  |  |
+              N10|  |  |  |  |  |  |  |  |  |  |  |2 |  |  |  |  |
+              N11|  |  |  |  |  |  |  |  |3 |  |  |  |  |  |  |  |
+              N12|  |  |  |  |8 |  |2 |  |  |  |  |  |  |  |  |  |
+              N13|  |  |  |  |8 |  |  |  |  |  |  |  |  |  |  |  |
+              N14|  |  |  |  |8 |  |  |  |  |  |  |  |  |  |  |  |
+              N15|  |  |  |  |  |  |9 |  |  |  |  |  |  |  |  |  |
+               H1|  |  |  |  |  |  |  |  |  |  |  |10|  |  |  |  |
+
+
+                     Figure 3: The resulting directed graph
+
+                 Networks and routers are represented by vertices.
+                 An edge of cost X connects Vertex A to Vertex B iff
+                 the intersection of Column A and Row B is marked
+                                     with an X.
+
+
+
+Moy                         Standards Track                    [Page 20]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+                     **FROM**                       **FROM**
+
+                  |RT12|N9|N10|H1|                 |RT9|RT11|RT12|N9|
+           *  --------------------          *  ----------------------
+           *  RT12|    |  |   |  |          *   RT9|   |    |    |0 |
+           T    N9|1   |  |   |  |          T  RT11|   |    |    |0 |
+           O   N10|2   |  |   |  |          O  RT12|   |    |    |0 |
+           *    H1|10  |  |   |  |          *    N9|   |    |    |  |
+           *                                *
+                RT12's router-LSA              N9's network-LSA
+
+                  Figure 4: Individual link state components
+
+              Networks and routers are represented by vertices.
+              An edge of cost X connects Vertex A to Vertex B iff
+              the intersection of Column A and Row B is marked
+                                  with an X.
+
+    2.2.  The shortest-path tree
+
+        When no OSPF areas are configured, each router in the Autonomous
+        System has an identical link-state database, leading to an
+        identical graphical representation.  A router generates its
+        routing table from this graph by calculating a tree of shortest
+        paths with the router itself as root.  Obviously, the shortest-
+        path tree depends on the router doing the calculation.  The
+        shortest-path tree for Router RT6 in our example is depicted in
+        Figure 5.
+
+        The tree gives the entire path to any destination network or
+        host.  However, only the next hop to the destination is used in
+        the forwarding process.  Note also that the best route to any
+        router has also been calculated.  For the processing of external
+        data, we note the next hop and distance to any router
+        advertising external routes.  The resulting routing table for
+        Router RT6 is pictured in Table 2.  Note that there is a
+        separate route for each end of a numbered point-to-point network
+        (in this case, the serial line between Routers RT6 and RT10).
+
+
+        Routes to networks belonging to other AS'es (such as N12) appear
+        as dashed lines on the shortest path tree in Figure 5.  Use of
+
+
+
+Moy                         Standards Track                    [Page 21]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+                                RT6(origin)
+                    RT5 o------------o-----------o Ib
+                       /|\    6      |\     7
+                     8/8|8\          | \
+                     /  |  \        6|  \
+                    o   |   o        |   \7
+                   N12  o  N14       |    \
+                       N13        2  |     \
+                            N4 o-----o RT3  \
+                                    /        \    5
+                                  1/     RT10 o-------o Ia
+                                  /           |\
+                       RT4 o-----o N3        3| \1
+                                /|            |  \ N6     RT7
+                               / |         N8 o   o---------o
+                              /  |            |   |        /|
+                         RT2 o   o RT1        |   |      2/ |9
+                            /    |            |   |RT8   /  |
+                           /3    |3      RT11 o   o     o   o
+                          /      |            |   |    N12 N15
+                      N2 o       o N1        1|   |4
+                                              |   |
+                                           N9 o   o N7
+                                             /|
+                                            / |
+                        N11      RT9       /  |RT12
+                         o--------o-------o   o--------o H1
+                             3                |   10
+                                              |2
+                                              |
+                                              o N10
+
+
+                     Figure 5: The SPF tree for Router RT6
+
+              Edges that are not marked with a cost have a cost of
+              of zero (these are network-to-router links). Routes
+              to networks N12-N15 are external information that is
+                         considered in Section 2.3
+
+
+
+
+
+Moy                         Standards Track                    [Page 22]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+                   Destination   Next  Hop   Distance
+                   __________________________________
+                   N1            RT3         10
+                   N2            RT3         10
+                   N3            RT3         7
+                   N4            RT3         8
+                   Ib            *           7
+                   Ia            RT10        12
+                   N6            RT10        8
+                   N7            RT10        12
+                   N8            RT10        10
+                   N9            RT10        11
+                   N10           RT10        13
+                   N11           RT10        14
+                   H1            RT10        21
+                   __________________________________
+                   RT5           RT5         6
+                   RT7           RT10        8
+
+
+    Table 2: The portion of Router RT6's routing table listing local
+                             destinations.
+
+        this externally derived routing information is considered in the
+        next section.
+
+
+    2.3.  Use of external routing information
+
+        After the tree is created the external routing information is
+        examined.  This external routing information may originate from
+        another routing protocol such as BGP, or be statically
+        configured (static routes).  Default routes can also be included
+        as part of the Autonomous System's external routing information.
+
+        External routing information is flooded unaltered throughout the
+        AS.  In our example, all the routers in the Autonomous System
+        know that Router RT7 has two external routes, with metrics 2 and
+        9.
+
+        OSPF supports two types of external metrics.  Type 1 external
+        metrics are expressed in the same units as OSPF interface cost
+
+
+
+Moy                         Standards Track                    [Page 23]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        (i.e., in terms of the link state metric).  Type 2 external
+        metrics are an order of magnitude larger; any Type 2 metric is
+        considered greater than the cost of any path internal to the AS.
+        Use of Type 2 external metrics assumes that routing between
+        AS'es is the major cost of routing a packet, and eliminates the
+        need for conversion of external costs to internal link state
+        metrics.
+
+        As an example of Type 1 external metric processing, suppose that
+        the Routers RT7 and RT5 in Figure 2 are advertising Type 1
+        external metrics.  For each advertised external route, the total
+        cost from Router RT6 is calculated as the sum of the external
+        route's advertised cost and the distance from Router RT6 to the
+        advertising router.  When two routers are advertising the same
+        external destination, RT6 picks the advertising router providing
+        the minimum total cost. RT6 then sets the next hop to the
+        external destination equal to the next hop that would be used
+        when routing packets to the chosen advertising router.
+
+        In Figure 2, both Router RT5 and RT7 are advertising an external
+        route to destination Network N12.  Router RT7 is preferred since
+        it is advertising N12 at a distance of 10 (8+2) to Router RT6,
+        which is better than Router RT5's 14 (6+8).  Table 3 shows the
+        entries that are added to the routing table when external routes
+        are examined:
+
+
+
+                         Destination   Next  Hop   Distance
+                         __________________________________
+                         N12           RT10        10
+                         N13           RT5         14
+                         N14           RT5         14
+                         N15           RT10        17
+
+
+                 Table 3: The portion of Router RT6's routing table
+                           listing external destinations.
+
+
+        Processing of Type 2 external metrics is simpler.  The AS
+        boundary router advertising the smallest external metric is
+
+
+
+Moy                         Standards Track                    [Page 24]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        chosen, regardless of the internal distance to the AS boundary
+        router.  Suppose in our example both Router RT5 and Router RT7
+        were advertising Type 2 external routes.  Then all traffic
+        destined for Network N12 would be forwarded to Router RT7, since
+        2 < 8.  When several equal-cost Type 2 routes exist, the
+        internal distance to the advertising routers is used to break
+        the tie.
+
+        Both Type 1 and Type 2 external metrics can be present in the AS
+        at the same time.  In that event, Type 1 external metrics always
+        take precedence.
+
+        This section has assumed that packets destined for external
+        destinations are always routed through the advertising AS
+        boundary router.  This is not always desirable.  For example,
+        suppose in Figure 2 there is an additional router attached to
+        Network N6, called Router RTX.  Suppose further that RTX does
+        not participate in OSPF routing, but does exchange BGP
+        information with the AS boundary router RT7.  Then, Router RT7
+        would end up advertising OSPF external routes for all
+        destinations that should be routed to RTX.  An extra hop will
+        sometimes be introduced if packets for these destinations need
+        always be routed first to Router RT7 (the advertising router).
+
+        To deal with this situation, the OSPF protocol allows an AS
+        boundary router to specify a "forwarding address" in its AS-
+        external-LSAs.  In the above example, Router RT7 would specify
+        RTX's IP address as the "forwarding address" for all those
+        destinations whose packets should be routed directly to RTX.
+
+        The "forwarding address" has one other application.  It enables
+        routers in the Autonomous System's interior to function as
+        "route servers".  For example, in Figure 2 the router RT6 could
+        become a route server, gaining external routing information
+        through a combination of static configuration and external
+        routing protocols.  RT6 would then start advertising itself as
+        an AS boundary router, and would originate a collection of OSPF
+        AS-external-LSAs.  In each AS-external-LSA, Router RT6 would
+        specify the correct Autonomous System exit point to use for the
+        destination through appropriate setting of the LSA's "forwarding
+        address" field.
+
+
+
+
+Moy                         Standards Track                    [Page 25]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    2.4.  Equal-cost multipath
+
+        The above discussion has been simplified by considering only a
+        single route to any destination.  In reality, if multiple
+        equal-cost routes to a destination exist, they are all
+        discovered and used.  This requires no conceptual changes to the
+        algorithm, and its discussion is postponed until we consider the
+        tree-building process in more detail.
+
+        With equal cost multipath, a router potentially has several
+        available next hops towards any given destination.
+
+

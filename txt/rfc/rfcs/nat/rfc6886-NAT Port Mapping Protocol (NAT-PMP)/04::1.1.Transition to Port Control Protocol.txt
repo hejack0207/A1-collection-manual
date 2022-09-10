@@ -1,0 +1,56 @@
+1.1.  Transition to Port Control Protocol
+
+   NAT-PMP enjoyed almost a decade of useful service, and operational
+   experience with NAT-PMP informed the design of its IETF Standards
+   Track successor, Port Control Protocol (PCP) [RFC6887].  PCP builds
+   on NAT-PMP, using the same UDP ports 5350 and 5351, and a compatible
+   packet format.  PCP also adds significant enhancements, including
+   IPv6 support, management of outbound mappings, management of firewall
+   rules, full compatibility with large-scale NATs with a pool of
+   external addresses, error lifetimes, and an extension mechanism to
+   enable future enhancements.
+
+   Because of the significant enhancements in PCP, all existing NAT-PMP
+   implementations are encouraged to migrate to PCP.  The version number
+   in the packet header is 0 for NAT-PMP and 2 for PCP, so the packets
+   are easily distinguished.  (Version number 1 was used by a vendor
+   that shipped products that use a protocol that is incompatible with
+   the IETF Standard.  PCP implementations MUST NOT use version
+   number 1.)
+
+   For NAT-PMP servers, adding PCP support is simple.  When packets are
+   received, if the version number is 2, then the packet is interpreted
+   as a PCP request, the request is handled, and replies and updates
+   pertaining to that mapping are sent using PCP format.  If the version
+   number is 0, then the existing code handles the request exactly as it
+   already does, and replies and updates pertaining to that mapping are
+
+
+
+
+
+Cheshire & Krochmal           Informational                     [Page 4]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+
+   sent using NAT-PMP format.  If the version number is 1 or any other
+   unsupported version, then result code 1 (Unsupported Version) is
+   returned.
+
+   NAT-PMP clients should add PCP support, and should default to sending
+   requests using PCP format, which will cause clients to prefer the
+   newer format when possible.  If a PCP request is sent to an old
+   NAT-PMP server that doesn't understand the new PCP format, then it
+   will return result code 1 (Unsupported Version), and the client
+   should then immediately retry the same request using NAT-PMP format.
+   The presence of the Unsupported Version reply allows fast fail-over
+   to NAT-PMP format, without waiting for timeouts, retransmissions, or
+   other arbitrary delays.  It is recommended that clients always try
+   PCP first for every new request, retransmission, and renewal, and
+   only try NAT-PMP in response to an "Unsupported Version" error.
+   Clients SHOULD NOT record that a given server only speaks NAT-PMP and
+   subsequently default to NAT-PMP for that server, since NAT firmware
+   gets updated, and even a NAT gateway that speaks only NAT-PMP today,
+   may be updated to speak PCP tomorrow.
+

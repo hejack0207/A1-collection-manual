@@ -1,0 +1,126 @@
+7.  Service Names
+
+   The <Service> portion of a Service Instance Name consists of a pair
+   of DNS labels, following the convention already established for SRV
+   records [RFC2782].
+
+   The first label of the pair is an underscore character followed by
+   the Service Name [RFC6335].  The Service Name identifies what the
+   service does and what application protocol it uses to do it.
+
+   For applications using TCP, the second label is "_tcp".
+
+   For applications using any transport protocol other than TCP, the
+   second label is "_udp".  This applies to all other transport
+   protocols, including User Datagram Protocol (UDP), Stream Control
+   Transmission Protocol (SCTP) [RFC4960], Datagram Congestion Control
+   Protocol (DCCP) [RFC4340], Adobe's Real Time Media Flow Protocol
+   (RTMFP), etc.  In retrospect, perhaps the SRV specification should
+   not have used the "_tcp" and "_udp" labels at all, and instead should
+   have used a single label "_srv" to carve off a subdomain of DNS
+   namespace for this use, but that specification is already published
+   and deployed.  At this point there is no benefit in changing
+   established practice.  While "_srv" might be aesthetically nicer than
+   "_udp", it is not a user-visible string, and all that is required
+   protocol-wise is (i) that it be a label that can form a DNS
+   delegation point, and (ii) that it be short so that it does not take
+   up too much space in the packet, and in this respect either "_udp" or
+   "_srv" is equally good.  Thus, it makes sense to use "_tcp" for TCP-
+   based services and "_udp" for all other transport protocols -- which
+   are in fact, in today's world, often encapsulated over UDP -- rather
+   than defining a new subdomain for every new transport protocol.
+
+   Note that this usage of the "_udp" label for all protocols other than
+   TCP applies exclusively to DNS-SD service advertising, i.e., services
+   advertised using the PTR+SRV+TXT convention specified in this
+   document.  It is not a requirement of SRV records in general.  Other
+   specifications that are independent of DNS-SD and not intended to
+   interoperate with DNS-SD records are not in any way constrained by
+   how DNS-SD works just because they also use the DNS SRV record
+   datatype [RFC2782]; they are free to specify their own naming
+   conventions as appropriate.
+
+   The rules for Service Names [RFC6335] state that they may be no more
+   than fifteen characters long (not counting the mandatory underscore),
+   consisting of only letters, digits, and hyphens, must begin and end
+   with a letter or digit, must not contain consecutive hyphens, and
+   must contain at least one letter.  The requirement to contain at
+   least one letter is to disallow Service Names such as "80" or
+
+
+
+Cheshire & Krochmal          Standards Track                   [Page 19]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+
+   "6000-6063", which could be misinterpreted as port numbers or port
+   number ranges.  While both uppercase and lowercase letters may be
+   used for mnemonic clarity, case is ignored for comparison purposes,
+   so the strings "HTTP" and "http" refer to the same service.
+
+   Wise selection of a Service Name is important, and the choice is not
+   always as obvious as it may appear.
+
+   In many cases, the Service Name merely names and refers to the on-
+   the-wire message format and semantics being used.  FTP is "ftp", IPP
+   printing is "ipp", and so on.
+
+   However, it is common to "borrow" an existing protocol and repurpose
+   it for a new task.  This is entirely sensible and sound engineering
+   practice, but that doesn't mean that the new protocol is providing
+   the same semantic service as the old one, even if it borrows the same
+   message formats.  For example, the network music sharing protocol
+   implemented by iTunes on Macintosh and Windows is built upon "HTTP
+   GET" commands.  However, that does *not* mean that it is sensible or
+   useful to try to access one of these music servers by connecting to
+   it with a standard web browser.  Consequently, the DNS-SD service
+   advertised (and browsed for) by iTunes is "_daap._tcp" (Digital Audio
+   Access Protocol), not "_http._tcp".
+
+   If iTunes were to advertise that it offered "_http._tcp" service,
+   that would cause iTunes servers to appear in conventional web
+   browsers (Safari, Camino, OmniWeb, Internet Explorer, Firefox,
+   Chrome, etc.), which is of little use since an iTunes music library
+   offers no HTML pages containing human-readable content that a web
+   browser could display.
+
+   Equally, if iTunes were to browse for "_http._tcp" service, that
+   would cause it to discover generic web servers, such as the embedded
+   web servers in devices like printers, which is of little use since
+   printers generally don't have much music to offer.
+
+   Analogously, Sun Microsystems's Network File System (NFS) is built on
+   top of Sun Microsystems's Remote Procedure Call (Sun RPC) mechanism,
+   but that doesn't mean it makes sense for an NFS server to advertise
+   that it provides "Sun RPC" service.  Likewise, Microsoft's Server
+   Message Block (SMB) file service is built on top of Netbios running
+   over IP, but that doesn't mean it makes sense for an SMB file server
+   to advertise that it provides "Netbios-over-IP" service.  The DNS-SD
+   name of a service needs to encapsulate both the "what" (semantics)
+   and the "how" (protocol implementation) of the service, since
+   knowledge of both is necessary for a client to use the service
+   meaningfully.  Merely advertising that a service was built on top of
+   Sun RPC is no use if the client has no idea what the service does.
+
+
+
+Cheshire & Krochmal          Standards Track                   [Page 20]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+
+   Another common question is whether the service type advertised by
+   iTunes should be "_daap._http._tcp."  This would also be incorrect.
+   Similarly, a protocol designer implementing a network service that
+   happens to use the Simple Object Access Protocol [SOAP] should not
+   feel compelled to have "_soap" appear somewhere in the Service Name.
+   Part of the confusion here is that the presence of "_tcp" or "_udp"
+   in the <Service> portion of a Service Instance Name has led people to
+   assume that the visible structure of the <Service> should reflect
+   the private internal structure of how the protocol was implemented.
+   This is not correct.  All that is required is that the service be
+   identified by some unique opaque Service Name.  Making the Service
+   Name be English text that is at least marginally descriptive of what
+   the service does may be convenient, but it is by no means essential.
+

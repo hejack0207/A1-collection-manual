@@ -1,0 +1,83 @@
+10.3.  Attacks On Infrastructure (Masking)
+
+   In addition to endpoints being the target of attacks via WebSockets,
+   other parts of web infrastructure, such as proxies, may be the
+   subject of an attack.
+
+   As this protocol was being developed, an experiment was conducted to
+   demonstrate a class of attacks on proxies that led to the poisoning
+   of caching proxies deployed in the wild [TALKING].  The general form
+   of the attack was to establish a connection to a server under the
+   "attacker's" control, perform an UPGRADE on the HTTP connection
+   similar to what the WebSocket Protocol does to establish a
+   connection, and subsequently send data over that UPGRADEd connection
+   that looked like a GET request for a specific known resource (which
+   in an attack would likely be something like a widely deployed script
+   for tracking hits or a resource on an ad-serving network).  The
+   remote server would respond with something that looked like a
+   response to the fake GET request, and this response would be cached
+   by a nonzero percentage of deployed intermediaries, thus poisoning
+   the cache.  The net effect of this attack would be that if a user
+   could be convinced to visit a website the attacker controlled, the
+   attacker could potentially poison the cache for that user and other
+   users behind the same cache and run malicious script on other
+   origins, compromising the web security model.
+
+   To avoid such attacks on deployed intermediaries, it is not
+   sufficient to prefix application-supplied data with framing that is
+   not compliant with HTTP, as it is not possible to exhaustively
+   discover and test that each nonconformant intermediary does not skip
+   such non-HTTP framing and act incorrectly on the frame payload.
+   Thus, the defense adopted is to mask all data from the client to the
+   server, so that the remote script (attacker) does not have control
+   over how the data being sent appears on the wire and thus cannot
+   construct a message that could be misinterpreted by an intermediary
+   as an HTTP request.
+
+   Clients MUST choose a new masking key for each frame, using an
+   algorithm that cannot be predicted by end applications that provide
+   data.  For example, each masking could be drawn from a
+   cryptographically strong random number generator.  If the same key is
+   used or a decipherable pattern exists for how the next key is chosen,
+   the attacker can send a message that, when masked, could appear to be
+
+
+
+Fette & Melnikov             Standards Track                   [Page 51]
+
+RFC 6455                 The WebSocket Protocol            December 2011
+
+
+   an HTTP request (by taking the message the attacker wishes to see on
+   the wire and masking it with the next masking key to be used, the
+   masking key will effectively unmask the data when the client applies
+   it).
+
+   It is also necessary that once the transmission of a frame from a
+   client has begun, the payload (application-supplied data) of that
+   frame must not be capable of being modified by the application.
+   Otherwise, an attacker could send a long frame where the initial data
+   was a known value (such as all zeros), compute the masking key being
+   used upon receipt of the first part of the data, and then modify the
+   data that is yet to be sent in the frame to appear as an HTTP request
+   when masked.  (This is essentially the same problem described in the
+   previous paragraph with using a known or predictable masking key.)
+   If additional data is to be sent or data to be sent is somehow
+   changed, that new or changed data must be sent in a new frame and
+   thus with a new masking key.  In short, once transmission of a frame
+   begins, the contents must not be modifiable by the remote script
+   (application).
+
+   The threat model being protected against is one in which the client
+   sends data that appears to be an HTTP request.  As such, the channel
+   that needs to be masked is the data from the client to the server.
+   The data from the server to the client can be made to look like a
+   response, but to accomplish this request, the client must also be
+   able to forge a request.  As such, it was not deemed necessary to
+   mask data in both directions (the data from the server to the client
+   is not masked).
+
+   Despite the protection provided by masking, non-compliant HTTP
+   proxies will still be vulnerable to poisoning attacks of this type by
+   clients and servers that do not apply masking.
+

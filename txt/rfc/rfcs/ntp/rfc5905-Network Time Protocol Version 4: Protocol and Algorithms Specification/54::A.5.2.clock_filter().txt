@@ -1,0 +1,196 @@
+A.5.2.  clock_filter()
+
+/*
+ * clock_filter(p, offset, delay, dispersion) - select the best from the
+ * latest eight delay/offset samples.
+ */
+void
+clock_filter(
+        struct p *p,            /* peer structure pointer */
+        double  offset,         /* clock offset */
+        double  delay,          /* roundtrip delay */
+        double  disp            /* dispersion */
+        )
+{
+        struct f f[NSTAGE];     /* sorted list */
+        double  dtemp;
+        int     i;
+
+        /*
+         * The clock filter contents consist of eight tuples (offset,
+         * delay, dispersion, time).  Shift each tuple to the left,
+         * discarding the leftmost one.  As each tuple is shifted,
+         * increase the dispersion since the last filter update.  At the
+         * same time, copy each tuple to a temporary list.  After this,
+         * place the (offset, delay, disp, time) in the vacated
+         * rightmost tuple.
+         */
+        for (i = 1; i < NSTAGE; i++) {
+                p->f[i] = p->f[i - 1];
+                p->f[i].disp += PHI * (c.t - p->t);
+                f[i] = p->f[i];
+        }
+        p->f[0].t = c.t;
+        p->f[0].offset = offset;
+        p->f[0].delay = delay;
+        p->f[0].disp = disp;
+        f[0] = p->f[0];
+
+        /*
+         * Sort the temporary list of tuples by increasing f[].delay.
+         * The first entry on the sorted list represents the best
+         * sample, but it might be old.
+         */
+        dtemp = p->offset;
+        p->offset = f[0].offset;
+        p->delay = f[0].delay;
+        for (i = 0; i < NSTAGE; i++) {
+                p->disp += f[i].disp / (2 ^ (i + 1));
+
+
+
+Mills, et al.                Standards Track                   [Page 85]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+                p->jitter += SQUARE(f[i].offset - f[0].offset);
+        }
+        p->jitter = max(SQRT(p->jitter), LOG2D(s.precision));
+
+        /*
+         * Prime directive: use a sample only once and never a sample
+         * older than the latest one, but anything goes before first
+         * synchronized.
+         */
+        if (f[0].t - p->t <= 0 && s.leap != NOSYNC)
+                return;
+
+        /*
+         * Popcorn spike suppressor.  Compare the difference between the
+         * last and current offsets to the current jitter.  If greater
+         * than SGATE (3) and if the interval since the last offset is
+         * less than twice the system poll interval, dump the spike.
+         * Otherwise, and if not in a burst, shake out the truechimers.
+         */
+        if (fabs(p->offset - dtemp) > SGATE * p->jitter && (f[0].t -
+            p->t) < 2 * s.poll)
+                return;
+
+        p->t = f[0].t;
+        if (p->burst == 0)
+                clock_select();
+        return;
+}
+
+/*
+ * fit() - test if association p is acceptable for synchronization
+ */
+int
+fit(
+        struct p *p             /* peer structure pointer */
+        )
+{
+        /*
+         * A stratum error occurs if (1) the server has never been
+         * synchronized, (2) the server stratum is invalid.
+         */
+        if (p->leap == NOSYNC || p->stratum >= MAXSTRAT)
+                return (FALSE);
+
+
+
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 86]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+        /*
+         * A distance error occurs if the root distance exceeds the
+         * distance threshold plus an increment equal to one poll
+         * interval.
+         */
+        if (root_dist(p) > MAXDIST + PHI * LOG2D(s.poll))
+                return (FALSE);
+
+        /*
+         * A loop error occurs if the remote peer is synchronized to the
+         * local peer or the remote peer is synchronized to the current
+         * system peer.  Note this is the behavior for IPv4; for IPv6
+         * the MD5 hash is used instead.
+         */
+        if (p->refid == p->dstaddr || p->refid == s.refid)
+                return (FALSE);
+
+        /*
+         * An unreachable error occurs if the server is unreachable.
+         */
+        if (p->reach == 0)
+                return (FALSE);
+
+        return (TRUE);
+}
+
+/*
+ * clear() - reinitialize for persistent association, demobilize
+ * for ephemeral association.
+ */
+void
+clear(
+        struct p *p,            /* peer structure pointer */
+        int     kiss            /* kiss code */
+        )
+{
+        int i;
+
+        /*
+         * The first thing to do is return all resources to the bank.
+         * Typical resources are not detailed here, but they include
+         * dynamically allocated structures for keys, certificates, etc.
+         * If an ephemeral association and not initialization, return
+         * the association memory as well.
+         */
+        /* return resources */
+        if (s.p == p)
+                s.p = NULL;
+
+
+
+Mills, et al.                Standards Track                   [Page 87]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+        if (kiss != X_INIT && (p->flags & P_EPHEM)) {
+                free(p);
+                return;
+        }
+
+        /*
+         * Initialize the association fields for general reset.
+         */
+        memset(BEGIN_CLEAR(p), LEN_CLEAR, 0);
+        p->leap = NOSYNC;
+        p->stratum = MAXSTRAT;
+        p->ppoll = MAXPOLL;
+        p->hpoll = MINPOLL;
+        p->disp = MAXDISP;
+        p->jitter = LOG2D(s.precision);
+        p->refid = kiss;
+        for (i = 0; i < NSTAGE; i++)
+                p->f[i].disp = MAXDISP;
+
+        /*
+         * Randomize the first poll just in case thousands of broadcast
+         * clients have just been stirred up after a long absence of the
+         * broadcast server.
+         */
+        p->outdate = p->t = c.t;
+        p->nextdate = p->outdate + (random() & ((1 << MINPOLL) - 1));
+}
+

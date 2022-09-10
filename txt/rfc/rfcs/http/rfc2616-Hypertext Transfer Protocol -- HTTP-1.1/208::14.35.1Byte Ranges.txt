@@ -1,0 +1,88 @@
+14.35.1 Byte Ranges
+
+   Since all HTTP entities are represented in HTTP messages as sequences
+   of bytes, the concept of a byte range is meaningful for any HTTP
+   entity. (However, not all clients and servers need to support byte-
+   range operations.)
+
+   Byte range specifications in HTTP apply to the sequence of bytes in
+   the entity-body (not necessarily the same as the message-body).
+
+   A byte range operation MAY specify a single range of bytes, or a set
+   of ranges within a single entity.
+
+       ranges-specifier = byte-ranges-specifier
+       byte-ranges-specifier = bytes-unit "=" byte-range-set
+       byte-range-set  = 1#( byte-range-spec | suffix-byte-range-spec )
+       byte-range-spec = first-byte-pos "-" [last-byte-pos]
+       first-byte-pos  = 1*DIGIT
+       last-byte-pos   = 1*DIGIT
+
+   The first-byte-pos value in a byte-range-spec gives the byte-offset
+   of the first byte in a range. The last-byte-pos value gives the
+   byte-offset of the last byte in the range; that is, the byte
+   positions specified are inclusive. Byte offsets start at zero.
+
+   If the last-byte-pos value is present, it MUST be greater than or
+   equal to the first-byte-pos in that byte-range-spec, or the byte-
+   range-spec is syntactically invalid. The recipient of a byte-range-
+   set that includes one or more syntactically invalid byte-range-spec
+   values MUST ignore the header field that includes that byte-range-
+   set.
+
+   If the last-byte-pos value is absent, or if the value is greater than
+   or equal to the current length of the entity-body, last-byte-pos is
+   taken to be equal to one less than the current length of the entity-
+   body in bytes.
+
+   By its choice of last-byte-pos, a client can limit the number of
+   bytes retrieved without knowing the size of the entity.
+
+
+
+
+Fielding, et al.            Standards Track                   [Page 138]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+       suffix-byte-range-spec = "-" suffix-length
+       suffix-length = 1*DIGIT
+
+   A suffix-byte-range-spec is used to specify the suffix of the
+   entity-body, of a length given by the suffix-length value. (That is,
+   this form specifies the last N bytes of an entity-body.) If the
+   entity is shorter than the specified suffix-length, the entire
+   entity-body is used.
+
+   If a syntactically valid byte-range-set includes at least one byte-
+   range-spec whose first-byte-pos is less than the current length of
+   the entity-body, or at least one suffix-byte-range-spec with a non-
+   zero suffix-length, then the byte-range-set is satisfiable.
+   Otherwise, the byte-range-set is unsatisfiable. If the byte-range-set
+   is unsatisfiable, the server SHOULD return a response with a status
+   of 416 (Requested range not satisfiable). Otherwise, the server
+   SHOULD return a response with a status of 206 (Partial Content)
+   containing the satisfiable ranges of the entity-body.
+
+   Examples of byte-ranges-specifier values (assuming an entity-body of
+   length 10000):
+
+      - The first 500 bytes (byte offsets 0-499, inclusive):  bytes=0-
+        499
+
+      - The second 500 bytes (byte offsets 500-999, inclusive):
+        bytes=500-999
+
+      - The final 500 bytes (byte offsets 9500-9999, inclusive):
+        bytes=-500
+
+      - Or bytes=9500-
+
+      - The first and last bytes only (bytes 0 and 9999):  bytes=0-0,-1
+
+      - Several legal but not canonical specifications of the second 500
+        bytes (byte offsets 500-999, inclusive):
+         bytes=500-600,601-999
+         bytes=500-700,601-999
+

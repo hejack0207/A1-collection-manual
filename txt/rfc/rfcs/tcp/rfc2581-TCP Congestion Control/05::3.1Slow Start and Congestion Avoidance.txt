@@ -1,0 +1,145 @@
+3.1 Slow Start and Congestion Avoidance
+
+   The slow start and congestion avoidance algorithms MUST be used by a
+   TCP sender to control the amount of outstanding data being injected
+   into the network.  To implement these algorithms, two variables are
+   added to the TCP per-connection state.  The congestion window (cwnd)
+   is a sender-side limit on the amount of data the sender can transmit
+   into the network before receiving an acknowledgment (ACK), while the
+   receiver's advertised window (rwnd) is a receiver-side limit on the
+   amount of outstanding data.  The minimum of cwnd and rwnd governs
+   data transmission.
+
+   Another state variable, the slow start threshold (ssthresh), is used
+   to determine whether the slow start or congestion avoidance algorithm
+   is used to control data transmission, as discussed below.
+
+   Beginning transmission into a network with unknown conditions
+   requires TCP to slowly probe the network to determine the available
+   capacity, in order to avoid congesting the network with an
+   inappropriately large burst of data.  The slow start algorithm is
+   used for this purpose at the beginning of a transfer, or after
+   repairing loss detected by the retransmission timer.
+
+
+
+
+
+
+Allman, et. al.             Standards Track                     [Page 3]
+
+RFC 2581                 TCP Congestion Control               April 1999
+
+
+   IW, the initial value of cwnd, MUST be less than or equal to 2*SMSS
+   bytes and MUST NOT be more than 2 segments.
+
+   We note that a non-standard, experimental TCP extension allows that a
+   TCP MAY use a larger initial window (IW), as defined in equation 1
+   [AFP98]:
+
+      IW = min (4*SMSS, max (2*SMSS, 4380 bytes))           (1)
+
+   With this extension, a TCP sender MAY use a 3 or 4 segment initial
+   window, provided the combined size of the segments does not exceed
+   4380 bytes.  We do NOT allow this change as part of the standard
+   defined by this document.  However, we include discussion of (1) in
+   the remainder of this document as a guideline for those experimenting
+   with the change, rather than conforming to the present standards for
+   TCP congestion control.
+
+   The initial value of ssthresh MAY be arbitrarily high (for example,
+   some implementations use the size of the advertised window), but it
+   may be reduced in response to congestion.  The slow start algorithm
+   is used when cwnd < ssthresh, while the congestion avoidance
+   algorithm is used when cwnd > ssthresh.  When cwnd and ssthresh are
+   equal the sender may use either slow start or congestion avoidance.
+
+   During slow start, a TCP increments cwnd by at most SMSS bytes for
+   each ACK received that acknowledges new data.  Slow start ends when
+   cwnd exceeds ssthresh (or, optionally, when it reaches it, as noted
+   above) or when congestion is observed.
+
+   During congestion avoidance, cwnd is incremented by 1 full-sized
+   segment per round-trip time (RTT).  Congestion avoidance continues
+   until congestion is detected.  One formula commonly used to update
+   cwnd during congestion avoidance is given in equation 2:
+
+      cwnd += SMSS*SMSS/cwnd                     (2)
+
+   This adjustment is executed on every incoming non-duplicate ACK.
+   Equation (2) provides an acceptable approximation to the underlying
+   principle of increasing cwnd by 1 full-sized segment per RTT.  (Note
+   that for a connection in which the receiver acknowledges every data
+   segment, (2) proves slightly more aggressive than 1 segment per RTT,
+   and for a receiver acknowledging every-other packet, (2) is less
+   aggressive.)
+
+
+
+
+
+
+
+
+Allman, et. al.             Standards Track                     [Page 4]
+
+RFC 2581                 TCP Congestion Control               April 1999
+
+
+   Implementation Note: Since integer arithmetic is usually used in TCP
+   implementations, the formula given in equation 2 can fail to increase
+   cwnd when the congestion window is very large (larger than
+   SMSS*SMSS).  If the above formula yields 0, the result SHOULD be
+   rounded up to 1 byte.
+
+   Implementation Note: older implementations have an additional
+   additive constant on the right-hand side of equation (2).  This is
+   incorrect and can actually lead to diminished performance [PAD+98].
+
+   Another acceptable way to increase cwnd during congestion avoidance
+   is to count the number of bytes that have been acknowledged by ACKs
+   for new data.  (A drawback of this implementation is that it requires
+   maintaining an additional state variable.)  When the number of bytes
+   acknowledged reaches cwnd, then cwnd can be incremented by up to SMSS
+   bytes.  Note that during congestion avoidance, cwnd MUST NOT be
+   increased by more than the larger of either 1 full-sized segment per
+   RTT, or the value computed using equation 2.
+
+   Implementation Note: some implementations maintain cwnd in units of
+   bytes, while others in units of full-sized segments.  The latter will
+   find equation (2) difficult to use, and may prefer to use the
+   counting approach discussed in the previous paragraph.
+
+   When a TCP sender detects segment loss using the retransmission
+   timer, the value of ssthresh MUST be set to no more than the value
+   given in equation 3:
+
+      ssthresh = max (FlightSize / 2, 2*SMSS)            (3)
+
+   As discussed above, FlightSize is the amount of outstanding data in
+   the network.
+
+   Implementation Note: an easy mistake to make is to simply use cwnd,
+   rather than FlightSize, which in some implementations may
+   incidentally increase well beyond rwnd.
+
+   Furthermore, upon a timeout cwnd MUST be set to no more than the loss
+   window, LW, which equals 1 full-sized segment (regardless of the
+   value of IW).  Therefore, after retransmitting the dropped segment
+   the TCP sender uses the slow start algorithm to increase the window
+   from 1 full-sized segment to the new value of ssthresh, at which
+   point congestion avoidance again takes over.
+
+
+
+
+
+
+
+
+Allman, et. al.             Standards Track                     [Page 5]
+
+RFC 2581                 TCP Congestion Control               April 1999
+
+

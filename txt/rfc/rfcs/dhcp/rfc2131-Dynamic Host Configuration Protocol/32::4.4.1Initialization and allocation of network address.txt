@@ -1,0 +1,173 @@
+4.4.1 Initialization and allocation of network address
+
+   The client begins in INIT state and forms a DHCPDISCOVER message.
+   The client SHOULD wait a random time between one and ten seconds to
+   desynchronize the use of DHCP at startup.  The client sets 'ciaddr'
+   to 0x00000000.  The client MAY request specific parameters by
+   including the 'parameter request list' option.  The client MAY
+   suggest a network address and/or lease time by including the
+   'requested IP address' and 'IP address lease time' options.  The
+   client MUST include its hardware address in the 'chaddr' field, if
+   necessary for delivery of DHCP reply messages.  The client MAY
+   include a different unique identifier in the 'client identifier'
+   option, as discussed in section 4.2.  If the client included a list
+   of requested parameters in a DHCPDISCOVER message, it MUST include
+   that list in all subsequent messages.
+
+   The client generates and records a random transaction identifier and
+   inserts that identifier into the 'xid' field.  The client records its
+   own local time for later use in computing the lease expiration.  The
+   client then broadcasts the DHCPDISCOVER on the local hardware
+   broadcast address to the 0xffffffff IP broadcast address and 'DHCP
+   server' UDP port.
+
+   If the 'xid' of an arriving DHCPOFFER message does not match the
+   'xid' of the most recent DHCPDISCOVER message, the DHCPOFFER message
+   must be silently discarded.  Any arriving DHCPACK messages must be
+   silently discarded.
+
+   The client collects DHCPOFFER messages over a period of time, selects
+   one DHCPOFFER message from the (possibly many) incoming DHCPOFFER
+   messages (e.g., the first DHCPOFFER message or the DHCPOFFER message
+   from the previously used server) and extracts the server address from
+   the 'server identifier' option in the DHCPOFFER message.  The time
+   over which the client collects messages and the mechanism used to
+   select one DHCPOFFER are implementation dependent.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Droms                       Standards Track                    [Page 36]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+Field      DHCPDISCOVER          DHCPREQUEST           DHCPDECLINE,
+           DHCPINFORM                                  DHCPRELEASE
+-----      ------------          -----------           -----------
+'op'       BOOTREQUEST           BOOTREQUEST           BOOTREQUEST
+'htype'    (From "Assigned Numbers" RFC)
+'hlen'     (Hardware address length in octets)
+'hops'     0                     0                     0
+'xid'      selected by client    'xid' from server     selected by
+                                 DHCPOFFER message     client
+'secs'     0 or seconds since    0 or seconds since    0
+           DHCP process started  DHCP process started
+'flags'    Set 'BROADCAST'       Set 'BROADCAST'       0
+           flag if client        flag if client
+           requires broadcast    requires broadcast
+           reply                 reply
+'ciaddr'   0 (DHCPDISCOVER)      0 or client's         0 (DHCPDECLINE)
+           client's              network address       client's network
+           network address       (BOUND/RENEW/REBIND)  address
+           (DHCPINFORM)                                (DHCPRELEASE)
+'yiaddr'   0                     0                     0
+'siaddr'   0                     0                     0
+'giaddr'   0                     0                     0
+'chaddr'   client's hardware     client's hardware     client's hardware
+           address               address               address
+'sname'    options, if           options, if           (unused)
+           indicated in          indicated in
+           'sname/file'          'sname/file'
+           option; otherwise     option; otherwise
+           unused                unused
+'file'     options, if           options, if           (unused)
+           indicated in          indicated in
+           'sname/file'          'sname/file'
+           option; otherwise     option; otherwise
+           unused                unused
+'options'  options               options               (unused)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Droms                       Standards Track                    [Page 37]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+Option                     DHCPDISCOVER  DHCPREQUEST      DHCPDECLINE,
+                           DHCPINFORM                     DHCPRELEASE
+------                     ------------  -----------      -----------
+Requested IP address       MAY           MUST (in         MUST
+                           (DISCOVER)    SELECTING or     (DHCPDECLINE),
+                           MUST NOT      INIT-REBOOT)     MUST NOT
+                           (INFORM)      MUST NOT (in     (DHCPRELEASE)
+                                         BOUND or
+                                         RENEWING)
+IP address lease time      MAY           MAY              MUST NOT
+                           (DISCOVER)
+                           MUST NOT
+                           (INFORM)
+Use 'file'/'sname' fields  MAY           MAY              MAY
+DHCP message type          DHCPDISCOVER/ DHCPREQUEST      DHCPDECLINE/
+                           DHCPINFORM                     DHCPRELEASE
+Client identifier          MAY           MAY              MAY
+Vendor class identifier    MAY           MAY              MUST NOT
+Server identifier          MUST NOT      MUST (after      MUST
+                                         SELECTING)
+                                         MUST NOT (after
+                                         INIT-REBOOT,
+                                         BOUND, RENEWING
+                                         or REBINDING)
+Parameter request list     MAY           MAY              MUST NOT
+Maximum message size       MAY           MAY              MUST NOT
+Message                    SHOULD NOT    SHOULD NOT       SHOULD
+Site-specific              MAY           MAY              MUST NOT
+All others                 MAY           MAY              MUST NOT
+
+             Table 5:  Fields and options used by DHCP clients
+
+   If the parameters are acceptable, the client records the address of
+   the server that supplied the parameters from the 'server identifier'
+   field and sends that address in the 'server identifier' field of a
+   DHCPREQUEST broadcast message.  Once the DHCPACK message from the
+   server arrives, the client is initialized and moves to BOUND state.
+   The DHCPREQUEST message contains the same 'xid' as the DHCPOFFER
+   message.  The client records the lease expiration time as the sum of
+   the time at which the original request was sent and the duration of
+   the lease from the DHCPACK message.    The client SHOULD perform a
+   check on the suggested address to ensure that the address is not
+   already in use.  For example, if the client is on a network that
+   supports ARP, the client may issue an ARP request for the suggested
+   request.  When broadcasting an ARP request for the suggested address,
+   the client must fill in its own hardware address as the sender's
+   hardware address, and 0 as the sender's IP address, to avoid
+   confusing ARP caches in other hosts on the same subnet.  If the
+
+
+
+Droms                       Standards Track                    [Page 38]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+   network address appears to be in use, the client MUST send a
+   DHCPDECLINE message to the server. The client SHOULD broadcast an ARP
+   reply to announce the client's new IP address and clear any outdated
+   ARP cache entries in hosts on the client's subnet.
+

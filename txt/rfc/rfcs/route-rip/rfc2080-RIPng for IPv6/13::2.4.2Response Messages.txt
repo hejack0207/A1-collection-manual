@@ -1,0 +1,139 @@
+2.4.2  Response Messages
+
+   A Response can be received for one of several different reasons:
+
+   - response to a specific query
+   - regular update (unsolicited response)
+   - triggered update caused by a route change
+
+   Processing is the same no matter why the Response was generated.
+
+   Because processing of a Response may update the router's routing
+   table, the Response must be checked carefully for validity.  The
+   Response must be ignored if it is not from the RIPng port.  The
+   datagram's IPv6 source address should be checked to see whether the
+   datagram is from a valid neighbor; the source of the datagram must be
+   a link-local address.  It is also worth checking to see whether the
+
+
+
+Malkin & Minnear            Standards Track                    [Page 11]
+
+RFC 2080                     RIPng for IPv6                 January 1997
+
+
+   response is from one of the router's own addresses.  Interfaces on
+   broadcast networks may receive copies of their own multicasts
+   immediately.  If a router processes its own output as new input,
+   confusion is likely, and such datagrams must be ignored.  As an
+   additional check, periodic advertisements must have their hop counts
+   set to 255, and inbound, multicast packets sent from the RIPng port
+   (i.e. periodic advertisement or triggered update packets) must be
+   examined to ensure that the hop count is 255.  This absolutely
+   guarantees that a packet is from a neighbor, because any intermediate
+   node would have decremented the hop count.  Queries and their
+   responses may still cross intermediate nodes and therefore do not
+   require the hop count test to be done.
+
+   Once the datagram as a whole has been validated, process the RTEs in
+   the Response one by one.  Again, start by doing validation.
+   Incorrect metrics and other format errors usually indicate
+   misbehaving neighbors and should probably be brought to the
+   administrator's attention.  For example, if the metric is greater
+   than infinity, ignore the entry but log the event.  The basic
+   validation tests are:
+
+   - is the destination prefix valid (e.g., not a multicast prefix and
+     not a link-local address)  A link-local address should never be
+     present in an RTE.
+   - is the prefix length valid (i.e., between 0 and 128, inclusive)
+   - is the metric valid (i.e., between 1 and 16, inclusive)
+
+   If any check fails, ignore that entry and proceed to the next.
+   Again, logging the error is probably a good idea.
+
+   Once the entry has been validated, update the metric by adding the
+   cost of the network on which the message arrived.  If the result is
+   greater than infinity, use infinity.  That is,
+
+                  metric = MIN (metric + cost, infinity)
+
+   Now, check to see whether there is already an explicit route for the
+   destination prefix.  If there is no such route, add this route to the
+   routing table, unless the metric is infinity (there is no point in
+   adding a route which unusable).  Adding a route to the routing table
+   consists of:
+
+   - Setting the destination prefix and length to those in the RTE.
+
+   - Setting the metric to the newly calculated metric (as described
+     above).
+
+
+
+
+
+Malkin & Minnear            Standards Track                    [Page 12]
+
+RFC 2080                     RIPng for IPv6                 January 1997
+
+
+   - Set the next hop address to be the address of the router from which
+     the datagram came or the next hop address specified by a next hop
+     RTE.
+
+   - Initialize the timeout for the route.  If the garbage-collection
+     timer is running for this route, stop it (see section 2.3 for a
+     discussion of the timers).
+
+   - Set the route change flag.
+
+   - Signal the output process to trigger an update (see section 2.5).
+
+   If there is an existing route, compare the next hop address to the
+   address of the router from which the datagram came.  If this datagram
+   is from the same router as the existing route, reinitialize the
+   timeout.  Next, compare the metrics.  If the datagram is from the
+   same router as the existing route, and the new metric is different
+   than the old one; or, if the new metric is lower than the old one; do
+   the following actions:
+
+   - Adopt the route from the datagram.  That is, put the new metric in,
+     and adjust the next hop address (if necessary).
+
+   - Set the route change flag and signal the output process to trigger
+     an update.
+
+   - If the new metric is infinity, start the deletion process
+     (described above); otherwise, re-initialize the timeout.
+
+   If the new metric is infinity, the deletion process begins for the
+   route, which is no longer used for routing packets.  Note that the
+   deletion process is started only when the metric is first set to
+   infinity.  If the metric was already infinity, then a new deletion
+   process is not started.
+
+   If the new metric is the same as the old one, it is simplest to do
+   nothing further (beyond reinitializing the timeout, as specified
+   above); but, there is a heuristic which could be applied.  Normally,
+   it is senseless to replace a route if the new route has the same
+   metric as the existing route; this would cause the route to bounce
+   back and forth, which would generate an intolerable number of
+   triggered updates.  However, if the existing route is showing signs
+   of timing out, it may be better to switch to an equally-good
+   alternative route immediately, rather than waiting for the timeout to
+   happen.  Therefore, if the new metric is the same as the old one,
+   examine the timeout for the existing route.  If it is at least
+   halfway to the expiration point, switch to the new route.  This
+   heuristic is optional, but highly recommended.
+
+
+
+Malkin & Minnear            Standards Track                    [Page 13]
+
+RFC 2080                     RIPng for IPv6                 January 1997
+
+
+   Any entry that fails these tests is ignored, as it is no better than
+   the current route.
+

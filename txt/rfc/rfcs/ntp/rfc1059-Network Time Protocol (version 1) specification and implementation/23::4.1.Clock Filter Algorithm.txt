@@ -1,0 +1,44 @@
+4.1.  Clock Filter Algorithm
+
+   The clock filter algorithm is executed upon arrival of each NTP
+   message that results in new delay/offset sample pairs.  New sample
+
+
+
+Mills                                                          [Page 29]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+   pairs are shifted into the filter register (peer.filter) from the
+   left end, causing first zeros then old sample pairs to shift off the
+   right end.  Then those sample pairs in peer.filter with nonzero delay
+   are inserted on a temporary list and sorted in order of increasing
+   delay.  The delay estimate (peer.delay) and offset estimate
+   (peer.offset) are chosen as the delay/offset values corresponding to
+   the minimum-delay sample.  In case of ties an arbitrary choice is
+   made.
+
+   The dispersion estimate (peer.dispersion) is then computed as the
+   weighted sum of the offsets in the list.  Assume the list has
+   PEER.SHIFT entries, the first m of which contain valid samples in
+   order of increasing delay.  If X(i) (0 =< i < PEER.SHIFT) is the
+   offset of the ith sample, then,
+
+           d(i) = |X(i) - X(0)|    if i < m and |X(i) - X(0)| < 2^15
+           d(i) = 2^15 - 1         otherwise
+
+                   peer.dispersion = Sum(d(i)*w^i) ,
+                           (0 =< i < PEER.SHIFT)
+
+   where w < 1 is a weighting factor experimentally adjusted to match
+   typical offset distributions.  The peer.dispersion variable is
+   intended for use as a quality indicator, with increasing values
+   associated with decreasing quality.  The intent is that samples with
+   a peer.dispersion exceeding a configuration threshold will not be
+   used in subsequent processing.  The prototype implementation uses a
+   weighting factor w = 0.5, also called PEER.FILTER, and a threshold
+   PEER.THRESHOLD of 500 ms, which insures that all stages of
+   peer.filter are filled and contain offsets within a few seconds of
+   each other.
+

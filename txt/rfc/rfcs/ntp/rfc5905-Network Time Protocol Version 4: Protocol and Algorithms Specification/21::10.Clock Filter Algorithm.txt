@@ -1,0 +1,115 @@
+10.  Clock Filter Algorithm
+
+   The clock filter algorithm is part of the peer process.  It grooms
+   the stream of on-wire data to select the samples most likely to
+   represent accurate time.  The algorithm produces the variables shown
+   in Figure 19, including the offset (theta), delay (delta), dispersion
+   (epsilon), jitter (psi), and time of arrival (t).  These data are
+   used by the mitigation algorithms to determine the best and final
+   offset used to discipline the system clock.  They are also used to
+   determine the server health and whether it is suitable for
+   synchronization.
+
+   The clock filter algorithm saves the most recent sample tuples
+   (theta, delta, epsilon, t) in the filter structure, which functions
+   as an 8-stage shift register.  The tuples are saved in the order that
+   packets arrive.  Here, t is the packet time of arrival according to
+   the seconds counter and should not be confused with the peer variable
+   tp.
+
+   The following scheme is used to ensure sufficient samples are in the
+   filter and that old stale data are discarded.  Initially, the tuples
+   of all stages are set to the dummy tuple (0, MAXDISP, MAXDISP, 0).
+   As valid packets arrive, tuples are shifted into the filter causing
+   old tuples to be discarded, so eventually only valid tuples remain.
+
+
+
+Mills, et al.                Standards Track                   [Page 37]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   If the three low-order bits of the reach register are zero,
+   indicating three poll intervals have expired with no valid packets
+   received, the poll process calls the clock filter algorithm with a
+   dummy tuple just as if the tuple had arrived from the network.  If
+   this persists for eight poll intervals, the register returns to the
+   initial condition.
+
+   In the next step, the shift register stages are copied to a temporary
+   list and the list sorted by increasing delta.  Let i index the stages
+   starting with the lowest delta.  If the first tuple epoch t_0 is not
+   later than the last valid sample epoch tp, the routine exits without
+   affecting the current peer variables.  Otherwise, let epsilon_i be
+   the dispersion of the ith entry, then
+
+                     i=n-1
+                     ---     epsilon_i
+      epsilon =       \     ----------
+                      /        (i+1)
+                     ---     2
+                     i=0
+
+   is the peer dispersion p.disp.  Note the overload of epsilon, whether
+   input to the clock filter or output, the meaning should be clear from
+   context.
+
+   The observer should note (a) if all stages contain the dummy tuple
+   with dispersion MAXDISP, the computed dispersion is a little less
+   than 16 s, (b) each time a valid tuple is shifted into the register,
+   the dispersion drops by a little less than half, depending on the
+   valid tuples dispersion, and (c) after the fourth valid packet the
+   dispersion is usually a little less than 1 s, which is the assumed
+   value of the MAXDIST parameter used by the selection algorithm to
+   determine whether or not the peer variables are acceptable.
+
+   Let the first stage offset in the sorted list be theta_0; then, for
+   the other stages in any order, the jitter is the RMS average
+
+                          +-----                 -----+^1/2
+                          |  n-1                      |
+                          |  ---                      |
+                  1       |  \                     2  |
+      psi   =  -------- * |  /    (theta_0-theta_j)   |
+                (n-1)     |  ---                      |
+                          |  j=1                      |
+                          +-----                 -----+
+
+   where n is the number of valid tuples in the filter (n > 1).  In
+   order to ensure consistency and avoid divide exceptions in other
+
+
+
+Mills, et al.                Standards Track                   [Page 38]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   computations, the psi is bounded from below by the system precision
+   s.rho expressed in seconds.  While not in general considered a major
+   factor in ranking server quality, jitter is a valuable indicator of
+   fundamental timekeeping performance and network congestion state.  Of
+   particular importance to the mitigation algorithms is the peer
+   synchronization distance, which is computed from the delay and
+   dispersion.
+
+   lambda = (delta / 2) + epsilon.
+
+   Note that epsilon and therefore lambda increase at rate PHI.  The
+   lambda is not a state variable, since lambda is recalculated at each
+   use.  It is a component of the root synchronization distance used by
+   the mitigation algorithms as a metric to evaluate the quality of time
+   available from each server.
+
+   It is important to note that, unlike NTPv3, NTPv4 associations do not
+   show a timeout condition by setting the stratum to 16 and leap
+   indicator to 3.  The association variables retain the values
+   determined upon arrival of the last packet.  In NTPv4, lambda
+   increases with time, so eventually the synchronization distance
+   exceeds the distance threshold MAXDIST, in which case the association
+   is considered unfit for synchronization.
+
+   An example implementation of the clock filter algorithm is shown in
+   the clock_filter() routine of Appendix A.5.2.
+

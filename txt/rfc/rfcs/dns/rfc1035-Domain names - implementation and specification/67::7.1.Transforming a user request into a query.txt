@@ -1,0 +1,72 @@
+7.1. Transforming a user request into a query
+
+The first step a resolver takes is to transform the client's request,
+stated in a format suitable to the local OS, into a search specification
+for RRs at a specific name which match a specific QTYPE and QCLASS.
+Where possible, the QTYPE and QCLASS should correspond to a single type
+and a single class, because this makes the use of cached data much
+simpler.  The reason for this is that the presence of data of one type
+in a cache doesn't confirm the existence or non-existence of data of
+other types, hence the only way to be sure is to consult an
+authoritative source.  If QCLASS=* is used, then authoritative answers
+won't be available.
+
+Since a resolver must be able to multiplex multiple requests if it is to
+perform its function efficiently, each pending request is usually
+represented in some block of state information.  This state block will
+typically contain:
+
+   - A timestamp indicating the time the request began.
+     The timestamp is used to decide whether RRs in the database
+     can be used or are out of date.  This timestamp uses the
+     absolute time format previously discussed for RR storage in
+     zones and caches.  Note that when an RRs TTL indicates a
+     relative time, the RR must be timely, since it is part of a
+     zone.  When the RR has an absolute time, it is part of a
+     cache, and the TTL of the RR is compared against the timestamp
+     for the start of the request.
+
+     Note that using the timestamp is superior to using a current
+     time, since it allows RRs with TTLs of zero to be entered in
+     the cache in the usual manner, but still used by the current
+     request, even after intervals of many seconds due to system
+     load, query retransmission timeouts, etc.
+
+   - Some sort of parameters to limit the amount of work which will
+     be performed for this request.
+
+     The amount of work which a resolver will do in response to a
+     client request must be limited to guard against errors in the
+     database, such as circular CNAME references, and operational
+     problems, such as network partition which prevents the
+
+
+
+Mockapetris                                                    [Page 43]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+     resolver from accessing the name servers it needs.  While
+     local limits on the number of times a resolver will retransmit
+     a particular query to a particular name server address are
+     essential, the resolver should have a global per-request
+     counter to limit work on a single request.  The counter should
+     be set to some initial value and decremented whenever the
+     resolver performs any action (retransmission timeout,
+     retransmission, etc.)  If the counter passes zero, the request
+     is terminated with a temporary error.
+
+     Note that if the resolver structure allows one request to
+     start others in parallel, such as when the need to access a
+     name server for one request causes a parallel resolve for the
+     name server's addresses, the spawned request should be started
+     with a lower counter.  This prevents circular references in
+     the database from starting a chain reaction of resolver
+     activity.
+
+   - The SLIST data structure discussed in [RFC-1034].
+
+     This structure keeps track of the state of a request if it
+     must wait for answers from foreign name servers.
+

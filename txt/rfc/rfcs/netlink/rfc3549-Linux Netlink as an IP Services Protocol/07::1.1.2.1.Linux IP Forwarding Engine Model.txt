@@ -1,0 +1,65 @@
+1.1.2.1.  Linux IP Forwarding Engine Model
+
+                        ____      +---------------+
+                   +->-| FW |---> | TCP, UDP, ... |
+                   |   +----+     +---------------+
+                   |                   |
+                   ^                   v
+                   |                  _|_
+                   +----<----+       | FW |
+                             |       +----+
+                             ^         |
+                             |         Y
+                           To host    From host
+                            stack     stack
+                             ^         |
+                             |_____    |
+Ingress                            ^   Y
+device   ____    +-------+        +|---|--+   ____   +--------+ Egress
+->----->| FW |-->|Ingress|-->---->| Forw- |->| FW |->| Egress | device
+        +----+   |  TC   |        |  ard  |  +----+  |   TC   |-->
+                 +-------+        +-------+          +--------+
+
+   The figure above shows the Linux FE model per device.  The only
+   mandatory part of the datapath is the Forwarding module, which is RFC
+   1812 conformant.  The different Firewall (FW), Ingress Traffic
+   Control, and Egress Traffic Control building blocks are not mandatory
+   in the datapath and may even be used to bypass the RFC 1812 module.
+   These modules are shown as simple blocks in the datapath but, in
+   fact, could be multiple cascaded, independent submodules within the
+   indicated blocks.  More information can be found at [10] and [11].
+
+   Packets arriving at the ingress device first pass through a firewall
+   module.  Packets may be dropped, munged, etc., by the firewall
+   module.  The incoming packet, depending on set policy, may then be
+   passed via an Ingress Traffic Control module. Metering and policing
+   activities are contained within the Ingress TC module.  Packets may
+   be dropped, depending on metering results and policing policies, at
+   this module. Next, the packet is subjected to the only non-optional
+   module, the RFC 1812-conformant Forwarding module. The packet may be
+   dropped if it is nonconformant (to the many RFCs complementing 1812
+   and 1122).  This module is a juncture point at which packets destined
+   to the forwarding NE may be sent up to the host stack.
+
+
+
+
+
+Salim, et. al.               Informational                      [Page 4]
+
+RFC 3549        Linux Netlink as an IP Services Protocol       July 2003
+
+
+   Packets that are not for the NE may further traverse a policy routing
+   submodule (within the forwarding module), if so provisioned.  Another
+   firewall module is walked next.  The firewall module can drop or
+   munge/transform packets, depending on the configured sub-modules
+   encountered and their policies.  If all goes well, the Egress TC
+   module is accessed next.
+
+   The Egress TC may drop packets for policing, scheduling, congestion
+   control, or rate control reasons.  Egress queues exist at this point
+   and any of the drops or delays may happen before or after the packet
+   is queued.  All is dependent on configured module algorithms and
+   policies.
+

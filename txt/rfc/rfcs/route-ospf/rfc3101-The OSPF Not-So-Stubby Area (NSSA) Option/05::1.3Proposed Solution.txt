@@ -1,0 +1,118 @@
+1.3 Proposed Solution
+
+   This document describes a new optional type of OSPF area, somewhat
+   humorously referred to as a "not-so-stubby" area (or NSSA), which has
+   the capability of importing external routes in a limited fashion.
+
+   The OSPF specification defines two general classes of area
+   configuration.  The first allows Type-5 LSAs to be flooded throughout
+   the area.  In this configuration, Type-5 LSAs may be originated by
+   routers internal to the area or flooded into the area by area border
+   routers.  These areas, referred to herein as Type-5 capable areas (or
+   just plain areas in the OSPF specification), are distinguished by the
+   fact that they can carry transit traffic.  The backbone is always a
+   Type-5 capable area.  The second type of area configuration, called
+   stub, does not allow Type-5 LSAs to be propagated into/throughout the
+   area and instead depends on default routing to external destinations.
+
+   NSSAs are defined in much the same manner as existing stub areas.  To
+   support NSSAs, a new option bit (the "N" bit) and a new type of LSA
+   (Type-7) are defined.  The "N" bit ensures that routers belonging to
+   an NSSA agree on its configuration.  Similar to the stub area's use
+   of the "E" bit, both NSSA neighbors must agree on the setting of the
+   "N" bit or the OSPF neighbor adjacency will not form.
+
+   Type-7 LSAs provide for carrying external route information within an
+   NSSA. Type-7 LSAs have virtually the same syntax as Type-5 LSAs with
+   the obvious exception of the link-state type.  (See section 2.3 for
+   more details.)   Both LSAs are considered a type of OSPF AS-
+   external-LSA.  There are two major semantic differences between
+   Type-5 LSAs and Type-7 LSAs.
+
+      o  Type-7 LSAs may be originated by and advertised throughout an
+         NSSA; as with stub areas, Type-5 LSAs are not flooded into
+         NSSAs and do not originate there.
+
+      o  Type-7 LSAs are advertised only within a single NSSA; they are
+         not flooded into the backbone area or any other area by border
+         routers, though the information that they contain may be
+         propagated into the backbone area.  (See Section 3.2.)
+
+
+
+Murphy                      Standards Track                     [Page 5]
+
+RFC 3101       The OSPF Not-So-Stubby Area (NSSA) Option    January 2003
+
+
+   In order to allow limited exchange of external information across an
+   NSSA border, NSSA border routers will translate selected Type-7 LSAs
+   received from the NSSA into Type-5 LSAs.  These Type-5 LSAs will be
+   flooded to all Type-5 capable areas.  NSSA border routers may be
+   configured with address ranges so that multiple Type-7 LSAs may be
+   aggregated into a single Type-5 LSA.  The NSSA border routers that
+   perform translation are configurable.  In the absence of a configured
+   translator one is elected.
+
+   In addition, an NSSA border router should originate a default LSA (IP
+   network is 0.0.0.0/0) into the NSSA.  Default routes are necessary
+   because NSSAs do not receive full routing information and must have a
+   default route in order to route to AS-external destinations.  Like
+   stub areas, NSSAs may be connected to the Area 0 backbone at more
+   than one NSSA border router, but may not be used as a transit area.
+   Note that a Type-7 default LSA originated by an NSSA border router is
+   never translated into a Type-5 LSA, however, a Type-7 default LSA
+   originated by an NSSA internal AS boundary router (one that is not an
+   NSSA border router) may be translated into a Type-5 LSA.
+
+   Like stub areas, NSSA border routers optionally import summary routes
+   into their NSSAs as Type-3 summary-LSAs.  If the import is disabled,
+   particular care should be taken to ensure that summary routing is not
+   obscured by an NSSA's Type-7 AS-external-LSAs.  This may happen when
+   the AS's other IGPs, like RIP and ISIS, leak routing information into
+   the NSSA.  In these cases all summary routes should be imported into
+   the NSSA.  The recommended default behavior is to import summary
+   routes into NSSAs.  Since Type-5 AS-external-LSAs are not flooded
+   into NSSAs, NSSA border routers should not originate Type-4 summary-
+   LSAs into their NSSAs.  Also an NSSA's border routers never originate
+   Type-4 summary-LSAs for the NSSA's AS boundary routers, since Type-7
+   AS-external-LSAs are never flooded beyond the NSSA's border.
+
+   When summary routes are not imported into an NSSA, the default LSA
+   originated into it by its border routers must be a Type-3 summary-
+   LSA.  This default summary-LSA insures intra-AS connectivity to the
+   rest of the OSPF domain, as its default summary route is preferred
+   over the default route of a Type-7 default LSA.  Without a default
+   summary route the OSPF domain's inter-area traffic, which is normally
+   forwarded by summary routes, might exit the AS via the default route
+   of a Type-7 default LSA originated by an NSSA internal router.  The
+   Type-7 default LSAs originated by NSSA internal routers and the no-
+   summary option are mutually exclusive features. When summary routes
+   are imported into the NSSA, the default LSA originated by a NSSA
+   border router into the NSSA should be a Type-7 LSA.
+
+   In our transit topology example the subnets of 130.57 and network
+   192.31.114 will still be learned by RIP on router BR18, but now both
+
+
+
+Murphy                      Standards Track                     [Page 6]
+
+RFC 3101       The OSPF Not-So-Stubby Area (NSSA) Option    January 2003
+
+
+   BR10 and BR18 can be in an NSSA and all of BBN Planet's external
+   routes are hidden from BR18; BR10 becomes an NSSA border router and
+   BR18 becomes an AS boundary router internal to the NSSA.  BR18 will
+   import the subnets of 130.57 and network 192.31.114 as Type-7 LSAs
+   into the NSSA.  BR10 then translates these routes into Type-5 LSAs
+   and floods them into BBN Planet's backbone.
+
+   In our corporate topology example if Area 1 and Area 2 are NSSAs the
+   external paths to the subnets of the address ranges 192.168.192/20
+   and 192.168.208/22 can be redistributed as Type-7 LSAs throughout
+   Area 1 and Area 2 respectively, and then aggregated during the
+   translation process into separate Type-5 LSAs that are flooded into
+   Area 0.  A0 may be configured as Area 1's translator even though B0
+   is the translator of Area 2.
+

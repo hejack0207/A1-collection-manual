@@ -1,0 +1,102 @@
+1.  Introduction
+
+   This document specifies how DNS resource records are named and
+   structured to facilitate service discovery.  Given a type of service
+   that a client is looking for, and a domain in which the client is
+   looking for that service, this mechanism allows clients to discover a
+   list of named instances of that desired service, using standard DNS
+   queries.  This mechanism is referred to as DNS-based Service
+   Discovery, or DNS-SD.
+
+   This document proposes no change to the structure of DNS messages,
+   and no new operation codes, response codes, resource record types, or
+   any other new DNS protocol values.
+
+   This document specifies that a particular service instance can be
+   described using a DNS SRV [RFC2782] and DNS TXT [RFC1035] record.
+   The SRV record has a name of the form "<Instance>.<Service>.<Domain>"
+   and gives the target host and port where the service instance can be
+   reached.  The DNS TXT record of the same name gives additional
+   information about this instance, in a structured form using key/value
+   pairs, described in Section 6.  A client discovers the list of
+   available instances of a given service type using a query for a DNS
+   PTR [RFC1035] record with a name of the form "<Service>.<Domain>",
+   which returns a set of zero or more names, which are the names of the
+   aforementioned DNS SRV/TXT record pairs.
+
+   This specification is compatible with both Multicast DNS [RFC6762]
+   and with today's existing Unicast DNS server and client software.
+
+   When used with Multicast DNS, DNS-SD can provide zero-configuration
+   operation -- just connect a DNS-SD/mDNS device, and its services are
+   advertised on the local link with no further user interaction [ZC].
+
+   When used with conventional Unicast DNS, some configuration will
+   usually be required -- such as configuring the device with the DNS
+   domain(s) in which it should advertise its services, and configuring
+   it with the DNS Update [RFC2136] [RFC3007] keys to give it permission
+   to do so.  In rare cases, such as a secure corporate network behind a
+
+
+
+Cheshire & Krochmal          Standards Track                    [Page 3]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+
+   firewall where no DNS Update keys are required, zero-configuration
+   operation may be achieved by simply having the device register its
+   services in a default registration domain learned from the network
+   (see Section 11, "Discovery of Browsing and Registration Domains"),
+   but this is the exception and usually security credentials will be
+   required to perform DNS updates.
+
+   Note that when using DNS-SD with Unicast DNS, the Unicast DNS-SD
+   service does NOT have to be provided by the same DNS server hardware
+   that is currently providing an organization's conventional host name
+   lookup service.  While many people think of "DNS" exclusively in the
+   context of mapping host names to IP addresses, in fact, "the DNS is a
+   general (if somewhat limited) hierarchical database, and can store
+   almost any kind of data, for almost any purpose" [RFC2181].  By
+   delegating the "_tcp" and "_udp" subdomains, all the workload related
+   to DNS-SD can be offloaded to a different machine.  This flexibility,
+   to handle DNS-SD on the main DNS server or not, at the network
+   administrator's discretion, is one of the benefits of using DNS.
+
+   Even when the DNS-SD functions are delegated to a different machine,
+   the benefits of using DNS remain: it is mature technology, well
+   understood, with multiple independent implementations from different
+   vendors, a wide selection of books published on the subject, and an
+   established workforce experienced in its operation.  In contrast,
+   adopting some other service discovery technology would require every
+   site in the world to install, learn, configure, operate, and maintain
+   some entirely new and unfamiliar server software.  Faced with these
+   obstacles, it seems unlikely that any other service discovery
+   technology could hope to compete with the ubiquitous deployment that
+   DNS already enjoys.  For further discussion, see Appendix A,
+   "Rationale for Using DNS as a Basis for Service Discovery".
+
+   This document is written for two audiences: for developers creating
+   application software that offers or accesses services on the network,
+   and for developers creating DNS-SD libraries to implement the
+   advertising and discovery mechanisms.  For both audiences,
+   understanding the entire document is helpful.  For developers
+   creating application software, this document provides guidance on
+   choosing instance names, service names, and other aspects that play a
+   role in creating a good overall user experience.  However, also
+   understanding the underlying DNS mechanisms used to provide the
+   service discovery facilities helps application developers understand
+   the capabilities and limitations of those underlying mechanisms
+   (e.g., name length limits).  For library developers writing software
+   to construct the DNS records (to advertise a service) and generate
+   the DNS queries (to discover and use a service), understanding the
+   ultimate user-experience goals helps them provide APIs that can meet
+   those goals.
+
+
+
+Cheshire & Krochmal          Standards Track                    [Page 4]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+

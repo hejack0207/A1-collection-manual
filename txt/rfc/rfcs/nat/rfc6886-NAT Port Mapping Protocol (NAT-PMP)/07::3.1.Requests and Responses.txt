@@ -1,0 +1,69 @@
+3.1.  Requests and Responses
+
+   NAT gateways are often low-cost devices, with limited memory and CPU
+   speed.  For this reason, to avoid making excessive demands on the NAT
+   gateway, clients SHOULD NOT issue multiple concurrent requests.  If a
+   client needs to perform multiple requests (e.g., on boot, wake from
+   sleep, network connection, etc.), it SHOULD queue them and issue them
+   serially, one at a time.  Once the NAT gateway responds to one
+   request the client machine may issue the next.  In the case of a fast
+   NAT gateway, the client may be able to complete requests at a rate of
+   hundreds per second.  In the case of a slow NAT gateway that takes
+   perhaps half a second to respond to a NAT-PMP request, the client
+   SHOULD respect this and allow the NAT gateway to operate at the pace
+   it can manage, and not overload it by issuing requests faster than
+   the rate it's answering them.
+
+   To determine the external IPv4 address, or to request a port mapping,
+   a NAT-PMP client sends its request packet to port 5351 of its
+   configured gateway address, and waits 250 ms for a response.  If no
+   NAT-PMP response is received from the gateway after 250 ms, the
+   client retransmits its request and waits 500 ms.  The client SHOULD
+   repeat this process with the interval between attempts doubling each
+   time.  If, after sending its ninth attempt (and then waiting for 64
+   seconds), the client has still received no response, then it SHOULD
+   conclude that this gateway does not support NAT Port Mapping Protocol
+   and MAY log an error message indicating this fact.  In addition, if
+   the NAT-PMP client receives an "ICMP Port Unreachable" message from
+
+
+
+
+
+Cheshire & Krochmal           Informational                     [Page 6]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+
+   the gateway for port 5351, then it can skip any remaining
+   retransmissions and conclude immediately that the gateway does not
+   support NAT-PMP.
+
+   As a performance optimization the client MAY record this information
+   and use it to suppress further attempts to use NAT-PMP, but the
+   client should not retain this information for too long.  In
+   particular, any event that may indicate a potential change of gateway
+   or a change in gateway configuration (hardware link change
+   indication, change of gateway MAC address, acquisition of new DHCP
+   lease, receipt of NAT-PMP announcement packet from gateway, etc.)
+   should cause the client to discard its previous information regarding
+   the gateway's lack of NAT-PMP support, and send its next NAT-PMP
+   request packet normally.
+
+   When deleting a port mapping, the client uses the same initial 250 ms
+   timeout, doubling on each successive interval, except that clients
+   may choose not to try the full nine times before giving up.  This is
+   because mapping deletion requests are in some sense advisory.  They
+   are useful for efficiency, but not required for correctness; it is
+   always possible for client software to crash, or for power to fail,
+   or for a client device to be physically unplugged from the network
+   before it gets a chance to send its mapping deletion request(s), so
+   NAT gateways already need to cope with this case.  Because of this,
+   it may be acceptable for a client to retry only once or twice before
+   giving up on deleting its port mapping(s), but a client SHOULD always
+   send at least one deletion request whenever possible, to reduce the
+   amount of stale state that accumulates on NAT gateways.
+
+   A client need not continue trying to delete a port mapping after the
+   time when that mapping would naturally have expired anyway.
+

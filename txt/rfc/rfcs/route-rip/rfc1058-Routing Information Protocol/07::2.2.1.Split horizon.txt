@@ -1,0 +1,76 @@
+2.2.1. Split horizon
+
+   Note that some of the problem above is caused by the fact that A and
+   C are engaged in a pattern of mutual deception.  Each claims to be
+   able to get to D via the other.  This can be prevented by being a bit
+   more careful about where information is sent.  In particular, it is
+   never useful to claim reachability for a destination network to the
+   neighbor(s) from which the route was learned.  "Split horizon" is a
+   scheme for avoiding problems caused by including routes in updates
+   sent to the gateway from which they were learned.  The "simple split
+   horizon" scheme omits routes learned from one neighbor in updates
+   sent to that neighbor.  "Split horizon with poisoned reverse"
+   includes such routes in updates, but sets their metrics to infinity.
+
+   If A thinks it can get to D via C, its messages to C should indicate
+   that D is unreachable.  If the route through C is real, then C either
+   has a direct connection to D, or a connection through some other
+   gateway.  C's route can't possibly go back to A, since that forms a
+   loop.  By telling C that D is unreachable, A simply guards against
+   the possibility that C might get confused and believe that there is a
+   route through A.  This is obvious for a point to point line.  But
+   consider the possibility that A and C are connected by a broadcast
+   network such as an Ethernet, and there are other gateways on that
+   network.  If A has a route through C, it should indicate that D is
+   unreachable when talking to any other gateway on that network.  The
+   other gateways on the network can get to C themselves.  They would
+   never need to get to C via A.  If A's best route is really through C,
+   no other gateway on that network needs to know that A can reach D.
+   This is fortunate, because it means that the same update message that
+   is used for C can be used for all other gateways on the same network.
+   Thus, update messages can be sent by broadcast.
+
+   In general, split horizon with poisoned reverse is safer than simple
+   split horizon.  If two gateways have routes pointing at each other,
+   advertising reverse routes with a metric of 16 will break the loop
+   immediately.  If the reverse routes are simply not advertised, the
+   erroneous routes will have to be eliminated by waiting for a timeout.
+   However, poisoned reverse does have a disadvantage: it increases the
+
+
+
+Hedrick                                                        [Page 14]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+
+   size of the routing messages.  Consider the case of a campus backbone
+   connecting a number of different buildings.  In each building, there
+   is a gateway connecting the backbone to a local network.  Consider
+   what routing updates those gateways should broadcast on the backbone
+   network.  All that the rest of the network really needs to know about
+   each gateway is what local networks it is connected to.  Using simple
+   split horizon, only those routes would appear in update messages sent
+   by the gateway to the backbone network.  If split horizon with
+   poisoned reverse is used, the gateway must mention all routes that it
+   learns from the backbone, with metrics of 16.  If the system is
+   large, this can result in a large update message, almost all of whose
+   entries indicate unreachable networks.
+
+   In a static sense, advertising reverse routes with a metric of 16
+   provides no additional information.  If there are many gateways on
+   one broadcast network, these extra entries can use significant
+   bandwidth.  The reason they are there is to improve dynamic behavior.
+   When topology changes, mentioning routes that should not go through
+   the gateway as well as those that should can speed up convergence.
+   However, in some situations, network managers may prefer to accept
+   somewhat slower convergence in order to minimize routing overhead.
+   Thus implementors may at their option implement simple split horizon
+   rather than split horizon with poisoned reverse, or they may provide
+   a configuration option that allows the network manager to choose
+   which behavior to use.  It is also permissible to implement hybrid
+   schemes that advertise some reverse routes with a metric of 16 and
+   omit others.  An example of such a scheme would be to use a metric of
+   16 for reverse routes for a certain period of time after routing
+   changes involving them, and thereafter omitting them from updates.
+

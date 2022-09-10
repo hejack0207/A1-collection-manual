@@ -1,0 +1,177 @@
+5.1. Realm Specific Address IP (RSA-IP)
+
+   A Realm Specific Address IP (RSA-IP) client adopts an IP address from
+   the external address space when connecting to a host in external
+   realm. Once an RSA-IP client assumes an external address, no other
+   host in private or external domain can assume the same address, until
+   that address is released by the RSA-IP client.
+
+   The following is a discussion of routing alternatives that may be
+   pursued for the end-to-end RSA-IP packets within private realm.  One
+   approach would be to tunnel the packet to the destination. The outer
+   header can be translated by NAT as normal without affecting the
+   addresses used in the internal header. Another approach would be to
+   set up a bi-directional tunnel between the RSA-IP Client and the
+   border router straddling the two address realms. Packets to and from
+   the client would be tunneled, but packets would be forwarded as
+
+
+
+Srisuresh & Holdrege         Informational                     [Page 15]
+
+RFC 2663           NAT Terminology and Considerations        August 1999
+
+
+   normal between the border router and the remote destination. Note,
+   the tunnel from the client TO the border router may not be necessary.
+   You might be able to just forward the packet directly. This should
+   work so long as your internal network isn't filtering packets based
+   on source addresses (which in this case would be external addresses).
+
+   As an example, Host-A in figure 2 above, could assume an address
+   Addr-k from the external realm and act as RSA-IP-Client to allow
+   end-to-end sessions between Addr-k and Addr-X. Traversal of end-to-
+   end packets within private realm may be illustrated as follows:
+
+   First method, using NAT router enroute to translate:
+   ===================================================
+
+   Host-A               NAT router               Host-X
+   ------               -----------              ------
+
+   <Outer IP header, with
+   src=Addr-A, Dest=Addr-X>,
+   embedding
+   <End-to-end packet, with
+   src=Addr-k, Dest=Addr-X>
+   ----------------------------->
+
+                        <Outer IP header, with
+                        src=Addr-k, Dest=Addr-X>,
+                        embedding
+                        <End-to-end packet, with
+                        src=Addr-k,  Dest=Addr-X>
+                        --------------------------->
+
+                             .
+                             .
+                             .
+
+                                              <Outer IP header, with
+                                              src=Addr-X, Dest=Addr-k>,
+                                              embedding
+                                              <End-to-end packet, with
+                                              src=Addr-X, Dest=Addr-k>
+                                     <---------------------------------
+
+                        <Outer IP header, with
+                        src=Addr-X, Dest=Addr-A>,
+                        embedding <End-to-end packet,
+                        with src=Addr-X, Dest=Addr-k>
+              <--------------------------------------
+
+
+
+
+Srisuresh & Holdrege         Informational                     [Page 16]
+
+RFC 2663           NAT Terminology and Considerations        August 1999
+
+
+   Second method, using a tunnel within private realm:
+   ==================================================
+
+   Host-A               NAT router               Host-X
+   ------               -----------              ------
+
+   <Outer IP header, with
+   src=Addr-A, Dest=Addr-Np>,
+   embedding
+   <End-to-end packet, with
+   src=Addr-k, Dest=Addr-X>
+   ----------------------------->
+
+                        <End-to-end packet, with
+                        src=Addr-k, Dest=Addr-X>
+                        ------------------------------->
+
+                             .
+                             .
+                             .
+
+                                             <End-to-end packet, with
+                                             src=Addr-X, Dest=Addr-k>
+                                    <--------------------------------
+
+                        <Outer IP header, with
+                        src=Addr-Np, Dest=Addr-A>,
+                        embedding <End-to-end packet,
+                        with src=Addr-X, Dest=Addr-k>
+                  <----------------------------------
+
+   There may be other approaches to pursue.
+
+   An RSA-IP-Client has the following characteristics. The collective
+   set of operations performed by an RSA-IP-Client may be termed "RSA-
+   IP".
+
+   1. Aware of the realm to which its peer nodes belong.
+
+   2. Assumes an address from external realm when communicating with
+      hosts in that realm. Such an address may be assigned statically
+      or obtained dynamically (through a yet-to-be-defined protocol)
+      from a node capable of assigning addresses from external realm.
+      RSA-IP-Server could be the node coordinating external realm
+      address assignment.
+
+
+
+
+
+
+Srisuresh & Holdrege         Informational                     [Page 17]
+
+RFC 2663           NAT Terminology and Considerations        August 1999
+
+
+   3. Route packets to external hosts using an approach amenable to
+      RSA-IP-Server. In all cases, RSA-IP-Client will likely need
+      to act as a tunnel end-point, capable of encapsulating
+      end-to-end packets while forwarding and decapsulating in the
+      return path.
+
+   "Realm Specific Address IP Server" (RSA-IP server) is a node resident
+   on both private and external realms, that facilitates routing of
+   external realm packets specific to RSA-IP clients inside a private
+   realm. An RSA-IP-Server may be described as having the following
+   characteristics.
+
+   1. May be configured to assign addresses from external realm to
+      RSA-IP-Clients, either statically or dynamically.
+
+   2. Must be a router resident on both the private and external
+      address realms.
+
+   3. Must be able to provide a mechanism to route external realm
+      packets within private realm. Of the two approaches described,
+      the first approach requires RSA-IP-Server to be a NAT router
+      providing transparent routing for the outer header. This
+      approach requires the external peer to be a tunnel end-point.
+
+      With the second approach, an RSA-IP-Server could be any router
+      (including a NAT router) that can be a tunnel end-point with
+      RSA-IP-Clients.  It would detunnel end-to-end packets outbound
+      from RSA-IP-Clients and forward to external hosts. On the
+      return path, it would locate RSA-IP-Client tunnel, based on the
+      destination address of the end-to-end packet and encapsulate the
+      packet in a tunnel to forward to RSA-IP-Client.
+
+   RSA-IP-Clients may pursue any of the IPsec techniques, namely
+   transport or tunnel mode Authentication and confidentiality using AH
+   and ESP headers on the embedded packets. Any of the tunneling
+   techniques may be adapted for encapsulation between RSA-IP-Client and
+   RSA-IP-Server or between RSA-IP-Client and external host.  For
+   example, IPsec tunnel mode encapsulation is a valid type of
+   encapsulation that ensures IPsec authentication and confidentiality
+   for the embedded end-to-end packets.
+

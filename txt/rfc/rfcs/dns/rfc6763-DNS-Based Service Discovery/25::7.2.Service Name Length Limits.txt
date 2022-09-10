@@ -1,0 +1,99 @@
+7.2.  Service Name Length Limits
+
+   As specified above, Service Names are allowed to be no more than
+   fifteen characters long.  The reason for this limit is to conserve
+   bytes in the domain name for use both by the network administrator
+   (choosing service domain names) and by the end user (choosing
+   instance names).
+
+   A fully qualified domain name may be up to 255 bytes long, plus one
+   byte for the final terminating root label at the end.  Domain names
+   used by DNS-SD take the following forms:
+
+                   <sn>._tcp . <servicedomain> . <parentdomain>.
+      <Instance> . <sn>._tcp . <servicedomain> . <parentdomain>.
+      <sub>._sub . <sn>._tcp . <servicedomain> . <parentdomain>.
+
+   The first example shows the name used for PTR queries.  The second
+   shows a Service Instance Name, i.e., the name of the service's SRV
+   and TXT records.  The third shows a subtype browsing name, i.e., the
+   name of a PTR record pointing to a Service Instance Name (see Section
+   7.1, "Selective Instance Enumeration").
+
+   The Service Name <sn> may be up to 15 bytes, plus the underscore and
+   length byte, making a total of 17.  Including the "_udp" or "_tcp"
+   and its length byte, this makes 22 bytes.
+
+   The instance name <Instance> may be up to 63 bytes.  Including the
+   length byte used by the DNS format when the name is stored in a
+   packet, that makes 64 bytes.
+
+
+
+Cheshire & Krochmal          Standards Track                   [Page 23]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+
+   When using subtypes, the subtype identifier is allowed to be up to 63
+   bytes, plus the length byte, making 64.  Including the "_sub" and its
+   length byte, this makes 69 bytes.
+
+   Typically, DNS-SD service records are placed into subdomains of their
+   own beneath a company's existing domain name.  Since these subdomains
+   are intended to be accessed through graphical user interfaces, not
+   typed on a command line, they are frequently long and descriptive.
+   Including the length byte, the user-visible service domain may be up
+   to 64 bytes.
+
+   Of our available 255 bytes, we have now accounted for 69+22+64 = 155
+   bytes.  This leaves 100 bytes to accommodate the organization's
+   existing domain name <parentdomain>.  When used with Multicast DNS,
+   <parentdomain> is "local.", which easily fits.  When used with parent
+   domains of 100 bytes or less, the full functionality of DNS-SD is
+   available without restriction.  When used with parent domains longer
+   than 100 bytes, the protocol risks exceeding the maximum possible
+   length of domain names, causing failures.  In this case, careful
+   choice of short <servicedomain> names can help avoid overflows.  If
+   the <servicedomain> and <parentdomain> are too long, then service
+   instances with long instance names will not be discoverable or
+   resolvable, and applications making use of long subtype names may
+   fail.
+
+   Because of this constraint, we choose to limit Service Names to 15
+   characters or less.  Allowing more characters would not increase the
+   expressive power of the protocol and would needlessly reduce the
+   maximum <parentdomain> length that may be safely used.
+
+   Note that <Instance> name lengths affect the maximum number of
+   services of a given type that can be discovered in a given
+   <servicedomain>.  The largest Unicast DNS response than can be sent
+   (typically using TCP, not UDP) is 64 kB.  Using DNS name compression,
+   a Service Instance Enumeration PTR record requires 2 bytes for the
+   (compressed) name, plus 10 bytes for type, class, ttl, and rdata
+   length.  The rdata of the PTR record requires up to 64 bytes for the
+   <Instance> part of the name, plus 2 bytes for a name compression
+   pointer to the common suffix, making a maximum of 78 bytes total.
+   This means that using maximum-sized <Instance> names, up to 839
+   instances of a given service type can be discovered in a given
+   <servicedomain>.
+
+   Multicast DNS aggregates response packets, so it does not have the
+   same hard limit, but in practice it is also useful for up to a few
+   hundred instances of a given service type, but probably not
+   thousands.
+
+
+
+
+Cheshire & Krochmal          Standards Track                   [Page 24]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+
+   However, displaying even 100 instances in a flat list is probably too
+   many to be helpful to a typical user.  If a network has more than 100
+   instances of a given service type, it's probably appropriate to
+   divide those services into logical subdomains by building, by floor,
+   by department, etc.
+

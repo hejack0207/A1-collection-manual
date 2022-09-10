@@ -1,0 +1,254 @@
+Appendix A).
+
+begin primary-clock-update procedure
+        <$Eroman peer.leap~<<-~"from"~radio~or~operator>;       /* copy
+variables */
+        <$Eroman peer.peeraddr~<<-~ASCII~identifier>;
+        <$Eroman peer.rec~<<-~radio~timestamp>;
+        <$Eroman peer.reach~<<-~1>;
+        call clock-filter(<$Eroman {sys.clock~-~peer.rec,~0,~1~<<
+<<~peer.precision}>);   /* process sample */
+        call clock-update;                              /* update local
+clock */
+        end primary-clock-update procedure;
+
+Initialization Procedures
+
+The initialization procedures are used to set up and initialize the
+system, its peers and associations.
+
+ Initialization Procedure
+
+The initialization procedure is called upon reboot or restart of the NTP
+daemon. The local clock is presumably undefined at reboot; however, in
+some equipment an estimate is available from the reboot environment,
+such as a battery-backed clock/calendar. The precision variable is
+determined by the intrinsic architecture of the local hardware clock.
+The authentication variables are used only if the authentication
+mechanism described in Appendix C is implemented. The values of these
+variables are determined using procedures beyond the scope of NTP
+itself.
+
+begin initialization procedure
+        #ifdef (authentication implemented)     / * see Appendix C */
+                <$Eroman sys.keys~<<-~as~required>;
+                #endef;
+        <$Eroman sys.leap~<<-~11 sub 2>;                                
+/* copy variables */
+        <$Eroman sys.stratum~<<-~0~(undefined)>;
+        <$Eroman sys.precision~<<-~host~precision>;
+        <$Eroman sys.rootdelay~<<-~0~(undefined)>;
+        <$Eroman sys.rootdispersion~<<-~0~(undefined)>;
+        <$Eroman sys.refid~<<-~0~(undefined)>;
+        <$Eroman sys.reftime~<<-~0~(undefined)>;
+        <$Eroman sys.clock~<<-~external~reference>;
+        <$Eroman sys.peer~<<-~roman NULL>;
+        <$Eroman sys.poll~<<-~roman NTP.MINPOLL>;
+        for (all configured peers)                      /* create
+configured associations */
+                call initialization-instantiation procedure;
+        end initialization procedure;
+
+ Initialization-Instantiation Procedure
+
+This implementation-specific procedure is called from the initialization
+procedure to define an association. The addresses and modes of the peers
+are determined using information read during the reboot procedure or as
+the result of operator commands. The authentication variables are used
+only if the authentication mechanism described in Appendix C is
+implemented. The values of these variables are determined using
+procedures beyond the scope of NTP itself. With the authentication bits
+set as suggested, only properly authenticated peers can become the
+synchronization source.
+
+begin initialization-instantiation procedure
+        <$Eroman peer.config~<<-~1>;
+        #ifdef (authentication implemented)     /* see Appendix C */
+                <$Eroman peer.authenable~<<-~1~(suggested)>;
+                <$Eroman peer.authentic~<<-~0>;
+                <$Eroman peer.hostkeyid~<<-~as~required>;
+                <$Eroman peer.peerkeyid~<<-~0>;
+                #endef;
+        <$Eroman peer.peeraddr~<<-~peer~IP~address>;    /* copy
+variables */
+        <$Eroman peer.peerport~<<-~roman NTP.PORT>;
+        <$Eroman peer.hostaddr~<<-~host~IP~address>;
+        <$Eroman peer.hostport~<<-~roman NTP.PORT>;
+        <$Eroman peer.mode~<<-~host~mode>;
+        <$Eroman peer.peerpoll~<<-~0~(undefined)>;
+        <$Eroman peer.timer~<<-~0>;
+        <$Eroman peer.delay~<<-~0~(undefined)>;
+        <$Eroman peer.offset~<<-~0~(undefined)>;
+        call clear;                                     /* initialize
+association */
+        end initialization-instantiation procedure;
+
+ Receive-Instantiation Procedure
+
+The receive-instantiation procedure is called from the receive procedure
+when a new peer is discovered. It initializes the peer variables and
+mobilizes the association. If the message is from a peer operating in
+client mode (3), the host mode is set to server mode (4); otherwise, it
+is set to symmetric passive mode (2). The authentication variables are
+used only if the authentication mechanism described in Appendix C is
+implemented. If implemented, only properly authenticated non-configured
+peers can become the synchronization source.
+
+begin receive-instantiation procedure
+        #ifdef (authentication implemented)     /* see Appendix C */
+                <$Eroman peer.authenable~<<-~0>;
+                <$Eroman peer.authentic~<<-~0>;
+                <$Eroman peer.hostkeyid~<<-~as~required>;
+                <$Eroman peer.peerkeyid~<<-~0>;
+                #endef
+        <$Eroman peer.config~<<-~0>;                            /* copy
+variables */
+        <$Eroman peer.peeraddr~<<-~roman pkt.peeraddr>;
+        <$Eroman peer.peerport~<<-~roman pkt.peerport>;
+        <$Eroman peer.hostaddr~<<-~roman pkt.hostaddr>;
+        <$Eroman peer.hostport~<<-~roman pkt.hostport>;
+        if (pkt.mode = 3)                               /* determine
+mode */
+                <$Eroman peer.mode~<<-~4>;
+                else
+                <$Eroman peer.mode~<<-~2>;
+        <$Eroman peer.peerpoll~<<-~0~(undefined)>;
+        <$Eroman peer.timer~<<-~0>;
+        <$Eroman peer.delay~<<-~0~(undefined)>;
+        <$Eroman peer.offset~<<-~0~(undefined)>;
+        call clear;                                     /* initialize
+association */
+        end receive-instantiation procedure;
+
+ Primary Clock-Instantiation Procedure
+
+This procedure is called from the initialization procedure in order to
+set up the state variables for the primary clock. The value for
+peer.precision is determined from the radio clock specification and
+hardware interface. The value for peer.rootdispersion is nominally ten
+times the inherent maximum error of the radio clock; for instance,
+<$E10~mu s> for a calibrated atomic clock, 10 ms for a WWVB or GOES
+radio clock and 100 ms for a less accurate WWV radio clock.
+
+begin clock-instantiation procedure
+        <$Eroman peer.config~<<-~1>;                            /* copy
+variables */
+        <$Eroman peer.peeraddr~<<-~0~undefined>;
+        <$Eroman peer.peerport~<<-~0~(not~used)>;
+        <$Eroman peer.hostaddr~<<-~0~(not~used)>;
+        <$Eroman peer.hostport~<<-~0~(not~used)>;
+        <$Eroman peer.leap~<<-~11 sub 2>;
+        <$Eroman peer.mode~<<-~0~(not~used)>;
+        <$Eroman peer.stratum~<<-~0>;
+        <$Eroman peer.peerpoll~<<-~0~(undefined)>;
+        <$Eroman peer.precision~<<-~clock~precision>;
+        <$Eroman peer.rootdelay~<<-~0>;
+        <$Eroman peer.rootdispersion~<<-~clock~dispersion>;
+        <$Eroman peer.refid~<<-~0~(not~used)>;
+        <$Eroman peer.reftime~<<-~0~(undefined)>;
+        <$Eroman peer.timer~<<-~0>;
+        <$Eroman peer.delay~<<-~0~(undefined)>;
+        <$Eroman peer.offset~<<-~0~(undefined)>;
+        call clear;                                     /* initialize
+association */
+        end clock-instantiation procedure;
+
+In some configurations involving a calibrated atomic clock or LORAN-C
+receiver, the primary reference source may provide only a seconds pulse,
+but lack a complete timecode from which the numbering of the seconds,
+etc., can be derived. In these configurations seconds numbering can be
+derived from other sources, such as a radio clock or even other NTP
+peers. In these configurations the primary clock variables should
+reflect the primary reference source, not the seconds-numbering source;
+however, if the seconds-numbering source fails or is known to be
+operating incorrectly, updates from the primary reference source should
+be suppressed as if it had failed.
+
+Clear Procedure
+
+The clear procedure is called when some event occurs that results in a
+significant change in reachability state or potential disruption of the
+local clock.
+begin clear procedure
+        <$Eroman peer.org~<<-~0~(undefined)>;                   /* mark
+timestamps undefined */
+        <$Eroman peer.rec~<<-~0~(undefined)>;
+        <$Eroman peer.xmt~<<-~0~(undefined)>;
+        <$Eroman peer.reach~<<-~0>;                             /* reset
+state variables */
+        <$Eroman peer.filter~<<-~[0,~,0,~roman NTP.MAXDISPERSE]>;   /*
+all stages */
+        <$Eroman peer.valid~<<-~0>;
+        <$Eroman peer.dispersion~<<-~roman NTP.MAXDISPERSE>;
+        <$Eroman {peer.hostpoll~<<-~NTP.MINPOLL}>;              /* reset
+poll interval */
+        call poll-update;
+        call clock-select;                              /* select clock
+source */
+        end clear procedure;
+
+Poll-Update Procedure
+
+The poll-update procedure is called when a significant event occurs that
+may result in a change of the poll interval or peer timer. It checks the
+values of the host poll interval (peer.hostpoll) and peer poll interval
+(peer.peerpoll) and clamps each within the valid range. If the peer is
+selected for synchronization, the value is further clamped as a function
+of the computed compliance (see Section 5).
+
+begin poll-update procedure
+        <$Etemp~<<-~roman peer.hostpoll>;                       /*
+determine host poll interval */
+        if (<$Epeer~=~roman sys.peer>)
+                <$Etemp~<<-~min (temp,~roman {sys.poll,~NTP.MAXPOLL)}>;
+        else
+                <$Etemp~<<-~min (temp,~roman NTP.MAXPOLL)>;
+        <$Eroman peer.hostpoll~<<-~max (temp,~roman NTP.MINPOLL)>;
+        <$Etemp~<<-~1~<< << ~min ( roman {peer.hostpoll,~max
+(peer.peerpoll,~NTP.MINPOLL)})>;
+
+If the poll interval is unchanged and the peer timer is zero, the timer
+is simply reset. If the poll interval is changed and the new timer value
+is greater than the present value, no additional action is necessary;
+otherwise, the peer timer must be reduced. When the peer timer must be
+reduced it is important to discourage tendencies to synchronize
+transmissions between the peers. A prudent precaution is to randomize
+the first transmission after the timer is reduced, for instance by the
+sneaky technique illustrated.
+
+        if (peer.timer = 0)                             /* reset peer
+timer */
+                <$Eroman peer.timer~<<-~temp>;
+        else if (<$Eroman peer.timer~>>~temp>)
+                <$Eroman peer.timer~<<-~( roman sys.clock~&~(temp~-
+~1))~+~1>;
+        end poll-update procedure;
+
+Synchronization Distance Procedure
+
+The distance procedure calculates the synchronization distance from the
+peer variables for the peer peer.
+
+begin distance(peer) procedure;
+        <$EDELTA~<<-~roman {peer.rootdelay~+~|peer.delay|}>;
+        <$EEPSILON~<<-~roman
+{peer.rootdispersion~+~peer.dispersion~+~phi (sys.clock~-~peer.update)
+}>;
+        <$ELAMBDA~<<-~EPSILON~+~{| DELTA |} over 2> ;
+        end distance procedure;
+
+Note that, while <$EDELTA> may be negative in some cases, both
+<$EEPSILON> and <$ELAMBDA> are always positive.
+
+Access Control Issues
+
+The NTP design is such that accidental or malicious data modification
+(tampering) or destruction (jamming) at a time server should not in
+general result in timekeeping errors elsewhere in the synchronization
+subnet. However, the success of this approach depends on redundant time
+servers and diverse network paths, together with the assumption that
+tampering or jamming will not occur at many time servers throughout the
+synchronization subnet at the same time. In principle, the subnet
+vulnerability can be engineered through the selection of time servers
+known to be trusted and allowing only those time servers to become the
+synchronization source. The authentication procedures described in

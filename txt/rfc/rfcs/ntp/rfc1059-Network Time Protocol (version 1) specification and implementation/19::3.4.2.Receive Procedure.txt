@@ -1,0 +1,182 @@
+3.4.2.  Receive Procedure
+
+   The receive procedure is executed upon arrival of an NTP message.  If
+   the version number of the message (pkt.version) does not match the
+   current version number (NTP.VERSION), the message is discarded;
+   however, exceptions may be advised on a case-by-case basis at times
+   when the version number is changed.
+
+   If the clock of the sender is unsynchronized (pkt.leap = 11), or the
+   receiver is in server mode or the receiver is in symmetric mode and
+   the stratum of the sender is greater than the stratum of the receiver
+   (pkt.stratum > sys.stratum), the message is simply returned to the
+   sender along with the timestamps.  In this case the addresses and
+   ports are interchanged in the IP and UDP headers:
+
+        pkt.srcadr <-> pkt.dstadr       pkt.srcport <-> pkt.dstport
+
+   The following packet variables are updated from the system variables:
+
+        pkt.leap <- sys.leap            pkt.distance <- sys.distance
+        pkt.version <- NTP.VERSION      pkt.drift <- sys.drift
+        pkt.stratum <- sys.stratum      pkt.refid <- sys.refid
+        pkt.precision <- sys.precision  pkt.reftime <- sys.reftime
+
+   Note that the pkt.poll packet variable is unchanged.  The timestamps
+   are updated in the order shown:
+
+
+
+
+Mills                                                          [Page 24]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+                        pkt.org <- pkt.xmt
+                        pkt.rec <- sys.clock
+                        pkt.xmt <- sys.clock
+
+   Finally, the message is forwarded to the sender and the server
+   receive procedure terminated at this point.
+
+   If the above is not the case, the source and destination Internet
+   addresses and ports in the IP and UDP headers are matched to the
+   correct peer.  If there is a match, processing continues at the next
+   step below.  If there is no match and symmetric mode is not indicated
+   (either pkt.srcport or pkt.dstport not equal to NTP.PORT), the
+   message must be a reply to a previously sent message from a client
+   which is no longer in operation.  In this case the message is dropped
+   and the receive procedure terminated at this point.
+
+   If there is no match and symmetric mode is indicated, (both
+   pkt.srcport and pkt.dstport equal to NTP.PORT), an implementation-
+   specific instantiation procedure is called to create and initialize a
+   new set of peer variables and start the peer timer.  The following
+   peer variables are set from the IP and UDP headers:
+
+           peer.srcadr <- pkt.srcadr       peer.srcport <- pkt.srcport
+           peer.dstadr <- pkt.dstadr       peer.dstport <- pkt.dstport
+
+
+   The following peer variables are initialized:
+
+                   peer.state <- symmetric (passive)
+                   peer.timer <- 0 (enabled)
+                   peer.hpoll <- NTP.MINPOLL
+                   peer.disp <- NTP.MAXDISP
+
+   The remaining peer variables are undefined and set to zero.
+
+   Assuming that instantiation is complete and that match occurs, the
+   least significant bit of the reachability register (peer.reach) is
+   set, indicating the peer is now reachable.  The following peer
+   variables are copied (rescaled as necessary) from the NTP packet
+   variables and system variables:
+
+
+
+
+
+
+
+
+
+
+
+Mills                                                          [Page 25]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+           peer.leap <- pkt.leap           peer.distance <- pkt.distance
+           peer.stratum <- pkt.stratum     peer.drift <- pkt.drift
+           peer.ppoll <- pkt.poll          peer.refid <- pkt.refid
+           peer.precision <- pkt.precision peer.reftime <- pkt.reftime
+           peer.org <- pkt.xmt             peer.rec <- sys.clock
+           peer.threshold <- max( min( peer.ppoll, peer.hpoll,
+                           NTP.MAXPOLL), NTP.MINPOLL)
+
+   If either or both the pkt.org or pkt.rec packet variables are zero,
+   the sender did not have reliable values for them, so the receive
+   procedure is terminated at this point.  If both of these variables
+   are nonzero, the roundtrip delay and clock offset relative to the
+   peer are calculated as follows.  Number the times of sending and
+   receiving NTP messages as shown in Figure 3.1 and let i be an even
+   integer.  Then t(i-3), t(i-2) and t(i-1) and t(i) are the contents of
+   the pkt.org, pkt.rec, pkt.xmt and peer.rec variables respectively.
+
+                        |                    |
+                   t(1) |------------------->| t(2)
+                        |                    |
+                   t(4) |<-------------------| t(3)
+                        |                    |
+                   t(5) |------------------->| t(6)
+                        |                    |
+                   t(8) |<-------------------| t(7)
+                        |                    |
+                                 ...
+                Figure 3.1. Calculating Delay and Offset
+
+   The roundtrip delay d and clock offset c of the receiving peer
+   relative to the sending peer is:
+
+                   d = (t(i) - t(i-3)) - (t(i-1) - t(i-2))
+                c = [(t(i-2) - t(i-3)) + (t(i-1) - t(i))]/2 .
+
+   This method amounts to a continuously sampled, returnable-time
+   system, which is used in some digital telephone networks.  Among the
+   advantages are that the order and timing of the messages is
+   unimportant and that reliable delivery is not required.  Obviously,
+   the accuracies achievable depend upon the statistical properties of
+   the outbound and inbound net paths.  Further analysis and
+   experimental results bearing on this issue can be found in
+   Appendix D.
+
+   The c and d values are then input to the clock filter algorithm to
+   produce the delay estimate (peer.delay) and offset estimate
+   (peer.offset) for the peer involved.  If d becomes nonpositive due to
+   low delays, long polling intervals and high drift rates, it should be
+
+
+
+Mills                                                          [Page 26]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+   considered invalid;  however, even under these conditions it may
+   still be useful to update the local clock and reduce the drift rate
+   to the point that d becomes positive again.  Specification of the
+   clock filter algorithm is not an integral part of the NTP
+   specification;  however, one found to work well in the Internet
+   environment is described in Section 4.
+
+   When a primary clock is connected to the host, it is convenient to
+   incorporate its information into the data base as if the clock were
+   represented by an ordinary peer.  The clocks are usually polled once
+   or twice a minute and the returned timecheck used to produce a new
+   update for the logical clock.  The update procedure is then called
+   with the following assumed peer variables:
+
+                   peer.offset <- timecheck - sys.clock
+                   peer.delay <- as determined
+                   peer.dispersion <- 0
+                   peer.leap <- selected by operator, ordinarily 00
+                   peer.stratum <- 0
+                   peer.distance <- 0
+                   peer.refid <- ASCII identifier
+                   peer.reftime <- timecheck
+
+   In this case the peer.delay and peer.refid can be constants
+   reflecting the type and accuracy of the clock.  By convention, the
+   value for peer.delay is ten times the expected mean error of the
+   clock, for instance, 10 milliseconds for a WWVB clock and 1000
+   milliseconds for a less accurate WWV clock, but with a floor of 100
+   milliseconds.  Other peer variables such as the peer timer and
+   reachability register can be used to control the polling interval and
+   to confirm the clock is operating correctly.  In this way the clock
+   filter and selection algorithms operate in the usual way and can be
+   used to mitigate the clock itself, should it appear to be operating
+   correctly, yet deliver bogus time.
+

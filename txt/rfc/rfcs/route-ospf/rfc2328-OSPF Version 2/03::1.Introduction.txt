@@ -1,0 +1,360 @@
+1.  Introduction
+
+    This document is a specification of the Open Shortest Path First
+    (OSPF) TCP/IP internet routing protocol.  OSPF is classified as an
+    Interior Gateway Protocol (IGP).  This means that it distributes
+    routing information between routers belonging to a single Autonomous
+    System.  The OSPF protocol is based on link-state or SPF technology.
+    This is a departure from the Bellman-Ford base used by traditional
+    TCP/IP internet routing protocols.
+
+    The OSPF protocol was developed by the OSPF working group of the
+    Internet Engineering Task Force.  It has been designed expressly for
+    the TCP/IP internet environment, including explicit support for CIDR
+    and the tagging of externally-derived routing information.  OSPF
+    also provides for the authentication of routing updates, and
+    utilizes IP multicast when sending/receiving the updates.  In
+    addition, much work has been done to produce a protocol that
+    responds quickly to topology changes, yet involves small amounts of
+    routing protocol traffic.
+
+    1.1.  Protocol overview
+
+        OSPF routes IP packets based solely on the destination IP
+        address found in the IP packet header.  IP packets are routed
+        "as is" -- they are not encapsulated in any further protocol
+        headers as they transit the Autonomous System.  OSPF is a
+        dynamic routing protocol.  It quickly detects topological
+        changes in the AS (such as router interface failures) and
+        calculates new loop-free routes after a period of convergence.
+        This period of convergence is short and involves a minimum of
+        routing traffic.
+
+        In a link-state routing protocol, each router maintains a
+        database describing the Autonomous System's topology.  This
+        database is referred to as the link-state database. Each
+        participating router has an identical database.  Each individual
+        piece of this database is a particular router's local state
+        (e.g., the router's usable interfaces and reachable neighbors).
+        The router distributes its local state throughout the Autonomous
+        System by flooding.
+
+
+
+
+
+Moy                         Standards Track                     [Page 6]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        All routers run the exact same algorithm, in parallel.  From the
+        link-state database, each router constructs a tree of shortest
+        paths with itself as root.  This shortest-path tree gives the
+        route to each destination in the Autonomous System.  Externally
+        derived routing information appears on the tree as leaves.
+
+        When several equal-cost routes to a destination exist, traffic
+        is distributed equally among them.  The cost of a route is
+        described by a single dimensionless metric.
+
+        OSPF allows sets of networks to be grouped together.  Such a
+        grouping is called an area.  The topology of an area is hidden
+        from the rest of the Autonomous System.  This information hiding
+        enables a significant reduction in routing traffic.  Also,
+        routing within the area is determined only by the area's own
+        topology, lending the area protection from bad routing data.  An
+        area is a generalization of an IP subnetted network.
+
+        OSPF enables the flexible configuration of IP subnets.  Each
+        route distributed by OSPF has a destination and mask.  Two
+        different subnets of the same IP network number may have
+        different sizes (i.e., different masks).  This is commonly
+        referred to as variable length subnetting.  A packet is routed
+        to the best (i.e., longest or most specific) match.  Host routes
+        are considered to be subnets whose masks are "all ones"
+        (0xffffffff).
+
+        All OSPF protocol exchanges are authenticated.  This means that
+        only trusted routers can participate in the Autonomous System's
+        routing.  A variety of authentication schemes can be used; in
+        fact, separate authentication schemes can be configured for each
+        IP subnet.
+
+        Externally derived routing data (e.g., routes learned from an
+        Exterior Gateway Protocol such as BGP; see [Ref23]) is
+        advertised throughout the Autonomous System.  This externally
+        derived data is kept separate from the OSPF protocol's link
+        state data.  Each external route can also be tagged by the
+        advertising router, enabling the passing of additional
+        information between routers on the boundary of the Autonomous
+        System.
+
+
+
+
+Moy                         Standards Track                     [Page 7]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    1.2.  Definitions of commonly used terms
+
+        This section provides definitions for terms that have a specific
+        meaning to the OSPF protocol and that are used throughout the
+        text.  The reader unfamiliar with the Internet Protocol Suite is
+        referred to [Ref13] for an introduction to IP.
+
+
+        Router
+            A level three Internet Protocol packet switch.  Formerly
+            called a gateway in much of the IP literature.
+
+        Autonomous System
+            A group of routers exchanging routing information via a
+            common routing protocol.  Abbreviated as AS.
+
+        Interior Gateway Protocol
+            The routing protocol spoken by the routers belonging to an
+            Autonomous system.  Abbreviated as IGP.  Each Autonomous
+            System has a single IGP.  Separate Autonomous Systems may be
+            running different IGPs.
+
+        Router ID
+            A 32-bit number assigned to each router running the OSPF
+            protocol.  This number uniquely identifies the router within
+            an Autonomous System.
+
+        Network
+            In this memo, an IP network/subnet/supernet.  It is possible
+            for one physical network to be assigned multiple IP
+            network/subnet numbers.  We consider these to be separate
+            networks.  Point-to-point physical networks are an exception
+            - they are considered a single network no matter how many
+            (if any at all) IP network/subnet numbers are assigned to
+            them.
+
+        Network mask
+            A 32-bit number indicating the range of IP addresses
+            residing on a single IP network/subnet/supernet.  This
+            specification displays network masks as hexadecimal numbers.
+
+
+
+
+
+Moy                         Standards Track                     [Page 8]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            For example, the network mask for a class C IP network is
+            displayed as 0xffffff00.  Such a mask is often displayed
+            elsewhere in the literature as 255.255.255.0.
+
+        Point-to-point networks
+            A network that joins a single pair of routers.  A 56Kb
+            serial line is an example of a point-to-point network.
+
+        Broadcast networks
+            Networks supporting many (more than two) attached routers,
+            together with the capability to address a single physical
+            message to all of the attached routers (broadcast).
+            Neighboring routers are discovered dynamically on these nets
+            using OSPF's Hello Protocol.  The Hello Protocol itself
+            takes advantage of the broadcast capability.  The OSPF
+            protocol makes further use of multicast capabilities, if
+            they exist.  Each pair of routers on a broadcast network is
+            assumed to be able to communicate directly. An ethernet is
+            an example of a broadcast network.
+
+        Non-broadcast networks
+            Networks supporting many (more than two) routers, but having
+            no broadcast capability.  Neighboring routers are maintained
+            on these nets using OSPF's Hello Protocol.  However, due to
+            the lack of broadcast capability, some configuration
+            information may be necessary to aid in the discovery of
+            neighbors.  On non-broadcast networks, OSPF protocol packets
+            that are normally multicast need to be sent to each
+            neighboring router, in turn. An X.25 Public Data Network
+            (PDN) is an example of a non-broadcast network.
+
+            OSPF runs in one of two modes over non-broadcast networks.
+            The first mode, called non-broadcast multi-access or NBMA,
+            simulates the operation of OSPF on a broadcast network. The
+            second mode, called Point-to-MultiPoint, treats the non-
+            broadcast network as a collection of point-to-point links.
+            Non-broadcast networks are referred to as NBMA networks or
+            Point-to-MultiPoint networks, depending on OSPF's mode of
+            operation over the network.
+
+
+
+
+
+
+Moy                         Standards Track                     [Page 9]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        Interface
+            The connection between a router and one of its attached
+            networks.  An interface has state information associated
+            with it, which is obtained from the underlying lower level
+            protocols and the routing protocol itself.  An interface to
+            a network has associated with it a single IP address and
+            mask (unless the network is an unnumbered point-to-point
+            network).  An interface is sometimes also referred to as a
+            link.
+
+        Neighboring routers
+            Two routers that have interfaces to a common network.
+            Neighbor relationships are maintained by, and usually
+            dynamically discovered by, OSPF's Hello Protocol.
+
+        Adjacency
+            A relationship formed between selected neighboring routers
+            for the purpose of exchanging routing information.  Not
+            every pair of neighboring routers become adjacent.
+
+        Link state advertisement
+            Unit of data describing the local state of a router or
+            network. For a router, this includes the state of the
+            router's interfaces and adjacencies.  Each link state
+            advertisement is flooded throughout the routing domain. The
+            collected link state advertisements of all routers and
+            networks forms the protocol's link state database.
+            Throughout this memo, link state advertisement is
+            abbreviated as LSA.
+
+        Hello Protocol
+            The part of the OSPF protocol used to establish and maintain
+            neighbor relationships.  On broadcast networks the Hello
+            Protocol can also dynamically discover neighboring routers.
+
+        Flooding
+            The part of the OSPF protocol that distributes and
+            synchronizes the link-state database between OSPF routers.
+
+        Designated Router
+            Each broadcast and NBMA network that has at least two
+            attached routers has a Designated Router.  The Designated
+
+
+
+Moy                         Standards Track                    [Page 10]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            Router generates an LSA for the network and has other
+            special responsibilities in the running of the protocol.
+            The Designated Router is elected by the Hello Protocol.
+
+            The Designated Router concept enables a reduction in the
+            number of adjacencies required on a broadcast or NBMA
+            network.  This in turn reduces the amount of routing
+            protocol traffic and the size of the link-state database.
+
+        Lower-level protocols
+            The underlying network access protocols that provide
+            services to the Internet Protocol and in turn the OSPF
+            protocol.  Examples of these are the X.25 packet and frame
+            levels for X.25 PDNs, and the ethernet data link layer for
+            ethernets.
+
+
+    1.3.  Brief history of link-state routing technology
+
+        OSPF is a link state routing protocol.  Such protocols are also
+        referred to in the literature as SPF-based or distributed-
+        database protocols.  This section gives a brief description of
+        the developments in link-state technology that have influenced
+        the OSPF protocol.
+
+        The first link-state routing protocol was developed for use in
+        the ARPANET packet switching network.  This protocol is
+        described in [Ref3].  It has formed the starting point for all
+        other link-state protocols.  The homogeneous ARPANET
+        environment, i.e., single-vendor packet switches connected by
+        synchronous serial lines, simplified the design and
+        implementation of the original protocol.
+
+        Modifications to this protocol were proposed in [Ref4].  These
+        modifications dealt with increasing the fault tolerance of the
+        routing protocol through, among other things, adding a checksum
+        to the LSAs (thereby detecting database corruption).  The paper
+        also included means for reducing the routing traffic overhead in
+        a link-state protocol.  This was accomplished by introducing
+        mechanisms which enabled the interval between LSA originations
+        to be increased by an order of magnitude.
+
+
+
+
+Moy                         Standards Track                    [Page 11]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        A link-state algorithm has also been proposed for use as an ISO
+        IS-IS routing protocol.  This protocol is described in [Ref2].
+        The protocol includes methods for data and routing traffic
+        reduction when operating over broadcast networks.  This is
+        accomplished by election of a Designated Router for each
+        broadcast network, which then originates an LSA for the network.
+
+        The OSPF Working Group of the IETF has extended this work in
+        developing the OSPF protocol.  The Designated Router concept has
+        been greatly enhanced to further reduce the amount of routing
+        traffic required.  Multicast capabilities are utilized for
+        additional routing bandwidth reduction.  An area routing scheme
+        has been developed enabling information
+        hiding/protection/reduction.  Finally, the algorithms have been
+        tailored for efficient operation in TCP/IP internets.
+
+
+    1.4.  Organization of this document
+
+        The first three sections of this specification give a general
+        overview of the protocol's capabilities and functions.  Sections
+        4-16 explain the protocol's mechanisms in detail.  Packet
+        formats, protocol constants and configuration items are
+        specified in the appendices.
+
+        Labels such as HelloInterval encountered in the text refer to
+        protocol constants.  They may or may not be configurable.
+        Architectural constants are summarized in Appendix B.
+        Configurable constants are summarized in Appendix C.
+
+        The detailed specification of the protocol is presented in terms
+        of data structures.  This is done in order to make the
+        explanation more precise.  Implementations of the protocol are
+        required to support the functionality described, but need not
+        use the precise data structures that appear in this memo.
+
+
+    1.5.  Acknowledgments
+
+        The author would like to thank Ran Atkinson, Fred Baker, Jeffrey
+        Burgan, Rob Coltun, Dino Farinacci, Vince Fuller, Phanindra
+        Jujjavarapu, Milo Medin, Tom Pusateri, Kannan Varadhan, Zhaohui
+
+
+
+Moy                         Standards Track                    [Page 12]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        Zhang and the rest of the OSPF Working Group for the ideas and
+        support they have given to this project.
+
+        The OSPF Point-to-MultiPoint interface is based on work done by
+        Fred Baker.
+
+        The OSPF Cryptographic Authentication option was developed by
+        Fred Baker and Ran Atkinson.
+
+

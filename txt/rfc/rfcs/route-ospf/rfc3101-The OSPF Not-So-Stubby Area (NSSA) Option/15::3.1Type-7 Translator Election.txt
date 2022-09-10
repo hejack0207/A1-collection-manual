@@ -1,0 +1,81 @@
+3.1 Type-7 Translator Election
+
+   It is not recommended that multiple NSSA border routers perform
+   Type-7 to Type-5 translation unless it is required to route packets
+   efficiently through Area 0 to an NSSA partitioned by Type-7 address
+   ranges.  It is normally sufficient to have only one NSSA border
+   router perform the translation.  Excessive numbers of Type-7
+   translators unnecessarily increase the size of the OSPF link state
+   data base.
+
+   A new area configuration parameter, NSSATranslatorRole, is defined in
+   Appendix D.  It specifies whether or not an NSSA router will
+   unconditionally translate Type-7 LSAs to Type-5 LSAs when acting as
+   an NSSA border router. Configuring the identity of the translator can
+   be used to bias the routing to aggregated destinations. When
+   NSSATranslatorRole is set to Always, Type-7 LSAs are always
+   translated regardless of the translator state of other NSSA border
+   routers.  When NSSATranslatorRole is set to Candidate an NSSA border
+   router will participate in the translator election process described
+   below.
+
+   A new area parameter, NSSATranslatorState, is maintained in an NSSA's
+   OSPF area data structure.  By default all NSSA routers initialize
+   NSSATranslatorState to disabled.  When an NSSA border router's
+   NSSATranslatorState changes from disabled to either enabled or
+   elected, it begins translating the NSSA's Type-7 LSAs into Type-5
+   LSAs.  When its NSSATranslatorState changes from either enabled or
+   elected to disabled, it ceases translating the NSSA's Type-7 LSAs
+   into Type-5 LSAs. (See paragraphs below.)
+
+   A new bit, Nt, is defined for the router-LSAs of NSSAs.  (See
+   Appendix B.)  By default routers clear bit Nt when originating
+   router-LSAs.  However, when an NSSA border router has its
+
+
+
+Murphy                      Standards Track                    [Page 15]
+
+RFC 3101       The OSPF Not-So-Stubby Area (NSSA) Option    January 2003
+
+
+   NSSATranslatorState enabled, it sets bit Nt in the router-LSA it
+   originates into the NSSA.  An NSSA router whose NSSATranslatorRole is
+   set to Always should re-originate a router-LSA into the NSSA whenever
+   its NSSATranslatorState changes.
+
+   When an NSSA router with the NSSA's NSSATranslatorRole set to Always
+   attains border router status, it should change NSSATranslatorState
+   from disabled to enabled.  When it loses border router status, it
+   should change NSSATranslatorState from enabled to disabled.
+
+   All NSSA border routers must set the E-bit in the Type-1 router-LSAs
+   of their directly attached non-stub areas, even when they are not
+   translating.  This allows other NSSA border routers to see their ASBR
+   status across the AS's transit topology.  Failure to do so may cause
+   the election algorithm to elect unnecessary translators.  Every NSSA
+   border router is a potential translator.
+
+   An NSSA border router whose NSSA's NSSATranslatorRole is set to
+   Candidate must maintain a list of the NSSA's border routers that are
+   reachable both over the NSSA and as ASBRs over the AS's transit
+   topology.  Any change in this list, or to the Nt bit settings of
+   members of this list, causes the NSSA border router to reevaluate its
+   NSSATranslatorState.  If there exists another border router in this
+   list whose router-LSA has bit Nt set or who has a higher router ID,
+   then its NSSATranslatorState is disabled.  Otherwise its
+   NSSATranslatorState is elected.
+
+   An elected translator will continue to perform translation duties
+   until supplanted by a reachable NSSA border router whose Nt bit is
+   set or whose router ID is greater.  Such an event may happen when an
+   NSSA router with NSSATranslatorRole set to Always regains border
+   router status, or when a partitioned NSSA becomes whole.  If an
+   elected translator determines its services are no longer required, it
+   continues to perform its translation duties for the additional time
+   interval defined by a new area configuration parameter,
+   TranslatorStabilityInterval.  This minimizes excessive flushing of
+   translated Type-7 LSAs and provides for a more stable translator
+   transition.  The default value for the TranslatorStabilityInterval
+   parameter has been defined as 40 seconds. (See Appendix D.)
+

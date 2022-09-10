@@ -1,0 +1,57 @@
+A.5.7.2.  poll_update()
+
+/*
+ * poll_update() - update the poll interval for association p
+ *
+ * Note: This routine is called by both the packet() and poll() routine.
+ * Since the packet() routine is executed when a network packet arrives
+ * and the poll() routine is executed as the result of timeout, a
+ * potential race can occur, possibly causing an incorrect interval for
+ * the next poll.  This is considered so unlikely as to be negligible.
+ */
+void
+poll_update(
+        struct p *p,            /* peer structure pointer */
+        int     poll            /* poll interval (log2 s) */
+        )
+{
+        /*
+         * This routine is called by both the poll() and packet()
+         * routines to determine the next poll time.  If within a burst
+         * the poll interval is two seconds.  Otherwise, it is the
+         * minimum of the host poll interval and peer poll interval, but
+         * not greater than MAXPOLL and not less than MINPOLL.  The
+         * design ensures that a longer interval can be preempted by a
+         * shorter one if required for rapid response.
+         */
+        p->hpoll = max(min(MAXPOLL, poll), MINPOLL);
+        if (p->burst > 0) {
+                if (p->nextdate != c.t)
+                        return;
+                else
+                        p->nextdate += BTIME;
+        } else {
+
+
+
+Mills, et al.                Standards Track                  [Page 107]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+                /*
+                 * While not shown here, the reference implementation
+                 * randomizes the poll interval by a small factor.
+                 */
+                p->nextdate = p->outdate + (1 << max(min(p->ppoll,
+                    p->hpoll), MINPOLL));
+        }
+
+        /*
+         * It might happen that the due time has already passed.  If so,
+         * make it one second in the future.
+         */
+        if (p->nextdate <= c.t)
+                p->nextdate = c.t + 1;
+}
+

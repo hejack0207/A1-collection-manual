@@ -1,0 +1,84 @@
+5.2.  False retransmit due to reordering
+
+   If packets are reordered in the network such that a segment arrives
+   more than 3 packets out of order, TCP's Fast Retransmit algorithm
+   will retransmit the out-of-order packet.  An example of this is shown
+   below:
+
+
+
+
+
+Floyd, et al.               Standards Track                    [Page 10]
+
+RFC 2883                     SACK Extension                    July 2000
+
+
+             Transmitted    Received    ACK Sent
+             Segment        Segment     (Including SACK Blocks)
+
+             500-999        500-999     1000
+             1000-1499      (delayed)
+             1500-1999      1500-1999   1000, SACK=1500-2000
+             2000-2499      2000-2499   1000, SACK=1500-2500
+             2500-2999      2500-2999   1000, SACK=1500-3000
+             1000-1499      1000-1499   3000
+                            1000-1499   3000, SACK=1000-1500
+                                                   ---------
+
+   In this case, an ACK containing a SACK block which is lower than its
+   ACK field and identical to a previously retransmitted segment is
+   indicative of a significant reordering followed by a false
+   (unnecessary) retransmission.
+
+   WITHOUT D-SACK:
+
+   With the use of D-SACK illustrated above, the sender knows that
+   either the first transmission of segment 1000-1499 was delayed in the
+   network, or the first transmission of segment 1000-1499 was dropped
+   and the second transmission of segment 1000-1499 was duplicated.
+   Given that no other segments have been duplicated in the network,
+   this second option can be considered unlikely.
+
+   Without the use of D-SACK, the sender would only know that either the
+   first transmission of segment 1000-1499 was delayed in the network,
+   or that either one of the data segments or the final ACK was
+   duplicated in the network.  Thus, the use of D-SACK allows the sender
+   to more reliably infer that the first transmission of segment
+   1000-1499 was not dropped.
+
+   [AP99], [L99], and [LK00] note that the sender could unambiguously
+   detect an unnecessary retransmit with the use of the timestamp
+   option.  [LK00] proposes a timestamp-based algorithm that minimizes
+   the penalty for an unnecessary retransmit.  [AP99] proposes a
+   heuristic for detecting an unnecessary retransmit in an environment
+   with neither timestamps nor SACK.  [L99] also proposes a two-bit
+   field as an alternate to the timestamp option for unambiguously
+   marking the first three retransmissions of a packet.  A similar idea
+   was proposed in [ISO8073].
+
+   RESEARCH ISSUES:
+
+   The use of D-SACK allows the sender to detect some cases (e.g., when
+   no ACK packets have been lost) when a a Fast Retransmit was due to
+   packet reordering instead of packet loss.  This allows the TCP sender
+
+
+
+Floyd, et al.               Standards Track                    [Page 11]
+
+RFC 2883                     SACK Extension                    July 2000
+
+
+   to adjust the duplicate acknowledgment threshold, to prevent such
+   unnecessary Fast Retransmits in the future.  Coupled with this, when
+   the sender determines, after the fact, that it has made an
+   unnecessary window reduction, the sender has the option of "undoing"
+   that reduction in the congestion window by resetting ssthresh to the
+   value of the old congestion window, and slow-starting until the
+   congestion window has reached that point.
+
+   Any proposal for "undoing" a reduction in the congestion window would
+   have to address the possibility that the TCP receiver could be lying
+   in its reports of received packets [SCWA99].
+

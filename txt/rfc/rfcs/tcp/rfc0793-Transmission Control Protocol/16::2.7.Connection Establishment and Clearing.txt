@@ -1,0 +1,114 @@
+2.7.  Connection Establishment and Clearing
+
+  To identify the separate data streams that a TCP may handle, the TCP
+  provides a port identifier.  Since port identifiers are selected
+  independently by each TCP they might not be unique.  To provide for
+  unique addresses within each TCP, we concatenate an internet address
+  identifying the TCP with a port identifier to create a socket which
+  will be unique throughout all networks connected together.
+
+  A connection is fully specified by the pair of sockets at the ends.  A
+  local socket may participate in many connections to different foreign
+  sockets.  A connection can be used to carry data in both directions,
+  that is, it is "full duplex".
+
+  TCPs are free to associate ports with processes however they choose.
+  However, several basic concepts are necessary in any implementation.
+  There must be well-known sockets which the TCP associates only with
+  the "appropriate" processes by some means.  We envision that processes
+  may "own" ports, and that processes can initiate connections only on
+  the ports they own.  (Means for implementing ownership is a local
+  issue, but we envision a Request Port user command, or a method of
+  uniquely allocating a group of ports to a given process, e.g., by
+  associating the high order bits of a port name with a given process.)
+
+  A connection is specified in the OPEN call by the local port and
+  foreign socket arguments.  In return, the TCP supplies a (short) local
+
+
+[Page 10]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                              Philosophy
+
+
+
+  connection name by which the user refers to the connection in
+  subsequent calls.  There are several things that must be remembered
+  about a connection.  To store this information we imagine that there
+  is a data structure called a Transmission Control Block (TCB).  One
+  implementation strategy would have the local connection name be a
+  pointer to the TCB for this connection.  The OPEN call also specifies
+  whether the connection establishment is to be actively pursued, or to
+  be passively waited for.
+
+  A passive OPEN request means that the process wants to accept incoming
+  connection requests rather than attempting to initiate a connection.
+  Often the process requesting a passive OPEN will accept a connection
+  request from any caller.  In this case a foreign socket of all zeros
+  is used to denote an unspecified socket.  Unspecified foreign sockets
+  are allowed only on passive OPENs.
+
+  A service process that wished to provide services for unknown other
+  processes would issue a passive OPEN request with an unspecified
+  foreign socket.  Then a connection could be made with any process that
+  requested a connection to this local socket.  It would help if this
+  local socket were known to be associated with this service.
+
+  Well-known sockets are a convenient mechanism for a priori associating
+  a socket address with a standard service.  For instance, the
+  "Telnet-Server" process is permanently assigned to a particular
+  socket, and other sockets are reserved for File Transfer, Remote Job
+  Entry, Text Generator, Echoer, and Sink processes (the last three
+  being for test purposes).  A socket address might be reserved for
+  access to a "Look-Up" service which would return the specific socket
+  at which a newly created service would be provided.  The concept of a
+  well-known socket is part of the TCP specification, but the assignment
+  of sockets to services is outside this specification.  (See [4].)
+
+  Processes can issue passive OPENs and wait for matching active OPENs
+  from other processes and be informed by the TCP when connections have
+  been established.  Two processes which issue active OPENs to each
+  other at the same time will be correctly connected.  This flexibility
+  is critical for the support of distributed computing in which
+  components act asynchronously with respect to each other.
+
+  There are two principal cases for matching the sockets in the local
+  passive OPENs and an foreign active OPENs.  In the first case, the
+  local passive OPENs has fully specified the foreign socket.  In this
+  case, the match must be exact.  In the second case, the local passive
+  OPENs has left the foreign socket unspecified.  In this case, any
+  foreign socket is acceptable as long as the local sockets match.
+  Other possibilities include partially restricted matches.
+
+
+
+                                                               [Page 11]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Philosophy
+
+
+
+  If there are several pending passive OPENs (recorded in TCBs) with the
+  same local socket, an foreign active OPEN will be matched to a TCB
+  with the specific foreign socket in the foreign active OPEN, if such a
+  TCB exists, before selecting a TCB with an unspecified foreign socket.
+
+  The procedures to establish connections utilize the synchronize (SYN)
+  control flag and involves an exchange of three messages.  This
+  exchange has been termed a three-way hand shake [3].
+
+  A connection is initiated by the rendezvous of an arriving segment
+  containing a SYN and a waiting TCB entry each created by a user OPEN
+  command.  The matching of local and foreign sockets determines when a
+  connection has been initiated.  The connection becomes "established"
+  when sequence numbers have been synchronized in both directions.
+
+  The clearing of a connection also involves the exchange of segments,
+  in this case carrying the FIN control flag.
+

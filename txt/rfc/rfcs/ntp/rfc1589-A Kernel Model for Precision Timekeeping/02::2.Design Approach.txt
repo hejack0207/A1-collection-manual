@@ -1,0 +1,412 @@
+2. Design Approach
+
+   While not strictly necessary for an understanding or implementation
+   of the model, it may be helpful to briefly describe how NTP operates
+   to control the system clock in a client workstation. As described in
+   [1], the NTP protocol exchanges timestamps with one or more peers
+   sharing a synchronization subnet to calculate the time offsets
+   between peer clocks and the local clock. These offsets are processed
+   by several algorithms which refine and combine the offsets to produce
+   an ensemble average, which is then used to adjust the local clock
+   time and frequency. The manner in which the local clock is adjusted
+   represents the main topic of this memorandum. The goal in the
+   enterprise is the most accurate and stable system clock possible with
+   the available kernel software and workstation hardware.
+
+   In order to understand how the new software works, it is useful to
+   review how most Unix kernels maintain the system time. In the Unix
+   design a hardware counter interrupts the kernel at a fixed rate: 100
+   Hz in the SunOS kernel, 256 Hz in the Ultrix kernel and 1024 Hz in
+   the OSF/1 kernel. Since the Ultrix timer interval (reciprocal of the
+   rate) does not evenly divide one second in microseconds, the Ultrix
+   kernel adds 64 microseconds once each second, so the timescale
+   consists of 255 advances of 3906 us plus one of 3970 us. Similarly,
+   the OSF/1 kernel adds 576 us once each second, so its timescale
+   consists of 1023 advances of 976 us plus one of 1552 us.
+
+   2.1. Mechanisms to Adjust Time and Frequency
+
+      In most Unix kernels it is possible to slew the system clock to a
+      new offset relative to the current time by using the adjtime()
+      system call. To do this the clock frequency is changed by adding
+      or subtracting a fixed amount (tickadj) at each timer interrupt
+      (tick) for a calculated number of ticks. Since this calculation
+      involves dividing the requested offset by tickadj, it is possible
+      to slew to a new offset with a precision only of tickadj, which is
+
+
+
+Mills                                                           [Page 3]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      usually in the neighborhood of 5 us, but sometimes much more. This
+      results in a roundoff error which can accumulate to an
+      unacceptable degree, so that special provisions must be made in
+      the clock adjustment procedures of the synchronization daemon.
+
+      In order to implement a frequency-discipline function, it is
+      necessary to provide time offset adjustments to the kernel at
+      regular adjustment intervals using the adjtime() system call. In
+      order to reduce the system clock jitter to the regime considered
+      in this memorandum, it is necessary that the adjustment interval
+      be relatively small, in the neighborhood of 1 s. However, the Unix
+      adjtime() implementation requires each offset adjustment to
+      complete before another one can be begun, which means that large
+      adjustments must be amortized in possibly many adjustment
+      intervals. The requirement to implement the adjustment interval
+      and compensate for roundoff error considerably complicates the
+      synchronizing daemon implementation.
+
+      In the new model this scheme is replaced by another that
+      represents the system clock as a multiple-word, precision-time
+      variable in order to provide very precise clock adjustments. At
+      each timer interrupt a precisely calibrated quantity is added to
+      the kernel time variable and overflows propagated as required. The
+      quantity is computed as in the NTP local clock model described in
+      [3], which operates as an adaptive-parameter, first-order, type-II
+      phase-lock loop (PLL). In principle, this PLL design can provide
+      precision control of the system clock oscillator within 1 us and
+      frequency to within parts in 10^11. While precisions of this order
+      are surely well beyond the capabilities of the CPU clock
+      oscillator used in typical workstations, they are appropriate
+      using precision external oscillators as described below.
+
+      The PLL design is identical to the one originally implemented in
+      NTP and described in [3]. In this design the software daemon
+      simulates the PLL using the adjtime() system call; however, the
+      daemon implementation is considerably complicated by the
+      considerations described above. The modified kernel routines
+      implement the PLL in the kernel using precision time and frequency
+      representions, so that these complications are avoided. A new
+      system call ntp_adjtime() is called only as each new time update
+      is determined, which in NTP occurs at intervals of from 16 s to
+      1024 s. In addition, doing frequency compensation in the kernel
+      means that the system time runs true even if the daemon were to
+      cease operation or the network paths to the primary
+      synchronization source fail.
+
+      In the new model the new ntp_adjtime() operates in a way similar
+      to the original adjtime() system call, but does so independently
+
+
+
+Mills                                                           [Page 4]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      of adjtime(), which continues to operate in its traditional
+      fashion. When used with NTP, it is the design intent that
+      settimeofday() or adjtime() be used only for system time
+      adjustments greater than +-128 ms, although the dynamic range of
+      the new model is much larger at +-512 ms. It has been the Internet
+      experience that the need to change the system time in increments
+      greater than +-128 ms is extremely rare and is usually associated
+      with a hardware or software malfunction or system reboot.
+
+      The easiest way to set the time is with the settimeofday() system
+      call; however, this can under some conditions cause the clock to
+      jump backward. If this cannot be tolerated, adjtime() can be used
+      to slew the clock to the new value without running backward or
+      affecting the frequency discipline process. Once the system clock
+      has been set within +-128 ms, the ntp_adjtime() system call is
+      used to provide periodic updates including the time offset,
+      maximum error, estimated error and PLL time constant. With NTP the
+      update interval depends on the measured dispersion and time
+      constant; however, the scheme is quite forgiving and neither
+      moderate loss of updates nor variations in the update interval are
+      serious.
+
+   2.2 Daemon and Application Interface
+
+      Unix application programs can read the system clock using the
+      gettimeofday() system call, which returns only the system time and
+      timezone data. For some applications it is useful to know the
+      maximum error of the reported time due to all causes, including
+      clock reading errors, oscillator frequency errors and accumulated
+      latencies on the path to a primary synchronization source.
+      However, in the new model the PLL adjusts the system clock to
+      compensate for its intrinsic frequency error, so that the time
+      errors expected in normal operation will usually be much less than
+      the maximum error. The programming interface includes a new system
+      call ntp_gettime(), which returns the system time, as well as the
+      maximum error and estimated error. This interface is intended to
+      support applications that need such things, including distributed
+      file systems, multimedia teleconferencing and other real-time
+      applications. The programming interface also includes the new
+      system call ntp_adjtime() mentioned previously, which can be used
+      to read and write kernel variables for time and frequency
+      adjustment, PLL time constant, leap-second warning and related
+      data.
+
+      In addition, the kernel adjusts the maximum error to grow by an
+      amount equal to the oscillator frequency tolerance times the
+      elapsed time since the last update. The default engineering
+      parameters have been optimized for update intervals in the order
+
+
+
+Mills                                                           [Page 5]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      of 64 s. For other intervals the PLL time constant can be adjusted
+      to optimize the dynamic response over intervals of 16-1024 s.
+      Normally, this is automatically done by NTP. In any case, if
+      updates are suspended, the PLL coasts at the frequency last
+      determined, which usually results in errors increasing only to a
+      few tens of milliseconds over a day using room-temperature quartz
+      oscillators of typical modern workstations.
+
+      While any synchronization daemon can in principle be modified to
+      use the new system calls, the most likely will be users of the NTP
+      Version 3 daemon xntpd. The xntpd code determines whether the new
+      system calls are implemented and automatically reconfigures as
+      required. When implemented, the daemon reads the frequency offset
+      from a file and provides it and the initial time constant via
+      ntp_adjtime(). In subsequent calls to ntp_adjtime(), only the time
+      offset and time constant are affected. The daemon reads the
+      frequency from the kernel using ntp_adjtime() at intervals of
+      about one hour and writes it to a system file. This information is
+      recovered when the daemon is restarted after reboot, for example,
+      so the sometimes extensive training period to learn the frequency
+      separately for each system can be avoided.
+
+   2.3. Precision Clocks for DECstation 5000/240 and 3000 AXP Alpha
+
+      The stock microtime() routine in the Ultrix kernel returns system
+      time to the precision of the timer interrupt interval, which is in
+      the 1-4 ms range. However, in the DECstation 5000/240 and possibly
+      other machines of that family, there is an undocumented IOASIC
+      hardware register that counts system bus cycles at a rate of 25
+      MHz. The new microtime() routine for the Ultrix kernel uses this
+      register to interpolate system time between timer interrupts. This
+      results in a precision of 1 us for all time values obtained via
+      the gettimeofday() and ntp_gettime() system calls. For the Digital
+      Equipment 3000 AXP Alpha, the architecture provides a hardware
+      Process Cycle Counter and a machine instruction rpcc to read it.
+      This counter operates at the fundamental frequency of the CPU
+      clock or some submultiple of it, 133.333 MHz for the 3000/400 for
+      example. The new microtime() routine for the OSF/1 kernel uses
+      this counter in the same fashion as the Ultrix routine.
+
+      In both the Ultrix and OSF/1 kernels the gettimeofday() and
+      ntp_gettime() system call use the new microtime() routine, which
+      returns the actual interpolated value, but does not change the
+      kernel time variable. Therefore, other routines that access the
+      kernel time variable directly and do not call either
+      gettimeofday(), ntp_gettime() or microtime() will continue their
+      present behavior. The microtime() feature is independent of other
+      features described here and is operative even if the kernel PLL or
+
+
+
+Mills                                                           [Page 6]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      new system calls have not been implemented.
+
+      The SunOS kernel already includes a system clock with 1-us
+      resolution; so, in principle, no microtime() routine is necessary.
+      An existing kernel routine uniqtime() implements this function,
+      but it is coded in the C language and is rather slow at 42-85 us
+      per call. A replacement microtime() routine coded in assembler
+      language is available in the NTP Version 3 distribution and is
+      much faster at about 3 us per call.
+
+   2.4. External Time and Frequency Discipline
+
+      The overall accuracy of a time synchronization subnet with respect
+      to Coordinated Universal Time (UTC) depends on the accuracy and
+      stability of the primary synchronization source, usually a radio
+      or satellite receiver, and the system clock oscillator of the
+      primary server. As discussed in [5], the traditional interface
+      using an RS232 protocol and serial port precludes the full
+      accuracy of the radio clock. In addition, the poor stability of
+      typical CPU clock oscillators limits the accuracy, whether or not
+      precision time sources are available. There are, however, several
+      ways in which the system clock accuracy and stability can be
+      improved to the degree limited only by the accuracy and stability
+      of the synchronization source and the jitter of the operating
+      system.
+
+      Many radio clocks produce special signals that can be used by
+      external equipment to precisely synchronize time and frequency.
+      Most produce a pulse-per-second (PPS) signal that can be read via
+      a modem-control lead of a serial port and some produce a special
+      IRIG signal that can be read directly by a bus peripheral, such as
+      the KSI/Odetics TPRO IRIG SBus interface, or indirectly via the
+      audio codec of some workstations, as described in [5]. In the NTP
+      Version 3 distribution, the PPS signal can be used to augment the
+      less precise ASCII serial timecode to improve accuracy to the
+      order of microseconds. Support is also included in the
+      distribution for the TPRO interface as well as the audio codec;
+      however, the latter requires a modified kernel audio driver
+      contained in the bsd_audio.tar.Z distribution in the same host and
+      directory as the NTP Version 3 distribution mentioned previously.
+
+      2.4.1. PPS Signal
+
+         The NTP Version 3 distribution includes a special ppsclock
+         module for the SunOS 4.1.x kernel that captures the PPS signal
+         presented via a modem-control lead of a serial port. Normally,
+         the ppsclock module produces a timestamp at each transition of
+         the PPS signal and provides it to the synchronization daemon
+
+
+
+Mills                                                           [Page 7]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+         for integration with the serial ASCII timecode, also produced
+         by the radio clock. With the conventional PLL implementation in
+         either the daemon or the kernel as described above, the
+         accuracy of this scheme is limited by the intrinsic stability
+         of the CPU clock oscillator to a millisecond or two, depending
+         on environmental temperature variations.
+
+         The ppsclock module has been modified to in addition call a new
+         kernel routine hardpps() once each second. The kernel routine
+         compares the timestamp with a sample of the CPU clock
+         oscillator to develop a frequency offset estimate. This offset
+         is used to discipline the oscillator frequency, nominally to
+         within a few parts in 10^8, which is about two orders of
+         magnitude better than the undisciplined oscillator. The new
+         feature is conditionally compiled in the code described below
+         only if the PPS_SYNC option is used in the kernel configuration
+         file.
+
+         When using the PPS signal to adjust the time, there is a
+         problem with the SunOS implementation which is very delicate to
+         fix. The Sun serial port interrupt routine operates at
+         interrupt priority level 12, while the timer interrupt routine
+         operates at priority 10. Thus, it is possible that the PPS
+         signal interrupt can occur during the timer interrupt routine,
+         with result that a tick increment can be missed and the
+         returned time early by one tick. It may happen that, if the CPU
+         clock oscillator is within a few ppm of the PPS oscillator,
+         this condition can persist for two or more successive PPS
+         interrupts. A useful workaround has been to use a median filter
+         to process the PPS sample offsets. In this filter the sample
+         offsets in a window of 20 samples are sorted by offset and the
+         six highest and six lowest outlyers discarded. The average of
+         the eight samples remaining becomes the output of the filter.
+
+         The problem is not nearly so serious when using the PPS signal
+         to discipline the frequency of the CPU clock oscillator. In
+         this case the quantity of interest is the contents of the
+         microseconds counter only, which does not depend on the kernel
+         time variable.
+
+      2.4.2. External Clocks
+
+         It is possible to replace the system clock function with an
+         external bus peripheral. The TPRO device mentioned previously
+         can be used to provide IRIG-synchronized time with a precision
+         of 1 us. A driver for this device tprotime.c and header file
+         tpro.h are included in the kernel.tar.Z distribution mentioned
+         previously. Using this device the system clock is read directly
+
+
+
+Mills                                                           [Page 8]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+         from the interface; however, the device does not record the
+         year, so special provisions have to be made to obtain the year
+         from the kernel time variable and initialize the driver
+         accordingly. This feature is conditionally compiled in the code
+         described below only if the EXT_CLOCK option is used in the
+         kernel configuration file.
+
+         While the system clock function is provided directly by the
+         microtime() routine in the driver, the kernel time variable
+         must be disciplined as well, since not all system timing
+         functions use the microtime() routine. This is done by
+         measuring the difference between the microtime() clock and
+         kernel time variable and using the difference to adjust the
+         kernel PLL as if the adjustment were provided by an external
+         peer and NTP.
+
+         A good deal of error checking is done in the TPRO driver, since
+         the system clock is vulnerable to a misbehaving radio clock,
+         IRIG signal source, interface cables and TPRO device itself.
+         Unfortunately, there is no easy way to utilize the extensive
+         diversity and redundancy capabilities available in the NTP
+         synchronization daemon. In order to avoid disruptions that
+         might occur if the TPRO time is far different from the kernel
+         time variable, the latter is used instead of the former if the
+         difference between the two exceeds 1000 s; presumably in that
+         case operator intervention is required.
+
+      2.4.3. External Oscillators
+
+         Even if a source of PPS or IRIG signals is not available, it is
+         still possible to improve the stability of the system clock
+         through the use of a specialized bus peripheral. In order to
+         explore the benefits of such an approach, a special SBus
+         peripheral caled HIGHBALL has been constructed. The device
+         includes a pair of 32-bit hardware counters in Unix timeval
+         format, together with a precision, oven-controlled quartz
+         oscillator with a stability of a few parts in 10^9. A driver
+         for this device hightime.c and header file high.h are included
+         in the kernel.tar.Z distribution mentioned previously. This
+         feature is conditionally compiled in the code described below
+         only if the EXT_CLOCK and HIGHBALL options are used in the
+         kernel configuration file.
+
+         Unlike the external clock case, where the system clock function
+         is provided directly by the microtime() routine in the driver,
+         the HIGHBALL counter offsets with respect to UTC must be
+         provided first.  This is done using the ordinary kernel PLL,
+         but controlling the counter offsets directly, rather than the
+
+
+
+Mills                                                           [Page 9]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+         kernel time variable. At first, this might seem to defeat the
+         purpose of the design, since the jitter and wander of the
+         synchronization source will affect the counter offsets and thus
+         the accuracy of the time. However, the jitter is much reduced
+         by the PLL and the wander is small, especially if using a radio
+         clock or another primary server disciplined in the same way.
+         In practice, the scheme works to reduce the incidental wander
+         to a few parts in 10^8, or about the same as using the PPS
+         signal.
+
+         As in the previous case, the kernel time variable must be
+         disciplined as well, since not all system timing functions use
+         the microtime() routine. However, the kernel PLL cannot be used
+         for this, since it is already in use providing offsets for the
+         HIGHBALL counters. Therefore, a special correction is
+         calculated from the difference between the microtime() clock
+         and the kernel time variable and used to adjust the kernel time
+         variable at the next timer interrupt. This somewhat roundabout
+         approach is necessary in order that the adjustment does not
+         cause the kernel time variable to jump backwards and possibly
+         lose or duplicate a timer event.
+
+   2.5 Other Features
+
+      It is a design feature of the NTP architecture that the system
+      clocks in a synchronization subnet are to read the same or nearly
+      the same values before during and after a leap-second event, as
+      declared by national standards bodies. The new model is designed
+      to implement the leap event upon command by an ntp_adjtime()
+      argument. The intricate and sometimes arcane details of the model
+      and implementation are discussed in [3] and [5]. Further details
+      are given in the technical summary later in this memorandum.
+

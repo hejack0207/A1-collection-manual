@@ -1,0 +1,192 @@
+3.3 Header Manipulations
+
+   In addition to modifying the IP address, NAT must modify the IP
+   checksum and the TCP checksum. Remember, TCP's checksum also covers a
+   pseudo header which contains the source and destination address. NAT
+   must also look out for ICMP and FTP and modify the places where the
+   IP address appears. There are undoubtedly other places, where
+   modifications must be done. Hopefully, most such applications will be
+   discovered during experimentation with NAT.
+
+   The checksum modifications to IP and TCP are simple and efficient.
+   Since both use a one's complement sum, it is sufficient to calculate
+   the arithmetic difference between the before-translation and after-
+   translation addresses and add this to the checksum. The only tricky
+   part is determining whether the addition resulted in a wrap-around
+   (in either the positive or negative direction) of the checksum. If
+
+
+
+Egevang & Francis                                               [Page 5]
+
+RFC 1631               Network Address Translator               May 1994
+
+
+   so, 1 must be added or subtracted to satisfy the one's complement
+   arithmetic. Sample code (in C) for this is as follows:
+
+   void checksumadjust(unsigned char *chksum, unsigned char *optr,
+   int olen, unsigned char *nptr, int nlen)
+   /* assuming: unsigned char is 8 bits, long is 32 bits.
+     - chksum points to the chksum in the packet
+     - optr points to the old data in the packet
+     - nptr points to the new data in the packet
+   */
+   {
+     long x, old, new;
+     x=chksum[0]*256+chksum[1];
+     x=~x;
+     while (olen) {
+       if (olen==1) {
+         old=optr[0]*256+optr[1];
+         x-=old & 0xff00;
+         if (x<=0) { x--; x&=0xffff; }
+         break;
+       }
+       else {
+         old=optr[0]*256+optr[1]; optr+=2;
+         x-=old & 0xffff;
+         if (x<=0) { x--; x&=0xffff; }
+         olen-=2;
+       }
+     }
+     while (nlen) {
+       if (nlen==1) {
+         new=nptr[0]*256+nptr[1];
+         x+=new & 0xff00;
+         if (x & 0x10000) { x++; x&=0xffff; }
+         break;
+       }
+       else {
+         new=nptr[0]*256+nptr[1]; nptr+=2;
+         x+=new & 0xffff;
+         if (x & 0x10000) { x++; x&=0xffff; }
+         nlen-=2;
+       }
+     }
+     x=~x;
+     chksum[0]=x/256; chksum[1]=x & 0xff;
+   }
+
+
+
+
+
+
+Egevang & Francis                                               [Page 6]
+
+RFC 1631               Network Address Translator               May 1994
+
+
+   The arguments to the File Transfer Protocol (FTP) PORT command
+   include an IP address (in ASCII!). If the IP address in the PORT
+   command is local to the stub domain, then NAT must substitute this.
+   Because the address is encoded in ASCII, this may result in a change
+   in the size of the packet (for instance 10.18.177.42 is 12 ASCII
+   characters, while 193.45.228.137 is 14 ASCII characters). If the new
+   size is the same as the previous, only the TCP checksum needs
+   adjustment (again). If the new size is less than the previous, ASCII
+   zeroes may be inserted, but this is not guaranteed to work. If the
+   new size is larger than the previous, TCP sequence numbers must be
+   changed too.
+
+   A special table is used to correct the TCP sequence and acknowledge
+   numbers with source port FTP or destination port FTP. The table
+   entries should have source, destination, source port, destination
+   port, initial sequence number, delta for sequence numbers and a
+   timestamp. New entries are created only when FTP PORT commands are
+   seen. The initial sequence numbers are used to find out if the
+   sequence number of a packet is before or after the last FTP PORT
+   command (delta may be increased for every FTP PORT command). Sequence
+   numbers are incremented and acknowledge numbers are decremented. If
+   the FIN bit is set in one of the packets, the associated entry may be
+   deleted soon after (1 minute should be safe). Entries that have not
+   been used for e.g. 24 hours should be safe to delete too.
+
+   The sequence number adjustment must be coded carefully, not to harm
+   performance for TCP in general. Of course, if the FTP session is
+   encrypted, the PORT command will fail.
+
+   If an ICMP message is passed through NAT, it may require two address
+   modifications and three checksum modifications. This is because most
+   ICMP messages contain part of the original IP packet in the body.
+   Therefore, for NAT to be completely transparent to the host, the IP
+   address of the IP header embedded in the data part of the ICMP packet
+   must be modified, the checksum field of the same IP header must
+   correspondingly be modified, and the ICMP header checksum must be
+   modified to reflect the changes to the IP header and checksum in the
+   ICMP body. Furthermore, the normal IP header must also be modified as
+   already described.
+
+   It is not entirely clear if the IP header information in the ICMP
+   part of the body really need to be modified. This depends on whether
+   or not any host code actually looks at this IP header information.
+   Indeed, it may be useful to provide the exact header seen by the
+   router or host that issued the ICMP message to aid in debugging. In
+   any event, no modifications are needed for the Echo and Timestamp
+   messages, and NAT should never need to handle a Redirect message.
+
+
+
+
+Egevang & Francis                                               [Page 7]
+
+RFC 1631               Network Address Translator               May 1994
+
+
+   SNMP messages could be modified, but it is even more dubious than for
+   ICMP messages that it will be necessary.
+
+Applications with IP-address Content
+
+   Any application that carries (and uses) the IP address inside the
+   application will not work through NAT unless NAT knows of such
+   instances and does the appropriate translation. It is not possible or
+   even necessarily desirable for NAT to know of all such applications.
+   And, if encryption is used then it is impossible for NAT to make the
+   translation.
+
+   It may be possible for such systems to avoid using NAT, if the hosts
+   in which they run are assigned global addresses. Whether or not this
+   can work depends on the capability of the intra-domain routing
+   algorithm and the internal topology. This is because the global
+   address must be advertised in the intra-domain routing algorithm.
+   With a low-feature routing algorithm like RIP, the host may require
+   its own class C address space, that must not only be advertised
+   internally but externally as well (thus hurting global scaling). With
+   a high-feature routing algorithm like OSPF, the host address can be
+   passed around individually, and can come from the NAT table.
+
+Privacy, Security, and Debugging Considerations
+
+   Unfortunately, NAT reduces the number of options for providing
+   security. With NAT, nothing that carries an IP address or information
+   derived from an IP address (such as the TCP-header checksum) can be
+   encrypted. While most application-level encryption should be ok, this
+   prevents encryption of the TCP header.
+
+   On the other hand, NAT itself can be seen as providing a kind of
+   privacy mechanism. This comes from the fact that machines on the
+   backbone cannot monitor which hosts are sending and receiving traffic
+   (assuming of course that the application data is encrypted).
+
+   The same characteristic that enhances privacy potentially makes
+   debugging problems (including security violations) more difficult. If
+   a host is abusing the Internet is some way (such as trying to attack
+   another machine or even sending large amounts of junk mail or
+   something) it is more difficult to pinpoint the source of the trouble
+   because the IP address of the host is hidden.
+
+
+
+
+
+
+
+
+
+Egevang & Francis                                               [Page 8]
+
+RFC 1631               Network Address Translator               May 1994
+
+

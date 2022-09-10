@@ -1,0 +1,99 @@
+6.1.5.  Retransmitted TCP packets
+
+   This document specifies ECN-capable TCP implementations MUST NOT set
+   either ECT codepoint (ECT(0) or ECT(1)) in the IP header for
+   retransmitted data packets, and that the TCP data receiver SHOULD
+   ignore the ECN field on arriving data packets that are outside of the
+   receiver's current window.  This is for greater security against
+   denial-of-service attacks, as well as for robustness of the ECN
+   congestion indication with packets that are dropped later in the
+   network.
+
+   First, we note that if the TCP sender were to set an ECT codepoint on
+   a retransmitted packet, then if an unnecessarily-retransmitted packet
+   was later dropped in the network, the end nodes would never receive
+   the indication of congestion from the router setting the CE
+   codepoint.  Thus, setting an ECT codepoint on retransmitted data
+   packets is not consistent with the robust delivery of the congestion
+   indication even for packets that are later dropped in the network.
+
+
+
+
+Ramakrishnan, et al.        Standards Track                    [Page 20]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   In addition, an attacker capable of spoofing the IP source address of
+   the TCP sender could send data packets with arbitrary sequence
+   numbers, with the CE codepoint set in the IP header.  On receiving
+   this spoofed data packet, the TCP data receiver would determine that
+   the data does not lie in the current receive window, and return a
+   duplicate acknowledgement.  We define an out-of-window packet at the
+   TCP data receiver as a data packet that lies outside the receiver's
+   current window.  On receiving an out-of-window packet, the TCP data
+   receiver has to decide whether or not to treat the CE codepoint in
+   the packet header as a valid indication of congestion, and therefore
+   whether to return ECN-Echo indications to the TCP data sender.  If
+   the TCP data receiver ignored the CE codepoint in an out-of-window
+   packet, then the TCP data sender would not receive this possibly-
+   legitimate indication of congestion from the network, resulting in a
+   violation of end-to-end congestion control.  On the other hand, if
+   the TCP data receiver honors the CE indication in the out-of-window
+   packet, and reports the indication of congestion to the TCP data
+   sender, then the malicious node that created the spoofed, out-of-
+   window packet has successfully "attacked" the TCP connection by
+   forcing the data sender to unnecessarily reduce (halve) its
+   congestion window.  To prevent such a denial-of-service attack, we
+   specify that a legitimate TCP data sender MUST NOT set an ECT
+   codepoint on retransmitted data packets, and that the TCP data
+   receiver SHOULD ignore the CE codepoint on out-of-window packets.
+
+   One drawback of not setting ECT(0) or ECT(1) on retransmitted packets
+   is that it denies ECN protection for retransmitted packets.  However,
+   for an ECN-capable TCP connection in a fully-ECN-capable environment
+   with mild congestion, packets should rarely be dropped due to
+   congestion in the first place, and so instances of retransmitted
+   packets should rarely arise.  If packets are being retransmitted,
+   then there are already packet losses (from corruption or from
+   congestion) that ECN has been unable to prevent.
+
+   We note that if the router sets the CE codepoint for an ECN-capable
+   data packet within a TCP connection, then the TCP connection is
+   guaranteed to receive that indication of congestion, or to receive
+   some other indication of congestion within the same window of data,
+   even if this packet is dropped or reordered in the network.  We
+   consider two cases, when the packet is later retransmitted, and when
+   the packet is not later retransmitted.
+
+   In the first case, if the packet is either dropped or delayed, and at
+   some point retransmitted by the data sender, then the retransmission
+   is a result of a Fast Retransmit or a Retransmit Timeout for either
+   that packet or for some prior packet in the same window of data.  In
+   this case, because the data sender already has retransmitted this
+   packet, we know that the data sender has already responded to an
+
+
+
+Ramakrishnan, et al.        Standards Track                    [Page 21]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   indication of congestion for some packet within the same window of
+   data as the original packet.  Thus, even if the first transmission of
+   the packet is dropped in the network, or is delayed, if it had the CE
+   codepoint set, and is later ignored by the data receiver as an out-
+   of-window packet, this is not a problem, because the sender has
+   already responded to an indication of congestion for that window of
+   data.
+
+   In the second case, if the packet is never retransmitted by the data
+   sender, then this data packet is the only copy of this data received
+   by the data receiver, and therefore arrives at the data receiver as
+   an in-window packet, regardless of how much the packet might be
+   delayed or reordered.  In this case, if the CE codepoint is set on
+   the packet within the network, this will be treated by the data
+   receiver as a valid indication of congestion.
+

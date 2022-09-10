@@ -1,0 +1,150 @@
+E. An algorithm for assigning Link State IDs
+
+    The Link State ID in AS-external-LSAs and summary-LSAs is usually
+    set to the described network's IP address. However, if necessary one
+    or more of the network's host bits may be set in the Link State ID.
+    This allows the router to originate separate LSAs for networks
+    having the same address, yet different masks. Such networks can
+    occur in the presence of supernetting and subnet 0s (see [Ref10]).
+
+    This appendix gives one possible algorithm for setting the host bits
+    in Link State IDs.  The choice of such an algorithm is a local
+    decision. Separate routers are free to use different algorithms,
+    since the only LSAs affected are the ones that the router itself
+    originates. The only requirement on the algorithms used is that the
+    network's IP address should be used as the Link State ID whenever
+    possible; this maximizes interoperability with OSPF implementations
+    predating RFC 1583.
+
+    The algorithm below is stated for AS-external-LSAs.  This is only
+    for clarity; the exact same algorithm can be used for summary-LSAs.
+    Suppose that the router wishes to originate an AS-external-LSA for a
+    network having address NA and mask NM1. The following steps are then
+    used to determine the LSA's Link State ID:
+
+    (1) Determine whether the router is already originating an AS-
+        external-LSA with Link State ID equal to NA (in such an LSA the
+        router itself will be listed as the LSA's Advertising Router).
+        If not, the Link State ID is set equal to NA and the algorithm
+        terminates. Otherwise,
+
+    (2) Obtain the network mask from the body of the already existing
+        AS-external-LSA. Call this mask NM2. There are then two cases:
+
+        o   NM1 is longer (i.e., more specific) than NM2. In this case,
+            set the Link State ID in the new LSA to be the network
+            [NA,NM1] with all the host bits set (i.e., equal to NA or'ed
+            together with all the bits that are not set in NM1, which is
+            network [NA,NM1]'s broadcast address).
+
+        o   NM2 is longer than NM1. In this case, change the existing
+            LSA (having Link State ID of NA) to reference the new
+            network [NA,NM1] by incrementing the sequence number,
+
+
+
+Moy                         Standards Track                   [Page 236]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            changing the mask in the body to NM1 and inserting the cost
+            of the new network. Then originate a new LSA for the old
+            network [NA,NM2], with Link State ID equal to NA or'ed
+            together with the bits that are not set in NM2 (i.e.,
+            network [NA,NM2]'s broadcast address).
+
+    The above algorithm assumes that all masks are contiguous; this
+    ensures that when two networks have the same address, one mask is
+    more specific than the other. The algorithm also assumes that no
+    network exists having an address equal to another network's
+    broadcast address. Given these two assumptions, the above algorithm
+    always produces unique Link State IDs. The above algorithm can also
+    be reworded as follows:  When originating an AS-external-LSA, try to
+    use the network number as the Link State ID.  If that produces a
+    conflict, examine the two networks in conflict. One will be a subset
+    of the other. For the less specific network, use the network number
+    as the Link State ID and for the more specific use the network's
+    broadcast address instead (i.e., flip all the "host" bits to 1).  If
+    the most specific network was originated first, this will cause you
+    to originate two LSAs at once.
+
+    As an example of the algorithm, consider its operation when the
+    following sequence of events occurs in a single router (Router A).
+
+
+    (1) Router A wants to originate an AS-external-LSA for
+        [10.0.0.0,255.255.255.0]:
+
+        (a) A Link State ID of 10.0.0.0 is used.
+
+    (2) Router A then wants to originate an AS-external-LSA for
+        [10.0.0.0,255.255.0.0]:
+
+        (a) The LSA for [10.0.0,0,255.255.255.0] is reoriginated using a
+            new Link State ID of 10.0.0.255.
+
+        (b) A Link State ID of 10.0.0.0 is used for
+            [10.0.0.0,255.255.0.0].
+
+    (3) Router A then wants to originate an AS-external-LSA for
+        [10.0.0.0,255.0.0.0]:
+
+
+
+
+Moy                         Standards Track                   [Page 237]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        (a) The LSA for [10.0.0.0,255.255.0.0] is reoriginated using a
+            new Link State ID of 10.0.255.255.
+
+        (b) A Link State ID of 10.0.0.0 is used for
+            [10.0.0.0,255.0.0.0].
+
+        (c) The network [10.0.0.0,255.255.255.0] keeps its Link State ID
+            of 10.0.0.255.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Moy                         Standards Track                   [Page 238]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+

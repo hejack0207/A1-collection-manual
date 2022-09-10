@@ -1,0 +1,67 @@
+2.2.  Message Reception
+
+   At the receiving entity, when CMTP obtains a DATAGRAM, it takes one
+   of the following actions, depending upon the outcome of the message
+   validation checks:
+
+   - The DATAGRAM passes the CMTP validation checks.  CMTP then delivers
+     the DATAGRAM with enclosed IDPR control message, to the appropriate
+     IDPR protocol, which in turn applies its own integrity checks to
+     the control message before acting on the contents.  The recipient
+     IDPR protocol, except in one case, directs CMTP to generate an ACK
+     and return the ACK to the sender.  That exception is the up/down
+     protocol (see section 3.2) which determines reachability of
+     adjacent policy gateways and does not use CMTP ACK messages to
+     notify the sender of message reception.  Instead, the up/down
+     protocol messages themselves carry implicit information about
+     message reception at the adjacent policy gateway.  In the cases
+     where the recipient IDPR protocol directs CMTP to generate an ACK,
+     it may pass control information to CMTP for inclusion in the ACK,
+     depending on the contents of the original IDPR control message.
+     For example, a route server unable to fill a request for routing
+     information may inform the requesting IDPR entity, through an ACK
+     for the initial request, to place its request elsewhere.
+
+   - The DATAGRAM fails at least one of the CMTP validation checks.
+     CMTP then generates a NAK, returns the NAK to the sender, and
+     discards the DATAGRAM, regardless of the type of IDPR control
+     message contained in the DATAGRAM.  The NAK indicates the nature of
+     the validation failure and serves to help the sender establish
+     communication with the recipient.  In particular, the CMTP NAK
+     provides a mechanism for negotiation of IDPR version and
+     integrity/authentication scheme, two parameters crucial for
+     establishing communication between IDPR entities.
+
+   Upon receiving an ACK or a NAK, CMTP immediately discards the message
+   if at least one of the validation checks fails or if it is unable to
+   locate the associated DATAGRAM.  CMTP logs the latter event for
+   network management.  Otherwise, if all of the validation checks pass
+   and if it is able to locate the associated DATAGRAM, CMTP clears the
+   associated retransmission timer and then takes one of the following
+   actions, depending upon the message type:
+
+   - The message is an ACK.  CMTP discards the associated DATAGRAM and
+     delivers the ACK, which may contain IDPR control information, to
+     the appropriate IDPR protocol.
+
+   - The message is a NAK.  If the associated DATAGRAM has exhausted its
+     transmission allotment, CMTP discards the DATAGRAM, informs the
+
+
+
+Steenstrup                                                     [Page 22]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+     appropriate IDPR protocol that the control message transmission was
+     not successful, and logs the event for network management.
+     Otherwise, if the associated DATAGRAM has not yet exhausted its
+     transmission allotment, CMTP first checks its copy of the DATAGRAM
+     against the failure indication contained in the NAK.  If its
+     DATAGRAM copy appears to be intact, CMTP retransmits the DATAGRAM
+     and sets the associated retransmission timer.  However, if its
+     DATAGRAM copy appears to be corrupted, CMTP discards the DATAGRAM,
+     informs the IDPR protocol that the control message transmission was
+     not successful, and logs the event for network management.
+

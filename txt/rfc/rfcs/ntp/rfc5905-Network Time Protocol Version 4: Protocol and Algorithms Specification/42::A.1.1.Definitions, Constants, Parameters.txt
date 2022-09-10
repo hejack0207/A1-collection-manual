@@ -1,0 +1,195 @@
+A.1.1.  Definitions, Constants, Parameters
+
+#include <math.h>               /* avoids complaints about sqrt() */
+#include <sys/time.h>           /* for gettimeofday() and friends */
+#include <stdlib.h>             /* for malloc() and friends */
+#include <string.h>             /* for memset() */
+
+/*
+ * Data types
+ *
+ * This program assumes the int data type is 32 bits and the long data
+ * type is 64 bits.  The native data type used in most calculations is
+ * floating double.  The data types used in some packet header fields
+ * require conversion to and from this representation.  Some header
+ * fields involve partitioning an octet, here represented by individual
+ * octets.
+ *
+ * The 64-bit NTP timestamp format used in timestamp calculations is
+ * unsigned seconds and fraction with the decimal point to the left of
+
+
+
+Mills, et al.                Standards Track                   [Page 61]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+ * bit 32.  The only operation permitted with these values is
+ * subtraction, yielding a signed 31-bit difference.  The 32-bit NTP
+ * short format used in delay and dispersion calculations is seconds and
+ * fraction with the decimal point to the left of bit 16.  The only
+ * operations permitted with these values are addition and
+ * multiplication by a constant.
+ *
+ * The IPv4 address is 32 bits, while the IPv6 address is 128 bits.  The
+ * message digest field is 128 bits as constructed by the MD5 algorithm.
+ * The precision and poll interval fields are signed log2 seconds.
+ */
+typedef unsigned long long tstamp;   /* NTP timestamp format */
+typedef unsigned int tdist;     /* NTP short format */
+typedef unsigned long ipaddr;   /* IPv4 or IPv6 address */
+typedef unsigned long digest;   /* md5 digest */
+typedef signed char s_char;     /* precision and poll interval (log2) */
+
+/*
+ * Timestamp conversion macroni
+ */
+#define FRIC        65536.                  /* 2^16 as a double */
+#define D2FP(r)     ((tdist)((r) * FRIC))   /* NTP short */
+#define FP2D(r)     ((double)(r) / FRIC)
+
+#define FRAC       4294967296.             /* 2^32 as a double */
+#define D2LFP(a)   ((tstamp)((a) * FRAC))  /* NTP timestamp */
+#define LFP2D(a)   ((double)(a) / FRAC)
+#define U2LFP(a)   (((unsigned long long) \
+                       ((a).tv_sec + JAN_1970) << 32) + \
+                       (unsigned long long) \
+                       ((a).tv_usec / 1e6 * FRAC))
+
+/*
+ * Arithmetic conversions
+ */
+#define LOG2D(a)        ((a) < 0 ? 1. / (1L << -(a)) : \
+                            1L << (a))          /* poll, etc. */
+#define SQUARE(x)       (x * x)
+#define SQRT(x)         (sqrt(x))
+
+/*
+ * Global constants.  Some of these might be converted to variables
+ * that can be tinkered by configuration or computed on-the-fly.  For
+ * instance, the reference implementation computes PRECISION on-the-fly
+ * and provides performance tuning for the defines marked with % below.
+ */
+#define VERSION         4       /* version number */
+#define MINDISP         .01     /* % minimum dispersion (s) */
+
+
+
+Mills, et al.                Standards Track                   [Page 62]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+#define MAXDISP         16      /* maximum dispersion (s) */
+#define MAXDIST         1       /* % distance threshold (s) */
+#define NOSYNC          0x3     /* leap unsync */
+#define MAXSTRAT        16      /* maximum stratum (infinity metric) */
+#define MINPOLL         6       /* % minimum poll interval (64 s)*/
+#define MAXPOLL         17      /* % maximum poll interval (36.4 h) */
+#define MINCLOCK        3       /* minimum manycast survivors */
+#define MAXCLOCK        10      /* maximum manycast candidates */
+#define TTLMAX          8       /* max ttl manycast */
+#define BEACON          15      /* max interval between beacons */
+
+#define PHI             15e-6   /* % frequency tolerance (15 ppm) */
+#define NSTAGE          8       /* clock register stages */
+#define NMAX            50      /* maximum number of peers */
+#define NSANE           1       /* % minimum intersection survivors */
+#define NMIN            3       /* % minimum cluster survivors */
+
+/*
+ * Global return values
+ */
+#define TRUE            1       /* boolean true */
+#define FALSE           0       /* boolean false */
+
+/*
+ * Local clock process return codes
+ */
+#define IGNORE          0       /* ignore */
+#define SLEW            1       /* slew adjustment */
+#define STEP            2       /* step adjustment */
+#define PANIC           3       /* panic - no adjustment */
+
+/*
+ * System flags
+ */
+#define S_FLAGS         0       /* any system flags */
+#define S_BCSTENAB      0x1     /* enable broadcast client */
+
+/*
+ * Peer flags
+ */
+#define P_FLAGS         0       /* any peer flags */
+#define P_EPHEM         0x01    /* association is ephemeral */
+#define P_BURST         0x02    /* burst enable */
+#define P_IBURST        0x04    /* intial burst enable */
+#define P_NOTRUST       0x08    /* authenticated access */
+#define P_NOPEER        0x10    /* authenticated mobilization */
+#define P_MANY          0x20    /* manycast client */
+
+
+
+
+Mills, et al.                Standards Track                   [Page 63]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+/*
+ * Authentication codes
+ */
+#define A_NONE          0       /* no authentication */
+#define A_OK            1       /* authentication OK */
+#define A_ERROR         2       /* authentication error */
+#define A_CRYPTO        3       /* crypto-NAK */
+
+/*
+ * Association state codes
+ */
+#define X_INIT          0       /* initialization */
+#define X_STALE         1       /* timeout */
+#define X_STEP          2       /* time step */
+#define X_ERROR         3       /* authentication error */
+#define X_CRYPTO        4       /* crypto-NAK received */
+#define X_NKEY          5       /* untrusted key */
+
+/*
+ * Protocol mode definitions
+ */
+#define M_RSVD          0       /* reserved */
+#define M_SACT          1       /* symmetric active */
+#define M_PASV          2       /* symmetric passive */
+#define M_CLNT          3       /* client */
+#define M_SERV          4       /* server */
+#define M_BCST          5       /* broadcast server */
+#define M_BCLN          6       /* broadcast client */
+
+/*
+ * Clock state definitions
+ */
+#define NSET            0       /* clock never set */
+#define FSET            1       /* frequency set from file */
+#define SPIK            2       /* spike detected */
+#define FREQ            3       /* frequency mode */
+#define SYNC            4       /* clock synchronized */
+
+#define min(a, b)   ((a) < (b) ? (a) : (b))
+#define max(a, b)   ((a) < (b) ? (b) : (a))
+
+
+
+
+
+
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 64]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+

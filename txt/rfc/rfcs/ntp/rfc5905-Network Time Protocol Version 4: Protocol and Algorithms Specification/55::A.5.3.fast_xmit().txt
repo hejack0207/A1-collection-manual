@@ -1,0 +1,64 @@
+A.5.3.  fast_xmit()
+
+/*
+ * fast_xmit() - transmit a reply packet for receive packet r
+ */
+void
+fast_xmit(
+        struct r *r,            /* receive packet pointer */
+        int     mode,           /* association mode */
+        int     auth            /* authentication code */
+        )
+{
+        struct x x;
+
+        /*
+         * Initialize header and transmit timestamp.  Note that the
+         * transmit version is copied from the receive version.  This is
+         * for backward compatibility.
+         */
+
+
+
+
+Mills, et al.                Standards Track                   [Page 88]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+        x.version = r->version;
+        x.srcaddr = r->dstaddr;
+        x.dstaddr = r->srcaddr;
+        x.leap = s.leap;
+        x.mode = mode;
+        if (s.stratum == MAXSTRAT)
+                x.stratum = 0;
+        else
+                x.stratum = s.stratum;
+        x.poll = r->poll;
+        x.precision = s.precision;
+        x.rootdelay = D2FP(s.rootdelay);
+        x.rootdisp = D2FP(s.rootdisp);
+        x.refid = s.refid;
+        x.reftime = s.reftime;
+        x.org = r->xmt;
+        x.rec = r->dst;
+        x.xmt = get_time();
+
+        /*
+         * If the authentication code is A.NONE, include only the
+         * header; if A.CRYPTO, send a crypto-NAK; if A.OK, send a valid
+         * MAC.  Use the key ID in the received packet and the key in
+         * the local key cache.
+         */
+        if (auth != A_NONE) {
+                if (auth == A_CRYPTO) {
+                        x.keyid = 0;
+                } else {
+                        x.keyid = r->keyid;
+                        x.dgst = md5(x.keyid);
+                }
+        }
+        xmit_packet(&x);
+}
+

@@ -1,0 +1,77 @@
+7.5.1.  Handling Implicit Path Failures
+
+   Nevertheless, policy gateways along a path must be able to handle the
+   case in which a policy gateway fails and subsequently returns to
+   service without either the up/down protocol or the intra-domain
+   routing procedure detecting the failure; we do not expect this event
+   to occur often.  If the policy gateway, prior to failure, contained
+   forwarding information for several established paths, it may now
+   receive many IDPR data messages containing unrecognized path
+   identifiers.  The policy gateway should alert the data sources that
+   their paths through it are no longer viable.
+
+   Policy gateways that receive IDPR data messages with unrecognized
+   path identifiers take one of the following two actions, depending
+   upon their past failure record:
+
+   - The policy gateway has not failed in the past pg_up (24) hour
+     period.  In this case, there are at least four possible reasons for
+     the unrecognized path identifier in the data message:
+
+      o The data message path identifier has been corrupted in a way
+        that is not detectable by the integrity/authentication value, if
+        one is present.
+
+      o The policy gateway has experienced a memory error.
+
+      o The policy gateway failed sometime during the life of the path
+        and source sent no data on the path for a period of pg_up hours
+        following the failure.  Although paths may persist for more than
+        pg_up hours, we expect that they will also be used more
+        frequently than once every pg_up hours.
+
+      o The path was not successfully established, and the originator
+        sent data messages down the path prior to receiving a response
+        to its SETUP message.
+
+      In all cases, the policy gateway discards the data message and
+      logs the event for network management.
+
+   - The policy gateway has failed at least once in the past pg_up hour
+     period.  Thus, the policy gateway assumes that the unrecognized
+     path identifier in the data message may be attributed to its
+     failure.  In response to the data message, the policy gateway
+     generates an ERROR message containing the unrecognized path
+     identifier.  The policy gateway then sends the ERROR message back
+     to the entity from which it received the data message, which should
+     be equivalent to the previous policy gateway on the path.
+
+
+
+
+Steenstrup                                                     [Page 96]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   When the previous policy gateway receives such an ERROR message, it
+   decides whether the message is acceptable.  If the policy gateway
+   does not recognize the path identifier contained in the ERROR
+   message, it does not find the ERROR message acceptable and
+   subsequently discards the message.  However, if the policy gateway
+   does find the ERROR message acceptable, it then determines whether it
+   has already received an ACCEPT message for the given path.  If the
+   policy gateway has not received an ACCEPT message for that path, it
+   discards the ERROR message and takes no further action.
+
+   If the policy gateway has received an ACCEPT message for that path,
+   it then attempts path repair, as described in section 7.5.2 below.
+   Only if path repair is unsuccessful does the previous policy gateway
+   generate a TEARDOWN message for the path and return it to the
+   originator.  The TEARDOWN message includes the domain and virtual
+   gateway containing the policy gateway that failed, which aids the
+   originator in selecting a new path that does not include the domain
+   containing the failed policy gateway.  This mechanism ensures that
+   path agents quickly discover and recover from disrupted paths, while
+   guarding against unwarranted path teardown.
+

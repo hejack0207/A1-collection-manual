@@ -1,0 +1,423 @@
+4.  PAWS: PROTECT AGAINST WRAPPED SEQUENCE NUMBERS
+
+   4.1  Introduction
+
+      Section 4.2 describes a simple mechanism to reject old duplicate
+      segments that might corrupt an open TCP connection; we call this
+      mechanism PAWS (Protect Against Wrapped Sequence numbers).  PAWS
+      operates within a single TCP connection, using state that is saved
+      in the connection control block.  Section 4.3 and Appendix C
+      discuss the implications of the PAWS mechanism for avoiding old
+      duplicates from previous incarnations of the same connection.
+
+   4.2  The PAWS Mechanism
+
+      PAWS uses the same TCP Timestamps option as the RTTM mechanism
+      described earlier, and assumes that every received TCP segment
+      (including data and ACK segments) contains a timestamp SEG.TSval
+      whose values are monotone non-decreasing in time.  The basic idea
+      is that a segment can be discarded as an old duplicate if it is
+      received with a timestamp SEG.TSval less than some timestamp
+      recently received on this connection.
+
+      In both the PAWS and the RTTM mechanism, the "timestamps" are 32-
+
+
+
+Jacobson, Braden, & Borman                                     [Page 17]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      bit unsigned integers in a modular 32-bit space.  Thus, "less
+      than" is defined the same way it is for TCP sequence numbers, and
+      the same implementation techniques apply.  If s and t are
+      timestamp values, s < t if 0 < (t - s) < 2**31, computed in
+      unsigned 32-bit arithmetic.
+
+      The choice of incoming timestamps to be saved for this comparison
+      must guarantee a value that is monotone increasing.  For example,
+      we might save the timestamp from the segment that last advanced
+      the left edge of the receive window, i.e., the most recent in-
+      sequence segment.  Instead, we choose the value TS.Recent
+      introduced in Section 3.4 for the RTTM mechanism, since using a
+      common value for both PAWS and RTTM simplifies the implementation
+      of both.  As Section 3.4 explained, TS.Recent differs from the
+      timestamp from the last in-sequence segment only in the case of
+      delayed ACKs, and therefore by less than one window.  Either
+      choice will therefore protect against sequence number wrap-around.
+
+      RTTM was specified in a symmetrical manner, so that TSval
+      timestamps are carried in both data and ACK segments and are
+      echoed in TSecr fields carried in returning ACK or data segments.
+      PAWS submits all incoming segments to the same test, and therefore
+      protects against duplicate ACK segments as well as data segments.
+      (An alternative un-symmetric algorithm would protect against old
+      duplicate ACKs: the sender of data would reject incoming ACK
+      segments whose TSecr values were less than the TSecr saved from
+      the last segment whose ACK field advanced the left edge of the
+      send window.  This algorithm was deemed to lack economy of
+      mechanism and symmetry.)
+
+      TSval timestamps sent on {SYN} and {SYN,ACK} segments are used to
+      initialize PAWS.  PAWS protects against old duplicate non-SYN
+      segments, and duplicate SYN segments received while there is a
+      synchronized connection.  Duplicate {SYN} and {SYN,ACK} segments
+      received when there is no connection will be discarded by the
+      normal 3-way handshake and sequence number checks of TCP.
+
+      It is recommended that RST segments NOT carry timestamps, and that
+      RST segments be acceptable regardless of their timestamp.  Old
+      duplicate RST segments should be exceedingly unlikely, and their
+      cleanup function should take precedence over timestamps.
+
+      4.2.1  Basic PAWS Algorithm
+
+         The PAWS algorithm requires the following processing to be
+         performed on all incoming segments for a synchronized
+         connection:
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 18]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+         R1)  If there is a Timestamps option in the arriving segment
+              and SEG.TSval < TS.Recent and if TS.Recent is valid (see
+              later discussion), then treat the arriving segment as not
+              acceptable:
+
+                   Send an acknowledgement in reply as specified in
+                   RFC-793 page 69 and drop the segment.
+
+                   Note: it is necessary to send an ACK segment in order
+                   to retain TCP's mechanisms for detecting and
+                   recovering from half-open connections.  For example,
+                   see Figure 10 of RFC-793.
+
+         R2)  If the segment is outside the window, reject it (normal
+              TCP processing)
+
+         R3)  If an arriving segment satisfies: SEG.SEQ <= Last.ACK.sent
+              (see Section 3.4), then record its timestamp in TS.Recent.
+
+         R4)  If an arriving segment is in-sequence (i.e., at the left
+              window edge), then accept it normally.
+
+         R5)  Otherwise, treat the segment as a normal in-window, out-
+              of-sequence TCP segment (e.g., queue it for later delivery
+              to the user).
+
+         Steps R2, R4, and R5 are the normal TCP processing steps
+         specified by RFC-793.
+
+         It is important to note that the timestamp is checked only when
+         a segment first arrives at the receiver, regardless of whether
+         it is in-sequence or it must be queued for later delivery.
+         Consider the following example.
+
+              Suppose the segment sequence: A.1, B.1, C.1, ..., Z.1 has
+              been sent, where the letter indicates the sequence number
+              and the digit represents the timestamp.  Suppose also that
+              segment B.1 has been lost.  The timestamp in TS.TStamp is
+              1 (from A.1), so C.1, ..., Z.1 are considered acceptable
+              and are queued.  When B is retransmitted as segment B.2
+              (using the latest timestamp), it fills the hole and causes
+              all the segments through Z to be acknowledged and passed
+              to the user.  The timestamps of the queued segments are
+              *not* inspected again at this time, since they have
+              already been accepted.  When B.2 is accepted, TS.Stamp is
+              set to 2.
+
+         This rule allows reasonable performance under loss.  A full
+
+
+
+Jacobson, Braden, & Borman                                     [Page 19]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+         window of data is in transit at all times, and after a loss a
+         full window less one packet will show up out-of-sequence to be
+         queued at the receiver (e.g., up to ~2**30 bytes of data); the
+         timestamp option must not result in discarding this data.
+
+         In certain unlikely circumstances, the algorithm of rules R1-R4
+         could lead to discarding some segments unnecessarily, as shown
+         in the following example:
+
+              Suppose again that segments: A.1, B.1, C.1, ..., Z.1 have
+              been sent in sequence and that segment B.1 has been lost.
+              Furthermore, suppose delivery of some of C.1, ... Z.1 is
+              delayed until AFTER the retransmission B.2 arrives at the
+              receiver.  These delayed segments will be discarded
+              unnecessarily when they do arrive, since their timestamps
+              are now out of date.
+
+         This case is very unlikely to occur.  If the retransmission was
+         triggered by a timeout, some of the segments C.1, ... Z.1 must
+         have been delayed longer than the RTO time.  This is presumably
+         an unlikely event, or there would be many spurious timeouts and
+         retransmissions.  If B's retransmission was triggered by the
+         "fast retransmit" algorithm, i.e., by duplicate ACKs, then the
+         queued segments that caused these ACKs must have been received
+         already.
+
+         Even if a segment were delayed past the RTO, the Fast
+         Retransmit mechanism [Jacobson90c] will cause the delayed
+         packets to be retransmitted at the same time as B.2, avoiding
+         an extra RTT and therefore causing a very small performance
+         penalty.
+
+         We know of no case with a significant probability of occurrence
+         in which timestamps will cause performance degradation by
+         unnecessarily discarding segments.
+
+      4.2.2  Timestamp Clock
+
+         It is important to understand that the PAWS algorithm does not
+         require clock synchronization between sender and receiver.  The
+         sender's timestamp clock is used to stamp the segments, and the
+         sender uses the echoed timestamp to measure RTT's.  However,
+         the receiver treats the timestamp as simply a monotone-
+         increasing serial number, without any necessary connection to
+         its clock.  From the receiver's viewpoint, the timestamp is
+         acting as a logical extension of the high-order bits of the
+         sequence number.
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 20]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+         The receiver algorithm does place some requirements on the
+         frequency of the timestamp clock.
+
+         (a)  The timestamp clock must not be "too slow".
+
+              It must tick at least once for each 2**31 bytes sent.  In
+              fact, in order to be useful to the sender for round trip
+              timing, the clock should tick at least once per window's
+              worth of data, and even with the RFC-1072 window
+              extension, 2**31 bytes must be at least two windows.
+
+              To make this more quantitative, any clock faster than 1
+              tick/sec will reject old duplicate segments for link
+              speeds of ~8 Gbps.  A 1ms timestamp clock will work at
+              link speeds up to 8 Tbps (8*10**12) bps!
+
+         (b)  The timestamp clock must not be "too fast".
+
+              Its recycling time must be greater than MSL seconds.
+              Since the clock (timestamp) is 32 bits and the worst-case
+              MSL is 255 seconds, the maximum acceptable clock frequency
+              is one tick every 59 ns.
+
+              However, it is desirable to establish a much longer
+              recycle period, in order to handle outdated timestamps on
+              idle connections (see Section 4.2.3), and to relax the MSL
+              requirement for preventing sequence number wrap-around.
+              With a 1 ms timestamp clock, the 32-bit timestamp will
+              wrap its sign bit in 24.8 days.  Thus, it will reject old
+              duplicates on the same connection if MSL is 24.8 days or
+              less.  This appears to be a very safe figure; an MSL of
+              24.8 days or longer can probably be assumed by the gateway
+              system without requiring precise MSL enforcement by the
+              TTL value in the IP layer.
+
+         Based upon these considerations, we choose a timestamp clock
+         frequency in the range 1 ms to 1 sec per tick.  This range also
+         matches the requirements of the RTTM mechanism, which does not
+         need much more resolution than the granularity of the
+         retransmit timer, e.g., tens or hundreds of milliseconds.
+
+         The PAWS mechanism also puts a strong monotonicity requirement
+         on the sender's timestamp clock.  The method of implementation
+         of the timestamp clock to meet this requirement depends upon
+         the system hardware and software.
+
+         *    Some hosts have a hardware clock that is guaranteed to be
+              monotonic between hardware resets.
+
+
+
+Jacobson, Braden, & Borman                                     [Page 21]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+         *    A clock interrupt may be used to simply increment a binary
+              integer by 1 periodically.
+
+         *    The timestamp clock may be derived from a system clock
+              that is subject to being abruptly changed, by adding a
+              variable offset value.  This offset is initialized to
+              zero.  When a new timestamp clock value is needed, the
+              offset can be adjusted as necessary to make the new value
+              equal to or larger than the previous value (which was
+              saved for this purpose).
+
+
+      4.2.3  Outdated Timestamps
+
+         If a connection remains idle long enough for the timestamp
+         clock of the other TCP to wrap its sign bit, then the value
+         saved in TS.Recent will become too old; as a result, the PAWS
+         mechanism will cause all subsequent segments to be rejected,
+         freezing the connection (until the timestamp clock wraps its
+         sign bit again).
+
+         With the chosen range of timestamp clock frequencies (1 sec to
+         1 ms), the time to wrap the sign bit will be between 24.8 days
+         and 24800 days.  A TCP connection that is idle for more than 24
+         days and then comes to life is exceedingly unusual.  However,
+         it is undesirable in principle to place any limitation on TCP
+         connection lifetimes.
+
+         We therefore require that an implementation of PAWS include a
+         mechanism to "invalidate" the TS.Recent value when a connection
+         is idle for more than 24 days.  (An alternative solution to the
+         problem of outdated timestamps would be to send keepalive
+         segments at a very low rate, but still more often than the
+         wrap-around time for timestamps, e.g., once a day.  This would
+         impose negligible overhead.  However, the TCP specification has
+         never included keepalives, so the solution based upon
+         invalidation was chosen.)
+
+         Note that a TCP does not know the frequency, and therefore, the
+         wraparound time, of the other TCP, so it must assume the worst.
+         The validity of TS.Recent needs to be checked only if the basic
+         PAWS timestamp check fails, i.e., only if SEG.TSval <
+         TS.Recent.  If TS.Recent is found to be invalid, then the
+         segment is accepted, regardless of the failure of the timestamp
+         check, and rule R3 updates TS.Recent with the TSval from the
+         new segment.
+
+         To detect how long the connection has been idle, the TCP may
+
+
+
+Jacobson, Braden, & Borman                                     [Page 22]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+         update a clock or timestamp value associated with the
+         connection whenever TS.Recent is updated, for example.  The
+         details will be implementation-dependent.
+
+      4.2.4  Header Prediction
+
+         "Header prediction" [Jacobson90a] is a high-performance
+         transport protocol implementation technique that is most
+         important for high-speed links.  This technique optimizes the
+         code for the most common case, receiving a segment correctly
+         and in order.  Using header prediction, the receiver asks the
+         question, "Is this segment the next in sequence?"  This
+         question can be answered in fewer machine instructions than the
+         question, "Is this segment within the window?"
+
+         Adding header prediction to our timestamp procedure leads to
+         the following recommended sequence for processing an arriving
+         TCP segment:
+
+         H1)  Check timestamp (same as step R1 above)
+
+         H2)  Do header prediction: if segment is next in sequence and
+              if there are no special conditions requiring additional
+              processing, accept the segment, record its timestamp, and
+              skip H3.
+
+         H3)  Process the segment normally, as specified in RFC-793.
+              This includes dropping segments that are outside the win-
+              dow and possibly sending acknowledgments, and queueing
+              in-window, out-of-sequence segments.
+
+         Another possibility would be to interchange steps H1 and H2,
+         i.e., to perform the header prediction step H2 FIRST, and
+         perform H1 and H3 only when header prediction fails.  This
+         could be a performance improvement, since the timestamp check
+         in step H1 is very unlikely to fail, and it requires interval
+         arithmetic on a finite field, a relatively expensive operation.
+         To perform this check on every single segment is contrary to
+         the philosophy of header prediction.  We believe that this
+         change might reduce CPU time for TCP protocol processing by up
+         to 5-10% on high-speed networks.
+
+         However, putting H2 first would create a hazard: a segment from
+         2**32 bytes in the past might arrive at exactly the wrong time
+         and be accepted mistakenly by the header-prediction step.  The
+         following reasoning has been introduced [Jacobson90b] to show
+         that the probability of this failure is negligible.
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 23]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+              If all segments are equally likely to show up as old
+              duplicates, then the probability of an old duplicate
+              exactly matching the left window edge is the maximum
+              segment size (MSS) divided by the size of the sequence
+              space.  This ratio must be less than 2**-16, since MSS
+              must be < 2**16; for example, it will be (2**12)/(2**32) =
+              2**-20 for an FDDI link.  However, the older a segment is,
+              the less likely it is to be retained in the Internet, and
+              under any reasonable model of segment lifetime the
+              probability of an old duplicate exactly at the left window
+              edge must be much smaller than 2**-16.
+
+              The 16 bit TCP checksum also allows a basic unreliability
+              of one part in 2**16.  A protocol mechanism whose
+              reliability exceeds the reliability of the TCP checksum
+              should be considered "good enough", i.e., it won't
+              contribute significantly to the overall error rate.  We
+              therefore believe we can ignore the problem of an old
+              duplicate being accepted by doing header prediction before
+              checking the timestamp.
+
+         However, this probabilistic argument is not universally
+         accepted, and the consensus at present is that the performance
+         gain does not justify the hazard in the general case.  It is
+         therefore recommended that H2 follow H1.
+
+   4.3.  Duplicates from Earlier Incarnations of Connection
+
+      The PAWS mechanism protects against errors due to sequence number
+      wrap-around on high-speed connection.  Segments from an earlier
+      incarnation of the same connection are also a potential cause of
+      old duplicate errors.  In both cases, the TCP mechanisms to
+      prevent such errors depend upon the enforcement of a maximum
+      segment lifetime (MSL) by the Internet (IP) layer (see Appendix of
+      RFC-1185 for a detailed discussion).  Unlike the case of sequence
+      space wrap-around, the MSL required to prevent old duplicate
+      errors from earlier incarnations does not depend upon the transfer
+      rate.  If the IP layer enforces the recommended 2 minute MSL of
+      TCP, and if the TCP rules are followed, TCP connections will be
+      safe from earlier incarnations, no matter how high the network
+      speed.  Thus, the PAWS mechanism is not required for this case.
+
+      We may still ask whether the PAWS mechanism can provide additional
+      security against old duplicates from earlier connections, allowing
+      us to relax the enforcement of MSL by the IP layer.  Appendix B
+      explores this question, showing that further assumptions and/or
+      mechanisms are required, beyond those of PAWS.  This is not part
+      of the current extension.
+
+
+
+Jacobson, Braden, & Borman                                     [Page 24]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+

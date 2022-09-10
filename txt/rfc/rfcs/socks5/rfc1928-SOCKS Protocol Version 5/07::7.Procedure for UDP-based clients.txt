@@ -1,0 +1,83 @@
+7.  Procedure for UDP-based clients
+
+   A UDP-based client MUST send its datagrams to the UDP relay server at
+   the UDP port indicated by BND.PORT in the reply to the UDP ASSOCIATE
+   request.  If the selected authentication method provides
+   encapsulation for the purposes of authenticity, integrity, and/or
+   confidentiality, the datagram MUST be encapsulated using the
+   appropriate encapsulation.  Each UDP datagram carries a UDP request
+   header with it:
+
+
+
+
+
+Leech, et al                Standards Track                     [Page 7]
+
+RFC 1928                SOCKS Protocol Version 5              March 1996
+
+
+      +----+------+------+----------+----------+----------+
+      |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+      +----+------+------+----------+----------+----------+
+      | 2  |  1   |  1   | Variable |    2     | Variable |
+      +----+------+------+----------+----------+----------+
+
+     The fields in the UDP request header are:
+
+          o  RSV  Reserved X'0000'
+          o  FRAG    Current fragment number
+          o  ATYP    address type of following addresses:
+             o  IP V4 address: X'01'
+             o  DOMAINNAME: X'03'
+             o  IP V6 address: X'04'
+          o  DST.ADDR       desired destination address
+          o  DST.PORT       desired destination port
+          o  DATA     user data
+
+   When a UDP relay server decides to relay a UDP datagram, it does so
+   silently, without any notification to the requesting client.
+   Similarly, it will drop datagrams it cannot or will not relay.  When
+   a UDP relay server receives a reply datagram from a remote host, it
+   MUST encapsulate that datagram using the above UDP request header,
+   and any authentication-method-dependent encapsulation.
+
+   The UDP relay server MUST acquire from the SOCKS server the expected
+   IP address of the client that will send datagrams to the BND.PORT
+   given in the reply to UDP ASSOCIATE.  It MUST drop any datagrams
+   arriving from any source IP address other than the one recorded for
+   the particular association.
+
+   The FRAG field indicates whether or not this datagram is one of a
+   number of fragments.  If implemented, the high-order bit indicates
+   end-of-fragment sequence, while a value of X'00' indicates that this
+   datagram is standalone.  Values between 1 and 127 indicate the
+   fragment position within a fragment sequence.  Each receiver will
+   have a REASSEMBLY QUEUE and a REASSEMBLY TIMER associated with these
+   fragments.  The reassembly queue must be reinitialized and the
+   associated fragments abandoned whenever the REASSEMBLY TIMER expires,
+   or a new datagram arrives carrying a FRAG field whose value is less
+   than the highest FRAG value processed for this fragment sequence.
+   The reassembly timer MUST be no less than 5 seconds.  It is
+   recommended that fragmentation be avoided by applications wherever
+   possible.
+
+   Implementation of fragmentation is optional; an implementation that
+   does not support fragmentation MUST drop any datagram whose FRAG
+   field is other than X'00'.
+
+
+
+Leech, et al                Standards Track                     [Page 8]
+
+RFC 1928                SOCKS Protocol Version 5              March 1996
+
+
+   The programming interface for a SOCKS-aware UDP MUST report an
+   available buffer space for UDP datagrams that is smaller than the
+   actual space provided by the operating system:
+
+          o  if ATYP is X'01' - 10+method_dependent octets smaller
+          o  if ATYP is X'03' - 262+method_dependent octets smaller
+          o  if ATYP is X'04' - 20+method_dependent octets smaller
+

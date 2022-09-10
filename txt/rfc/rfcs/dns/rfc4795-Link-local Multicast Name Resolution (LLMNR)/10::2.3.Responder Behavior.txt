@@ -1,0 +1,117 @@
+2.3.  Responder Behavior
+
+   An LLMNR response MUST be sent to the sender via unicast.
+
+   Upon configuring an IP address, responders typically will synthesize
+   corresponding A, AAAA and PTR RRs so as to be able to respond to
+   LLMNR queries for these RRs.  An SOA RR is synthesized only when a
+   responder has another RR in addition to the SOA RR;  the SOA RR MUST
+   NOT be the only RR that a responder has.  However, in general,
+   whether RRs are manually or automatically created is an
+   implementation decision.
+
+   For example, a host configured to have computer name "host1" and to
+   be a member of the "example.com" domain, with IPv4 address 192.0.2.1
+   and IPv6 address 2001:0DB8::1:2:3:FF:FE:4:5:6, might be authoritative
+   for the following records:
+
+   host1. IN A 192.0.2.1
+          IN AAAA 2001:0DB8::1:2:3:FF:FE:4:5:6
+
+   host1.example.com. IN A 192.0.2.1
+          IN AAAA 2001:0DB8::1:2:3:FF:FE:4:5:6
+
+   1.2.0.192.in-addr.arpa. IN PTR host1.
+          IN PTR host1.example.com.
+
+   6.0.5.0.4.0.E.F.F.F.3.0.2.0.1.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.
+   ip6.arpa IN PTR host1.  (line split for formatting reasons)
+            IN PTR host1.example.com.
+
+   An LLMNR responder might be further manually configured with the name
+   of a local mail server with an MX RR included in the "host1." and
+   "host1.example.com." records.
+
+   In responding to queries:
+
+   (a)  Responders MUST listen on UDP port 5355 on the link-scope
+        multicast address(es) defined in Section 2, and on TCP port 5355
+        on the unicast address(es) that could be set as the source
+        address(es) when the responder responds to the LLMNR query.
+
+   (b)  Responders MUST direct responses to the port from which the
+        query was sent.  When queries are received via TCP, this is an
+        inherent part of the transport protocol.  For queries received
+        by UDP, the responder MUST take note of the source port and use
+        that as the destination port in the response.  Responses MUST
+        always be sent from the port to which they were directed.
+
+
+
+
+Aboba, et al.                Informational                      [Page 9]
+
+RFC 4795                         LLMNR                      January 2007
+
+
+   (c)  Responders MUST respond to LLMNR queries for names and addresses
+        for which they are authoritative.  This applies to both forward
+        and reverse lookups, with the exception of queries with the 'C'
+        bit set, which do not elicit a response.
+
+   (d)  Responders MUST NOT respond to LLMNR queries for names for which
+        they are not authoritative.
+
+   (e)  Responders MUST NOT respond using data from the LLMNR or DNS
+        resolver cache.
+
+   (f)  If a responder is authoritative for a name, it MUST respond with
+        RCODE=0 and an empty answer section, if the type of query does
+        not match an RR that the responder has.
+
+   As an example, a host configured to respond to LLMNR queries for the
+   name "foo.example.com."  is authoritative for the name
+   "foo.example.com.".  On receiving an LLMNR query for an A RR with the
+   name "foo.example.com.", the host authoritatively responds with an A
+   RR(s) that contain IP address(es) in the RDATA of the resource
+   record.  If the responder has an AAAA RR, but no A RR, and an A RR
+   query is received, the responder would respond with RCODE=0 and an
+   empty answer section.
+
+   In conventional DNS terminology, a DNS server authoritative for a
+   zone is authoritative for all the domain names under the zone apex
+   except for the branches delegated into separate zones.  Contrary to
+   conventional DNS terminology, an LLMNR responder is authoritative
+   only for the zone apex.
+
+   For example, the host "foo.example.com." is not authoritative for the
+   name "child.foo.example.com." unless the host is configured with
+   multiple names, including "foo.example.com."  and
+   "child.foo.example.com.".  As a result, "foo.example.com." cannot
+   respond to an LLMNR query for "child.foo.example.com." with RCODE=3
+   (authoritative name error).  The purpose of limiting the name
+   authority scope of a responder is to prevent complications that could
+   be caused by coexistence of two or more hosts with the names
+   representing child and parent (or grandparent) nodes in the DNS tree,
+   for example, "foo.example.com." and "child.foo.example.com.".
+
+   Without the restriction on authority, an LLMNR query for an A
+   resource record for the name "child.foo.example.com." would result in
+   two authoritative responses: RCODE=3 (authoritative name error)
+   received from "foo.example.com.", and a requested A record from
+   "child.foo.example.com.".  To prevent this ambiguity, LLMNR-enabled
+   hosts could perform a dynamic update of the parent (or grandparent)
+   zone with a delegation to a child zone; for example, a host
+
+
+
+Aboba, et al.                Informational                     [Page 10]
+
+RFC 4795                         LLMNR                      January 2007
+
+
+   "child.foo.example.com." could send a dynamic update for the NS and
+   glue A record to "foo.example.com.".  However, this approach
+   significantly complicates implementation of LLMNR and would not be
+   acceptable for lightweight hosts.
+

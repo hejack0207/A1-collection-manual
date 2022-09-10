@@ -1,0 +1,169 @@
+7.1.  An Example of Path Setup
+
+   We illustrate how path setup works by stepping through an example.
+   Suppose host Hx in domain AD X wants to communicate with host Hy in
+   domain AD Y and that both AD X and AD Y support IDPR.  Hx need not
+   know the identity of its own domain or of Hy's domain in order to
+   send messages to Hy.  Instead, Hx simply forwards a message bound for
+   Hy to one of the gateways on its local network, according to its
+   local forwarding information only.  If the recipient gateway is a
+   policy gateway, the resident path agent determines how to forward the
+   message outside of the domain.  Otherwise, the recipient gateway
+   forwards the message to another gateway in AD X, according to its
+   local forwading information.  Eventually, the message will arrive at
+   a policy gateway in AD X, as policy gateways are the only egress
+   points to other domains, in domains that support IDPR.
+
+   The path agent resident in the recipient policy gateway uses the
+   message header, including source and destination addresses and any
+   requested service information (for example, type of service), in
+   order to determine whether it is an intra-domain or inter-domain
+   message, and if inter-domain, whether it requires an IDPR policy
+   route.  Specifically, the path agent attempts to locate a forwarding
+   information database entry for the given traffic flow, from the
+   information contained in the message header.  In the future, for IP
+   messages, the relevant header information may also include special
+   service-specific IP options or even information from higher layer
+   protocols.
+
+   Forwarding database entries exist for all of the following:
+
+   - All intra-domain traffic flows.  Intra-domain forwarding
+     information is integrated into the forwarding information database
+     as soon as it is received.
+
+   - Inter-domain traffic flows that do not require IDPR policy routes.
+     Non-IDPR forwarding information is integrated into the forwarding
+     database as soon as it is received.
+
+   - IDPR inter-domain traffic flows for which a path has already been
+
+
+
+Steenstrup                                                     [Page 81]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+     set up.  IDPR forwarding information is integrated into the
+     forwarding database only during path setup.
+
+   The path agent uses the message header contents to guide the search
+   for a forwarding information database entry for a given traffic flow.
+   We recommend a radix search to locate such an entry.  When the search
+   terminates, it produces either an entry, or, in the case of a new
+   IDPR traffic flow, a directive to generate an entry.  If the search
+   terminates in an existing forwarding information database entry, the
+   path agent forwards the message according to that entry.
+
+   Suppose that the search terminates indicating that the traffic flow
+   from Hx to Hy requires an IDPR policy route and that no entry in the
+   forwarding information database yet exists for that traffic flow.  In
+   this case, the path agent first determines the source and destination
+   domains associated with the message's source and destination
+   addresses, before attempting to obtain a policy route.  The path
+   agent relies on the mapping servers to supply the domain information,
+   but it caches all mapping server responses locally to limit the
+   number of future queries.  When attempting to resolve an address to a
+   domain, the path agent always checks its local cache before
+   contacting a mapping server.
+
+   After obtaining the domain information, the path agent attempts to
+   obtain a policy route to carry the traffic from Hx to Hy.  The path
+   agent relies on route servers to supply policy routes, but it caches
+   all route server responses locally to limit the number of future
+   queries.  When attempting to locate a suitable policy route, the path
+   agent usually consults its local cache before contacting a route
+   server, as described previously in section 6.3.
+
+   If no suitable cache entry exists, the path agent queries the route
+   server, providing it with the source and destination domains together
+   with source policy information carried in the host message or
+   specified through configuration.  Upon receiving a policy route
+   query, a route server consults its route database.  If it cannot
+   locate a suitable route in its route database, the route server
+   attempts to generate at least one route to AD Y, consistent with the
+   requested services for Hx.
+
+   The route server always returns a response to the path agent,
+   regardless of whether it is successful in locating a suitable policy
+   route.  The response to a successful route query consists of a set of
+   candidate routes, from which the path agent makes its selection.  We
+   expect that a path agent will normally choose a single route from a
+   candidate set.  Nevertheless, IDPR does not preclude a path agent
+   from selecting multiple routes from the candidate set.  A path agent
+   may desire multiple routes to support features such as fault
+
+
+
+Steenstrup                                                     [Page 82]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   tolerance or load balancing; however, IDPR does not currently specify
+   how the path agent should use multiple routes.
+
+   If the policy route is a new route provided by the route server,
+   there will be no existing path for the route, and thus the path agent
+   must set up such a path.  However, if the policy route is an existing
+   route extracted from the path agent's cache, there may well be an
+   existing path for the route, set up to accommodate a host traffic
+   flow.  IDPR permits multiple traffic flows to use the same path,
+   provided that all traffic flows sharing the path travel between the
+   same endpoint domains and have the same service requirements.
+   Nevertheless, IDPR does not preclude a path agent from setting up
+   distinct paths along the same policy route to preserve the
+   distinction between host traffic flows.
+
+   The path agent associates an identifier with the path, which is
+   included in each message that travels down the path and is used by
+   the policy gateways along the path in order to determine how to
+   forward the message.  If the path already exists, the path agent uses
+   the preexisting identifier.  However, for new paths, the path agent
+   chooses a path identifier that is different from those of all other
+   paths that it manages.  The path agent also updates its forwarding
+   information database to reference the path identifier and modifies
+   its search procedure to yield the correct entry in the forwarding
+   information database given the data message header.
+
+   For new paths, the path agent initiates path setup, communicating the
+   policy route, in terms of requested services, constituent domains,
+   relevant transit policies, and the connecting virtual gateways, to
+   policy gateways in intermediate domains.  Using this information, an
+   intermediate policy gateway determines whether to accept or refuse
+   the path and to which next policy gateway to forward the path setup
+   information.  The path setup procedure allows policy gateways to set
+   up a path in both directions simultaneously.  Each intermediate
+   policy gateway, after path acceptance, updates its forwarding
+   information database to include an entry that associates the path
+   identifier with the appropriate previous and next hop policy
+   gateways.
+
+   When a policy gateway in AD Y accepts a path, it notifies the source
+   path agent in AD X.  We expect that the source path agent will
+   normally wait until a path has been successfully established before
+   using it to transport data traffic.  However, PCP does not preclude a
+   path agent from forwarding messages along a path prior to
+   confirmation of successful path establishment.  Paths remain in place
+   until they are torn down because of failure, expiration, or when
+   resources are scarce, preemption in favor of other paths.
+
+
+
+
+Steenstrup                                                     [Page 83]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   We note that data communication between Hx and Hy may occur over two
+   separate IDPR paths: one from AD X to AD Y and one from AD Y to AD X.
+   The reasons are that within a domain, hosts know nothing about path
+   agents nor IDPR paths, and path agents know nothing about other path
+   agents' existing IDPR paths.  Thus, in AD Y, the path agent that
+   terminates the path from AD X may not be the same as the path agent
+   that receives traffic from Hy destined for Hx.  In this case, receipt
+   of traffic from Hy forces the second path agent to set up an
+   independent path from AD Y to AD X.
+

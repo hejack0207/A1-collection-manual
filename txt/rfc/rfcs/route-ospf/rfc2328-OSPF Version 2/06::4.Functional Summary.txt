@@ -1,0 +1,374 @@
+4.  Functional Summary
+
+    A separate copy of OSPF's basic routing algorithm runs in each area.
+    Routers having interfaces to multiple areas run multiple copies of
+    the algorithm.  A brief summary of the routing algorithm follows.
+
+    When a router starts, it first initializes the routing protocol data
+    structures.  The router then waits for indications from the lower-
+    level protocols that its interfaces are functional.
+
+    A router then uses the OSPF's Hello Protocol to acquire neighbors.
+    The router sends Hello packets to its neighbors, and in turn
+    receives their Hello packets.  On broadcast and point-to-point
+    networks, the router dynamically detects its neighboring routers by
+    sending its Hello packets to the multicast address AllSPFRouters.
+    On non-broadcast networks, some configuration information may be
+    necessary in order to discover neighbors.  On broadcast and NBMA
+    networks the Hello Protocol also elects a Designated router for the
+    network.
+
+    The router will attempt to form adjacencies with some of its newly
+    acquired neighbors.  Link-state databases are synchronized between
+    pairs of adjacent routers.  On broadcast and NBMA networks, the
+    Designated Router determines which routers should become adjacent.
+
+    Adjacencies control the distribution of routing information.
+    Routing updates are sent and received only on adjacencies.
+
+    A router periodically advertises its state, which is also called
+    link state.  Link state is also advertised when a router's state
+    changes.  A router's adjacencies are reflected in the contents of
+    its LSAs.  This relationship between adjacencies and link state
+    allows the protocol to detect dead routers in a timely fashion.
+
+    LSAs are flooded throughout the area.  The flooding algorithm is
+    reliable, ensuring that all routers in an area have exactly the same
+    link-state database.  This database consists of the collection of
+    LSAs originated by each router belonging to the area.  From this
+    database each router calculates a shortest-path tree, with itself as
+    root.  This shortest-path tree in turn yields a routing table for
+    the protocol.
+
+
+
+
+Moy                         Standards Track                    [Page 40]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    4.1.  Inter-area routing
+
+        The previous section described the operation of the protocol
+        within a single area.  For intra-area routing, no other routing
+        information is pertinent.  In order to be able to route to
+        destinations outside of the area, the area border routers inject
+        additional routing information into the area.  This additional
+        information is a distillation of the rest of the Autonomous
+        System's topology.
+
+        This distillation is accomplished as follows: Each area border
+        router is by definition connected to the backbone.  Each area
+        border router summarizes the topology of its attached non-
+        backbone areas for transmission on the backbone, and hence to
+        all other area border routers.  An area border router then has
+        complete topological information concerning the backbone, and
+        the area summaries from each of the other area border routers.
+        From this information, the router calculates paths to all
+        inter-area destinations.  The router then advertises these paths
+        into its attached areas.  This enables the area's internal
+        routers to pick the best exit router when forwarding traffic
+        inter-area destinations.
+
+
+    4.2.  AS external routes
+
+        Routers that have information regarding other Autonomous Systems
+        can flood this information throughout the AS.  This external
+        routing information is distributed verbatim to every
+        participating router.  There is one exception: external routing
+        information is not flooded into "stub" areas (see Section 3.6).
+
+        To utilize external routing information, the path to all routers
+        advertising external information must be known throughout the AS
+        (excepting the stub areas).  For that reason, the locations of
+        these AS boundary routers are summarized by the (non-stub) area
+        border routers.
+
+
+
+
+
+
+
+
+Moy                         Standards Track                    [Page 41]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    4.3.  Routing protocol packets
+
+        The OSPF protocol runs directly over IP, using IP protocol 89.
+        OSPF does not provide any explicit fragmentation/reassembly
+        support.  When fragmentation is necessary, IP
+        fragmentation/reassembly is used.  OSPF protocol packets have
+        been designed so that large protocol packets can generally be
+        split into several smaller protocol packets.  This practice is
+        recommended; IP fragmentation should be avoided whenever
+        possible.
+
+        Routing protocol packets should always be sent with the IP TOS
+        field set to 0.  If at all possible, routing protocol packets
+        should be given preference over regular IP data traffic, both
+        when being sent and received.  As an aid to accomplishing this,
+        OSPF protocol packets should have their IP precedence field set
+        to the value Internetwork Control (see [Ref5]).
+
+        All OSPF protocol packets share a common protocol header that is
+        described in Appendix A.  The OSPF packet types are listed below
+        in Table 8.  Their formats are also described in Appendix A.
+
+
+
+             Type   Packet  name           Protocol  function
+             __________________________________________________________
+             1      Hello                  Discover/maintain  neighbors
+             2      Database Description   Summarize database contents
+             3      Link State Request     Database download
+             4      Link State Update      Database update
+             5      Link State Ack         Flooding acknowledgment
+
+
+                            Table 8: OSPF packet types.
+
+
+        OSPF's Hello protocol uses Hello packets to discover and
+        maintain neighbor relationships.  The Database Description and
+        Link State Request packets are used in the forming of
+        adjacencies.  OSPF's reliable update mechanism is implemented by
+        the Link State Update and Link State Acknowledgment packets.
+
+
+
+
+Moy                         Standards Track                    [Page 42]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        Each Link State Update packet carries a set of new link state
+        advertisements (LSAs) one hop further away from their point of
+        origination.  A single Link State Update packet may contain the
+        LSAs of several routers.  Each LSA is tagged with the ID of the
+        originating router and a checksum of its link state contents.
+        Each LSA also has a type field; the different types of OSPF LSAs
+        are listed below in Table 9.
+
+        OSPF routing packets (with the exception of Hellos) are sent
+        only over adjacencies.  This means that all OSPF protocol
+        packets travel a single IP hop, except those that are sent over
+        virtual adjacencies.  The IP source address of an OSPF protocol
+        packet is one end of a router adjacency, and the IP destination
+        address is either the other end of the adjacency or an IP
+        multicast address.
+
+
+    4.4.  Basic implementation requirements
+
+        An implementation of OSPF requires the following pieces of
+        system support:
+
+
+        Timers
+            Two different kind of timers are required.  The first kind,
+            called "single shot timers", fire once and cause a protocol
+            event to be processed.  The second kind, called "interval
+            timers", fire at continuous intervals.  These are used for
+            the sending of packets at regular intervals.  A good example
+            of this is the regular broadcast of Hello packets. The
+            granularity of both kinds of timers is one second.
+
+            Interval timers should be implemented to avoid drift.  In
+            some router implementations, packet processing can affect
+            timer execution.  When multiple routers are attached to a
+            single network, all doing broadcasts, this can lead to the
+            synchronization of routing packets (which should be
+            avoided).  If timers cannot be implemented to avoid drift,
+            small random amounts should be added to/subtracted from the
+            interval timer at each firing.
+
+
+
+
+
+Moy                         Standards Track                    [Page 43]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+
+        LS     LSA                LSA description
+        type   name
+        ________________________________________________________
+        1      Router-LSAs        Originated by all routers.
+                                  This LSA describes
+                                  the collected states of the
+                                  router's interfaces to an
+                                  area. Flooded throughout a
+                                  single area only.
+        ________________________________________________________
+        2      Network-LSAs       Originated for broadcast
+                                  and NBMA networks by
+                                  the Designated Router. This
+                                  LSA contains the
+                                  list of routers connected
+                                  to the network. Flooded
+                                  throughout a single area only.
+        ________________________________________________________
+        3,4    Summary-LSAs       Originated by area border
+                                  routers, and flooded through-
+                                  out the LSA's associated
+                                  area. Each summary-LSA
+                                  describes a route to a
+                                  destination outside the area,
+                                  yet still inside the AS
+                                  (i.e., an inter-area route).
+                                  Type 3 summary-LSAs describe
+                                  routes to networks. Type 4
+                                  summary-LSAs describe
+                                  routes to AS boundary routers.
+        ________________________________________________________
+        5      AS-external-LSAs   Originated by AS boundary
+                                  routers, and flooded through-
+                                  out the AS. Each
+                                  AS-external-LSA describes
+                                  a route to a destination in
+                                  another Autonomous System.
+                                  Default routes for the AS can
+                                  also be described by
+                                  AS-external-LSAs.
+
+
+
+Moy                         Standards Track                    [Page 44]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            Table 9: OSPF link state advertisements (LSAs).
+
+
+
+        IP multicast
+            Certain OSPF packets take the form of IP multicast
+            datagrams.  Support for receiving and sending IP multicast
+            datagrams, along with the appropriate lower-level protocol
+            support, is required.  The IP multicast datagrams used by
+            OSPF never travel more than one hop. For this reason, the
+            ability to forward IP multicast datagrams is not required.
+            For information on IP multicast, see [Ref7].
+
+        Variable-length subnet support
+            The router's IP protocol support must include the ability to
+            divide a single IP class A, B, or C network number into many
+            subnets of various sizes.  This is commonly called
+            variable-length subnetting; see Section 3.5 for details.
+
+        IP supernetting support
+            The router's IP protocol support must include the ability to
+            aggregate contiguous collections of IP class A, B, and C
+            networks into larger quantities called supernets.
+            Supernetting has been proposed as one way to improve the
+            scaling of IP routing in the worldwide Internet. For more
+            information on IP supernetting, see [Ref10].
+
+        Lower-level protocol support
+            The lower level protocols referred to here are the network
+            access protocols, such as the Ethernet data link layer.
+            Indications must be passed from these protocols to OSPF as
+            the network interface goes up and down.  For example, on an
+            ethernet it would be valuable to know when the ethernet
+            transceiver cable becomes unplugged.
+
+        Non-broadcast lower-level protocol support
+            On non-broadcast networks, the OSPF Hello Protocol can be
+            aided by providing an indication when an attempt is made to
+            send a packet to a dead or non-existent router.  For
+            example, on an X.25 PDN a dead neighboring router may be
+
+
+
+
+
+Moy                         Standards Track                    [Page 45]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            indicated by the reception of a X.25 clear with an
+            appropriate cause and diagnostic, and this information would
+            be passed to OSPF.
+
+        List manipulation primitives
+            Much of the OSPF functionality is described in terms of its
+            operation on lists of LSAs.  For example, the collection of
+            LSAs that will be retransmitted to an adjacent router until
+            acknowledged are described as a list.  Any particular LSA
+            may be on many such lists.  An OSPF implementation needs to
+            be able to manipulate these lists, adding and deleting
+            constituent LSAs as necessary.
+
+        Tasking support
+            Certain procedures described in this specification invoke
+            other procedures.  At times, these other procedures should
+            be executed in-line, that is, before the current procedure
+            is finished.  This is indicated in the text by instructions
+            to execute a procedure.  At other times, the other
+            procedures are to be executed only when the current
+            procedure has finished.  This is indicated by instructions
+            to schedule a task.
+
+
+    4.5.  Optional OSPF capabilities
+
+        The OSPF protocol defines several optional capabilities.  A
+        router indicates the optional capabilities that it supports in
+        its OSPF Hello packets, Database Description packets and in its
+        LSAs.  This enables routers supporting a mix of optional
+        capabilities to coexist in a single Autonomous System.
+
+        Some capabilities must be supported by all routers attached to a
+        specific area.  In this case, a router will not accept a
+        neighbor's Hello Packet unless there is a match in reported
+        capabilities (i.e., a capability mismatch prevents a neighbor
+        relationship from forming).  An example of this is the
+        ExternalRoutingCapability (see below).
+
+        Other capabilities can be negotiated during the Database
+        Exchange process.  This is accomplished by specifying the
+        optional capabilities in Database Description packets.  A
+
+
+
+Moy                         Standards Track                    [Page 46]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        capability mismatch with a neighbor in this case will result in
+        only a subset of the link state database being exchanged between
+        the two neighbors.
+
+        The routing table build process can also be affected by the
+        presence/absence of optional capabilities.  For example, since
+        the optional capabilities are reported in LSAs, routers
+        incapable of certain functions can be avoided when building the
+        shortest path tree.
+
+        The OSPF optional capabilities defined in this memo are listed
+        below.  See Section A.2 for more information.
+
+
+        ExternalRoutingCapability
+            Entire OSPF areas can be configured as "stubs" (see Section
+            3.6).  AS-external-LSAs will not be flooded into stub areas.
+            This capability is represented by the E-bit in the OSPF
+            Options field (see Section A.2).  In order to ensure
+            consistent configuration of stub areas, all routers
+            interfacing to such an area must have the E-bit clear in
+            their Hello packets (see Sections 9.5 and 10.5).
+
+

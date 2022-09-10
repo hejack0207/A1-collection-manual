@@ -1,0 +1,359 @@
+1. INTRODUCTION
+
+   The TCP protocol [Postel81] was designed to operate reliably over
+   almost any transmission medium regardless of transmission rate,
+   delay, corruption, duplication, or reordering of segments.
+   Production TCP implementations currently adapt to transfer rates in
+   the range of 100 bps to 10**7 bps and round-trip delays in the range
+   1 ms to 100 seconds.  Recent work on TCP performance has shown that
+   TCP can work well over a variety of Internet paths, ranging from 800
+   Mbit/sec I/O channels to 300 bit/sec dial-up modems [Jacobson88a].
+
+   The introduction of fiber optics is resulting in ever-higher
+   transmission speeds, and the fastest paths are moving out of the
+   domain for which TCP was originally engineered.  This memo defines a
+   set of modest extensions to TCP to extend the domain of its
+   application to match this increasing network capability.  It is based
+   upon and obsoletes RFC-1072 [Jacobson88b] and RFC-1185 [Jacobson90b].
+
+   There is no one-line answer to the question: "How fast can TCP go?".
+   There are two separate kinds of issues, performance and reliability,
+   and each depends upon different parameters.  We discuss each in turn.
+
+   1.1  TCP Performance
+
+      TCP performance depends not upon the transfer rate itself, but
+      rather upon the product of the transfer rate and the round-trip
+      delay.  This "bandwidth*delay product" measures the amount of data
+      that would "fill the pipe"; it is the buffer space required at
+      sender and receiver to obtain maximum throughput on the TCP
+      connection over the path, i.e., the amount of unacknowledged data
+      that TCP must handle in order to keep the pipeline full.  TCP
+      performance problems arise when the bandwidth*delay product is
+      large.  We refer to an Internet path operating in this region as a
+      "long, fat pipe", and a network containing this path as an "LFN"
+      (pronounced "elephan(t)").
+
+      High-capacity packet satellite channels (e.g., DARPA's Wideband
+      Net) are LFN's.  For example, a DS1-speed satellite channel has a
+      bandwidth*delay product of 10**6 bits or more; this corresponds to
+      100 outstanding TCP segments of 1200 bytes each.  Terrestrial
+      fiber-optical paths will also fall into the LFN class; for
+      example, a cross-country delay of 30 ms at a DS3 bandwidth
+      (45Mbps) also exceeds 10**6 bits.
+
+      There are three fundamental performance problems with the current
+      TCP over LFN paths:
+
+
+
+Jacobson, Braden, & Borman                                      [Page 2]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      (1)  Window Size Limit
+
+           The TCP header uses a 16 bit field to report the receive
+           window size to the sender.  Therefore, the largest window
+           that can be used is 2**16 = 65K bytes.
+
+           To circumvent this problem, Section 2 of this memo defines a
+           new TCP option, "Window Scale", to allow windows larger than
+           2**16.  This option defines an implicit scale factor, which
+           is used to multiply the window size value found in a TCP
+           header to obtain the true window size.
+
+      (2)  Recovery from Losses
+
+           Packet losses in an LFN can have a catastrophic effect on
+           throughput.  Until recently, properly-operating TCP
+           implementations would cause the data pipeline to drain with
+           every packet loss, and require a slow-start action to
+           recover.  Recently, the Fast Retransmit and Fast Recovery
+           algorithms [Jacobson90c] have been introduced.  Their
+           combined effect is to recover from one packet loss per
+           window, without draining the pipeline.  However, more than
+           one packet loss per window typically results in a
+           retransmission timeout and the resulting pipeline drain and
+           slow start.
+
+           Expanding the window size to match the capacity of an LFN
+           results in a corresponding increase of the probability of
+           more than one packet per window being dropped.  This could
+           have a devastating effect upon the throughput of TCP over an
+           LFN.  In addition, if a congestion control mechanism based
+           upon some form of random dropping were introduced into
+           gateways, randomly spaced packet drops would become common,
+           possible increasing the probability of dropping more than one
+           packet per window.
+
+           To generalize the Fast Retransmit/Fast Recovery mechanism to
+           handle multiple packets dropped per window, selective
+           acknowledgments are required.  Unlike the normal cumulative
+           acknowledgments of TCP, selective acknowledgments give the
+           sender a complete picture of which segments are queued at the
+           receiver and which have not yet arrived.  Some evidence in
+           favor of selective acknowledgments has been published
+           [NBS85], and selective acknowledgments have been included in
+           a number of experimental Internet protocols -- VMTP
+           [Cheriton88], NETBLT [Clark87], and RDP [Velten84], and
+           proposed for OSI TP4 [NBS85].  However, in the non-LFN
+           regime, selective acknowledgments reduce the number of
+
+
+
+Jacobson, Braden, & Borman                                      [Page 3]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+           packets retransmitted but do not otherwise improve
+           performance, making their complexity of questionable value.
+           However, selective acknowledgments are expected to become
+           much more important in the LFN regime.
+
+           RFC-1072 defined a new TCP "SACK" option to send a selective
+           acknowledgment.  However, there are important technical
+           issues to be worked out concerning both the format and
+           semantics of the SACK option.  Therefore, SACK has been
+           omitted from this package of extensions.  It is hoped that
+           SACK can "catch up" during the standardization process.
+
+      (3)  Round-Trip Measurement
+
+           TCP implements reliable data delivery by retransmitting
+           segments that are not acknowledged within some retransmission
+           timeout (RTO) interval.  Accurate dynamic determination of an
+           appropriate RTO is essential to TCP performance.  RTO is
+           determined by estimating the mean and variance of the
+           measured round-trip time (RTT), i.e., the time interval
+           between sending a segment and receiving an acknowledgment for
+           it [Jacobson88a].
+
+           Section 4 introduces a new TCP option, "Timestamps", and then
+           defines a mechanism using this option that allows nearly
+           every segment, including retransmissions, to be timed at
+           negligible computational cost.  We use the mnemonic RTTM
+           (Round Trip Time Measurement) for this mechanism, to
+           distinguish it from other uses of the Timestamps option.
+
+
+   1.2 TCP Reliability
+
+      Now we turn from performance to reliability.  High transfer rate
+      enters TCP performance through the bandwidth*delay product.
+      However, high transfer rate alone can threaten TCP reliability by
+      violating the assumptions behind the TCP mechanism for duplicate
+      detection and sequencing.
+
+      An especially serious kind of error may result from an accidental
+      reuse of TCP sequence numbers in data segments.  Suppose that an
+      "old duplicate segment", e.g., a duplicate data segment that was
+      delayed in Internet queues, is delivered to the receiver at the
+      wrong moment, so that its sequence numbers falls somewhere within
+      the current window.  There would be no checksum failure to warn of
+      the error, and the result could be an undetected corruption of the
+      data.  Reception of an old duplicate ACK segment at the
+      transmitter could be only slightly less serious: it is likely to
+
+
+
+Jacobson, Braden, & Borman                                      [Page 4]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      lock up the connection so that no further progress can be made,
+      forcing an RST on the connection.
+
+      TCP reliability depends upon the existence of a bound on the
+      lifetime of a segment: the "Maximum Segment Lifetime" or MSL.  An
+      MSL is generally required by any reliable transport protocol,
+      since every sequence number field must be finite, and therefore
+      any sequence number may eventually be reused.  In the Internet
+      protocol suite, the MSL bound is enforced by an IP-layer
+      mechanism, the "Time-to-Live" or TTL field.
+
+      Duplication of sequence numbers might happen in either of two
+      ways:
+
+      (1)  Sequence number wrap-around on the current connection
+
+           A TCP sequence number contains 32 bits.  At a high enough
+           transfer rate, the 32-bit sequence space may be "wrapped"
+           (cycled) within the time that a segment is delayed in queues.
+
+      (2)  Earlier incarnation of the connection
+
+           Suppose that a connection terminates, either by a proper
+           close sequence or due to a host crash, and the same
+           connection (i.e., using the same pair of sockets) is
+           immediately reopened.  A delayed segment from the terminated
+           connection could fall within the current window for the new
+           incarnation and be accepted as valid.
+
+      Duplicates from earlier incarnations, Case (2), are avoided by
+      enforcing the current fixed MSL of the TCP spec, as explained in
+      Section 5.3 and Appendix B.   However, case (1), avoiding the
+      reuse of sequence numbers within the same connection, requires an
+      MSL bound that depends upon the transfer rate, and at high enough
+      rates, a new mechanism is required.
+
+      More specifically, if the maximum effective bandwidth at which TCP
+      is able to transmit over a particular path is B bytes per second,
+      then the following constraint must be satisfied for error-free
+      operation:
+
+          2**31 / B  > MSL (secs)                     [1]
+
+      The following table shows the value for Twrap = 2**31/B in
+      seconds, for some important values of the bandwidth B:
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                      [Page 5]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+           Network       B*8          B         Twrap
+                      bits/sec   bytes/sec      secs
+           _______    _______      ______       ______
+
+           ARPANET       56kbps       7KBps    3*10**5 (~3.6 days)
+
+           DS1          1.5Mbps     190KBps    10**4 (~3 hours)
+
+           Ethernet      10Mbps    1.25MBps    1700 (~30 mins)
+
+           DS3           45Mbps     5.6MBps    380
+
+           FDDI         100Mbps    12.5MBps    170
+
+           Gigabit        1Gbps     125MBps    17
+
+
+      It is clear that wrap-around of the sequence space is not a
+      problem for 56kbps packet switching or even 10Mbps Ethernets.  On
+      the other hand, at DS3 and FDDI speeds, Twrap is comparable to the
+      2 minute MSL assumed by the TCP specification [Postel81].  Moving
+      towards gigabit speeds, Twrap becomes too small for reliable
+      enforcement by the Internet TTL mechanism.
+
+      The 16-bit window field of TCP limits the effective bandwidth B to
+      2**16/RTT, where RTT is the round-trip time in seconds
+      [McKenzie89].  If the RTT is large enough, this limits B to a
+      value that meets the constraint [1] for a large MSL value.  For
+      example, consider a transcontinental backbone with an RTT of 60ms
+      (set by the laws of physics).  With the bandwidth*delay product
+      limited to 64KB by the TCP window size, B is then limited to
+      1.1MBps, no matter how high the theoretical transfer rate of the
+      path.  This corresponds to cycling the sequence number space in
+      Twrap= 2000 secs, which is safe in today's Internet.
+
+      It is important to understand that the culprit is not the larger
+      window but rather the high bandwidth.  For example, consider a
+      (very large) FDDI LAN with a diameter of 10km.  Using the speed of
+      light, we can compute the RTT across the ring as
+      (2*10**4)/(3*10**8) = 67 microseconds, and the delay*bandwidth
+      product is then 833 bytes.  A TCP connection across this LAN using
+      a window of only 833 bytes will run at the full 100mbps and can
+      wrap the sequence space in about 3 minutes, very close to the MSL
+      of TCP.  Thus, high speed alone can cause a reliability problem
+      with sequence number wrap-around, even without extended windows.
+
+      Watson's Delta-T protocol [Watson81] includes network-layer
+      mechanisms for precise enforcement of an MSL.  In contrast, the IP
+
+
+
+Jacobson, Braden, & Borman                                      [Page 6]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      mechanism for MSL enforcement is loosely defined and even more
+      loosely implemented in the Internet.  Therefore, it is unwise to
+      depend upon active enforcement of MSL for TCP connections, and it
+      is unrealistic to imagine setting MSL's smaller than the current
+      values (e.g., 120 seconds specified for TCP).
+
+      A possible fix for the problem of cycling the sequence space would
+      be to increase the size of the TCP sequence number field.  For
+      example, the sequence number field (and also the acknowledgment
+      field) could be expanded to 64 bits.  This could be done either by
+      changing the TCP header or by means of an additional option.
+
+      Section 5 presents a different mechanism, which we call PAWS
+      (Protect Against Wrapped Sequence numbers), to extend TCP
+      reliability to transfer rates well beyond the foreseeable upper
+      limit of network bandwidths.  PAWS uses the TCP Timestamps option
+      defined in Section 4 to protect against old duplicates from the
+      same connection.
+
+   1.3 Using TCP options
+
+      The extensions defined in this memo all use new TCP options.  We
+      must address two possible issues concerning the use of TCP
+      options: (1) compatibility and (2) overhead.
+
+      We must pay careful attention to compatibility, i.e., to
+      interoperation with existing implementations.  The only TCP option
+      defined previously, MSS, may appear only on a SYN segment.  Every
+      implementation should (and we expect that most will) ignore
+      unknown options on SYN segments.  However, some buggy TCP
+      implementation might be crashed by the first appearance of an
+      option on a non-SYN segment.  Therefore, for each of the
+      extensions defined below, TCP options will be sent on non-SYN
+      segments only when an exchange of options on the SYN segments has
+      indicated that both sides understand the extension.  Furthermore,
+      an extension option will be sent in a <SYN,ACK> segment only if
+      the corresponding option was received in the initial <SYN>
+      segment.
+
+      A question may be raised about the bandwidth and processing
+      overhead for TCP options.  Those options that occur on SYN
+      segments are not likely to cause a performance concern.  Opening a
+      TCP connection requires execution of significant special-case
+      code, and the processing of options is unlikely to increase that
+      cost significantly.
+
+      On the other hand, a Timestamps option may appear in any data or
+      ACK segment, adding 12 bytes to the 20-byte TCP header.  We
+
+
+
+Jacobson, Braden, & Borman                                      [Page 7]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      believe that the bandwidth saved by reducing unnecessary
+      retransmissions will more than pay for the extra header bandwidth.
+
+      There is also an issue about the processing overhead for parsing
+      the variable byte-aligned format of options, particularly with a
+      RISC-architecture CPU.  To meet this concern, Appendix A contains
+      a recommended layout of the options in TCP headers to achieve
+      reasonable data field alignment.  In the spirit of Header
+      Prediction, a TCP can quickly test for this layout and if it is
+      verified then use a fast path.  Hosts that use this canonical
+      layout will effectively use the options as a set of fixed-format
+      fields appended to the TCP header.  However, to retain the
+      philosophical and protocol framework of TCP options, a TCP must be
+      prepared to parse an arbitrary options field, albeit with less
+      efficiency.
+
+      Finally, we observe that most of the mechanisms defined in this
+      memo are important for LFN's and/or very high-speed networks.  For
+      low-speed networks, it might be a performance optimization to NOT
+      use these mechanisms.  A TCP vendor concerned about optimal
+      performance over low-speed paths might consider turning these
+      extensions off for low-speed paths, or allow a user or
+      installation manager to disable them.
+
+

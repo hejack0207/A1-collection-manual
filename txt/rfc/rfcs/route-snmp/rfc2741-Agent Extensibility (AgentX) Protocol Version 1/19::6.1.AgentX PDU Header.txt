@@ -1,0 +1,168 @@
+6.1. AgentX PDU Header
+
+   The AgentX PDU header is a fixed-format, 20-octet structure:
+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   h.version   |    h.type     |    h.flags    |  <reserved>   |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                          h.sessionID                          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        h.transactionID                        |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                          h.packetID                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        h.payload_length                       |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   An AgentX PDU header contains the following fields:
+
+      h.version
+
+         The version of the AgentX protocol (1 for this memo).
+
+      h.type
+
+         The PDU type; one of the following values:
+
+            agentx-Open-PDU             (1),
+            agentx-Close-PDU            (2),
+            agentx-Register-PDU         (3),
+            agentx-Unregister-PDU       (4),
+            agentx-Get-PDU              (5),
+            agentx-GetNext-PDU          (6),
+            agentx-GetBulk-PDU          (7),
+            agentx-TestSet-PDU          (8),
+            agentx-CommitSet-PDU        (9),
+            agentx-UndoSet-PDU         (10),
+
+
+
+Daniele, et al.             Standards Track                    [Page 17]
+
+RFC 2741                         AgentX                     January 2000
+
+
+            agentx-CleanupSet-PDU      (11),
+            agentx-Notify-PDU          (12),
+            agentx-Ping-PDU            (13),
+            agentx-IndexAllocate-PDU   (14),
+            agentx-IndexDeallocate-PDU (15),
+            agentx-AddAgentCaps-PDU    (16),
+            agentx-RemoveAgentCaps-PDU (17),
+            agentx-Response-PDU        (18)
+
+            The set of PDU types for "administrative processing" are 1-4
+            and 12-17.  The set of PDU types for "SNMP request
+            processing" are 5-11.
+
+      h.flags
+
+            A bitmask, with bit 0 the least significant bit.  The bit
+            definitions are as follows:
+
+                 Bit             Definition
+                 ---             ----------
+                 0               INSTANCE_REGISTRATION
+                 1               NEW_INDEX
+                 2               ANY_INDEX
+                 3               NON_DEFAULT_CONTEXT
+                 4               NETWORK_BYTE_ORDER
+                 5-7             (reserved)
+
+            The NETWORK_BYTE_ORDER bit applies to all multi-byte integer
+            values in the entire AgentX packet, including the remaining
+            header fields.  If set, then network byte order (most
+            significant byte first; "big endian") is used.  If not set,
+            then least significant byte first ("little endian") is used.
+
+            The NETWORK_BYTE_ORDER bit applies to all AgentX PDUs.
+
+            The NON_DEFAULT_CONTEXT bit is used only in the AgentX PDUs
+            described in section 6.1.1, "Context".
+
+            The NEW_INDEX and ANY_INDEX bits are used only within the
+            agentx-IndexAllocate-, and -IndexDeallocate-PDUs.
+
+            The INSTANCE_REGISTRATION bit is used only within the
+            agentx-Register-PDU.
+
+
+
+
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 18]
+
+RFC 2741                         AgentX                     January 2000
+
+
+      h.sessionID
+
+            The session ID uniquely identifies a session over which
+            AgentX PDUs are exchanged between a subagent and the master
+            agent.  The session ID has no significance and no defined
+            value in the agentx-Open-PDU sent by a subagent to open a
+            session with the master agent; in this case, the master
+            agent will assign a unique session ID that it will pass back
+            in the corresponding agentx-Response-PDU.  From that point
+            on, that same session ID will appear in every AgentX PDU
+            exchanged over that session between the master and the
+            subagent.  A subagent may establish multiple AgentX sessions
+            by sending multiple agentx-Open-PDUs to the master agent.
+
+            In master agents that support multiple transport protocols,
+            the sessionID should be globally unique rather than unique
+            just to a particular transport.
+
+      h.transactionID
+
+            The transaction ID uniquely identifies, for a given session,
+            the single SNMP management request (and single SNMP PDU)
+            with which an AgentX PDU is associated.  If a single SNMP
+            management request results in multiple AgentX PDUs being
+            sent by the master agent with the same session ID, each of
+            these AgentX PDUs must contain the same transaction ID;
+            conversely, AgentX PDUs sent during a particular session,
+            that result from distinct SNMP management requests, must
+            have distinct transaction IDs within the limits of the 32-
+            bit field).
+
+            Note that the transaction ID is not the same as the SNMP
+            PDU's request-id (as described in section 4.1 of RFC 1905
+            [13], nor is it the same as the SNMP Message's msgID (as
+            described in section 6.2 of RFC 2572 [11]), nor can it be,
+            since a master agent might receive SNMP requests with the
+            same request-ids or msgIDs from different managers.
+
+            The transaction ID has no significance and no defined value
+            in AgentX administrative PDUs, i.e., AgentX PDUs that are
+            not associated with an SNMP management request.
+
+      h.packetID
+
+            A packet ID generated by the sender for all AgentX PDUs
+            except the agentx-Response-PDU. In an agentx-Response-PDU,
+            the packet ID must be the same as that in the received
+            AgentX PDU to which it is a response.  A master agent might
+
+
+
+Daniele, et al.             Standards Track                    [Page 19]
+
+RFC 2741                         AgentX                     January 2000
+
+
+            use this field to associate subagent response PDUs with
+            their corresponding request PDUs.  A subagent might use this
+            field to correlate responses to multiple (batched)
+            registrations.
+
+      h.payload_length
+
+            The size in octets of the PDU contents, excluding the 20-
+            byte header.  As a result of the encoding schemes and PDU
+            layouts, this value will always be either 0, or a multiple
+            of 4.
+

@@ -1,0 +1,69 @@
+7.1. Processing AgentX Administrative Messages
+
+   This subsection describes the actions of AgentX protocol entities in
+   processing AgentX administrative messages.  Such messages include
+   those involved in establishing and terminating an AgentX session
+   between a subagent and a master agent, those by which a subagent
+   requests allocation of instance index values, and those by which a
+   subagent communicates to a master agent which MIB regions it
+   supports.
+
+   Processing is defined specifically for each PDU type in its own
+   section.  For the master agent, many of these PDU types require the
+   same initial processing steps.  This common processing is defined
+   here, and referenced as needed in the PDU type-specific descriptions.
+
+   Common Processing:
+
+   The master agent initially processes a received AgentX PDU as
+   follows:
+
+      1) An agentx-Response-PDU is created, res.sysUpTime is set to the
+         value of sysUpTime.0 for the default context, res.error is set
+         to `noAgentXError', and res.index is set to 0.
+
+      2) If the received PDU cannot be parsed, res.error is set to `
+         parseError'.  Examples of a parse error are:
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 45]
+
+RFC 2741                         AgentX                     January 2000
+
+
+            - PDU length (h.payload) too short to contain current
+               construct (Object Identifier header indicates more sub-
+               identifiers, VarBind v.type indicates data follows, etc)
+
+            - An unrecognized value is encountered for h.type, v.type,
+               etc.
+
+      3) Otherwise, if h.sessionID does not correspond to a currently
+         established session with this subagent, res.error is set to
+         `notOpen'.
+
+      4) Otherwise, if the NON_DEFAULT_CONTEXT bit is set and the master
+         agent does not support the indicated context, res.error is set
+         to `unsupportedContext'.  If the master agent does support the
+         indicated context, the value of res.sysUpTime is set to the
+         value of sysUpTime.0 for that context.
+
+      Note: Non-default contexts might be added on the fly by the master
+            agent, or the master agent might require such non-default
+            contexts to be pre-configured.  The choice is
+            implementation-specific.
+
+      5) If resources cannot be allocated or some other condition
+         prevents processing, res.error is set to `processingError'.
+
+      6) At this point, if res.error is not `noAgentXError', the
+         received PDU is not processed further.  If the received PDU's
+         header was successfully parsed, the AgentX-Response-PDU is sent
+         in reply.  If the received PDU contained a VarBindList which
+         was successfully parsed, the AgentX-Response-PDU contains the
+         identical VarBindList.  If the received PDU's header was not
+         successfully parsed or for some other reason the master agent
+         cannot send a reply, processing is complete.
+

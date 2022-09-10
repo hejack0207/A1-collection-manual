@@ -1,0 +1,228 @@
+5.  Protocol Operation
+
+   The intent of this document is to specify a standard for data
+   representation and message format which can be used for a variety of
+   synchronizing algorithms and filtering mechanisms.  Accordingly, the
+   information in this section should be considered a guide, rather than
+   a concise specification.  Nevertheless, it is expected that a
+   standard Internet distributed timekeeping protocol with concisely
+   specified synchronizing and filtering algorithms can be evolved from
+   the information in this section.
+
+   5.1.  Protocol Modes
+
+      The distinction between client and server is significant only in
+      the way they interact in the request/response interchange.  The
+      same NTP message format is used by each peer and contains the same
+      data relative to the other peer.  In the unsymmetric mode the
+      client periodically sends an NTP message to the server, which then
+      responds within some interval.  Usually, the server simply
+      interchanges addresses and ports, fills in the required
+      information and sends the message right back. Servers operating in
+      the unsymmetric mode then need retain no state information between
+      client requests.
+
+      In the symmetric mode the client/server distinction disappears.
+      Each peer maintains a table with as many entries as active peers,
+      each entry including a code uniquely identifying the peer (e.g.
+      Internet address), together with status information and a copy of
+      the Originate Timestamp and Receive Timestamp values last received
+      from that peer. The peer periodically sends an NTP message to each
+      of these peers including the latest copy of these timestamps.  The
+      interval between sending NTP messages is managed solely by the
+      sending peer and is unaffected by the arrival of NTP messages from
+      other peers.
+
+      The mode assumed by a peer can be determined by inspection of the
+      UDP Source Port and Destination Port fields (see Appendix A).  If
+      both of these fields contain the NTP service-port number 123, the
+      peer is operating in symmetric mode.  If they are different and
+      the Destination Port field contains 123, this is a client request
+      and the receiver is expected to reply in the manner described
+      above.  If they are different and the Source Port field contains
+      123, this is a server reply to a previously sent client request.
+
+
+
+
+
+
+Mills                                                           [Page 6]
+
+
+
+RFC 958                                                        September
+Network Time Protocol
+
+
+   5.2.  Message Processing
+
+      The significant events of interest in NTP occur usually near the
+      times the NTP messages depart and arrive the client/server.  In
+      order to maintain the highest accuracy it is important that the
+      timestamps associated with these events be computed as close as
+      possible to the hardware or software driver associated with the
+      communications link and, in particular, that departure timestamps
+      be recomputed for each retransmission, if used at the link level.
+
+      An NTP message is constructed as follows (see Appendix B).  The
+      source peer constructs the UDP header and the LI, Status,
+      Reference Clock Type and Precision fields in the NTP data portion.
+      Next, it determines the current synchronizing source and
+      constructs the Type and Reference Clock Identifier fields.  From
+      its timekeeping algorithm (see [12] for examples) it determines
+      the Reference Timestamp, Estimated Error and Estimated Drift Rate
+      fields.  Then it copies into the Receive Timestamp and Transmit
+      Timestamp fields the data saved from the latest message received
+      from the destination peer and, finally, computes the Originate
+      Timestamp field.
+
+      The destination peer calculates the roundtrip delay and clock
+      offset relative to the source peer as follows.  Let t1, t2 and t3
+      represent the contents of the Originate Timestamp, Receive
+      Timestamp and Transmit Timestamp fields and t4 the local time the
+      NTP message is received.  Then the roundtrip delay d and clock
+      offset c is:
+
+         d = (t4 - t1) - (t3 - t2)  and  c = (t2 - t1 + t3 - t4)/2 .
+
+      The implicit assumption in the above is that the one-way delay is
+      statistically half the roundtrip delay and that the intrinsic
+      drift rates of both the client and server clocks are small and
+      close to the same value.
+
+   5.3.  Network Considerations
+
+      The client/server peers have an opportunity to learn a good deal
+      about each other in the NTP message exchange.  For instance, each
+      can learn about the characteristics of the other clocks and select
+      among them the most accurate to use as reference clock, compute
+      the estimated error and drift rate and use this information to
+      manage the dynamics of the subnetwork of clocks.  An outline of a
+      suggested mechanism is as follows:
+
+      Included in the table of timestamps for each peer are state
+
+
+Mills                                                           [Page 7]
+
+
+
+RFC 958                                                        September
+Network Time Protocol
+
+
+      variables to indicate the precision, as well as the current
+      estimated delay, offset, error and drift rate of its local clock.
+      These variables are updated for each NTP message received from the
+      peer, after which the estimated error is periodically recomputed
+      on the basis of elapsed time and estimated drift rate.
+
+      Assuming symmetric mode, a polling interval is established for
+      each peer, depending upon its normal synchronization source,
+      precision and intrinsic accuracy, which might be determined in
+      advance or even as the result of observation.  The delay and
+      clock-offset samples obtained can be filtered using
+      maximum-likelihood techniques and algorithms described in [12].
+
+      From time to time a local-clock correction is computed from the
+      offset data accumulated as above, perhaps using algorithms
+      described in [10] and [12].  The correction causes the local clock
+      to run slightly fast or slow to the corrected time or to jump
+      instantaneously to the correct time, depending on the magnitude of
+      the correction.  See [5] and [11] for a discussion of local-clock
+      implementation models and synchronizing algorithms.  Note that the
+      expectation here is that all network clocks are maintained by
+      these algorithms, so that manual intervention is not normally
+      required.
+
+      As a byproduct of the above operations an estimate of local-clock
+      error and drift rate can be computed.  Note that the magnitude of
+      the error estimate must always be greater than that of the
+      selected reference clock by at least the inherent precision of the
+      local clock. It does not take a leap of imagination to see that
+      the estimated error, delay or precision, or some combination of
+      them, can be used as a metric for a simple min-hop-type routing
+      algorithm to organize the subnetwork so as to provide the most
+      accurate time to all peers and to provide automatic fallback to
+      alternate sources in case of failures.
+
+      A variety of network configurations can be included in the above
+      scenario.  In the case of networks supporting a broadcast
+      function, for example, NTP messages can be broadcast from one or
+      more server hosts and picked up by client hosts sharing the same
+      cable.  Since typical networks of this type have a very low
+      propagation delay, the roundtrip-delay calculation can be omitted
+      and the clients need not broadcast in return.  Thus, the
+      requirement to save per-peer timestamps is removed, so that the
+      Receive Timestamp and Transmit Timestamp fields can be set to zero
+      and the local-clock offset becomes simply the difference between
+      the Originate Timestamp and the local time upon arrival.  In the
+      case of long-delay satellite networks with broadcast capabilities,
+
+
+Mills                                                           [Page 8]
+
+
+
+RFC 958                                                        September
+Network Time Protocol
+
+
+      an accurate measure of roundtrip delay is usually available from
+      the channel-scheduling algorithm, so the per-peer timestamps again
+      can be avoided.
+
+   5.4.  Leap Seconds
+
+      A standard mechanism to effect leap-second correction is not a
+      part of this specification.  It is expected that the Leap
+      Indicator bits would be set by hand in the primary reference
+      clocks, then trickle down to all other clocks in the network,
+      which would execute the correction at the specified time and reset
+      the bits.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Mills                                                           [Page 9]
+
+
+
+RFC 958                                                        September
+Network Time Protocol
+
+

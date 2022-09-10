@@ -1,0 +1,94 @@
+7.2. Sending the queries
+
+As described in [RFC-1034], the basic task of the resolver is to
+formulate a query which will answer the client's request and direct that
+query to name servers which can provide the information.  The resolver
+will usually only have very strong hints about which servers to ask, in
+the form of NS RRs, and may have to revise the query, in response to
+CNAMEs, or revise the set of name servers the resolver is asking, in
+response to delegation responses which point the resolver to name
+servers closer to the desired information.  In addition to the
+information requested by the client, the resolver may have to call upon
+its own services to determine the address of name servers it wishes to
+contact.
+
+In any case, the model used in this memo assumes that the resolver is
+multiplexing attention between multiple requests, some from the client,
+and some internally generated.  Each request is represented by some
+state information, and the desired behavior is that the resolver
+transmit queries to name servers in a way that maximizes the probability
+that the request is answered, minimizes the time that the request takes,
+and avoids excessive transmissions.  The key algorithm uses the state
+information of the request to select the next name server address to
+query, and also computes a timeout which will cause the next action
+should a response not arrive.  The next action will usually be a
+transmission to some other server, but may be a temporary error to the
+
+
+
+Mockapetris                                                    [Page 44]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+client.
+
+The resolver always starts with a list of server names to query (SLIST).
+This list will be all NS RRs which correspond to the nearest ancestor
+zone that the resolver knows about.  To avoid startup problems, the
+resolver should have a set of default servers which it will ask should
+it have no current NS RRs which are appropriate.  The resolver then adds
+to SLIST all of the known addresses for the name servers, and may start
+parallel requests to acquire the addresses of the servers when the
+resolver has the name, but no addresses, for the name servers.
+
+To complete initialization of SLIST, the resolver attaches whatever
+history information it has to the each address in SLIST.  This will
+usually consist of some sort of weighted averages for the response time
+of the address, and the batting average of the address (i.e., how often
+the address responded at all to the request).  Note that this
+information should be kept on a per address basis, rather than on a per
+name server basis, because the response time and batting average of a
+particular server may vary considerably from address to address.  Note
+also that this information is actually specific to a resolver address /
+server address pair, so a resolver with multiple addresses may wish to
+keep separate histories for each of its addresses.  Part of this step
+must deal with addresses which have no such history; in this case an
+expected round trip time of 5-10 seconds should be the worst case, with
+lower estimates for the same local network, etc.
+
+Note that whenever a delegation is followed, the resolver algorithm
+reinitializes SLIST.
+
+The information establishes a partial ranking of the available name
+server addresses.  Each time an address is chosen and the state should
+be altered to prevent its selection again until all other addresses have
+been tried.  The timeout for each transmission should be 50-100% greater
+than the average predicted value to allow for variance in response.
+
+Some fine points:
+
+   - The resolver may encounter a situation where no addresses are
+     available for any of the name servers named in SLIST, and
+     where the servers in the list are precisely those which would
+     normally be used to look up their own addresses.  This
+     situation typically occurs when the glue address RRs have a
+     smaller TTL than the NS RRs marking delegation, or when the
+     resolver caches the result of a NS search.  The resolver
+     should detect this condition and restart the search at the
+     next ancestor zone, or alternatively at the root.
+
+
+
+
+
+Mockapetris                                                    [Page 45]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+   - If a resolver gets a server error or other bizarre response
+     from a name server, it should remove it from SLIST, and may
+     wish to schedule an immediate transmission to the next
+     candidate server address.
+

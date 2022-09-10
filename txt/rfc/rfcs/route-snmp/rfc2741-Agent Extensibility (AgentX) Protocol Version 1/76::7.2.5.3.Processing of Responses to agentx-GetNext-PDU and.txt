@@ -1,0 +1,82 @@
+7.2.5.3.  Processing of Responses to agentx-GetNext-PDU and
+                agentx-GetBulk-PDU
+
+   After common processing of the subagent's response to an agentx-
+   GetNext-PDU or agentx-GetBulk-PDU (see section 7.2.5.1, "Common
+   Processing of All AgentX Response PDUs", above), processing continues
+   with the following steps:
+
+   1) For any received AgentX response PDU, if res.error is not
+      `noError', the SNMP response PDU's error code is set to this
+      value.  If res.error contains an AgentX specific value (e.g.
+      `parseError'), the SNMP response PDU's error code is set to a
+      value of genErr instead.  Also, the SNMP response PDU's error
+      index is set to the index of the variable binding corresponding to
+      the failed VarBind in the subagent's AgentX response PDU.
+
+      All other AgentX response PDUs received due to processing this
+      SNMP request are ignored.  Processing is complete; the SNMP
+      response PDU is ready to be sent (see section 7.2.6, "Sending the
+      SNMP Response-PDU").
+
+   2) Otherwise, the content of each VarBind in the AgentX response PDU
+      is used to update the corresponding VarBind in the SNMP response
+      PDU.
+
+   After all expected AgentX response PDUs have been processed, if any
+   VarBinds still contain the value `endOfMibView' in their v.type
+   fields, processing must continue:
+
+
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 71]
+
+RFC 2741                         AgentX                     January 2000
+
+
+   3) A new iteration of AgentX request dispatching is initiated (as
+      described in section 7.2.1.2, "agentx-GetNext-PDU"), in which only
+      those VarBinds whose v.type is `endOfMibView' are processed.
+
+   4) For each such VarBind, an authoritative target MIB region is
+      identified in which the master agent expects to find suitable MIB
+      variables.  The target session is the one on which this new target
+      region was registered.
+
+      The starting OID in each SearchRange is set to the value of v.name
+      for the corresponding VarBind, and its "include" field is set to
+      0.
+
+   5) The value of transactionID must be identical to the value used
+      during the previous iteration.
+
+   6) The AgentX PDUs are sent on the target session(s), and the
+      responses are received and processed according to the steps
+      described in section 7.2.5, "Master Agent Processing of AgentX
+      Responses".
+
+   7) This process continues iteratively until a complete SNMP
+      Response-PDU has been built, or until there remain no
+      authoritative MIB regions to query.
+
+   Note that r.subtree for the new target region identified in step 4)
+   may not lexicographically succeed r.subtree for the region that has
+   returned `endOfMibView'.  For example, consider the following
+   registry:
+
+        session A   `mib-2' (1.3.6.1.2.1)
+        session B   `ip'    (1.3.6.1.2.1.4)
+        session C   `tcp'   (1.3.6.1.2.1.6)
+
+   If while processing a GetNext-Request-PDU session B returns
+   `endOfMibView' for a variable name within 1.3.6.1.2.1.4, the target
+   MIB region identified in step 4) would be 1.3.6.1.2.1 (since it may
+   contain variables whose names precede 1.3.6.1.2.1.6).
+
+   Note also that if session A returned variables from within
+   1.3.6.1.2.1.6, they must be discarded since session A is NOT
+   authoritative for that region.
+

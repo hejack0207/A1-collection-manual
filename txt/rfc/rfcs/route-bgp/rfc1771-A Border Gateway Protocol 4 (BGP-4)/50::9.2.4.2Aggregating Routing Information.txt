@@ -1,0 +1,104 @@
+9.2.4.2 Aggregating Routing Information
+
+   Aggregation is the process of combining the characteristics of
+   several different routes in such a way that a single route can be
+   advertised.  Aggregation can occur as part of the decision  process
+   to reduce the amount of routing information that will be placed in
+   the Adj-RIBs-Out.
+
+   Aggregation reduces the amount of information that a BGP speaker must
+   store and exchange with other BGP speakers. Routes can be aggregated
+   by applying the following procedure separately to path attributes of
+   like type and to the Network Layer Reachability Information.
+
+   Routes that have the following attributes shall not be aggregated
+   unless the corresponding attributes of each route are identical:
+   MULTI_EXIT_DISC, NEXT_HOP.
+
+   Path attributes that have different type codes can not be aggregated
+   together. Path of the same type code may be aggregated, according to
+   the following rules:
+
+      ORIGIN attribute: If at least one route among routes that are
+      aggregated has ORIGIN with the value INCOMPLETE, then the
+      aggregated route must have the ORIGIN attribute with the value
+      INCOMPLETE. Otherwise, if at least one route among routes that are
+      aggregated has ORIGIN with the value EGP, then the aggregated
+      route must have the origin attribute with the value EGP. In all
+      other case the value of the ORIGIN attribute of the aggregated
+      route is INTERNAL.
+
+      AS_PATH attribute: If routes to be aggregated have identical
+      AS_PATH attributes, then the aggregated route has the same AS_PATH
+      attribute as each individual route.
+
+      For the purpose of aggregating AS_PATH attributes we model each AS
+      within the AS_PATH attribute as a tuple <type, value>, where
+      "type" identifies a type of the path segment the AS belongs to
+
+
+
+Rekhter & Li                                                   [Page 45]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+      (e.g. AS_SEQUENCE, AS_SET), and "value" is the AS number.  If the
+      routes to be aggregated have different AS_PATH attributes, then
+      the aggregated AS_PATH attribute shall satisfy all of the
+      following conditions:
+
+         - all tuples of the type AS_SEQUENCE in the aggregated AS_PATH
+         shall appear in all of the AS_PATH in the initial set of routes
+         to be aggregated.
+
+         - all tuples of the type AS_SET in the aggregated AS_PATH shall
+         appear in at least one of the AS_PATH in the initial set (they
+         may appear as either AS_SET or AS_SEQUENCE types).
+
+         - for any tuple X of the type AS_SEQUENCE in the aggregated
+         AS_PATH which precedes tuple Y in the aggregated AS_PATH, X
+         precedes Y in each AS_PATH in the initial set which contains Y,
+         regardless of the type of Y.
+
+         - No tuple with the same value shall appear more than once in
+         the aggregated AS_PATH, regardless of the tuple's type.
+
+      An implementation may choose any algorithm which conforms to these
+      rules.  At a minimum a conformant implementation shall be able to
+      perform the following algorithm that meets all of the above
+      conditions:
+
+         - determine the longest leading sequence of tuples (as defined
+         above) common to all the AS_PATH attributes of the routes to be
+         aggregated. Make this sequence the leading sequence of the
+         aggregated AS_PATH attribute.
+
+         - set the type of the rest of the tuples from the AS_PATH
+         attributes of the routes to be aggregated to AS_SET, and append
+         them to the aggregated AS_PATH attribute.
+
+         - if the aggregated AS_PATH has more than one tuple with the
+         same value (regardless of tuple's type), eliminate all, but one
+         such tuple by deleting tuples of the type AS_SET from the
+         aggregated AS_PATH attribute.
+
+      Appendix 6, section 6.8 presents another algorithm that satisfies
+      the conditions and  allows for more complex policy configurations.
+
+      ATOMIC_AGGREGATE: If at least one of the routes to be aggregated
+      has ATOMIC_AGGREGATE path attribute, then the aggregated route
+      shall have this attribute as well.
+
+
+
+
+
+Rekhter & Li                                                   [Page 46]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+      AGGREGATOR: All AGGREGATOR attributes of all routes to be
+      aggregated should be ignored.
+

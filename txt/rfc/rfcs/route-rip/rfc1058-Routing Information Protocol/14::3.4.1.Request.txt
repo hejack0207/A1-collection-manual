@@ -1,0 +1,60 @@
+3.4.1. Request
+
+   Request is used to ask for a response containing all or part of the
+   host's routing table.  [Note that the term host is used for either
+   host or gateway, in most cases it would be unusual for a non-gateway
+   host to send RIP messages.]  Normally, requests are sent as
+   broadcasts, from a UDP source port of 520.  In this case, silent
+   processes do not respond to the request.  Silent processes are by
+   definition processes for which we normally do not want to see routing
+   information.  However, there may be situations involving gateway
+   monitoring where it is desired to look at the routing table even for
+   a silent process.  In this case, the request should be sent from a
+   UDP port number other than 520.  If a request comes from port 520,
+   silent processes do not respond.  If the request comes from any other
+   port, processes must respond even if they are silent.
+
+   The request is processed entry by entry.  If there are no entries, no
+   response is given.  There is one special case.  If there is exactly
+   one entry in the request, with an address family identifier of 0
+   (meaning unspecified), and a metric of infinity (i.e., 16 for current
+   implementations), this is a request to send the entire routing table.
+   In that case, a call is made to the output process to send the
+   routing table to the requesting port.
+
+   Except for this special case, processing is quite simple.  Go down
+   the list of entries in the request one by one.  For each entry, look
+   up the destination in the host's routing database.  If there is a
+   route, put that route's metric in the metric field in the datagram.
+   If there isn't a route to the specified destination, put infinity
+   (i.e., 16) in the metric field in the datagram.  Once all the entries
+   have been filled in, set the command to response and send the
+   datagram back to the port from which it came.
+
+   Note that there is a difference in handling depending upon whether
+   the request is for a specified set of destinations, or for a complete
+   routing table.  If the request is for a complete host table, normal
+   output processing is done.  This includes split horizon (see section
+   2.2.1) and subnet hiding (section 3.2), so that certain entries from
+   the routing table will not be shown.  If the request is for specific
+   entries, they are looked up in the host table and the information is
+   returned.  No split horizon processing is done, and subnets are
+   returned if requested.  We anticipate that these requests are likely
+   to be used for different purposes.  When a host first comes up, it
+   broadcasts requests on every connected network asking for a complete
+   routing table.  In general, we assume that complete routing tables
+   are likely to be used to update another host's routing table.  For
+   this reason, split horizon and all other filtering must be used.
+   Requests for specific networks are made only by diagnostic software,
+
+
+
+Hedrick                                                        [Page 25]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+
+   and are not used for routing.  In this case, the requester would want
+   to know the exact contents of the routing database, and would not
+   want any information hidden.
+

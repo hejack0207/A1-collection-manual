@@ -1,0 +1,116 @@
+3.7 Addressing Considerations
+
+   Distance vector routing can be used to describe routes to individual
+   hosts or to networks.  The RIP protocol allows either of these
+   possibilities.  The destinations appearing in request and response
+   messages can be networks, hosts, or a special code used to indicate a
+   default address.  In general, the kinds of routes actually used will
+   depend upon the routing strategy used for the particular network.
+   Many networks are set up so that routing information for individual
+   hosts is not needed.  If every node on a given network or subnet is
+   accessible through the same routers, then there is no reason to
+   mention individual hosts in the routing tables.  However, networks
+   that include point-to-point lines sometimes require routers to keep
+   track of routes to certain nodes.  Whether this feature is required
+   depends upon the addressing and routing approach used in the system.
+   Thus, some implementations may choose not to support host routes.  If
+   host routes are not supported, they are to be dropped when they are
+   received in response messages (see section 3.7.2).
+
+   The RIP-1 packet format does not distinguish among various types of
+   address.  Fields that are labeled "address" can contain any of the
+   following:
+
+   host address subnet number network number zero (default route)
+
+   Entities which use RIP-1 are assumed to use the most specific
+   information available when routing a datagram.  That is, when routing
+   a datagram, its destination address must first be checked against the
+   list of node addresses.  Then it must be checked to see whether it
+   matches any known subnet or network number.  Finally, if none of
+   these match, the default route is used.
+
+   When a node evaluates information that it receives via RIP-1, its
+   interpretation of an address depends upon whether it knows the subnet
+   mask that applies to the net.  If so, then it is possible to
+   determine the meaning of the address.  For example, consider net
+   128.6.  It has a subnet mask of 255.255.255.0.  Thus 128.6.0.0 is a
+   network number, 128.6.4.0 is a subnet number, and 128.6.4.1 is a node
+   address.  However, if the node does not know the subnet mask,
+   evaluation of an address may be ambiguous.  If there is a non-zero
+   node part, there is no clear way to determine whether the address
+   represents a subnet number or a node address.  As a subnet number
+   would be useless without the subnet mask, addresses are assumed to
+   represent nodes in this situation.  In order to avoid this sort of
+   ambiguity, when using version 1, nodes must not send subnet routes to
+   nodes that cannot be expected to know the appropriate subnet mask.
+   Normally hosts only know the subnet masks for directly-connected
+   networks.  Therefore, unless special provisions have been made,
+
+
+
+Malkin                      Standards Track                    [Page 22]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   routes to a subnet must not be sent outside the network of which the
+   subnet is a part.  RIP-2 (see section 4) eliminates the subnet/host
+   ambiguity by including the subnet mask in the routing entry.
+
+   This "subnet filtering" is carried out by the routers at the "border"
+   of the subnetted network.  These are routers which connect that
+   network with some other network.  Within the subnetted network, each
+   subnet is treated as an individual network.  Routing entries for each
+   subnet are circulated by RIP.  However, border routers send only a
+   single entry for the network as a whole to nodes in other networks.
+   This means that a border router will send different information to
+   different neighbors.  For neighbors connected to the subnetted
+   network, it generates a list of all subnets to which it is directly
+   connected, using the subnet number.  For neighbors connected to other
+   networks, it makes a single entry for the network as a whole, showing
+   the metric associated with that network.  This metric would normally
+   be the smallest metric for the subnets to which the router is
+   attached.
+
+   Similarly, border routers must not mention host routes for nodes
+   within one of the directly-connected networks in messages to other
+   networks.  Those routes will be subsumed by the single entry for the
+   network as a whole.
+
+   The router requirements RFC [11] specifies that all implementation of
+   RIP should support host routes but if they do not then they must
+   ignore any received host routes.
+
+   The special address 0.0.0.0 is used to describe a default route.  A
+   default route is used when it is not convenient to list every
+   possible network in the RIP updates, and when one or more closely-
+   connected routers in the system are prepared to handle traffic to the
+   networks that are not listed explicitly.  These routers should create
+   RIP entries for the address 0.0.0.0, just as if it were a network to
+   which they are connected.  The decision as to how routers create
+   entries for 0.0.0.0 is left to the implementor.  Most commonly, the
+   system administrator will be provided with a way to specify which
+   routers should create entries for 0.0.0.0; however, other mechanisms
+   are possible.  For example, an implementor might decide that any
+   router which speaks BGP should be declared to be a default router.
+   It may be useful to allow the network administrator to choose the
+   metric to be used in these entries.  If there is more than one
+   default router, this will make it possible to express a preference
+   for one over the other.  The entries for 0.0.0.0 are handled by RIP
+   in exactly the same manner as if there were an actual network with
+   this address.  System administrators should take care to make sure
+   that routes to 0.0.0.0 do not propagate further than is intended.
+   Generally, each autonomous system has its own preferred default
+
+
+
+Malkin                      Standards Track                    [Page 23]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   router.  Thus, routes involving 0.0.0.0 should generally not leave
+   the boundary of an autonomous system.  The mechanisms for enforcing
+   this are not specified in this document.
+

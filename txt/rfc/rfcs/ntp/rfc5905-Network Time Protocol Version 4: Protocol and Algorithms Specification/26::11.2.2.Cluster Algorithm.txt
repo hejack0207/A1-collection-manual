@@ -1,0 +1,58 @@
+11.2.2.  Cluster Algorithm
+
+   The candidates of the majority clique are placed on the survivor list
+   v in the form of tuples (p, theta_p, psi_p, lambda_p), where p is an
+   association identifier, theta_p, psi_p, and stratum_p the current
+   offset, jitter and stratum of association p, respectively, and
+   lambda_p is a merit factor equal to stratum_p * MAXDIST + lambda,
+   where lambda is the root synchronization distance for association p.
+   The list is processed by the cluster algorithm below.  An example is
+   shown by the second half of the clock_select() algorithm in
+   Appendix A.5.5.1.
+
+   1.  Let (p, theta_p, psi_p, lambda_p) represent a survivor candidate.
+
+   2.  Sort the candidates by increasing lambda_p.  Let n be the number
+   of candidates and NMIN the minimum required number of survivors.
+
+   3.  For each candidate, compute the selection jitter psi_s:
+
+             +-----                       -----+^1/2
+             |        n-1                      |
+             |        ---                      |
+             |   1    \                     2  |
+     psi_s = | ---- * /  (theta_s - theta_j)   |
+             |  n-1   ---                      |
+             |        j=1                      |
+             +-----                       -----+
+
+   4.  Select psi_max as the candidate with maximum psi_s.
+
+
+
+Mills, et al.                Standards Track                   [Page 44]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   5.  Select psi_min as the candidate with minimum psi_p.
+
+   6.  Is psi_max < psi_min or n <= NMIN?  If yes, follow step 6A;
+   otherwise, follow step 6B.
+
+   6A. Done.  The remaining candidates on the survivor list are ranked
+   in the order of preference.  The first entry on the list represents
+   the system peer; its variables are used later to update the system
+   variables.
+
+   6B. Delete the outlier candidate with psi_max; reduce n by one and go
+   back to step 3.
+
+   The algorithm operates in a series of rounds where each round
+   discards the statistical outlier with maximum selection jitter psi_s.
+   However, if psi_s is less than the minimum peer jitter psi_p, no
+   improvement is possible by discarding outliers.  This and the minimum
+   number of survivors represent the terminating conditions of the
+   algorithm.  Upon termination, the final value of psi_max is saved as
+   the system selection jitter PSI_s for use later.
+

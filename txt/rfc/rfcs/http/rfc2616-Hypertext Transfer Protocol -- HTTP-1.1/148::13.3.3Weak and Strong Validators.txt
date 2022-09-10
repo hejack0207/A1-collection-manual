@@ -1,0 +1,146 @@
+13.3.3 Weak and Strong Validators
+
+   Since both origin servers and caches will compare two validators to
+   decide if they represent the same or different entities, one normally
+   would expect that if the entity (the entity-body or any entity-
+   headers) changes in any way, then the associated validator would
+   change as well. If this is true, then we call this validator a
+   "strong validator."
+
+   However, there might be cases when a server prefers to change the
+   validator only on semantically significant changes, and not when
+   insignificant aspects of the entity change. A validator that does not
+   always change when the resource changes is a "weak validator."
+
+   Entity tags are normally "strong validators," but the protocol
+   provides a mechanism to tag an entity tag as "weak." One can think of
+   a strong validator as one that changes whenever the bits of an entity
+   changes, while a weak value changes whenever the meaning of an entity
+   changes. Alternatively, one can think of a strong validator as part
+   of an identifier for a specific entity, while a weak validator is
+   part of an identifier for a set of semantically equivalent entities.
+
+      Note: One example of a strong validator is an integer that is
+      incremented in stable storage every time an entity is changed.
+
+
+
+Fielding, et al.            Standards Track                    [Page 86]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+      An entity's modification time, if represented with one-second
+      resolution, could be a weak validator, since it is possible that
+      the resource might be modified twice during a single second.
+
+      Support for weak validators is optional. However, weak validators
+      allow for more efficient caching of equivalent objects; for
+      example, a hit counter on a site is probably good enough if it is
+      updated every few days or weeks, and any value during that period
+      is likely "good enough" to be equivalent.
+
+   A "use" of a validator is either when a client generates a request
+   and includes the validator in a validating header field, or when a
+   server compares two validators.
+
+   Strong validators are usable in any context. Weak validators are only
+   usable in contexts that do not depend on exact equality of an entity.
+   For example, either kind is usable for a conditional GET of a full
+   entity. However, only a strong validator is usable for a sub-range
+   retrieval, since otherwise the client might end up with an internally
+   inconsistent entity.
+
+   Clients MAY issue simple (non-subrange) GET requests with either weak
+   validators or strong validators. Clients MUST NOT use weak validators
+   in other forms of request.
+
+   The only function that the HTTP/1.1 protocol defines on validators is
+   comparison. There are two validator comparison functions, depending
+   on whether the comparison context allows the use of weak validators
+   or not:
+
+      - The strong comparison function: in order to be considered equal,
+        both validators MUST be identical in every way, and both MUST
+        NOT be weak.
+
+      - The weak comparison function: in order to be considered equal,
+        both validators MUST be identical in every way, but either or
+        both of them MAY be tagged as "weak" without affecting the
+        result.
+
+   An entity tag is strong unless it is explicitly tagged as weak.
+   Section 3.11 gives the syntax for entity tags.
+
+   A Last-Modified time, when used as a validator in a request, is
+   implicitly weak unless it is possible to deduce that it is strong,
+   using the following rules:
+
+      - The validator is being compared by an origin server to the
+        actual current validator for the entity and,
+
+
+
+Fielding, et al.            Standards Track                    [Page 87]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+      - That origin server reliably knows that the associated entity did
+        not change twice during the second covered by the presented
+        validator.
+
+   or
+
+      - The validator is about to be used by a client in an If-
+        Modified-Since or If-Unmodified-Since header, because the client
+        has a cache entry for the associated entity, and
+
+      - That cache entry includes a Date value, which gives the time
+        when the origin server sent the original response, and
+
+      - The presented Last-Modified time is at least 60 seconds before
+        the Date value.
+
+   or
+
+      - The validator is being compared by an intermediate cache to the
+        validator stored in its cache entry for the entity, and
+
+      - That cache entry includes a Date value, which gives the time
+        when the origin server sent the original response, and
+
+      - The presented Last-Modified time is at least 60 seconds before
+        the Date value.
+
+   This method relies on the fact that if two different responses were
+   sent by the origin server during the same second, but both had the
+   same Last-Modified time, then at least one of those responses would
+   have a Date value equal to its Last-Modified time. The arbitrary 60-
+   second limit guards against the possibility that the Date and Last-
+   Modified values are generated from different clocks, or at somewhat
+   different times during the preparation of the response. An
+   implementation MAY use a value larger than 60 seconds, if it is
+   believed that 60 seconds is too short.
+
+   If a client wishes to perform a sub-range retrieval on a value for
+   which it has only a Last-Modified time and no opaque validator, it
+   MAY do this only if the Last-Modified time is strong in the sense
+   described here.
+
+   A cache or origin server receiving a conditional request, other than
+   a full-body GET request, MUST use the strong comparison function to
+   evaluate the condition.
+
+   These rules allow HTTP/1.1 caches and clients to safely perform sub-
+   range retrievals on values that have been obtained from HTTP/1.0
+
+
+
+Fielding, et al.            Standards Track                    [Page 88]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+   servers.
+

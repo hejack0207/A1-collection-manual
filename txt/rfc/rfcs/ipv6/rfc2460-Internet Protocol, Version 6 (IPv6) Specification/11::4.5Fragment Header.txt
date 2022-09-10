@@ -1,0 +1,280 @@
+4.5  Fragment Header
+
+   The Fragment header is used by an IPv6 source to send a packet larger
+   than would fit in the path MTU to its destination.  (Note: unlike
+   IPv4, fragmentation in IPv6 is performed only by source nodes, not by
+   routers along a packet's delivery path -- see section 5.)  The
+   Fragment header is identified by a Next Header value of 44 in the
+   immediately preceding header, and has the following format:
+
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |  Next Header  |   Reserved    |      Fragment Offset    |Res|M|
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                         Identification                        |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   Next Header          8-bit selector.  Identifies the initial header
+                        type of the Fragmentable Part of the original
+                        packet (defined below).  Uses the same values as
+                        the IPv4 Protocol field [RFC-1700 et seq.].
+
+   Reserved             8-bit reserved field.  Initialized to zero for
+                        transmission; ignored on reception.
+
+   Fragment Offset      13-bit unsigned integer.  The offset, in 8-octet
+                        units, of the data following this header,
+                        relative to the start of the Fragmentable Part
+                        of the original packet.
+
+   Res                  2-bit reserved field.  Initialized to zero for
+                        transmission; ignored on reception.
+
+   M flag               1 = more fragments; 0 = last fragment.
+
+   Identification       32 bits.  See description below.
+
+   In order to send a packet that is too large to fit in the MTU of the
+   path to its destination, a source node may divide the packet into
+   fragments and send each fragment as a separate packet, to be
+   reassembled at the receiver.
+
+   For every packet that is to be fragmented, the source node generates
+   an Identification value. The Identification must be different than
+   that of any other fragmented packet sent recently* with the same
+   Source Address and Destination Address.  If a Routing header is
+   present, the Destination Address of concern is that of the final
+   destination.
+
+
+
+
+
+Deering & Hinden            Standards Track                    [Page 18]
+
+RFC 2460                   IPv6 Specification              December 1998
+
+
+      * "recently" means within the maximum likely lifetime of a packet,
+        including transit time from source to destination and time spent
+        awaiting reassembly with other fragments of the same packet.
+        However, it is not required that a source node know the maximum
+        packet lifetime.  Rather, it is assumed that the requirement can
+        be met by maintaining the Identification value as a simple, 32-
+        bit, "wrap-around" counter, incremented each time a packet must
+        be fragmented.  It is an implementation choice whether to
+        maintain a single counter for the node or multiple counters,
+        e.g., one for each of the node's possible source addresses, or
+        one for each active (source address, destination address)
+        combination.
+
+   The initial, large, unfragmented packet is referred to as the
+   "original packet", and it is considered to consist of two parts, as
+   illustrated:
+
+   original packet:
+
+   +------------------+----------------------//-----------------------+
+   |  Unfragmentable  |                 Fragmentable                  |
+   |       Part       |                     Part                      |
+   +------------------+----------------------//-----------------------+
+
+      The Unfragmentable Part consists of the IPv6 header plus any
+      extension headers that must be processed by nodes en route to the
+      destination, that is, all headers up to and including the Routing
+      header if present, else the Hop-by-Hop Options header if present,
+      else no extension headers.
+
+      The Fragmentable Part consists of the rest of the packet, that is,
+      any extension headers that need be processed only by the final
+      destination node(s), plus the upper-layer header and data.
+
+   The Fragmentable Part of the original packet is divided into
+   fragments, each, except possibly the last ("rightmost") one, being an
+   integer multiple of 8 octets long.  The fragments are transmitted in
+   separate "fragment packets" as illustrated:
+
+   original packet:
+
+   +------------------+--------------+--------------+--//--+----------+
+   |  Unfragmentable  |    first     |    second    |      |   last   |
+   |       Part       |   fragment   |   fragment   | .... | fragment |
+   +------------------+--------------+--------------+--//--+----------+
+
+
+
+
+
+
+Deering & Hinden            Standards Track                    [Page 19]
+
+RFC 2460                   IPv6 Specification              December 1998
+
+
+   fragment packets:
+
+   +------------------+--------+--------------+
+   |  Unfragmentable  |Fragment|    first     |
+   |       Part       | Header |   fragment   |
+   +------------------+--------+--------------+
+
+   +------------------+--------+--------------+
+   |  Unfragmentable  |Fragment|    second    |
+   |       Part       | Header |   fragment   |
+   +------------------+--------+--------------+
+                         o
+                         o
+                         o
+   +------------------+--------+----------+
+   |  Unfragmentable  |Fragment|   last   |
+   |       Part       | Header | fragment |
+   +------------------+--------+----------+
+
+   Each fragment packet is composed of:
+
+      (1) The Unfragmentable Part of the original packet, with the
+          Payload Length of the original IPv6 header changed to contain
+          the length of this fragment packet only (excluding the length
+          of the IPv6 header itself), and the Next Header field of the
+          last header of the Unfragmentable Part changed to 44.
+
+      (2) A Fragment header containing:
+
+               The Next Header value that identifies the first header of
+               the Fragmentable Part of the original packet.
+
+               A Fragment Offset containing the offset of the fragment,
+               in 8-octet units, relative to the start of the
+               Fragmentable Part of the original packet.  The Fragment
+               Offset of the first ("leftmost") fragment is 0.
+
+               An M flag value of 0 if the fragment is the last
+               ("rightmost") one, else an M flag value of 1.
+
+               The Identification value generated for the original
+               packet.
+
+      (3) The fragment itself.
+
+   The lengths of the fragments must be chosen such that the resulting
+   fragment packets fit within the MTU of the path to the packets'
+   destination(s).
+
+
+
+Deering & Hinden            Standards Track                    [Page 20]
+
+RFC 2460                   IPv6 Specification              December 1998
+
+
+   At the destination, fragment packets are reassembled into their
+   original, unfragmented form, as illustrated:
+
+   reassembled original packet:
+
+   +------------------+----------------------//------------------------+
+   |  Unfragmentable  |                 Fragmentable                   |
+   |       Part       |                     Part                       |
+   +------------------+----------------------//------------------------+
+
+   The following rules govern reassembly:
+
+      An original packet is reassembled only from fragment packets that
+      have the same Source Address, Destination Address, and Fragment
+      Identification.
+
+      The Unfragmentable Part of the reassembled packet consists of all
+      headers up to, but not including, the Fragment header of the first
+      fragment packet (that is, the packet whose Fragment Offset is
+      zero), with the following two changes:
+
+         The Next Header field of the last header of the Unfragmentable
+         Part is obtained from the Next Header field of the first
+         fragment's Fragment header.
+
+         The Payload Length of the reassembled packet is computed from
+         the length of the Unfragmentable Part and the length and offset
+         of the last fragment.  For example, a formula for computing the
+         Payload Length of the reassembled original packet is:
+
+           PL.orig = PL.first - FL.first - 8 + (8 * FO.last) + FL.last
+
+           where
+           PL.orig  = Payload Length field of reassembled packet.
+           PL.first = Payload Length field of first fragment packet.
+           FL.first = length of fragment following Fragment header of
+                      first fragment packet.
+           FO.last  = Fragment Offset field of Fragment header of
+                      last fragment packet.
+           FL.last  = length of fragment following Fragment header of
+                      last fragment packet.
+
+      The Fragmentable Part of the reassembled packet is constructed
+      from the fragments following the Fragment headers in each of the
+      fragment packets.  The length of each fragment is computed by
+      subtracting from the packet's Payload Length the length of the
+
+
+
+
+
+Deering & Hinden            Standards Track                    [Page 21]
+
+RFC 2460                   IPv6 Specification              December 1998
+
+
+      headers between the IPv6 header and fragment itself; its relative
+      position in Fragmentable Part is computed from its Fragment Offset
+      value.
+
+      The Fragment header is not present in the final, reassembled
+      packet.
+
+   The following error conditions may arise when reassembling fragmented
+   packets:
+
+      If insufficient fragments are received to complete reassembly of a
+      packet within 60 seconds of the reception of the first-arriving
+      fragment of that packet, reassembly of that packet must be
+      abandoned and all the fragments that have been received for that
+      packet must be discarded.  If the first fragment (i.e., the one
+      with a Fragment Offset of zero) has been received, an ICMP Time
+      Exceeded -- Fragment Reassembly Time Exceeded message should be
+      sent to the source of that fragment.
+
+      If the length of a fragment, as derived from the fragment packet's
+      Payload Length field, is not a multiple of 8 octets and the M flag
+      of that fragment is 1, then that fragment must be discarded and an
+      ICMP Parameter Problem, Code 0, message should be sent to the
+      source of the fragment, pointing to the Payload Length field of
+      the fragment packet.
+
+      If the length and offset of a fragment are such that the Payload
+      Length of the packet reassembled from that fragment would exceed
+      65,535 octets, then that fragment must be discarded and an ICMP
+      Parameter Problem, Code 0, message should be sent to the source of
+      the fragment, pointing to the Fragment Offset field of the
+      fragment packet.
+
+   The following conditions are not expected to occur, but are not
+   considered errors if they do:
+
+      The number and content of the headers preceding the Fragment
+      header of different fragments of the same original packet may
+      differ.  Whatever headers are present, preceding the Fragment
+      header in each fragment packet, are processed when the packets
+      arrive, prior to queueing the fragments for reassembly.  Only
+      those headers in the Offset zero fragment packet are retained in
+      the reassembled packet.
+
+      The Next Header values in the Fragment headers of different
+      fragments of the same original packet may differ.  Only the value
+      from the Offset zero fragment packet is used for reassembly.
+
+
+
+
+Deering & Hinden            Standards Track                    [Page 22]
+
+RFC 2460                   IPv6 Specification              December 1998
+
+

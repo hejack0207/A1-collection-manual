@@ -1,0 +1,454 @@
+4. Programming Model and Interfaces
+
+   This section describes the programming model for the synchronization
+   daemon and user application programs. The ideas are based on
+   suggestions from Jeff Mogul and Philip Gladstone and a similar
+   interface designed by the latter. It is important to point out that
+   the functionality of the original Unix adjtime() system call is
+   preserved, so that the modified kernel will work as the unmodified
+   one, should the new features not be in use. In this case the
+   ntp_adjtime() system call can still be used to read and write kernel
+   variables that might be used by a synchronization daemon other than
+   NTP, for example.
+
+   4.1. The ntp_gettime() System Call
+
+      The syntax and semantics of the ntp_gettime() call are given in
+      the following fragment of the timex.h header file. This file is
+      identical, except for the SHIFT_HZ define, in the SunOS, Ultrix
+      and OSF/1 kernel distributions. (The SHIFT_HZ define represents
+      the logarithm to the base 2 of the clock oscillator frequency
+      specific to each system type.) Note that the timex.h file calls
+      the syscall.h system header file, which must be modified to define
+      the SYS_ntp_gettime system call specific to each system type. The
+      kernel distributions include directions on how to do this.
+
+
+
+
+
+Mills                                                          [Page 20]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      /*
+       * This header file defines the Network Time Protocol (NTP)
+       * interfaces for user and daemon application programs. These are
+       * implemented using private system calls and data structures and
+       * require specific kernel support.
+       *
+       * NAME
+       *   ntp_gettime - NTP user application interface
+       *
+       * SYNOPSIS
+       *   #include <sys/timex.h>
+       *
+       *   int system call(SYS_ntp_gettime, tptr)
+       *
+       *   int SYS_ntp_gettime     defined in syscall.h header file
+       *   struct ntptimeval *tptr pointer to ntptimeval structure
+       *
+       * NTP user interface - used to read kernel clock values
+       * Note: maximum error = NTP synch distance = dispersion + delay /
+       * 2
+       * estimated error = NTP dispersion.
+       */
+      struct ntptimeval {
+           struct timeval time;    /* current time */
+           long maxerror;          /* maximum error (us) */
+           long esterror;          /* estimated error (us) */
+      };
+
+      The ntp_gettime() system call returns three values in the
+      ntptimeval structure: the current time in unix timeval format plus
+      the maximum and estimated errors in microseconds. While the 32-bit
+      long data type limits the error quantities to something more than
+      an hour, in practice this is not significant, since the protocol
+      itself will declare an unsynchronized condition well below that
+      limit. In the NTP Version 3 specification, if the protocol
+      computes either of these values in excess of 16 seconds, they are
+      clamped to that value and the system clock declared
+      unsynchronized.
+
+      Following is a detailed description of the ntptimeval structure
+      members.
+
+
+
+
+
+
+
+
+
+
+Mills                                                          [Page 21]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      struct timeval time;    /* current time */
+
+         This member returns the current system time, expressed as a
+         Unix timeval structure. The timeval structure consists of two
+         32-bit words; the first returns the number of seconds past 1
+         January 1970, while the second returns the number of
+         microseconds.
+
+      long maxerror;          /* maximum error (us) */
+
+         This member returns the time_maxerror kernel variable in
+         microseconds. See the entry for this variable in section 5 for
+         additional information.
+
+      long esterror;          /* estimated error (us) */
+
+         This member returns the time_esterror kernel variable in
+         microseconds. See the entry for this variable in section 5 for
+         additional information.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Mills                                                          [Page 22]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+   4.2. The ntp_adjtime() System Call
+
+      The syntax and semantics of the ntp_adjtime() call are given in
+      the following fragment of the timex.h header file. Note that, as
+      in the ntp_gettime() system call, the syscall.h system header file
+      must be modified to define the SYS_ntp_adjtime system call
+      specific to each system type.
+
+      /*
+       * NAME
+       *   ntp_adjtime - NTP daemon application interface
+       *
+       * SYNOPSIS
+       *   #include <sys/timex.h>
+       *
+       *   int system call(SYS_ntp_adjtime, mode, tptr)
+       *
+       *   int SYS_ntp_adjtime     defined in syscall.h header file
+       *   struct timex *tptr      pointer to timex structure
+       *
+       * NTP daemon interface - used to discipline kernel clock
+       * oscillator
+       */
+      struct timex {
+          int mode;                /* mode selector */
+          long offset;             /* time offset (us) */
+          long frequency;          /* frequency offset (scaled ppm) */
+          long maxerror;           /* maximum error (us) */
+          long esterror;           /* estimated error (us) */
+          int status;              /* clock command/status */
+          long time_constant;      /* pll time constant */
+          long precision;          /* clock precision (us) (read only)
+                                    */
+          long tolerance;          /* clock frequency tolerance (scaled
+                                    * ppm) (read only) */
+          /*
+           * The following read-only structure members are implemented
+           * only if the PPS signal discipline is configured in the
+           * kernel.
+           */
+          long ybar;               /* frequency estimate (scaled ppm) */
+          long disp;               /* dispersion estimate (scaled ppm)
+                                    */
+          int shift;               /* interval duration (s) (shift) */
+          long calcnt;             /* calibration intervals */
+          long jitcnt;             /* jitter limit exceeded */
+          long discnt;             /* dispersion limit exceeded */
+      };
+
+
+
+Mills                                                          [Page 23]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      The ntp_adjtime() system call is used to read and write certain
+      time-related kernel variables summarized in this and subsequent
+      sections. Writing these variables can only be done in superuser
+      mode. To write a variable, the mode structure member is set with
+      one or more bits, one of which is assigned each of the following
+      variables in turn. The current values for all variables are
+      returned in any case; therefore, a mode argument of zero means to
+      return these values without changing anything.
+
+      Following is a description of the timex structure members.
+
+      int mode;               /* mode selector */
+
+         This is a bit-coded variable selecting one or more structure
+         members, with one bit assigned each member. If a bit is set,
+         the value of the associated member variable is copied to the
+         corresponding kernel variable; if not, the member is ignored.
+         The bits are assigned as given in the following fragment of the
+         timex.h header file. Note that the precision and tolerance are
+         determined by the kernel and cannot be changed by
+         ntp_adjtime().
+
+         /*
+          * Mode codes (timex.mode)
+          */
+         #define ADJ_OFFSET       0x0001    /* time offset */
+         #define ADJ_FREQUENCY    0x0002    /* frequency offset */
+         #define ADJ_MAXERROR     0x0004    /* maximum time error */
+         #define ADJ_ESTERROR     0x0008    /* estimated time error */
+         #define ADJ_STATUS       0x0010    /* clock status */
+         #define ADJ_TIMECONST    0x0020    /* pll time constant */
+
+      long offset;            /* time offset (us) */
+
+         If selected, this member replaces the value of the time_offset
+         kernel variable in microseconds. The absolute value must be
+         less than MAXPHASE microseconds defined in the timex.h header
+         file. See the entry for this variable in section 5 for
+         additional information.
+
+         If within range and the PPS signal and/or external oscillator
+         are configured and operating properly, the clock status is
+         automatically set to TIME_OK.
+
+
+
+
+
+
+
+
+Mills                                                          [Page 24]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      long time_constant;     /* pll time constant */
+
+         If selected, this member replaces the value of the
+         time_constant kernel variable. The value must be between zero
+         and MAXTC defined in the timex.h header file. See the entry for
+         this variable in section 5 for additional information.
+
+      long frequency;         /* frequency offset (scaled ppm) */
+
+         If selected, this member replaces the value of the
+         time_frequency kernel variable. The value is in ppm, with the
+         integer part in the high order 16 bits and fraction in the low
+         order 16 bits. The absolute value must be in the range less
+         than MAXFREQ ppm defined in the timex.h header file. See the
+         entry for this variable in section 5 for additional
+         information.
+
+      long maxerror;          /* maximum error (us) */
+
+         If selected, this member replaces the value of the
+         time_maxerror kernel variable in microseconds. See the entry
+         for this variable in section 5 for additional information.
+
+      long esterror;          /* estimated error (us) */
+
+         If selected, this member replaces the value of the
+         time_esterror kernel variable in microseconds. See the entry
+         for this variable in section 5 for additional information.
+
+      int status;             /* clock command/status */
+
+         If selected, this member replaces the value of the time_status
+         kernel variable. See the entry for this variable in section 5
+         for additional information.
+
+         In order to set this variable by ntp_adjtime(), either (a) the
+         current clock status must be TIME_OK or (b) the member value is
+         TIME_BAD; that is, the ntp_adjtime() call can always set the
+         clock to the unsynchronized state or, if the clock is running
+         correctly, can set it to any state. In any case, the
+         ntp_adjtime() call always returns the current state in this
+         member, so the caller can determine whether or not the request
+         succeeded.
+
+
+
+
+
+
+
+
+Mills                                                          [Page 25]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      long time_constant;     /* pll time constant */
+
+         If selected, this member replaces the value of the
+         time_constant kernel variable. The value must be between zero
+         and MAXTC defined in the timex.h header file. See the entry for
+         this variable in section 5 for additional information.
+
+      long precision;         /* clock precision (us) (read only) */
+
+         This member returns the time_precision kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+      long tolerance;         /* clock frequency tolerance (scaled ppm)
+                               */
+
+         This member returns the time_tolerance kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+      long ybar;              /* frequency estimate (scaled ppm) */
+
+         This member returns the pps_ybar kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+      long disp;              /* dispersion estimate (scaled ppm) */
+
+         This member returns the pps_disp kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+      int shift;              /* interval duration (s) (shift) */
+
+         This member returns the pps_shift kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+
+
+
+
+
+
+
+
+Mills                                                          [Page 26]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+      long calcnt;            /* calibration intervals */
+
+         This member returns the pps_calcnt kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+      long jitcnt;            /* jitter limit exceeded */
+
+         This member returns the pps_jittcnt kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+      long discnt;            /* dispersion limit exceeded */
+
+         This member returns the pps_discnt kernel variable in
+         microseconds. The variable can be written only by the kernel.
+         See the entry for this variable in section 5 for additional
+         information.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Mills                                                          [Page 27]
+
+RFC 1589         Kernel Model for Precision Timekeeping       March 1994
+
+
+   4.3. Command/Status Codes
+
+      The kernel routines use the system clock status variable
+      time_status, which records whether the clock is synchronized,
+      waiting for a leap second, etc. The value of this variable is
+      returned as the result code by both the ntp_gettime() and
+      ntp_adjtime() system calls. In addition, it can be explicitly read
+      and written using the ntp_adjtime() system call, but can be
+      written only in superuser mode. Values presently defined in the
+      timex.h header file are as follows:
+
+      /*
+       * Clock command/status codes (timex.status)
+       */
+      #define TIME_OK    0    /* clock synchronized */
+      #define TIME_INS   1    /* insert leap second */
+      #define TIME_DEL   2    /* delete leap second */
+      #define TIME_OOP   3    /* leap second in progress */
+      #define TIME_BAD   4    /* kernel clock not synchronized */
+      #define TIME_ERR   5    /* external oscillator not
+                                 synchronized */
+
+      A detailed description of these codes as used by the leap-second
+      state machine is given later in this memorandum. In case of a
+      negative result code, the kernel has intercepted an invalid
+      address or (in case of the ntp_adjtime() system call), a superuser
+      violation.
+

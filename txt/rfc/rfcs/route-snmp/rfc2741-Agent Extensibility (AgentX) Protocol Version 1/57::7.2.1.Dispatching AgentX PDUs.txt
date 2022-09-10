@@ -1,0 +1,134 @@
+7.2.1. Dispatching AgentX PDUs
+
+   Upon receipt and initial validation of an SNMP request PDU, a master
+   agent uses the procedures described below to dispatch AgentX PDUs to
+   the proper subagents.
+
+   General Rules of Procedure
+
+   While processing a particular SNMP request, the master agent may send
+   one or more AgentX PDUs on one or more subagent sessions.  The
+   following rules of procedure apply in general to the AgentX master
+   agent.  PDU-specific rules are listed in the applicable sections.
+
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 58]
+
+RFC 2741                         AgentX                     January 2000
+
+
+   1) Honoring the registry
+
+      Because AgentX supports registration of duplicate and overlapping
+      regions, it is possible for the master agent to obtain a value for
+      a requested varbind from within multiple registered MIB regions.
+
+      The master agent must ensure that the value (or exception)
+      actually returned in the SNMP response PDU is taken from the
+      authoritative region (as defined in section 7.1.4.1, "Handling
+      Duplicate and Overlapping Subtrees").
+
+   2) GetNext and GetBulk Processing
+
+      The master agent may choose to send agentx-Get-PDUs while
+      servicing an SNMP GetNextRequest-PDU.  The master agent may choose
+      to send agentx-Get-PDUs or agentx-GetNext-PDUs while servicing an
+      SNMP GetBulkRequest-PDU.  One possible reason for this would be if
+      the current iteration has targeted instance-level registrations.
+
+      The master agent may choose to "scope" the possible instances
+      returned by a subagent by specifying an ending OID in the
+      SearchRange.  If such scoping is used, typically the ending OID
+      would be the first lexicographical successor to the target region
+      that was registered on a session other than the target session.
+      Regardless of this choice, rule (1) must be obeyed.
+
+      The master agent may require multiple request-response iterations
+      on the same subagent session, to determine the final value of all
+      requested variables.
+
+      All AgentX PDUs sent on the session while processing a given SNMP
+      request must contain identical values of transactionID.  Each
+      different SNMP request processed by the master agent must present
+      a unique value of transactionID (within the limits of the 32-bit
+      field) to the session.
+
+   3) Number and order of variables sent per AgentX PDU
+
+      For Get/GetNext/GetBulk operations, at any stage of the possibly
+      iterative process, the master agent may need to dispatch several
+      SearchRanges to a particular subagent session.  The master agent
+      may send one, some, or all of the SearchRanges in a single AgentX
+      PDU.
+
+      The master agent must ensure that the correct contents and
+      ordering of the VarBindList in the SNMP Response-PDU are
+      maintained.
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 59]
+
+RFC 2741                         AgentX                     January 2000
+
+
+      The following rules govern the number of VarBinds in a given
+      AgentX PDU:
+
+         a) The subagent must support processing of AgentX PDUs with
+            multiple VarBinds.
+
+         b) When processing an SNMP Set request, the master agent must
+            send all of the VarBinds applicable to a particular subagent
+            session in a single agentx-TestSet-PDU.
+
+         c) When processing an SNMP Get, GetNext, or GetBulk request,
+            the master agent may send a single AgentX PDU on the session
+            with all applicable VarBinds, or multiple PDUs with single
+            VarBinds, or something in between those extremes. The
+            determination of which method to use in a particular case is
+            implementation-specific.
+
+   4) Timeout Values
+
+      The master agent chooses a timeout value for each MIB region being
+      queried, which is
+
+         a) the value specified during registration of the MIB region,
+            if it was non-zero
+
+         b) otherwise, the value specified during establishment of the
+            session in which this region was subsequently registered, if
+            that value was non-zero
+
+         c) otherwise, or, if the specified value is not practical, the
+            master agent's implementaton-specific default value
+
+      When an AgentX PDU that references multiple MIB regions is
+      dispatched, the timeout value used for the PDU is the maximum
+      value of the timeouts so determined for each of the referenced MIB
+      regions.
+
+   5) Context
+
+      If the master agent has determined that a specific non-default
+      context is associated with the SNMP request PDU, that context is
+      encoded into the AgentX PDU's context field and the
+      NON_DEFAULT_CONTEXT bit is set in h.flags.
+
+      Otherwise, no context Octet String is added to the PDU, and the
+      NON_DEFAULT_CONTEXT bit is cleared.
+
+
+
+
+
+Daniele, et al.             Standards Track                    [Page 60]
+
+RFC 2741                         AgentX                     January 2000
+
+

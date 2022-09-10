@@ -1,0 +1,74 @@
+2.2.  Network Configurations
+
+   A primary time server is connected to a primary reference source,
+   usually a radio clock synchronized to national standard time.  A
+   secondary time server derives time synchronization, possibly via
+   other secondary servers, from a primary server.  Under normal
+   circumstances it is intended that a subnet of primary and secondary
+   servers assumes a hierarchical master-slave configuration with the
+   more accurate servers near the top and the less accurate below.
+
+   Following conventions established by the telephone industry, the
+   accuracy of each server is defined by a number called its stratum,
+   with the stratum of a primary server assigned as one and each level
+   downwards in the hierarchy assigned as one greater than the preceding
+   level.  With current technology and available receiving equipment,
+   single-sample accuracies in the order of a millisecond can be
+   achieved at the radio clock interface and in the order of a few
+   milliseconds at the packet interface to the net.  Accuracies of this
+   order require special care in the design and implementation of the
+   operating system, such as described in [15], and the logical clock
+   mechanism, such as described in Section 5.
+
+   As the stratum increases from one, the single-sample accuracies
+   achievable will degrade depending on the communication paths and
+   local clock stabilities.  In order to avoid the tedious calculations
+   [4] necessary to estimate errors in each specific configuration, it
+   is useful to assume the errors accumulate approximately in proportion
+   to the minimum total roundtrip path delay between each server and the
+   primary reference source to which it is synchronized.  This is called
+   the synchronization distance.
+
+   Again drawing from the experience of the telephone industry, who
+   learned such lessons at considerable cost, the synchronization paths
+   should be organized to produce the highest accuracies, but must never
+   be allowed to form a loop.  The clock filter and selection algorithms
+   used in NTP accomplish this by using a variant of the Bellman-Ford
+   distributed routing algorithm [29] to compute the minimum-weight
+   spanning trees rooted on the primary servers.  This results in each
+   server operating at the lowest stratum and, in case of multiple peers
+   at the same stratum, at the lowest synchronization distance.
+
+   As a result of the above design, the subnet reconfigures
+   automatically in a hierarchical master-slave configuration to produce
+   the most accurate time, even when one or more primary or secondary
+   servers or the communication paths between them fail.  This includes
+   the case where all normal primary servers (e.g.,  backbone WWVB
+   clocks) on a possibly partitioned subnet fail, but one or more backup
+   primary servers (e.g., local WWV clocks) continue operation.
+
+
+
+Mills                                                           [Page 9]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+   However, should all primary servers throughout the subnet fail, the
+   remaining secondary servers will synchronize among themselves for
+   some time and then gradually drop off the subnet and coast using
+   their last offset and frequency computations.  Since these
+   computations are expected to be very precise, especially in
+   frequency, even extend outage periods of a day or more should result
+   in timekeeping errors of not over a few tens of milliseconds.
+
+   In the case of multiple primary servers, the spanning-tree
+   computation will usually select the server at minimum synchronization
+   distance.  However, when these servers are at approximately the same
+   distance, the computation may result in random selections among them
+   as the result of normal dispersive delays.  Ordinarily this does not
+   degrade accuracy as long as any discrepancy between the primary
+   servers is small compared to the synchronization distance.  If not,
+   the filter and selection algorithms will select the best of the
+   available servers and cast out outlyers as intended.
+

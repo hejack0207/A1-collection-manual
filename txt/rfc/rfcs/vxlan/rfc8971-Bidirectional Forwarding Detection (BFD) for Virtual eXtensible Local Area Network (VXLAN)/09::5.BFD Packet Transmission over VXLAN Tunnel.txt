@@ -1,0 +1,86 @@
+5.  BFD Packet Transmission over VXLAN Tunnel
+
+   BFD packets MUST be encapsulated and sent to a remote VTEP as
+   explained in this section.  Implementations SHOULD ensure that the
+   BFD packets follow the same forwarding path as VXLAN data packets
+   within the sender system.
+
+   BFD packets are encapsulated in VXLAN as described below.  The VXLAN
+   packet format is defined in Section 5 of [RFC7348].  The value in the
+   VNI field of the VXLAN header MUST be set to the value selected as
+   the Management VNI.  The outer IP/UDP and VXLAN headers MUST be
+   encoded by the sender, as defined in [RFC7348].
+
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                      Outer Ethernet Header                    ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                        Outer IPvX Header                      ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                        Outer UDP Header                       ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                           VXLAN Header                        ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                    Inner Ethernet Header                      ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                        Inner IPvX Header                      ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                         Inner UDP Header                      ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                       BFD Control Packet                     ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                   Outer Ethernet FCS                          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+            Figure 2: VXLAN Encapsulation of BFD Control Packet
+
+   The BFD packet MUST be carried inside the inner Ethernet frame of the
+   VXLAN packet.  The choice of destination Media Access Control (MAC)
+   and destination IP addresses for the inner Ethernet frame MUST ensure
+   that the BFD Control packet is not forwarded to a tenant but is
+   processed locally at the remote VTEP.  The inner Ethernet frame
+   carrying the BFD Control packet has the following format:
+
+   Ethernet Header:
+      Destination MAC:  A Management VNI, which does not have any
+         tenants, will have no dedicated MAC address for decapsulated
+         traffic.  The value 00-52-02 SHOULD be used in this field.
+
+      Source MAC:  MAC address associated with the originating VTEP.
+
+      Ethertype:  This is set to 0x0800 if the inner IP header is IPv4
+         and set to 0x86DD if the inner IP header is IPv6.
+
+   IP header:
+      Destination IP:  This IP address MUST NOT be of one of tenant's IP
+         addresses.  The IP address SHOULD be selected from the range
+         127/8 for IPv4 and from the range ::ffff:127.0.0.0/104 for
+         IPv6.  Alternatively, the destination IP address MAY be set to
+         VTEP's IP address.
+
+      Source IP:  IP address of the originating VTEP.
+
+      TTL or Hop Limit:  MUST be set to 255, in accordance with
+         [RFC5881].
+
+   The destination UDP port is set to 3784 and the fields of the BFD
+   Control packet are encoded as specified in [RFC5881].
+

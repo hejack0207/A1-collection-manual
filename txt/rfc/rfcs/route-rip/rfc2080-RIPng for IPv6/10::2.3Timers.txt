@@ -1,0 +1,78 @@
+2.3  Timers
+
+   This section describes all events that are triggered by timers.
+
+   Every 30 seconds, the RIPng process is awakened to send an
+   unsolicited Response message, containing the complete routing table
+   (see section 2.6 on Split Horizon), to every neighboring router.
+   When there are many routers on a single network, there is a tendency
+   for them to synchronize with each other such that they all issue
+   updates at the same time.  This can happen whenever the 30 second
+   timer is affected by the processing load on the system.  It is
+   undesirable for the update messages to become synchronized, since it
+   can lead to unnecessary collisions on broadcast networks (see [13]
+   for more details).  Therefore, implementations are required to take
+   one of two precautions:
+
+   - The 30-second updates are triggered by a clock whose rate is not
+     affected by system load or the time required to service the
+     previous update timer.
+
+   - The 30-second timer is offset by a small random time (+/- 0 to 15
+     seconds) each time it is set.  The offset is derived from: 0.5 *
+     the update period (i.e. 30).
+
+   There are two timers associated with each route, a "timeout" and a
+   "garbage-collection time."  Upon expiration of the timeout, the route
+   is no longer valid; however, it is retained in the routing table for
+   a short time so that neighbors can be notified that the route has
+   been dropped.  Upon expiration of the garbage-collection timer, the
+   route is finally removed from the routing table.
+
+   The timeout is initialized when a route is established, and any time
+   an update message is received for the route.  If 180 seconds elapse
+   from the last time the timeout was initialized, the route is
+   considered to have expired, and the deletion process described below
+   begins for that route.
+
+
+
+
+
+
+
+
+
+Malkin & Minnear            Standards Track                     [Page 9]
+
+RFC 2080                     RIPng for IPv6                 January 1997
+
+
+   Deletions can occur for one of two reasons: the timeout expires, or
+   the metric is set to 16 because of an update received from the
+   current router (see section 2.4.2 for a discussion of processing
+   updates from other routers).  In either case, the following events
+   happen:
+
+   - The garbage-collection timer is set for 120 seconds.
+
+   - The metric for the route is set to 16 (infinity).  This causes the
+     route to be removed from service.
+
+   - The route change flag is to indicate that this entry has been
+     changed.
+
+   - The output process is signalled to trigger a response.
+
+   Until the garbage-collection timer expires, the route is included in
+   all updates sent by this router.  When the garbage-collection timer
+   expires, the route is deleted from the routing table.
+
+   Should a new route to this network be established while the garbage-
+   collection timer is running, the new route will replace the one that
+   is about to be deleted.  In this case the garbage-collection timer
+   must be cleared.
+
+   Triggered updates also use a small timer; however, this is best
+   described in section 2.5.1.
+

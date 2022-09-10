@@ -1,0 +1,104 @@
+15.  Virtual Links
+
+    The single backbone area (Area ID = 0.0.0.0) cannot be disconnected,
+    or some areas of the Autonomous System will become unreachable.  To
+    establish/maintain connectivity of the backbone, virtual links can
+    be configured through non-backbone areas.  Virtual links serve to
+    connect physically separate components of the backbone.  The two
+    endpoints of a virtual link are area border routers.  The virtual
+    link must be configured in both routers.  The configuration
+    information in each router consists of the other virtual endpoint
+    (the other area border router), and the non-backbone area the two
+    routers have in common (called the Transit area).  Virtual links
+    cannot be configured through stub areas (see Section 3.6).
+
+    The virtual link is treated as if it were an unnumbered point-to-
+    point network belonging to the backbone and joining the two area
+    border routers.  An attempt is made to establish an adjacency over
+    the virtual link.  When this adjacency is established, the virtual
+    link will be included in backbone router-LSAs, and OSPF packets
+    pertaining to the backbone area will flow over the adjacency.  Such
+    an adjacency has been referred to in this document as a "virtual
+    adjacency".
+
+    In each endpoint router, the cost and viability of the virtual link
+    is discovered by examining the routing table entry for the other
+    endpoint router.  (The entry's associated area must be the
+    configured Transit area).  This is called the virtual link's
+    corresponding routing table entry.  The InterfaceUp event occurs for
+    a virtual link when its corresponding routing table entry becomes
+    reachable.  Conversely, the InterfaceDown event occurs when its
+    routing table entry becomes unreachable.  In other words, the
+    virtual link's viability is determined by the existence of an
+    intra-area path, through the Transit area, between the two
+    endpoints.  Note that a virtual link whose underlying path has cost
+    greater than hexadecimal 0xffff (the maximum size of an interface
+    cost in a router-LSA) should be considered inoperational (i.e.,
+    treated the same as if the path did not exist).
+
+    The other details concerning virtual links are as follows:
+
+    o   AS-external-LSAs are NEVER flooded over virtual adjacencies.
+        This would be duplication of effort, since the same AS-
+
+
+
+Moy                         Standards Track                   [Page 158]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        external-LSAs are already flooded throughout the virtual link's
+        Transit area.  For this same reason, AS-external-LSAs are not
+        summarized over virtual adjacencies during the Database Exchange
+        process.
+
+    o   The cost of a virtual link is NOT configured.  It is defined to
+        be the cost of the intra-area path between the two defining area
+        border routers.  This cost appears in the virtual link's
+        corresponding routing table entry.  When the cost of a virtual
+        link changes, a new router-LSA should be originated for the
+        backbone area.
+
+    o   Just as the virtual link's cost and viability are determined by
+        the routing table build process (through construction of the
+        routing table entry for the other endpoint), so are the IP
+        interface address for the virtual interface and the virtual
+        neighbor's IP address.  These are used when sending OSPF
+        protocol packets over the virtual link. Note that when one (or
+        both) of the virtual link endpoints connect to the Transit area
+        via an unnumbered point-to-point link, it may be impossible to
+        calculate either the virtual interface's IP address and/or the
+        virtual neighbor's IP address, thereby causing the virtual link
+        to fail.
+
+    o   In each endpoint's router-LSA for the backbone, the virtual link
+        is represented as a Type 4 link whose Link ID is set to the
+        virtual neighbor's OSPF Router ID and whose Link Data is set to
+        the virtual interface's IP address.  See Section 12.4.1 for more
+        information.
+
+    o   A non-backbone area can carry transit data traffic (i.e., is
+        considered a "transit area") if and only if it serves as the
+        Transit area for one or more fully adjacent virtual links (see
+        TransitCapability in Sections 6 and 16.1). Such an area requires
+        special treatment when summarizing backbone networks into it
+        (see Section 12.4.3), and during the routing calculation (see
+        Section 16.3).
+
+    o   The time between link state retransmissions, RxmtInterval, is
+        configured for a virtual link.  This should be well over the
+        expected round-trip delay between the two routers.  This may be
+
+
+
+
+Moy                         Standards Track                   [Page 159]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        hard to estimate for a virtual link; it is better to err on the
+        side of making it too large.
+
+

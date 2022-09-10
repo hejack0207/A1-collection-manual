@@ -1,0 +1,143 @@
+4.3.2 DHCPREQUEST message
+
+   A DHCPREQUEST message may come from a client responding to a
+   DHCPOFFER message from a server, from a client verifying a previously
+   allocated IP address or from a client extending the lease on a
+   network address.  If the DHCPREQUEST message contains a 'server
+   identifier' option, the message is in response to a DHCPOFFER
+   message.  Otherwise, the message is a request to verify or extend an
+   existing lease.  If the client uses a 'client identifier' in a
+   DHCPREQUEST message, it MUST use that same 'client identifier' in all
+   subsequent messages. If the client included a list of requested
+   parameters in a DHCPDISCOVER message, it MUST include that list in
+   all subsequent messages.
+
+
+
+
+
+
+
+Droms                       Standards Track                    [Page 30]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+   Any configuration parameters in the DHCPACK message SHOULD NOT
+   conflict with those in the earlier DHCPOFFER message to which the
+   client is responding.  The client SHOULD use the parameters in the
+   DHCPACK message for configuration.
+
+   Clients send DHCPREQUEST messages as follows:
+
+   o DHCPREQUEST generated during SELECTING state:
+
+      Client inserts the address of the selected server in 'server
+      identifier', 'ciaddr' MUST be zero, 'requested IP address' MUST be
+      filled in with the yiaddr value from the chosen DHCPOFFER.
+
+      Note that the client may choose to collect several DHCPOFFER
+      messages and select the "best" offer.  The client indicates its
+      selection by identifying the offering server in the DHCPREQUEST
+      message.  If the client receives no acceptable offers, the client
+      may choose to try another DHCPDISCOVER message.  Therefore, the
+      servers may not receive a specific DHCPREQUEST from which they can
+      decide whether or not the client has accepted the offer.  Because
+      the servers have not committed any network address assignments on
+      the basis of a DHCPOFFER, servers are free to reuse offered
+      network addresses in response to subsequent requests.  As an
+      implementation detail, servers SHOULD NOT reuse offered addresses
+      and may use an implementation-specific timeout mechanism to decide
+      when to reuse an offered address.
+
+   o DHCPREQUEST generated during INIT-REBOOT state:
+
+      'server identifier' MUST NOT be filled in, 'requested IP address'
+      option MUST be filled in with client's notion of its previously
+      assigned address. 'ciaddr' MUST be zero. The client is seeking to
+      verify a previously allocated, cached configuration. Server SHOULD
+      send a DHCPNAK message to the client if the 'requested IP address'
+      is incorrect, or is on the wrong network.
+
+      Determining whether a client in the INIT-REBOOT state is on the
+      correct network is done by examining the contents of 'giaddr', the
+      'requested IP address' option, and a database lookup. If the DHCP
+      server detects that the client is on the wrong net (i.e., the
+      result of applying the local subnet mask or remote subnet mask (if
+      'giaddr' is not zero) to 'requested IP address' option value
+      doesn't match reality), then the server SHOULD send a DHCPNAK
+      message to the client.
+
+
+
+
+
+
+
+Droms                       Standards Track                    [Page 31]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+      If the network is correct, then the DHCP server should check if
+      the client's notion of its IP address is correct. If not, then the
+      server SHOULD send a DHCPNAK message to the client. If the DHCP
+      server has no record of this client, then it MUST remain silent,
+      and MAY output a warning to the network administrator. This
+      behavior is necessary for peaceful coexistence of non-
+      communicating DHCP servers on the same wire.
+
+      If 'giaddr' is 0x0 in the DHCPREQUEST message, the client is on
+      the same subnet as the server.  The server MUST broadcast the
+      DHCPNAK message to the 0xffffffff broadcast address because the
+      client may not have a correct network address or subnet mask, and
+      the client may not be answering ARP requests.
+
+      If 'giaddr' is set in the DHCPREQUEST message, the client is on a
+      different subnet.  The server MUST set the broadcast bit in the
+      DHCPNAK, so that the relay agent will broadcast the DHCPNAK to the
+      client, because the client may not have a correct network address
+      or subnet mask, and the client may not be answering ARP requests.
+
+   o DHCPREQUEST generated during RENEWING state:
+
+      'server identifier' MUST NOT be filled in, 'requested IP address'
+      option MUST NOT be filled in, 'ciaddr' MUST be filled in with
+      client's IP address. In this situation, the client is completely
+      configured, and is trying to extend its lease. This message will
+      be unicast, so no relay agents will be involved in its
+      transmission.  Because 'giaddr' is therefore not filled in, the
+      DHCP server will trust the value in 'ciaddr', and use it when
+      replying to the client.
+
+      A client MAY choose to renew or extend its lease prior to T1.  The
+      server may choose not to extend the lease (as a policy decision by
+      the network administrator), but should return a DHCPACK message
+      regardless.
+
+   o DHCPREQUEST generated during REBINDING state:
+
+      'server identifier' MUST NOT be filled in, 'requested IP address'
+      option MUST NOT be filled in, 'ciaddr' MUST be filled in with
+      client's IP address. In this situation, the client is completely
+      configured, and is trying to extend its lease. This message MUST
+      be broadcast to the 0xffffffff IP broadcast address.  The DHCP
+      server SHOULD check 'ciaddr' for correctness before replying to
+      the DHCPREQUEST.
+
+
+
+
+
+
+Droms                       Standards Track                    [Page 32]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+      The DHCPREQUEST from a REBINDING client is intended to accommodate
+      sites that have multiple DHCP servers and a mechanism for
+      maintaining consistency among leases managed by multiple servers.
+      A DHCP server MAY extend a client's lease only if it has local
+      administrative authority to do so.
+

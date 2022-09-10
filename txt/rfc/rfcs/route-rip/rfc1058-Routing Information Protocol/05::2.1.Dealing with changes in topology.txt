@@ -1,0 +1,53 @@
+2.1. Dealing with changes in topology
+
+   The discussion above assumes that the topology of the network is
+   fixed.  In practice, gateways and lines often fail and come back up.
+   To handle this possibility, we need to modify the algorithm slightly.
+   The theoretical version of the algorithm involved a minimum over all
+   immediate neighbors.  If the topology changes, the set of neighbors
+   changes.  Therefore, the next time the calculation is done, the
+   change will be reflected.  However, as mentioned above, actual
+   implementations use an incremental version of the minimization.  Only
+   the best route to any given destination is remembered.  If the
+   gateway involved in that route should crash, or the network
+   connection to it break, the calculation might never reflect the
+   change.  The algorithm as shown so far depends upon a gateway
+   notifying its neighbors if its metrics change.  If the gateway
+   crashes, then it has no way of notifying neighbors of a change.
+
+   In order to handle problems of this kind, distance vector protocols
+   must make some provision for timing out routes.  The details depend
+   upon the specific protocol.  As an example, in RIP every gateway that
+   participates in routing sends an update message to all its neighbors
+   once every 30 seconds.  Suppose the current route for network N uses
+   gateway G.  If we don't hear from G for 180 seconds, we can assume
+   that either the gateway has crashed or the network connecting us to
+   it has become unusable.  Thus, we mark the route as invalid.  When we
+   hear from another neighbor that has a valid route to N, the valid
+   route will replace the invalid one.  Note that we wait for 180
+   seconds before timing out a route even though we expect to hear from
+   each neighbor every 30 seconds.  Unfortunately, messages are
+   occasionally lost by networks.  Thus, it is probably not a good idea
+   to invalidate a route based on a single missed message.
+
+   As we will see below, it is useful to have a way to notify neighbors
+   that there currently isn't a valid route to some network.  RIP, along
+   with several other protocols of this class, does this through a
+   normal update message, by marking that network as unreachable.  A
+   specific metric value is chosen to indicate an unreachable
+   destination; that metric value is larger than the largest valid
+   metric that we expect to see.  In the existing implementation of RIP,
+   16 is used.  This value is normally referred to as "infinity", since
+   it is larger than the largest valid metric.  16 may look like a
+   surprisingly small number.  It is chosen to be this small for reasons
+   that we will see shortly.  In most implementations, the same
+   convention is used internally to flag a route as invalid.
+
+
+
+
+Hedrick                                                        [Page 11]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+

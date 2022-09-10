@@ -1,0 +1,257 @@
+8.  BGP Finite State machine.
+
+   This section specifies BGP operation in terms of a Finite State
+   Machine (FSM).  Following is a brief summary and overview of BGP
+   operations by state as determined by this FSM.  A condensed version
+   of the BGP FSM is found in Appendix 1.
+
+      Initially BGP is in the Idle state.
+
+      Idle state:
+
+         In this state BGP refuses all incoming BGP connections.  No
+         resources are allocated to the peer.  In response to the Start
+         event (initiated by either system or operator) the local system
+         initializes all BGP resources, starts the ConnectRetry timer,
+         initiates a transport connection to other BGP peer, while
+         listening for connection that may be initiated by the remote
+         BGP peer, and changes its state to Connect.  The exact value of
+         the ConnectRetry timer is a local matter, but should be
+         sufficiently large to allow TCP initialization.
+
+         If a BGP speaker detects an error, it shuts down the connection
+         and changes its state to Idle. Getting out of the Idle state
+
+
+
+Rekhter & Li                                                   [Page 29]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+         requires generation of the Start event.  If such an event is
+         generated automatically, then persistent BGP errors may result
+         in persistent flapping of the speaker.  To avoid such a
+         condition it is recommended that Start events should not be
+         generated immediately for a peer that was previously
+         transitioned to Idle due to an error. For a peer that was
+         previously transitioned to Idle due to an error, the time
+         between consecutive generation of Start events, if such events
+         are generated automatically, shall exponentially increase. The
+         value of the initial timer shall be 60 seconds. The time shall
+         be doubled for each consecutive retry.
+
+         Any other event received in the Idle state is ignored.
+
+      Connect state:
+
+         In this state BGP is waiting for the transport protocol
+         connection to be completed.
+
+         If the transport protocol connection succeeds, the local system
+         clears the ConnectRetry timer, completes initialization, sends
+         an OPEN message to its peer, and changes its state to OpenSent.
+
+         If the transport protocol connect fails (e.g., retransmission
+         timeout), the local system restarts the ConnectRetry timer,
+         continues to listen for a connection that may be initiated by
+         the remote BGP peer, and changes its state to Active state.
+
+         In response to the ConnectRetry timer expired event, the local
+         system restarts the ConnectRetry timer, initiates a transport
+         connection to other BGP peer, continues to listen for a
+         connection that may be initiated by the remote BGP peer, and
+         stays in the Connect state.
+
+         Start event is ignored in the Active state.
+
+         In response to any other event (initiated by either system or
+         operator), the local system releases all BGP resources
+         associated with this connection and changes its state to Idle.
+
+      Active state:
+
+         In this state BGP is trying to acquire a peer by initiating a
+         transport protocol connection.
+
+         If the transport protocol connection succeeds, the local system
+         clears the ConnectRetry timer, completes initialization, sends
+         an OPEN message to its peer, sets its Hold Timer to a large
+
+
+
+Rekhter & Li                                                   [Page 30]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+         value, and changes its state to OpenSent.  A Hold Timer value
+         of 4 minutes is suggested.
+
+         In response to the ConnectRetry timer expired event, the local
+         system restarts the ConnectRetry timer, initiates a transport
+         connection to other BGP peer, continues to listen for a
+         connection that may be initiated by the remote BGP peer, and
+         changes its state to Connect.
+
+         If the local system detects that a remote peer is trying to
+         establish BGP connection to it, and the IP address of the
+         remote peer is not an expected one, the local system restarts
+         the ConnectRetry timer, rejects the attempted connection,
+         continues to listen for a connection that may be initiated by
+         the remote BGP peer, and stays in the Active state.
+
+         Start event is ignored in the Active state.
+
+         In response to any other event (initiated by either system or
+         operator), the local system releases all BGP resources
+         associated with this connection and changes its state to Idle.
+
+      OpenSent state:
+
+         In this state BGP waits for an OPEN message from its peer.
+         When an OPEN message is received, all fields are checked for
+         correctness.  If the BGP message header checking or OPEN
+         message checking detects an error (see Section 6.2), or a
+         connection collision (see Section 6.8) the local system sends a
+         NOTIFICATION message and changes its state to Idle.
+
+         If there are no errors in the OPEN message, BGP sends a
+         KEEPALIVE message and sets a KeepAlive timer.  The Hold Timer,
+         which was originally set to a large value (see above), is
+         replaced with the negotiated Hold Time value (see section 4.2).
+         If the negotiated Hold Time value is zero, then the Hold Time
+         timer and KeepAlive timers are not started.  If the value of
+         the Autonomous System field is the same as the local Autonomous
+         System number, then the connection is an "internal" connection;
+         otherwise, it is "external".  (This will effect UPDATE
+         processing as described below.)  Finally, the state is changed
+         to OpenConfirm.
+
+         If a disconnect notification is received from the underlying
+         transport protocol, the local system closes the BGP connection,
+         restarts the ConnectRetry timer, while continue listening for
+         connection that may be initiated by the remote BGP peer, and
+         goes into the Active state.
+
+
+
+Rekhter & Li                                                   [Page 31]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+         If the Hold Timer expires, the local system sends NOTIFICATION
+         message with error code Hold Timer Expired and changes its
+         state to Idle.
+
+         In response to the Stop event (initiated by either system or
+         operator) the local system sends NOTIFICATION message with
+         Error Code Cease and changes its state to Idle.
+
+         Start event is ignored in the OpenSent state.
+
+         In response to any other event the local system sends
+         NOTIFICATION message with Error Code Finite State Machine Error
+         and changes its state to Idle.
+
+         Whenever BGP changes its state from OpenSent to Idle, it closes
+         the BGP (and transport-level) connection and releases all
+         resources associated with that connection.
+
+      OpenConfirm state:
+
+         In this state BGP waits for a KEEPALIVE or NOTIFICATION
+         message.
+
+         If the local system receives a KEEPALIVE message, it changes
+         its state to Established.
+
+         If the Hold Timer expires before a KEEPALIVE message is
+         received, the local system sends NOTIFICATION message with
+         error code Hold Timer Expired and changes its state to Idle.
+
+         If the local system receives a NOTIFICATION message, it changes
+         its state to Idle.
+
+         If the KeepAlive timer expires, the local system sends a
+         KEEPALIVE message and restarts its KeepAlive timer.
+
+         If a disconnect notification is received from the underlying
+         transport protocol, the local system changes its state to Idle.
+
+         In response to the Stop event (initiated by either system or
+         operator) the local system sends NOTIFICATION message with
+         Error Code Cease and changes its state to Idle.
+
+         Start event is ignored in the OpenConfirm state.
+
+         In response to any other event the local system sends
+         NOTIFICATION message with Error Code Finite State Machine Error
+         and changes its state to Idle.
+
+
+
+Rekhter & Li                                                   [Page 32]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+         Whenever BGP changes its state from OpenConfirm to Idle, it
+         closes the BGP (and transport-level) connection and releases
+         all resources associated with that connection.
+
+      Established state:
+
+         In the Established state BGP can exchange UPDATE, NOTIFICATION,
+         and KEEPALIVE messages with its peer.
+
+         If the local system receives an UPDATE or KEEPALIVE message, it
+         restarts its Hold Timer, if the negotiated Hold Time value is
+         non-zero.
+
+         If the local system receives a NOTIFICATION message, it changes
+         its state to Idle.
+
+         If the local system receives an UPDATE message and the UPDATE
+         message error handling procedure (see Section 6.3) detects an
+         error, the local system sends a NOTIFICATION message and
+         changes its state to Idle.
+
+         If a disconnect notification is received from the underlying
+         transport protocol, the local system changes its state to Idle.
+
+         If the Hold Timer expires, the local system sends a
+         NOTIFICATION message with Error Code Hold Timer Expired and
+         changes its state to Idle.
+
+         If the KeepAlive timer expires, the local system sends a
+         KEEPALIVE message and restarts its KeepAlive timer.
+
+         Each time the local system sends a KEEPALIVE or UPDATE message,
+         it restarts its KeepAlive timer, unless the negotiated Hold
+         Time value is zero.
+
+         In response to the Stop event (initiated by either system or
+         operator), the local system sends a NOTIFICATION message with
+         Error Code Cease and changes its state to Idle.
+
+         Start event is ignored in the Established state.
+
+         In response to any other event, the local system sends
+         NOTIFICATION message with Error Code Finite State Machine Error
+         and changes its state to Idle.
+
+         Whenever BGP changes its state from Established to Idle, it
+         closes the BGP (and transport-level) connection, releases all
+         resources associated with that connection, and deletes all
+
+
+
+Rekhter & Li                                                   [Page 33]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+         routes derived from that connection.
+

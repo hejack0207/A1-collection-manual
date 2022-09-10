@@ -1,0 +1,63 @@
+7.2. Extensions to the IP Module
+
+   To support the reception of multicast IP datagrams, the IP module
+   must be extended to maintain a list of host group memberships
+   associated with each network interface.  An incoming datagram
+   destined to one of those groups is processed exactly the same way as
+   datagrams destined to one of the host's individual addresses.
+
+   Incoming datagrams destined to groups to which the host does not
+   belong are discarded without generating any error report or log
+   entry.  On hosts with more than one network interface, if a datagram
+   arrives via one interface, destined for a group to which the host
+   belongs only on a different interface, the datagram is quietly
+   discarded.  (These cases should occur only as a result of inadequate
+   multicast address filtering in a local network module.)
+
+   An incoming datagram is not rejected for having an IP time-to-live of
+   1 (i.e., the time-to-live should not automatically be decremented on
+   arriving datagrams that are not being forwarded).  An incoming
+   datagram with an IP host group address in its source address field is
+   quietly discarded.  An ICMP error message (Destination Unreachable,
+   Time Exceeded, Parameter Problem, Source Quench, or Redirect) is
+   never generated in response to a datagram destined to an IP host
+   group.
+
+   The list of host group memberships is updated in response to
+   JoinHostGroup and LeaveHostGroup requests from upper-layer protocols.
+   Each membership should have an associated reference count or similar
+   mechanism to handle multiple requests to join and leave the same
+   group.  On the first request to join and the last request to leave a
+   group on a given interface, the local network module for that
+   interface is notified, so that it may update its multicast reception
+   filter (see section 7.3).
+
+   The IP module must also be extended to implement the IGMP protocol,
+   specified in Appendix I. IGMP is used to keep neighboring multicast
+   routers informed of the host group memberships present on a
+   particular local network.  To support IGMP, every level 2 host must
+   join the "all-hosts" group (address 224.0.0.1) on each network
+   interface at initialization time and must remain a member for as long
+   as the host is active.
+
+
+
+
+Deering                                                         [Page 8]
+
+RFC 1112          Host Extensions for IP Multicasting        August 1989
+
+
+   (Datagrams addressed to the all-hosts group are recognized as a
+   special case by the multicast routers and are never forwarded beyond
+   a single network, regardless of their time-to-live.  Thus, the all-
+   hosts address may not be used as an internet-wide broadcast address.
+   For the purpose of IGMP, membership in the all-hosts group is really
+   necessary only while the host belongs to at least one other group.
+   However, it is specified that the host shall remain a member of the
+   all-hosts group at all times because (1) it is simpler, (2) the
+   frequency of reception of unnecessary IGMP queries should be low
+   enough that overhead is negligible, and (3) the all-hosts address may
+   serve other routing-oriented purposes, such as advertising the
+   presence of gateways or resolving local addresses.)
+

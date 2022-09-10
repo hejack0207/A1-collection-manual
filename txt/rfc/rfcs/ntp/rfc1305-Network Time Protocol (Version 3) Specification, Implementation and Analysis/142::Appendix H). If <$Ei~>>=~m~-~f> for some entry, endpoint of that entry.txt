@@ -1,0 +1,145 @@
+Appendix H). If <$Ei~>>=~m~-~f> for some entry, endpoint of that entry
+becomes the lower endpoint of the intersection; otherwise, f is
+increased by one and the above procedure is repeated. Without resetting
+f or c, a similar procedure is used to find the upper endpoint, except
+that the value of type is added to the counter.. If after both endpoints
+have been determined <$Ec~<<=~f>, the procedure continues having found
+<$Em~-~f> truechimers; otherwise, f is increased by one and the entire
+procedure is repeated.
+
+        for (f from 0 to <$Ef~>>=~m over 2>) begin              /*
+calling all truechimers */
+                <$Ec~<<-~0>;
+                <$Ei~<<-~0>;
+                for (each [endpoint, type] from lowest) begin   /* find
+low endpoint */
+                        <$Ei~<<-~i~-~type>;
+                        <$Elow~<<-~endpoint>;
+                        if (<$Ei~>>=~m~-~f>) break;
+                        if (<$Etype~=~0>) <$Ec~<<-~c~+~1>;
+                        endfor;
+                <$Ei~<<-~0>;
+
+                for (each [endpoint, type] from highest) begin  /* find
+high endpoint */
+                        <$Ei~<<-~i~+~type>;
+                        <$Ehigh~<<-~endpoint>;
+                        if (<$Ei~>>=~m~-~f>) break;
+                        if (<$Etype~=~0>) <$Ec~<<-~c~+~1>;
+                        endfor;
+                if (<$Ec~<<=~f>) break;                 /* continue
+until all falsetickers found */
+                endfor;
+        if (<$Elow~>>~high>) begin                              /* quit
+if no intersection found */
+                <$Eroman sys.peer~<<-~roman NULL>;
+                exit;
+                endif;
+
+Note that processing continues past this point only if there are more
+than <$Em over 2> intersections. However, it is possible, but not highly
+likely, that there may be fewer than <$Em over 2> truechimers remaining
+in the intersection.
+
+Clustering Algorithm
+
+In the original DTS algorithm the clock-selection procedure exits at
+this point with the presumed correct time set midway in the computed
+intersection <$E[low,~high]>. However, this can lead to a considerable
+loss in accuracy and stability, since the individual peer statistics are
+lost. Therefore, in NTP the candidates that survived the preceding steps
+are processed further. The candidate list is rebuilt with entries of the
+form <$E[distance,~index]>, where distance is computed from the (scaled)
+peer stratum and synchronization distance <$ELAMBDA>. The scaling factor
+provides a mechanism to weight the combination of stratum and distance.
+Ordinarily, the stratum will dominate, unless one or more of the
+survivors has an exceptionally high distance. The list is then sorted by
+increasing distance.
+
+        <$Em~<<-~0>;
+        for (each peer) begin                   /* calling all peers */
+                if (<$Elow~<<=~theta~<<=~high>) begin
+                        <$ELAMBDA~<<-~roman distance (peer)>;           
+/* make list entry */
+                        <$Edist~<<-~roman
+{peer.stratum~times~NTP.MAXDISPERSE~+~LAMBDA }>
+                        add <$E[ dist ,~peer]> to candidate list;
+                        <$Em~<<-~m~+~1>;
+                        endif;
+                endfor;
+        sort candidate list by increasing dist;
+
+The next steps are designed to cast out outlyers which exhibit
+significant dispersions relative to the other members of the candidate
+list while minimizing wander, especially on high-speed LANs with many
+time servers. Wander causes needless network overhead, since the poll
+interval is clamped at sys.poll as each new peer is selected for
+synchronization and only slowly increases when the peer is no longer
+selected. It has been the practical experience that the number of
+candidates surviving to this point can become quite large and can result
+in significant processor cycles without materially enhancing stability
+and accuracy. Accordingly, the candidate list is truncated at
+NTP.MAXCLOCK entries.
+
+Note <$Eepsilon sub {xi i}> is the select (sample) dispersion relative
+to the ith peer represented on the candidate list, which can be
+calculated in a manner similar to the filter dispersion described
+previously. The <$EEPSILON sub j> is the dispersion of the jth peer
+represented on the list and includes components due to measurement
+error, skew-error accumulation and filter dispersion. If the maximum
+<$Eepsilon sub {xi i}> is greater than the minimum <$EEPSILON sub j> and
+the number of survivors is greater than NTP.MINCLOCK, the ith peer is
+discarded from the list and the procedure is repeated. If the current
+synchronization source is one of the survivors and there is no other
+survivor of lower stratum, then the procedure exits without doing
+anything further. Otherwise, the synchronization source is set to the
+first survivor on the candidate list. In the following i, j, k, l are
+peer indices, with k the index of the current synchronization source
+(NULL if none) and l the index of the first survivor on the candidate
+list.
+
+        while begin
+                for (each survivor <$E[distance,~index]>) begin /*
+compute dispersions */
+                        find index i for max <$Eepsilon sub {xi i}>;
+                        find index j for min <$EEPSILON sub j>;
+                        endfor
+                if (<$Eepsilon sub {xi i}~<<=~EPSILON sub j> or
+<$Em~<<=~roman NTP.MINCLOCK>) break;
+                <$Eroman peer.survivor [i]~<<-~0> ;             /*
+discard ith peer */
+                if (<$Ei~=~k>) <$Eroman sys.peer~<<-~roman NULL>;
+                delete the ith peer from the candidate list;
+                <$Em~<<-~m~-~1>;
+                endwhile
+        if (<$Eroman peer.survivor [k]~=~0> or <$Eroman peer.stratum
+[k]~>>~roman peer.stratum [l]>) begin
+                <$Eroman sys.peer~<<-~l>;                               
+/* new clock source */
+                call poll-update;
+                endif
+        end clock-select procedure;
+
+The algorithm is designed to favor those peers near the head of the
+candidate list, which are at the lowest stratum and distance and
+presumably can provide the most accurate and stable time. With proper
+selection of weight factor v (also called NTP.SELECT), entries will be
+trimmed from the tail of the list, unless a few outlyers disagree
+significantly with respect to the remaining entries, in which case the
+outlyers are discarded first. The termination condition is designed to
+avoid needless switching between synchronization sources when not
+statistically justified, yet maintain a bias toward the low-stratum,
+low-distance peers.
+
+Local Clocks
+
+In order to implement a precise and accurate local clock, the host must
+be equipped with a hardware clock consisting of an oscillator and
+interface and capable of the required precision and stability. A logical
+clock is then constructed using these components plus software
+components that adjust the apparent time and frequency in response to
+periodic updates computed by NTP or some other time-synchronization
+protocol such as Hellospeak [MIL83b] or the Unix 4.3bsd TSP [GUS85a].
+This section describes the Fuzzball local-clock model and
+implementation, which includes provisions for precise time and frequency
+adjustment and can maintain time to within 15 ns and frequency to within

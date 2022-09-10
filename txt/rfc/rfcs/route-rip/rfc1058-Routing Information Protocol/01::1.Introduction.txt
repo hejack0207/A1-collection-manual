@@ -1,0 +1,90 @@
+1. Introduction
+
+   This memo describes one protocol in a series of routing protocols
+   based on the Bellman-Ford (or distance vector) algorithm.  This
+   algorithm has been used for routing computations in computer networks
+   since the early days of the ARPANET.  The particular packet formats
+   and protocol described here are based on the program "routed", which
+   is included with the Berkeley distribution of Unix.  It has become a
+   de facto standard for exchange of routing information among gateways
+   and hosts.  It is implemented for this purpose by most commercial
+   vendors of IP gateways.  Note, however, that many of these vendors
+   have their own protocols which are used among their own gateways.
+
+   This protocol is most useful as an "interior gateway protocol".  In a
+   nationwide network such as the current Internet, it is very unlikely
+   that a single routing protocol will used for the whole network.
+   Rather, the network will be organized as a collection of "autonomous
+   systems".  An autonomous system will in general be administered by a
+   single entity, or at least will have some reasonable degree of
+   technical and administrative control.  Each autonomous system will
+   have its own routing technology.  This may well be different for
+   different autonomous systems.  The routing protocol used within an
+   autonomous system is referred to as an interior gateway protocol, or
+   "IGP".  A separate protocol is used to interface among the autonomous
+
+
+
+Hedrick                                                         [Page 2]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+
+   systems.  The earliest such protocol, still used in the Internet, is
+   "EGP" (exterior gateway protocol).  Such protocols are now usually
+   referred to as inter-AS routing protocols.  RIP was designed to work
+   with moderate-size networks using reasonably homogeneous technology.
+   Thus it is suitable as an IGP for many campuses and for regional
+   networks using serial lines whose speeds do not vary widely.  It is
+   not intended for use in more complex environments.  For more
+   information on the context into which RIP is expected to fit, see
+   Braden and Postel [3].
+
+   RIP is one of a class of algorithms known as "distance vector
+   algorithms".  The earliest description of this class of algorithms
+   known to the author is in Ford and Fulkerson [6].  Because of this,
+   they are sometimes known as Ford-Fulkerson algorithms.  The term
+   Bellman-Ford is also used.  It comes from the fact that the
+   formulation is based on Bellman's equation, the basis of "dynamic
+   programming".  (For a standard introduction to this area, see [1].)
+   The presentation in this document is closely based on [2].  This text
+   contains an introduction to the mathematics of routing algorithms.
+   It describes and justifies several variants of the algorithm
+   presented here, as well as a number of other related algorithms.  The
+   basic algorithms described in this protocol were used in computer
+   routing as early as 1969 in the ARPANET.  However, the specific
+   ancestry of this protocol is within the Xerox network protocols.  The
+   PUP protocols (see [4]) used the Gateway Information Protocol to
+   exchange routing information.  A somewhat updated version of this
+   protocol was adopted for the Xerox Network Systems (XNS)
+   architecture, with the name Routing Information Protocol.  (See [7].)
+   Berkeley's routed is largely the same as the Routing Information
+   Protocol, with XNS addresses replaced by a more general address
+   format capable of handling IP and other types of address, and with
+   routing updates limited to one every 30 seconds.  Because of this
+   similarity, the term Routing Information Protocol (or just RIP) is
+   used to refer to both the XNS protocol and the protocol used by
+   routed.
+
+   RIP is intended for use within the IP-based Internet.  The Internet
+   is organized into a number of networks connected by gateways.  The
+   networks may be either point-to-point links or more complex networks
+   such as Ethernet or the ARPANET.  Hosts and gateways are presented
+   with IP datagrams addressed to some host.  Routing is the method by
+   which the host or gateway decides where to send the datagram.  It may
+   be able to send the datagram directly to the destination, if that
+   destination is on one of the networks that are directly connected to
+   the host or gateway.  However, the interesting case is when the
+   destination is not directly reachable.  In this case, the host or
+   gateway attempts to send the datagram to a gateway that is nearer the
+   destination.  The goal of a routing protocol is very simple: It is to
+
+
+
+Hedrick                                                         [Page 3]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+
+   supply the information that is needed to do routing.
+

@@ -1,0 +1,75 @@
+9.3.  Efficiency
+
+   In addition to low-cost home gateways, many of the clients will also
+   be similarly constrained low-cost devices with limited RAM resources.
+
+   When implementing a NAT-PMP client on a constrained device, it's
+   beneficial to have well-defined bounds on RAM requirements that are
+   fixed and known in advance.  For example, when requesting the
+   gateway's external IPv4 address, a NAT-PMP client on Ethernet knows
+
+
+
+
+
+Cheshire & Krochmal           Informational                    [Page 27]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+
+   that to receive the reply it will require 14 bytes for the Ethernet
+   header, 20 bytes for the IPv4 header, 8 bytes for the UDP header, and
+   12 bytes for the NAT-PMP payload, making a total of 54 bytes.
+
+   In contrast, UPnP IGD uses an XML reply of unbounded size.  It is not
+   uncommon for a UPnP IGD device to return an XML document 4000 to 8000
+   bytes in size to communicate its 4-byte external IPv4 address, and
+   the protocol specification places no upper bound on how large the XML
+   response may be, so there's nothing to stop the reply being even
+   larger.  This means that developers of UPnP client devices can only
+   guess at how much memory they may need to receive the XML reply.
+   Operational experience suggests that 10,000 bytes is usually enough
+   for most UPnP IGD home gateways today, but that's no guarantee that
+   some future UPnP IGD home gateway might not return a perfectly legal
+   XML reply much larger than that.
+
+   In addition, because the XML reply is too large to fit in a single
+   UDP packet, UPnP IGD has to use a TCP connection, thereby adding the
+   overhead of TCP connection setup and teardown.
+
+   The process of discovering a UPnP IGD home gateway's external IPv4
+   address consists of:
+
+   o SSDP transaction to discover the TCP port to use, and the "URL" of
+     the XML document to fetch from the gateway.  Following the SSDP
+     specification, this is 3 multicast requests, eliciting 9 unicast
+     responses.
+
+   o HTTP "GET" request to get the device description.  Typically, 16
+     packets: 3 for TCP connection setup, 9 packets of data exchange,
+     and a 4-packet FIN-ACK-FIN-ACK sequence to close the connection.
+
+   o HTTP "POST" to request the external IPv4 address.  Typically, 14
+     packets: 3 for TCP connection setup, 7 packets of data exchange,
+     and a 4-packet FIN-ACK-FIN-ACK sequence to close the connection.
+
+   To retrieve the external IPv4 address NAT-PMP takes a 2-packet UDP
+   exchange (44-byte request, 54-byte response); the same thing using
+   UPnP IGD takes 42 packets and thousands of bytes.
+
+   Similarly, UPnP IGD's HTTP "POST" request for a port mapping is
+   typically a 14-packet exchange, compared with NAT-PMP's 2-packet UDP
+   exchange.
+
+
+
+
+
+
+
+
+Cheshire & Krochmal           Informational                    [Page 28]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+

@@ -1,0 +1,84 @@
+3.2.1.  Announcing Address Changes
+
+   Upon boot, acquisition of an external IPv4 address, subsequent change
+   of the external IPv4 address, reboot, or any other event that may
+   indicate possible loss or change of NAT mapping state, the NAT
+   gateway MUST send a gratuitous response to the link-local multicast
+   address 224.0.0.1, port 5350, with the packet format above, to notify
+   clients of the external IPv4 address and Seconds Since Start of
+   Epoch.
+
+   To accommodate packet loss, the NAT gateway SHOULD multicast 10
+   address notifications.  The interval between the first two
+   notifications SHOULD be 250 ms, and the interval between each
+   subsequent notification SHOULD double.  The Seconds Since Start of
+   Epoch field in each transmission MUST be updated appropriately to
+   reflect the passage of time, so as not to trigger unnecessary
+   additional mapping renewals (see Section 3.7, "Recreating Mappings on
+   NAT Gateway Reboot").
+
+
+
+
+
+Cheshire & Krochmal           Informational                     [Page 8]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+
+   Upon receiving a gratuitous address announcement packet, the client
+   MUST check the source IP address, and silently discard the packet if
+   the address is not the address of the client's current configured
+   gateway.  This is to guard against inadvertent misconfigurations
+   where there may be more than one NAT gateway active on the network.
+
+   If the source IP address is correct, then the Seconds Since Start of
+   Epoch field is checked as described in Section 3.6, and if the value
+   is outside the expected plausible range, indicating that a NAT
+   gateway state loss has occurred, then the NAT-PMP client promptly
+   recreates all its active port mapping leases, as described in Section
+   3.7, "Recreating Mappings on NAT Gateway Reboot".
+
+   IMPLEMENTATION NOTE: Earlier implementations of NAT-PMP used UDP port
+   5351 as the destination both for client requests (address and port
+   mapping) and for address announcements.  NAT-PMP servers would listen
+   on UDP 5351 for client requests, and NAT-PMP clients would listen on
+   UDP 5351 for server announcements.  However, implementers encountered
+   difficulties when a single device is acting in both roles, for
+   example, a home computer with Internet Sharing enabled.  This
+   computer is acting in the role of NAT-PMP server to its DHCP clients,
+   yet, at the same time, it has to act in the role of NAT-PMP client in
+   order to determine whether it is, itself, behind another NAT gateway.
+   While in principle it might be possible on some operating systems for
+   two processes to coordinate sharing of a single UDP port, on many
+   platforms this is difficult or even impossible, so, for pragmatic
+   engineering reasons, it is convenient to have clients listen on UDP
+   5350 and servers listen on UDP 5351.
+
+   IMPLEMENTATION NOTE: A given host may have more than one independent
+   NAT-PMP client running at the same time, and address announcements
+   need to be available to all of them.  Clients should therefore set
+   the SO_REUSEPORT option or equivalent in order to allow other
+   processes to also listen on port 5350.  Additionally, implementers
+   have encountered issues when one or more processes on the same device
+   listen to port 5350 on *all* addresses.  Clients should therefore
+   bind specifically to 224.0.0.1:5350, not to 0.0.0.0:5350.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Cheshire & Krochmal           Informational                     [Page 9]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+

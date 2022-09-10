@@ -1,0 +1,117 @@
+7.1.  Selective Instance Enumeration (Subtypes)
+
+   This document does not attempt to define a sophisticated (e.g.,
+   Turing complete, or even regular expression) query language for
+   service discovery, nor do we believe one is necessary.
+
+   However, there are some limited circumstances where narrowing the set
+   of results may be useful.  For example, many network printers offer a
+   web-based user interface, for management and administration, using
+   HTML/HTTP.  A web browser wanting to discover all advertised web
+   pages issues a query for "_http._tcp.<Domain>".  On the other hand,
+   there are cases where users wish to manage printers specifically, not
+   to discover web pages in general, and it is good accommodate this.
+   In this case, we define the "_printer" subtype of "_http._tcp", and
+   to discover only the subset of pages advertised as having that
+   subtype property, the web browser issues a query for
+   "_printer._sub._http._tcp.<Domain>".
+
+   The Safari web browser on Mac OS X 10.5 "Leopard" and later uses
+   subtypes in this way.  If an "_http._tcp" service is discovered both
+   via "_printer._sub._http._tcp" browsing and via "_http._tcp" browsing
+   then it is displayed in the "Printers" section of Safari's UI.  If a
+   service is discovered only via "_http._tcp" browsing then it is
+   displayed in the "Webpages" section of Safari's UI.  This can be seen
+   by using the commands below on Mac OS X to advertise two "fake"
+   services.  The service instance "A web page" is displayed in the
+   "Webpages" section of Safari's Bonjour list, while the instance
+   "A printer's web page" is displayed in the "Printers" section.
+
+      dns-sd -R "A web page"           _http._tcp          local 100
+      dns-sd -R "A printer's web page" _http._tcp,_printer local 101
+
+   Note that the advertised web page's Service Instance Name is
+   unchanged by the use of subtypes -- it is still something of the form
+
+
+
+Cheshire & Krochmal          Standards Track                   [Page 21]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+
+   "The Server._http._tcp.example.com.", and the advertised web page is
+   still discoverable using a standard browsing query for services of
+   type "_http._tcp".  The subdomain in which HTTP server SRV records
+   are registered defines the namespace within which HTTP server names
+   are unique.  Additional subtypes (e.g., "_printer") of the basic
+   service type (e.g., "_http._tcp") serve to allow clients to query for
+   a narrower set of results, not to create more namespace.
+
+   Using DNS zone file syntax, the service instance "A web page" is
+   advertised using one PTR record, while the instance "A printer's web
+   page" is advertised using two: the primary service type and the
+   additional subtype.  Even though the "A printer's web page" service
+   is advertised two different ways, both PTR records refer to the name
+   of the same SRV+TXT record pair:
+
+   ; One PTR record advertises "A web page"
+   _http._tcp.local. PTR A\032web\032page._http._tcp.local.
+
+   ; Two different PTR records advertise "A printer's web page"
+   _http._tcp.local. PTR A\032printer's\032web\032page._http._tcp.local.
+   _printer._sub._http._tcp.local.
+                     PTR A\032printer's\032web\032page._http._tcp.local.
+
+   Subtypes are appropriate when it is desirable for different kinds of
+   client to be able to browse for services at two levels of
+   granularity.  In the example above, we describe two classes of HTTP
+   clients: general web browsing clients that are interested in all web
+   pages, and specific printer management tools that would like to
+   discover only web UI pages advertised by printers.  The set of HTTP
+   servers on the network is the same in both cases; the difference is
+   that some clients want to discover all of them, whereas other clients
+   only want to find the subset of HTTP servers whose purpose is printer
+   administration.
+
+   Subtypes are only appropriate in two-level scenarios such as this
+   one, where some clients want to find the full set of services of a
+   given type, and at the same time other clients only want to find some
+   subset.  Generally speaking, if there is no client that wants to find
+   the entire set, then it's neither necessary nor desirable to use the
+   subtype mechanism.  If all clients are browsing for some particular
+   subtype, and no client exists that browses for the parent type, then
+   a new Service Name representing the logical service should be
+   defined, and software should simply advertise and browse for that
+   particular service type directly.  In particular, just because a
+   particular network service happens to be implemented in terms of some
+   other underlying protocol, like HTTP, Sun RPC, or SOAP, doesn't mean
+   that it's sensible for that service to be defined as a subtype of
+   "_http", "_sunrpc", or "_soap".  That would only be useful if there
+
+
+
+Cheshire & Krochmal          Standards Track                   [Page 22]
+
+RFC 6763               DNS-Based Service Discovery         February 2013
+
+
+   were some class of client for which it is sensible to say, "I want to
+   discover a service on the network, and I don't care what it does, as
+   long as it does it using the SOAP XML RPC mechanism."
+
+   Subtype strings are not required to begin with an underscore, though
+   they often do.  As with the TXT record key/value pairs, the list of
+   possible subtypes, if any (including whether some or all begin with
+   an underscore) are defined and specified separately for each basic
+   service type.
+
+   Subtype strings (e.g., "_printer" in the example above) may be
+   constructed using arbitrary 8-bit data values.  In many cases these
+   data values may be UTF-8 [RFC3629] representations of text, or even
+   (as in the example above) plain ASCII [RFC20], but they do not have
+   to be.  Note, however, that even when using arbitrary 8-bit data for
+   subtype strings, DNS name comparisons are still case-insensitive, so
+   (for example) the byte values 0x41 and 0x61 will be considered
+   equivalent for subtype comparison purposes.
+

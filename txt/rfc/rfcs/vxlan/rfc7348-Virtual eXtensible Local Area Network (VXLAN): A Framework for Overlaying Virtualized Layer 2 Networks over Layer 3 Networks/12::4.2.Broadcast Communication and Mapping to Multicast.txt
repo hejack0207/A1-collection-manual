@@ -1,0 +1,53 @@
+4.2.  Broadcast Communication and Mapping to Multicast
+
+   Consider the VM on the source host attempting to communicate with the
+   destination VM using IP.  Assuming that they are both on the same
+   subnet, the VM sends out an Address Resolution Protocol (ARP)
+   broadcast frame.  In the non-VXLAN environment, this frame would be
+   sent out using MAC broadcast across all switches carrying that VLAN.
+
+   With VXLAN, a header including the VXLAN VNI is inserted at the
+   beginning of the packet along with the IP header and UDP header.
+   However, this broadcast packet is sent out to the IP multicast group
+   on which that VXLAN overlay network is realized.
+
+   To effect this, we need to have a mapping between the VXLAN VNI and
+   the IP multicast group that it will use.  This mapping is done at the
+   management layer and provided to the individual VTEPs through a
+   management channel.  Using this mapping, the VTEP can provide IGMP
+   membership reports to the upstream switch/router to join/leave the
+   VXLAN-related IP multicast groups as needed.  This will enable
+   pruning of the leaf nodes for specific multicast traffic addresses
+   based on whether a member is available on this host using the
+   specific multicast address (see [RFC4541]).  In addition, use of
+
+
+
+
+
+Mahalingam, et al.            Informational                     [Page 8]
+
+RFC 7348                          VXLAN                      August 2014
+
+
+   multicast routing protocols like Protocol Independent Multicast -
+   Sparse Mode (PIM-SM see [RFC4601]) will provide efficient multicast
+   trees within the Layer 3 network.
+
+   The VTEP will use (*,G) joins.  This is needed as the set of VXLAN
+   tunnel sources is unknown and may change often, as the VMs come up /
+   go down across different hosts.  A side note here is that since each
+   VTEP can act as both the source and destination for multicast
+   packets, a protocol like bidirectional PIM (BIDIR-PIM -- see
+   [RFC5015]) would be more efficient.
+
+   The destination VM sends a standard ARP response using IP unicast.
+   This frame will be encapsulated back to the VTEP connecting the
+   originating VM using IP unicast VXLAN encapsulation.  This is
+   possible since the mapping of the ARP response's destination MAC to
+   the VXLAN tunnel end point IP was learned earlier through the ARP
+   request.
+
+   Note that multicast frames and "unknown MAC destination" frames are
+   also sent using the multicast tree, similar to the broadcast frames.
+

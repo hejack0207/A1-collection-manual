@@ -1,0 +1,114 @@
+1.  Introduction
+
+   We begin by describing TCP's use of packet drops as an indication of
+   congestion.  Next we explain that with the addition of active queue
+   management (e.g., RED) to the Internet infrastructure, where routers
+   detect congestion before the queue overflows, routers are no longer
+   limited to packet drops as an indication of congestion.  Routers can
+   instead set the Congestion Experienced (CE) codepoint in the IP
+   header of packets from ECN-capable transports.  We describe when the
+   CE codepoint is to be set in routers, and describe modifications
+   needed to TCP to make it ECN-capable.  Modifications to other
+   transport protocols (e.g., unreliable unicast or multicast, reliable
+   multicast, other reliable unicast transport protocols) could be
+   considered as those protocols are developed and advance through the
+   standards process.  We also describe in this document the issues
+   involving the use of ECN within IP tunnels, and within IPsec tunnels
+   in particular.
+
+   One of the guiding principles for this document is that, to the
+   extent possible, the mechanisms specified here be incrementally
+   deployable.  One challenge to the principle of incremental deployment
+   has been the prior existence of some IP tunnels that were not
+   compatible with the use of ECN.  As ECN becomes deployed, non-
+   compatible IP tunnels will have to be upgraded to conform to this
+   document.
+
+   This document obsoletes RFC 2481, "A Proposal to add Explicit
+   Congestion Notification (ECN) to IP", which defined ECN as an
+   Experimental Protocol for the Internet Community.  This document also
+   updates RFC 2474, "Definition of the Differentiated Services Field
+   (DS Field) in the IPv4 and IPv6 Headers", in defining the ECN field
+   in the IP header, RFC 2401, "Security Architecture for the Internet
+   Protocol" to change the handling of IPv4 TOS Byte and IPv6 Traffic
+   Class Octet in tunnel mode header construction to be compatible with
+   the use of ECN, and RFC 793, "Transmission Control Protocol", in
+   defining two new flags in the TCP header.
+
+   TCP's congestion control and avoidance algorithms are based on the
+   notion that the network is a black-box [Jacobson88, Jacobson90].  The
+   network's state of congestion or otherwise is determined by end-
+   systems probing for the network state, by gradually increasing the
+   load on the network (by increasing the window of packets that are
+   outstanding in the network) until the network becomes congested and a
+   packet is lost.  Treating the network as a "black-box" and treating
+
+
+
+Ramakrishnan, et al.        Standards Track                     [Page 3]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   loss as an indication of congestion in the network is appropriate for
+   pure best-effort data carried by TCP, with little or no sensitivity
+   to delay or loss of individual packets.  In addition, TCP's
+   congestion management algorithms have techniques built-in (such as
+   Fast Retransmit and Fast Recovery) to minimize the impact of losses,
+   from a throughput perspective.  However, these mechanisms are not
+   intended to help applications that are in fact sensitive to the delay
+   or loss of one or more individual packets.  Interactive traffic such
+   as telnet, web-browsing, and transfer of audio and video data can be
+   sensitive to packet losses (especially when using an unreliable data
+   delivery transport such as UDP) or to the increased latency of the
+   packet caused by the need to retransmit the packet after a loss (with
+   the reliable data delivery semantics provided by TCP).
+
+   Since TCP determines the appropriate congestion window to use by
+   gradually increasing the window size until it experiences a dropped
+   packet, this causes the queues at the bottleneck router to build up.
+   With most packet drop policies at the router that are not sensitive
+   to the load placed by each individual flow (e.g., tail-drop on queue
+   overflow), this means that some of the packets of latency-sensitive
+   flows may be dropped. In addition, such drop policies lead to
+   synchronization of loss across multiple flows.
+
+   Active queue management mechanisms detect congestion before the queue
+   overflows, and provide an indication of this congestion to the end
+   nodes.  Thus, active queue management can reduce unnecessary queuing
+   delay for all traffic sharing that queue.  The advantages of active
+   queue management are discussed in RFC 2309 [RFC2309].  Active queue
+   management avoids some of the bad properties of dropping on queue
+   overflow, including the undesirable synchronization of loss across
+   multiple flows.  More importantly, active queue management means that
+   transport protocols with mechanisms for congestion control (e.g.,
+   TCP) do not have to rely on buffer overflow as the only indication of
+   congestion.
+
+   Active queue management mechanisms may use one of several methods for
+   indicating congestion to end-nodes. One is to use packet drops, as is
+   currently done. However, active queue management allows the router to
+   separate policies of queuing or dropping packets from the policies
+   for indicating congestion. Thus, active queue management allows
+   routers to use the Congestion Experienced (CE) codepoint in a packet
+   header as an indication of congestion, instead of relying solely on
+   packet drops. This has the potential of reducing the impact of loss
+   on latency-sensitive flows.
+
+
+
+
+
+
+
+Ramakrishnan, et al.        Standards Track                     [Page 4]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   There exist some middleboxes (firewalls, load balancers, or intrusion
+   detection systems) in the Internet that either drop a TCP SYN packet
+   configured to negotiate ECN, or respond with a RST.  This document
+   specifies procedures that TCP implementations may use to provide
+   robust connectivity even in the presence of such equipment.
+

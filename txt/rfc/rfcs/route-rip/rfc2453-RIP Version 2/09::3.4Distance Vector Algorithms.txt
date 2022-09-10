@@ -1,0 +1,324 @@
+3.4 Distance Vector Algorithms
+
+   Routing is the task of finding a path from a sender to a desired
+   destination.  In the IP "Internet model" this reduces primarily to a
+   matter of finding a series of routers between the source and
+   destination networks.  As long as a message or datagram remains on a
+   single network or subnet, any forwarding problems are the
+   responsibility of technology that is specific to the network.  For
+   example, Ethernet and the ARPANET each define a way in which any
+   sender can talk to any specified destination within that one network.
+   IP routing comes in primarily when messages must go from a sender on
+   one network to a destination on a different one.  In that case, the
+   message must pass through one or more routers connecting the
+   networks.  If the networks are not adjacent, the message may pass
+   through several intervening networks, and the routers connecting
+   them.  Once the message gets to a router that is on the same network
+   as the destination, that network's own technology is used to get to
+   the destination.
+
+   Throughout this section, the term "network" is used generically to
+   cover a single broadcast network (e.g., an Ethernet), a point to
+   point line, or the ARPANET.  The critical point is that a network is
+   treated as a single entity by IP.  Either no forwarding decision is
+   necessary (as with a point to point line), or that forwarding is done
+   in a manner that is transparent to IP, allowing IP to treat the
+   entire network as a single fully-connected system (as with an
+   Ethernet or the ARPANET).  Note that the term "network" is used in a
+   somewhat different way in discussions of IP addressing.  We are using
+   the term "network" here to refer to subnets in cases where subnet
+
+
+
+Malkin                      Standards Track                     [Page 6]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   addressing is in use.
+
+   A number of different approaches for finding routes between networks
+   are possible.  One useful way of categorizing these approaches is on
+   the basis of the type of information the routers need to exchange in
+   order to be able to find routes.  Distance vector algorithms are
+   based on the exchange of only a small amount of information.  Each
+   entity (router or host) that participates in the routing protocol is
+   assumed to keep information about all of the destinations within the
+   system.  Generally, information about all entities connected to one
+   network is summarized by a single entry, which describes the route to
+   all destinations on that network.  This summarization is possible
+   because as far as IP is concerned, routing within a network is
+   invisible.  Each entry in this routing database includes the next
+   router to which datagrams destined for the entity should be sent.  In
+   addition, it includes a "metric" measuring the total distance to the
+   entity.  Distance is a somewhat generalized concept, which may cover
+   the time delay in getting messages to the entity, the dollar cost of
+   sending messages to it, etc.  Distance vector algorithms get their
+   name from the fact that it is possible to compute optimal routes when
+   the only information exchanged is the list of these distances.
+   Furthermore, information is only exchanged among entities that are
+   adjacent, that is, entities that share a common network.
+
+   Although routing is most commonly based on information about
+   networks, it is sometimes necessary to keep track of the routes to
+   individual hosts.  The RIP protocol makes no formal distinction
+   between networks and hosts.  It simply describes exchange of
+   information about destinations, which may be either networks or
+   hosts.  (Note however, that it is possible for an implementor to
+   choose not to support host routes.  See section 3.2.)  In fact, the
+   mathematical developments are most conveniently thought of in terms
+   of routes from one host or router to another.  When discussing the
+   algorithm in abstract terms, it is best to think of a routing entry
+   for a network as an abbreviation for routing entries for all of the
+   entities connected to that network.  This sort of abbreviation makes
+   sense only because we think of networks as having no internal
+   structure that is visible at the IP level.  Thus, we will generally
+   assign the same distance to every entity in a given network.
+
+   We said above that each entity keeps a routing database with one
+   entry for every possible destination in the system.  An actual
+   implementation is likely to need to keep the following information
+   about each destination:
+
+
+
+
+
+
+
+Malkin                      Standards Track                     [Page 7]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   - address: in IP implementations of these algorithms, this will be
+     the IP address of the host or network.
+
+   - router: the first router along the route to the destination.
+
+   - interface: the physical network which must be used to reach the
+     first router.
+
+   - metric: a number, indicating the distance to the destination.
+
+   - timer: the amount of time since the entry was last updated.
+
+   In addition, various flags and other internal information will
+   probably be included.  This database is initialized with a
+   description of the entities that are directly connected to the
+   system.  It is updated according to information received in messages
+   from neighboring routers.
+
+   The most important information exchanged by the hosts and routers is
+   carried in update messages.  Each entity that participates in the
+   routing scheme sends update messages that describe the routing
+   database as it currently exists in that entity.  It is possible to
+   maintain optimal routes for the entire system by using only
+   information obtained from neighboring entities.  The algorithm used
+   for that will be described in the next section.
+
+   As we mentioned above, the purpose of routing is to find a way to get
+   datagrams to their ultimate destinations.  Distance vector algorithms
+   are based on a table in each router listing the best route to every
+   destination in the system.  Of course, in order to define which route
+   is best, we have to have some way of measuring goodness.  This is
+   referred to as the "metric".
+
+   In simple networks, it is common to use a metric that simply counts
+   how many routers a message must go through.  In more complex
+   networks, a metric is chosen to represent the total amount of delay
+   that the message suffers, the cost of sending it, or some other
+   quantity which may be minimized.  The main requirement is that it
+   must be possible to represent the metric as a sum of "costs" for
+   individual hops.
+
+   Formally, if it is possible to get from entity i to entity j directly
+   (i.e., without passing through another router between), then a cost,
+   d(i,j), is associated with the hop between i and j.  In the normal
+   case where all entities on a given network are considered to be the
+   same, d(i,j) is the same for all destinations on a given network, and
+   represents the cost of using that network.  To get the metric of a
+   complete route, one just adds up the costs of the individual hops
+
+
+
+Malkin                      Standards Track                     [Page 8]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   that make up the route.  For the purposes of this memo, we assume
+   that the costs are positive integers.
+
+   Let D(i,j) represent the metric of the best route from entity i to
+   entity j.  It should be defined for every pair of entities.  d(i,j)
+   represents the costs of the individual steps.  Formally, let d(i,j)
+   represent the cost of going directly from entity i to entity j.  It
+   is infinite if i and j are not immediate neighbors. (Note that d(i,i)
+   is infinite.  That is, we don't consider there to be a direct
+   connection from a node to itself.)  Since costs are additive, it is
+   easy to show that the best metric must be described by
+
+      D(i,i) = 0,                      all i
+      D(i,j) = min [d(i,k) + D(k,j)],  otherwise
+                      k
+   and that the best routes start by going from i to those neighbors k
+   for which d(i,k) + D(k,j) has the minimum value.  (These things can
+   be shown by induction on the number of steps in the routes.)  Note
+   that we can limit the second equation to k's that are immediate
+   neighbors of i.  For the others, d(i,k) is infinite, so the term
+   involving them can never be the minimum.
+
+   It turns out that one can compute the metric by a simple algorithm
+   based on this.  Entity i gets its neighbors k to send it their
+   estimates of their distances to the destination j.  When i gets the
+   estimates from k, it adds d(i,k) to each of the numbers.  This is
+   simply the cost of traversing the network between i and k.  Now and
+   then i compares the values from all of its neighbors and picks the
+   smallest.
+
+   A proof is given in [2] that this algorithm will converge to the
+   correct estimates of D(i,j) in finite time in the absence of topology
+   changes.  The authors make very few assumptions about the order in
+   which the entities send each other their information, or when the min
+   is recomputed.  Basically, entities just can't stop sending updates
+   or recomputing metrics, and the networks can't delay messages
+   forever.  (Crash of a routing entity is a topology change.)  Also,
+   their proof does not make any assumptions about the initial estimates
+   of D(i,j), except that they must be non-negative.  The fact that
+   these fairly weak assumptions are good enough is important.  Because
+   we don't have to make assumptions about when updates are sent, it is
+   safe to run the algorithm asynchronously.  That is, each entity can
+   send updates according to its own clock.  Updates can be dropped by
+   the network, as long as they don't all get dropped.  Because we don't
+   have to make assumptions about the starting condition, the algorithm
+   can handle changes.  When the system changes, the routing algorithm
+   starts moving to a new equilibrium, using the old one as its starting
+   point.  It is important that the algorithm will converge in finite
+
+
+
+Malkin                      Standards Track                     [Page 9]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   time no matter what the starting point.  Otherwise certain kinds of
+   changes might lead to non-convergent behavior.
+
+   The statement of the algorithm given above (and the proof) assumes
+   that each entity keeps copies of the estimates that come from each of
+   its neighbors, and now and then does a min over all of the neighbors.
+   In fact real implementations don't necessarily do that.  They simply
+   remember the best metric seen so far, and the identity of the
+   neighbor that sent it.  They replace this information whenever they
+   see a better (smaller) metric.  This allows them to compute the
+   minimum incrementally, without having to store data from all of the
+   neighbors.
+
+   There is one other difference between the algorithm as described in
+   texts and those used in real protocols such as RIP: the description
+   above would have each entity include an entry for itself, showing a
+   distance of zero.  In fact this is not generally done.  Recall that
+   all entities on a network are normally summarized by a single entry
+   for the network.  Consider the situation of a host or router G that
+   is connected to network A.  C represents the cost of using network A
+   (usually a metric of one).  (Recall that we are assuming that the
+   internal structure of a network is not visible to IP, and thus the
+   cost of going between any two entities on it is the same.)  In
+   principle, G should get a message from every other entity H on
+   network A, showing a cost of 0 to get from that entity to itself.  G
+   would then compute C + 0 as the distance to H.  Rather than having G
+   look at all of these identical messages, it simply starts out by
+   making an entry for network A in its table, and assigning it a metric
+   of C.  This entry for network A should be thought of as summarizing
+   the entries for all other entities on network A.  The only entity on
+   A that can't be summarized by that common entry is G itself, since
+   the cost of going from G to G is 0, not C.  But since we never need
+   those 0 entries, we can safely get along with just the single entry
+   for network A.  Note one other implication of this strategy: because
+   we don't need to use the 0 entries for anything, hosts that do not
+   function as routers don't need to send any update messages.  Clearly
+   hosts that don't function as routers (i.e., hosts that are connected
+   to only one network) can have no useful information to contribute
+   other than their own entry D(i,i) = 0.  As they have only the one
+   interface, it is easy to see that a route to any other network
+   through them will simply go in that interface and then come right
+   back out it.  Thus the cost of such a route will be greater than the
+   best cost by at least C.  Since we don't need the 0 entries, non-
+   routers need not participate in the routing protocol at all.
+
+   Let us summarize what a host or router G does.  For each destination
+   in the system, G will keep a current estimate of the metric for that
+   destination (i.e., the total cost of getting to it) and the identity
+
+
+
+Malkin                      Standards Track                    [Page 10]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   of the neighboring router on whose data that metric is based.  If the
+   destination is on a network that is directly connected to G, then G
+   simply uses an entry that shows the cost of using the network, and
+   the fact that no router is needed to get to the destination.  It is
+   easy to show that once the computation has converged to the correct
+   metrics, the neighbor that is recorded by this technique is in fact
+   the first router on the path to the destination.  (If there are
+   several equally good paths, it is the first router on one of them.)
+   This combination of destination, metric, and router is typically
+   referred to as a route to the destination with that metric, using
+   that router.
+
+   4.ne The method so far only has a way to lower the metric, as the
+   existing metric is kept until a smaller one shows up.  It is possible
+   that the initial estimate might be too low.  Thus, there must be a
+   way to increase the metric.  It turns out to be sufficient to use the
+   following rule: suppose the current route to a destination has metric
+   D and uses router G.  If a new set of information arrived from some
+   source other than G, only update the route if the new metric is
+   better than D.  But if a new set of information arrives from G
+   itself, always update D to the new value.  It is easy to show that
+   with this rule, the incremental update process produces the same
+   routes as a calculation that remembers the latest information from
+   all the neighbors and does an explicit minimum.  (Note that the
+   discussion so far assumes that the network configuration is static.
+   It does not allow for the possibility that a system might fail.)
+
+   To summarize, here is the basic distance vector algorithm as it has
+   been developed so far.  (Note that this is not a statement of the RIP
+   protocol.  There are several refinements still to be added.)  The
+   following procedure is carried out by every entity that participates
+   in the routing protocol.  This must include all of the routers in the
+   system.  Hosts that are not routers may participate as well.
+
+   - Keep a table with an entry for every possible destination in the
+     system.  The entry contains the distance D to the destination, and
+     the first router G on the route to that network.  Conceptually,
+     there should be an entry for the entity itself, with metric 0, but
+     this is not actually included.
+
+   - Periodically, send a routing update to every neighbor.  The update
+     is a set of messages that contain all of the information from the
+     routing table.  It contains an entry for each destination, with the
+     distance shown to that destination.
+
+   - When a routing update arrives from a neighbor G', add the cost
+     associated with the network that is shared with G'.  (This should
+     be the network over which the update arrived.)  Call the resulting
+
+
+
+Malkin                      Standards Track                    [Page 11]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+     distance D'.  Compare the resulting distances with the current
+     routing table entries.  If the new distance D' for N is smaller
+     than the existing value D, adopt the new route.  That is, change
+     the table entry for N to have metric D' and router G'.  If G' is
+     the router from which the existing route came, i.e., G' = G, then
+     use the new metric even if it is larger than the old one.
+

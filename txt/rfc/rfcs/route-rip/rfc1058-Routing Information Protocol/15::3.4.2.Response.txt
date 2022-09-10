@@ -1,0 +1,148 @@
+3.4.2. Response
+
+   Responses can be received for several different reasons:
+
+      response to a specific query
+      regular updates
+      triggered updates triggered by a metric change
+
+   Processing is the same no matter how responses were generated.
+
+   Because processing of a response may update the host's routing table,
+   the response must be checked carefully for validity.  The response
+   must be ignored if it is not from port 520.  The IP source address
+   should be checked to see whether the datagram is from a valid
+   neighbor.  The source of the datagram must be on a directly-connected
+   network.  It is also worth checking to see whether the response is
+   from one of the host's own addresses.  Interfaces on broadcast
+   networks may receive copies of their own broadcasts immediately.  If
+   a host processes its own output as new input, confusion is likely,
+   and such datagrams must be ignored (except as discussed in the next
+   paragraph).
+
+   Before actually processing a response, it may be useful to use its
+   presence as input to a process for keeping track of interface status.
+   As mentioned above, we time out a route when we haven't heard from
+   its gateway for a certain amount of time.  This works fine for routes
+   that come from another gateway.  It is also desirable to know when
+   one of our own directly-connected networks has failed.  This document
+   does not specify any particular method for doing this, as such
+   methods depend upon the characteristics of the network and the
+   hardware interface to it.  However, such methods often involve
+   listening for datagrams arriving on the interface.  Arriving
+   datagrams can be used as an indication that the interface is working.
+   However, some caution must be used, as it is possible for interfaces
+   to fail in such a way that input datagrams are received, but output
+   datagrams are never sent successfully.
+
+   Now that the datagram as a whole has been validated, process the
+   entries in it one by one.  Again, start by doing validation.  If the
+   metric is greater than infinity, ignore the entry.  (This should be
+   impossible, if the other host is working correctly.  Incorrect
+   metrics and other format errors should probably cause alerts or be
+   logged.)  Then look at the destination address.  Check the address
+   family identifier.  If it is not a value which is expected (e.g., 2
+
+
+
+Hedrick                                                        [Page 26]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+
+   for Internet addresses), ignore the entry.  Now check the address
+   itself for various kinds of inappropriate addresses.  Ignore the
+   entry if the address is class D or E, if it is on net 0 (except for
+   0.0.0.0, if we accept default routes) or if it is on net 127 (the
+   loopback network).  Also, test for a broadcast address, i.e.,
+   anything whose host part is all ones on a network that supports
+   broadcast, and ignore any such entry.  If the implementor has chosen
+   not to support host routes (see section 3.2), check to see whether
+   the host portion of the address is non-zero; if so, ignore the entry.
+
+   Recall that the address field contains a number of unused octets.  If
+   the version number of the datagram is 1, they must also be checked.
+   If any of them is nonzero, the entry is to be ignored.  (Many of
+   these cases indicate that the host from which the message came is not
+   working correctly.  Thus some form of error logging or alert should
+   be triggered.)
+
+   Update the metric by adding the cost of the network on which the
+   message arrived.  If the result is greater than 16, use 16.  That is,
+
+      metric = MIN (metric + cost, 16)
+
+   Now look up the address to see whether this is already a route for
+   it.  In general, if not, we want to add one.  However, there are
+   various exceptions.  If the metric is infinite, don't add an entry.
+   (We would update an existing one, but we don't add new entries with
+   infinite metric.)  We want to avoid adding routes to hosts if the
+   host is part of a net or subnet for which we have at least as good a
+   route.  If neither of these exceptions applies, add a new entry to
+   the routing database.  This includes the following actions:
+
+      - Set the destination and metric to those from the datagram.
+
+      - Set the gateway to be the host from which the datagram
+        came.
+
+      - Initialize the timeout for the route. If the garbage-
+        collection timer is running for this route, stop it. (See
+        section 3.3 for a discussion of the timers.)
+
+      - Set the route change flag, and signal the output process to
+        trigger an update (see 3.5).
+
+   If there is an existing route, first compare gateways.  If this
+   datagram is from the same gateway as the existing route, reinitialize
+   the timeout.  Next compare metrics.  If the datagram is from the same
+   gateway as the existing route and the new metric is different than
+   the old one, or if the new metric is lower than the old one, do the
+
+
+
+Hedrick                                                        [Page 27]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+
+   following actions:
+
+      - adopt the route from the datagram.  That is, put the new
+        metric in, and set the gateway to be the host from which
+        the datagram came.
+
+      - Initialize the timeout for the route.
+
+      - Set the route change flag, and signal the output process to
+        trigger an update (see 3.5).
+
+      - If the new metric is 16 (infinity), the deletion process is
+        started.
+
+   If the new metric is 16 (infinity), this starts the process for
+   deleting the route.  The route is no longer used for routing packets,
+   and the deletion timer is started (see section 3.3).  Note that a
+   deletion is started only when the metric is first set to 16.  If the
+   metric was already 16, then a new deletion is not started.  (Starting
+   a deletion sets a timer.  The concern is that we do not want to reset
+   the timer every 30 seconds, as new messages arrive with an infinite
+   metric.)
+
+   If the new metric is the same as the old one, it is simplest to do
+   nothing further (beyond reinitializing the timeout, as specified
+   above).  However, the 4BSD routed uses an additional heuristic here.
+   Normally, it is senseless to change to a route with the same metric
+   as the existing route but a different gateway.  If the existing route
+   is showing signs of timing out, though, it may be better to switch to
+   an equally-good alternative route immediately, rather than waiting
+   for the timeout to happen.  (See section 3.3 for a discussion of
+   timeouts.)  Therefore, if the new metric is the same as the old one,
+   routed looks at the timeout for the existing route.  If it is at
+   least halfway to the expiration point, routed switches to the new
+   route.  That is, the gateway is changed to the source of the current
+   message.  This heuristic is optional.
+
+   Any entry that fails these tests is ignored, as it is no better than
+   the current route.
+

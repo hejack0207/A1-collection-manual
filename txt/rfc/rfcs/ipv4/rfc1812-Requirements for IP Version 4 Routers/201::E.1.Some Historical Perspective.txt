@@ -1,0 +1,112 @@
+E.1. Some Historical Perspective
+
+   It is useful to briefly review the history of the topic, beginning
+   with what is sometimes called the "classic model" of how a router
+   makes routing decisions.  This model predates IP.  In this model, a
+   router speaks some single routing protocol such as RIP.  The protocol
+   completely determines the contents of the router's Forwarding
+   Information Base (FIB).  The route lookup algorithm is trivial: the
+   router looks in the FIB for a route whose destination attribute
+   exactly matches the network prefix portion of the destination address
+   in the packet.  If one is found, it is used; if none is found, the
+   destination is unreachable.  Because the routing protocol keeps at
+   most one route to each destination, the problem of what to do when
+   there are multiple routes that match the same destination cannot
+   arise.
+
+
+
+
+Baker                       Standards Track                   [Page 155]
+
+RFC 1812         Requirements for IP Version 4 Routers         June 1995
+
+
+   Over the years, this classic model has been augmented in small ways.
+   With the deployment of default routes, subnets, and host routes, it
+   became possible to have more than one routing table entry which in
+   some sense matched the destination.  This was easily resolved by a
+   consensus that there was a hierarchy of routes: host routes should be
+   preferred over subnet routes, subnet routes over net routes, and net
+   routes over default routes.
+
+   With the deployment of technologies supporting variable length subnet
+   masks (variable length network prefixes), the general approach
+   remained the same although its description became a little more
+   complicated; network prefixes were introduced as a conscious
+   simplification and regularization of the architecture.  We now say
+   that each route to a network prefix route has a prefix length
+   associated with it.  This prefix length indicates the number of bits
+   in the prefix.  This may also be represented using the classical
+   subnet mask.  A route cannot be used to route a packet unless each
+   significant bit in the route's network prefix matches the
+   corresponding bit in the packet's destination address.  Routes with
+   more bits set in their masks are preferred over routes that have
+   fewer bits set in their masks.  This is simply a generalization of
+   the hierarchy of routes described above, and will be referred to for
+   the rest of this memo as choosing a route by preferring longest
+   match.
+
+   Another way the classic model has been augmented is through a small
+   amount of relaxation of the notion that a routing protocol has
+   complete control over the contents of the routing table.  First,
+   static routes were introduced.  For the first time, it was possible
+   to simultaneously have two routes (one dynamic and one static) to the
+   same destination.  When this happened, a router had to have a policy
+   (in some cases configurable, and in other cases chosen by the author
+   of the router's software) which determined whether the static route
+   or the dynamic route was preferred.  However, this policy was only
+   used as a tie-breaker when longest match didn't uniquely determine
+   which route to use.  Thus, for example, a static default route would
+   never be preferred over a dynamic net route even if the policy
+   preferred static routes over dynamic routes.
+
+   The classic model had to be further augmented when inter-domain
+   routing protocols were invented.  Traditional routing protocols came
+   to be called "interior gateway protocols" (IGPs), and at each
+   Internet site there was a strange new beast called an "exterior
+   gateway", a router that spoke EGP to several "BBN Core Gateways" (the
+   routers that made up the Internet backbone at the time) at the same
+   time as it spoke its IGP to the other routers at its site.  Both
+   protocols wanted to determine the contents of the router's routing
+   table.  Theoretically, this could result in a router having three
+
+
+
+Baker                       Standards Track                   [Page 156]
+
+RFC 1812         Requirements for IP Version 4 Routers         June 1995
+
+
+   routes (EGP, IGP, and static) to the same destination.  Because of
+   the Internet topology at the time, it was resolved with little debate
+   that routers would be best served by a policy of preferring IGP
+   routes over EGP routes.  However, the sanctity of longest match
+   remained unquestioned: a default route learned from the IGP would
+   never be preferred over a net route from learned EGP.
+
+   Although the Internet topology, and consequently routing in the
+   Internet, have evolved considerably since then, this slightly
+   augmented version of the classic model has survived intact to this
+   day in the Internet (except that BGP has replaced EGP).  Conceptually
+   (and often in implementation) each router has a routing table and one
+   or more routing protocol processes.  Each of these processes can add
+   any entry that it pleases, and can delete or modify any entry that it
+   has created.  When routing a packet, the router picks the best route
+   using longest match, augmented with a policy mechanism to break ties.
+   Although this augmented classic model has served us well, it has a
+   number of shortcomings:
+
+   o It ignores (although it could be augmented to consider) path
+      characteristics such as quality of service and MTU.
+
+   o It doesn't support routing protocols (such as OSPF and Integrated
+      IS-IS) that require route lookup algorithms different than pure
+      longest match.
+
+   o There has not been a firm consensus on what the tie-breaking
+      mechanism ought to be.  Tie-breaking mechanisms have often been
+      found to be difficult if not impossible to configure in such a way
+      that the router will always pick what the network manger considers
+      to be the "correct" route.
+

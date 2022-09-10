@@ -1,0 +1,72 @@
+3.4.  Destroying a Mapping
+
+   A mapping may be destroyed in a variety of ways.  If a client fails
+   to renew a mapping, then at the time its lifetime expires, the
+   mapping MUST be automatically deleted.  In the common case where the
+   gateway device is a combined DHCP server and NAT gateway, when a
+   client's DHCP address lease expires, the gateway device MAY
+   automatically delete any mappings belonging to that client.
+   Otherwise, a new client being assigned the same IP address could
+   receive unexpected inbound UDP packets or inbound TCP connection
+   requests that it did not ask for and does not want.
+
+   A client MAY also send an explicit packet to request deletion of a
+   mapping that is no longer needed.  A client requests explicit
+   deletion of a mapping by sending a message to the NAT gateway
+   requesting the mapping, with the Requested Lifetime in Seconds set to
+   zero.  The Suggested External Port MUST be set to zero by the client
+   on sending, and MUST be ignored by the gateway on reception.
+
+   When a mapping is destroyed successfully as a result of the client
+   explicitly requesting the deletion, the NAT gateway MUST send a
+   response packet that is formatted as defined in Section 3.3,
+   "Requesting a Mapping".  The response MUST contain a result code of
+   0, the internal port as indicated in the deletion request, an
+   external port of 0, and a lifetime of 0.  The NAT gateway MUST
+   respond to a request to destroy a mapping that does not exist as if
+   the request were successful.  This is because of the case where the
+   acknowledgment is lost, and the client retransmits its request to
+   delete the mapping.  In this case, the second request to delete the
+   mapping MUST return the same response packet as the first request.
+
+   If the deletion request was unsuccessful, the response MUST contain a
+   non-zero result code and the requested mapping; the lifetime is
+   undefined (MUST be set to zero on transmission, and MUST be ignored
+   on reception).  If the client attempts to delete a port mapping that
+   was manually assigned by some kind of configuration tool, the NAT
+   gateway MUST respond with a "Not Authorized" error, result code 2.
+
+
+
+
+
+
+Cheshire & Krochmal           Informational                    [Page 13]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+
+   When a mapping is destroyed as a result of its lifetime expiring or
+   for any other reason, if the NAT gateway's internal state indicates
+   that there are still active TCP connections traversing that now-
+   defunct mapping, then the NAT gateway SHOULD send appropriately
+   constructed TCP RST (reset) packets both to the local client and to
+   the remote peer on the Internet to terminate that TCP connection.
+
+   A client can request the explicit deletion of all its UDP or TCP
+   mappings by sending the same deletion request to the NAT gateway with
+   the external port, internal port, and lifetime set to zero.  A client
+   MAY choose to do this when it first acquires a new IP address in
+   order to protect itself from port mappings that were performed by a
+   previous owner of the IP address.  After receiving such a deletion
+   request, the gateway MUST delete all its UDP or TCP port mappings
+   (depending on the opcode).  The gateway responds to such a deletion
+   request with a response as described above, with the internal port
+   set to zero.  If the gateway is unable to delete a port mapping, for
+   example, because the mapping was manually configured by the
+   administrator, the gateway MUST still delete as many port mappings as
+   possible, but respond with a non-zero result code.  The exact result
+   code to return depends on the cause of the failure.  If the gateway
+   is able to successfully delete all port mappings as requested, it
+   MUST respond with a result code of zero.
+

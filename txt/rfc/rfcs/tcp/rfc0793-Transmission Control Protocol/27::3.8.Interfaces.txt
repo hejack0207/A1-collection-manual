@@ -1,0 +1,463 @@
+3.8.  Interfaces
+
+  There are of course two interfaces of concern:  the user/TCP interface
+  and the TCP/lower-level interface.  We have a fairly elaborate model
+  of the user/TCP interface, but the interface to the lower level
+  protocol module is left unspecified here, since it will be specified
+  in detail by the specification of the lowel level protocol.  For the
+  case that the lower level is IP we note some of the parameter values
+  that TCPs might use.
+
+  User/TCP Interface
+
+    The following functional description of user commands to the TCP is,
+    at best, fictional, since every operating system will have different
+    facilities.  Consequently, we must warn readers that different TCP
+    implementations may have different user interfaces.  However, all
+    TCPs must provide a certain minimum set of services to guarantee
+    that all TCP implementations can support the same protocol
+    hierarchy.  This section specifies the functional interfaces
+    required of all TCP implementations.
+
+    TCP User Commands
+
+      The following sections functionally characterize a USER/TCP
+      interface.  The notation used is similar to most procedure or
+      function calls in high level languages, but this usage is not
+      meant to rule out trap type service calls (e.g., SVCs, UUOs,
+      EMTs).
+
+      The user commands described below specify the basic functions the
+      TCP must perform to support interprocess communication.
+      Individual implementations must define their own exact format, and
+      may provide combinations or subsets of the basic functions in
+      single calls.  In particular, some implementations may wish to
+      automatically OPEN a connection on the first SEND or RECEIVE
+      issued by the user for a given connection.
+
+
+
+
+
+[Page 44]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                Functional Specification
+
+
+
+      In providing interprocess communication facilities, the TCP must
+      not only accept commands, but must also return information to the
+      processes it serves.  The latter consists of:
+
+        (a) general information about a connection (e.g., interrupts,
+        remote close, binding of unspecified foreign socket).
+
+        (b) replies to specific user commands indicating success or
+        various types of failure.
+
+      Open
+
+        Format:  OPEN (local port, foreign socket, active/passive
+        [, timeout] [, precedence] [, security/compartment] [, options])
+        -> local connection name
+
+        We assume that the local TCP is aware of the identity of the
+        processes it serves and will check the authority of the process
+        to use the connection specified.  Depending upon the
+        implementation of the TCP, the local network and TCP identifiers
+        for the source address will either be supplied by the TCP or the
+        lower level protocol (e.g., IP).  These considerations are the
+        result of concern about security, to the extent that no TCP be
+        able to masquerade as another one, and so on.  Similarly, no
+        process can masquerade as another without the collusion of the
+        TCP.
+
+        If the active/passive flag is set to passive, then this is a
+        call to LISTEN for an incoming connection.  A passive open may
+        have either a fully specified foreign socket to wait for a
+        particular connection or an unspecified foreign socket to wait
+        for any call.  A fully specified passive call can be made active
+        by the subsequent execution of a SEND.
+
+        A transmission control block (TCB) is created and partially
+        filled in with data from the OPEN command parameters.
+
+        On an active OPEN command, the TCP will begin the procedure to
+        synchronize (i.e., establish) the connection at once.
+
+        The timeout, if present, permits the caller to set up a timeout
+        for all data submitted to TCP.  If data is not successfully
+        delivered to the destination within the timeout period, the TCP
+        will abort the connection.  The present global default is five
+        minutes.
+
+        The TCP or some component of the operating system will verify
+        the users authority to open a connection with the specified
+
+
+                                                               [Page 45]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Functional Specification
+
+
+
+        precedence or security/compartment.  The absence of precedence
+        or security/compartment specification in the OPEN call indicates
+        the default values must be used.
+
+        TCP will accept incoming requests as matching only if the
+        security/compartment information is exactly the same and only if
+        the precedence is equal to or higher than the precedence
+        requested in the OPEN call.
+
+        The precedence for the connection is the higher of the values
+        requested in the OPEN call and received from the incoming
+        request, and fixed at that value for the life of the
+        connection.Implementers may want to give the user control of
+        this precedence negotiation.  For example, the user might be
+        allowed to specify that the precedence must be exactly matched,
+        or that any attempt to raise the precedence be confirmed by the
+        user.
+
+        A local connection name will be returned to the user by the TCP.
+        The local connection name can then be used as a short hand term
+        for the connection defined by the <local socket, foreign socket>
+        pair.
+
+      Send
+
+        Format:  SEND (local connection name, buffer address, byte
+        count, PUSH flag, URGENT flag [,timeout])
+
+        This call causes the data contained in the indicated user buffer
+        to be sent on the indicated connection.  If the connection has
+        not been opened, the SEND is considered an error.  Some
+        implementations may allow users to SEND first; in which case, an
+        automatic OPEN would be done.  If the calling process is not
+        authorized to use this connection, an error is returned.
+
+        If the PUSH flag is set, the data must be transmitted promptly
+        to the receiver, and the PUSH bit will be set in the last TCP
+        segment created from the buffer.  If the PUSH flag is not set,
+        the data may be combined with data from subsequent SENDs for
+        transmission efficiency.
+
+        If the URGENT flag is set, segments sent to the destination TCP
+        will have the urgent pointer set.  The receiving TCP will signal
+        the urgent condition to the receiving process if the urgent
+        pointer indicates that data preceding the urgent pointer has not
+        been consumed by the receiving process.  The purpose of urgent
+        is to stimulate the receiver to process the urgent data and to
+        indicate to the receiver when all the currently known urgent
+
+
+[Page 46]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                Functional Specification
+
+
+
+        data has been received.  The number of times the sending user's
+        TCP signals urgent will not necessarily be equal to the number
+        of times the receiving user will be notified of the presence of
+        urgent data.
+
+        If no foreign socket was specified in the OPEN, but the
+        connection is established (e.g., because a LISTENing connection
+        has become specific due to a foreign segment arriving for the
+        local socket), then the designated buffer is sent to the implied
+        foreign socket.  Users who make use of OPEN with an unspecified
+        foreign socket can make use of SEND without ever explicitly
+        knowing the foreign socket address.
+
+        However, if a SEND is attempted before the foreign socket
+        becomes specified, an error will be returned.  Users can use the
+        STATUS call to determine the status of the connection.  In some
+        implementations the TCP may notify the user when an unspecified
+        socket is bound.
+
+        If a timeout is specified, the current user timeout for this
+        connection is changed to the new one.
+
+        In the simplest implementation, SEND would not return control to
+        the sending process until either the transmission was complete
+        or the timeout had been exceeded.  However, this simple method
+        is both subject to deadlocks (for example, both sides of the
+        connection might try to do SENDs before doing any RECEIVEs) and
+        offers poor performance, so it is not recommended.  A more
+        sophisticated implementation would return immediately to allow
+        the process to run concurrently with network I/O, and,
+        furthermore, to allow multiple SENDs to be in progress.
+        Multiple SENDs are served in first come, first served order, so
+        the TCP will queue those it cannot service immediately.
+
+        We have implicitly assumed an asynchronous user interface in
+        which a SEND later elicits some kind of SIGNAL or
+        pseudo-interrupt from the serving TCP.  An alternative is to
+        return a response immediately.  For instance, SENDs might return
+        immediate local acknowledgment, even if the segment sent had not
+        been acknowledged by the distant TCP.  We could optimistically
+        assume eventual success.  If we are wrong, the connection will
+        close anyway due to the timeout.  In implementations of this
+        kind (synchronous), there will still be some asynchronous
+        signals, but these will deal with the connection itself, and not
+        with specific segments or buffers.
+
+        In order for the process to distinguish among error or success
+        indications for different SENDs, it might be appropriate for the
+
+
+                                                               [Page 47]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Functional Specification
+
+
+
+        buffer address to be returned along with the coded response to
+        the SEND request.  TCP-to-user signals are discussed below,
+        indicating the information which should be returned to the
+        calling process.
+
+      Receive
+
+        Format:  RECEIVE (local connection name, buffer address, byte
+        count) -> byte count, urgent flag, push flag
+
+        This command allocates a receiving buffer associated with the
+        specified connection.  If no OPEN precedes this command or the
+        calling process is not authorized to use this connection, an
+        error is returned.
+
+        In the simplest implementation, control would not return to the
+        calling program until either the buffer was filled, or some
+        error occurred, but this scheme is highly subject to deadlocks.
+        A more sophisticated implementation would permit several
+        RECEIVEs to be outstanding at once.  These would be filled as
+        segments arrive.  This strategy permits increased throughput at
+        the cost of a more elaborate scheme (possibly asynchronous) to
+        notify the calling program that a PUSH has been seen or a buffer
+        filled.
+
+        If enough data arrive to fill the buffer before a PUSH is seen,
+        the PUSH flag will not be set in the response to the RECEIVE.
+        The buffer will be filled with as much data as it can hold.  If
+        a PUSH is seen before the buffer is filled the buffer will be
+        returned partially filled and PUSH indicated.
+
+        If there is urgent data the user will have been informed as soon
+        as it arrived via a TCP-to-user signal.  The receiving user
+        should thus be in "urgent mode".  If the URGENT flag is on,
+        additional urgent data remains.  If the URGENT flag is off, this
+        call to RECEIVE has returned all the urgent data, and the user
+        may now leave "urgent mode".  Note that data following the
+        urgent pointer (non-urgent data) cannot be delivered to the user
+        in the same buffer with preceeding urgent data unless the
+        boundary is clearly marked for the user.
+
+        To distinguish among several outstanding RECEIVEs and to take
+        care of the case that a buffer is not completely filled, the
+        return code is accompanied by both a buffer pointer and a byte
+        count indicating the actual length of the data received.
+
+        Alternative implementations of RECEIVE might have the TCP
+
+
+
+[Page 48]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                Functional Specification
+
+
+
+        allocate buffer storage, or the TCP might share a ring buffer
+        with the user.
+
+      Close
+
+        Format:  CLOSE (local connection name)
+
+        This command causes the connection specified to be closed.  If
+        the connection is not open or the calling process is not
+        authorized to use this connection, an error is returned.
+        Closing connections is intended to be a graceful operation in
+        the sense that outstanding SENDs will be transmitted (and
+        retransmitted), as flow control permits, until all have been
+        serviced.  Thus, it should be acceptable to make several SEND
+        calls, followed by a CLOSE, and expect all the data to be sent
+        to the destination.  It should also be clear that users should
+        continue to RECEIVE on CLOSING connections, since the other side
+        may be trying to transmit the last of its data.  Thus, CLOSE
+        means "I have no more to send" but does not mean "I will not
+        receive any more."  It may happen (if the user level protocol is
+        not well thought out) that the closing side is unable to get rid
+        of all its data before timing out.  In this event, CLOSE turns
+        into ABORT, and the closing TCP gives up.
+
+        The user may CLOSE the connection at any time on his own
+        initiative, or in response to various prompts from the TCP
+        (e.g., remote close executed, transmission timeout exceeded,
+        destination inaccessible).
+
+        Because closing a connection requires communication with the
+        foreign TCP, connections may remain in the closing state for a
+        short time.  Attempts to reopen the connection before the TCP
+        replies to the CLOSE command will result in error responses.
+
+        Close also implies push function.
+
+      Status
+
+        Format:  STATUS (local connection name) -> status data
+
+        This is an implementation dependent user command and could be
+        excluded without adverse effect.  Information returned would
+        typically come from the TCB associated with the connection.
+
+        This command returns a data block containing the following
+        information:
+
+          local socket,
+
+
+                                                               [Page 49]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Functional Specification
+
+
+
+          foreign socket,
+          local connection name,
+          receive window,
+          send window,
+          connection state,
+          number of buffers awaiting acknowledgment,
+          number of buffers pending receipt,
+          urgent state,
+          precedence,
+          security/compartment,
+          and transmission timeout.
+
+        Depending on the state of the connection, or on the
+        implementation itself, some of this information may not be
+        available or meaningful.  If the calling process is not
+        authorized to use this connection, an error is returned.  This
+        prevents unauthorized processes from gaining information about a
+        connection.
+
+      Abort
+
+        Format:  ABORT (local connection name)
+
+        This command causes all pending SENDs and RECEIVES to be
+        aborted, the TCB to be removed, and a special RESET message to
+        be sent to the TCP on the other side of the connection.
+        Depending on the implementation, users may receive abort
+        indications for each outstanding SEND or RECEIVE, or may simply
+        receive an ABORT-acknowledgment.
+
+    TCP-to-User Messages
+
+      It is assumed that the operating system environment provides a
+      means for the TCP to asynchronously signal the user program.  When
+      the TCP does signal a user program, certain information is passed
+      to the user.  Often in the specification the information will be
+      an error message.  In other cases there will be information
+      relating to the completion of processing a SEND or RECEIVE or
+      other user call.
+
+      The following information is provided:
+
+        Local Connection Name                    Always
+        Response String                          Always
+        Buffer Address                           Send & Receive
+        Byte count (counts bytes received)       Receive
+        Push flag                                Receive
+        Urgent flag                              Receive
+
+
+[Page 50]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                Functional Specification
+
+
+
+  TCP/Lower-Level Interface
+
+    The TCP calls on a lower level protocol module to actually send and
+    receive information over a network.  One case is that of the ARPA
+    internetwork system where the lower level module is the Internet
+    Protocol (IP) [2].
+
+    If the lower level protocol is IP it provides arguments for a type
+    of service and for a time to live.  TCP uses the following settings
+    for these parameters:
+
+      Type of Service = Precedence: routine, Delay: normal, Throughput:
+      normal, Reliability: normal; or 00000000.
+
+      Time to Live    = one minute, or 00111100.
+
+        Note that the assumed maximum segment lifetime is two minutes.
+        Here we explicitly ask that a segment be destroyed if it cannot
+        be delivered by the internet system within one minute.
+
+    If the lower level is IP (or other protocol that provides this
+    feature) and source routing is used, the interface must allow the
+    route information to be communicated.  This is especially important
+    so that the source and destination addresses used in the TCP
+    checksum be the originating source and ultimate destination. It is
+    also important to preserve the return route to answer connection
+    requests.
+
+    Any lower level protocol will have to provide the source address,
+    destination address, and protocol fields, and some way to determine
+    the "TCP length", both to provide the functional equivlent service
+    of IP and to be used in the TCP checksum.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                               [Page 51]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Functional Specification
+
+
+

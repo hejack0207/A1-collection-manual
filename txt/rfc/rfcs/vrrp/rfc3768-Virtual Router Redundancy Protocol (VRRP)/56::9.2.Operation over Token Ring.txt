@@ -1,0 +1,113 @@
+9.2.  Operation over Token Ring
+
+   Token ring has several characteristics that make running VRRP
+   difficult.  These include:
+
+   -  In order to switch to a new master located on a different bridge
+      token ring segment from the previous master when using source
+      route bridges, a mechanism is required to update cached source
+      route information.
+
+   -  No general multicast mechanism supported across old and new token
+      ring adapter implementations.  While many newer token ring
+      adapters support group addresses, token ring functional address
+      support is the only generally available multicast mechanism.  Due
+      to the limited number of token ring functional addresses these may
+      collide with other usage of the same token ring functional
+      addresses.
+
+
+
+Hinden                      Standards Track                    [Page 21]
+
+RFC 3768                          VRRP                        April 2004
+
+
+   Due to these difficulties, the preferred mode of operation over token
+   ring will be to use a token ring functional address for the VRID
+   virtual MAC address.  Token ring functional addresses have the two
+   high order bits in the first MAC address octet set to B'1'.  They
+   range from 03-00-00-00-00-80 to 03-00-02-00-00-00 (canonical format).
+   However, unlike multicast addresses, there is only one unique
+   functional address per bit position.  The functional addresses
+   03-00-00-10-00-00 through 03-00-02-00-00-00 are reserved by the Token
+   Ring Architecture [TKARCH] for user-defined applications.  However,
+   since there are only 12 user-defined token ring functional addresses,
+   there may be other non-IP protocols using the same functional
+   address.  Since the Novell IPX [IPX] protocol uses the
+   03-00-00-10-00-00 functional address, operation of VRRP over token
+   ring will avoid use of this functional address.  In general, token
+   ring VRRP users will be responsible for resolution of other user-
+   defined token ring functional address conflicts.
+
+   VRIDs are mapped directly to token ring functional addresses.  In
+   order to decrease the likelihood of functional address conflicts,
+   allocation will begin with the largest functional address.  Most
+   non-IP protocols use the first or first couple user-defined
+   functional addresses and it is expected that VRRP users will choose
+   VRIDs sequentially starting with 1.
+
+      VRID      Token Ring Functional Address
+      ----      -----------------------------
+         1             03-00-02-00-00-00
+         2             03-00-04-00-00-00
+         3             03-00-08-00-00-00
+         4             03-00-10-00-00-00
+         5             03-00-20-00-00-00
+         6             03-00-40-00-00-00
+         7             03-00-80-00-00-00
+         8             03-00-00-01-00-00
+         9             03-00-00-02-00-00
+        10             03-00-00-04-00-00
+        11             03-00-00-08-00-00
+
+   Or more succinctly, octets 3 and 4 of the functional address are
+   equal to (0x4000 >> (VRID - 1)) in non-canonical format.
+
+   Since a functional address cannot be used as a MAC level source
+   address, the real MAC address is used as the MAC source address in
+   VRRP advertisements.  This is not a problem for bridges since packets
+   addressed to functional addresses will be sent on the spanning-tree
+   explorer path [802.1D].
+
+
+
+
+
+Hinden                      Standards Track                    [Page 22]
+
+RFC 3768                          VRRP                        April 2004
+
+
+   The functional address mode of operation MUST be implemented by
+   routers supporting VRRP on token ring.
+
+   Additionally, routers MAY support unicast mode of operation to take
+   advantage of newer token ring adapter implementations that support
+   non-promiscuous reception for multiple unicast MAC addresses and to
+   avoid both the multicast traffic and usage conflicts associated with
+   the use of token ring functional addresses.  Unicast mode uses the
+   same mapping of VRIDs to virtual MAC addresses as Ethernet.  However,
+   one important difference exists.  ARP request/reply packets contain
+   the virtual MAC address as the source MAC address.  The reason for
+   this is that some token ring driver implementations keep a cache of
+   MAC address/source routing information independent of the ARP cache.
+   Hence, these implementations need to receive a packet with the
+   virtual MAC address as the source address in order to transmit to
+   that MAC address in a source-route bridged network.
+
+   Unicast mode on token ring has one limitation that should be
+   considered.  If there are VRID routers on different source-route
+   bridge segments and there are host implementations that keep their
+   source-route information in the ARP cache and do not listen to
+   gratuitous ARPs, these hosts will not update their ARP source-route
+   information correctly when a switch-over occurs.  The only possible
+   solution is to put all routers with the same VRID on the same
+   source-bridge segment and use techniques to prevent that bridge
+   segment from being a single point of failure.  These techniques are
+   beyond the scope this document.
+
+   For both the multicast and unicast mode of operation, VRRP
+   advertisements sent to 224.0.0.18 should be encapsulated as described
+   in [RFC1469].
+

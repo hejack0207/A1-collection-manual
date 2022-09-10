@@ -1,0 +1,83 @@
+6.1.2.  The TCP Sender
+
+   For a TCP connection using ECN, new data packets are transmitted with
+   an ECT codepoint set in the IP header.  When only one ECT codepoint
+   is needed by a sender for all packets sent on a TCP connection,
+   ECT(0) SHOULD be used.  If the sender receives an ECN-Echo (ECE) ACK
+   packet (that is, an ACK packet with the ECN-Echo flag set in the TCP
+   header), then the sender knows that congestion was encountered in the
+   network on the path from the sender to the receiver.  The indication
+   of congestion should be treated just as a congestion loss in non-
+   ECN-Capable TCP. That is, the TCP source halves the congestion window
+   "cwnd" and reduces the slow start threshold "ssthresh".  The sending
+   TCP SHOULD NOT increase the congestion window in response to the
+   receipt of an ECN-Echo ACK packet.
+
+   TCP should not react to congestion indications more than once every
+   window of data (or more loosely, more than once every round-trip
+   time). That is, the TCP sender's congestion window should be reduced
+   only once in response to a series of dropped and/or CE packets from a
+   single window of data.  In addition, the TCP source should not
+   decrease the slow-start threshold, ssthresh, if it has been decreased
+   within the last round trip time.  However, if any retransmitted
+   packets are dropped, then this is interpreted by the source TCP as a
+   new instance of congestion.
+
+   After the source TCP reduces its congestion window in response to a
+   CE packet, incoming acknowledgments that continue to arrive can
+   "clock out" outgoing packets as allowed by the reduced congestion
+   window.  If the congestion window consists of only one MSS (maximum
+   segment size), and the sending TCP receives an ECN-Echo ACK packet,
+   then the sending TCP should in principle still reduce its congestion
+   window in half. However, the value of the congestion window is
+   bounded below by a value of one MSS.  If the sending TCP were to
+   continue to send, using a congestion window of 1 MSS, this results in
+   the transmission of one packet per round-trip time.  It is necessary
+   to still reduce the sending rate of the TCP sender even further, on
+   receipt of an ECN-Echo packet when the congestion window is one.  We
+   use the retransmit timer as a means of reducing the rate further in
+   this circumstance.  Therefore, the sending TCP MUST reset the
+   retransmit timer on receiving the ECN-Echo packet when the congestion
+   window is one.  The sending TCP will then be able to send a new
+   packet only when the retransmit timer expires.
+
+   When an ECN-Capable TCP sender reduces its congestion window for any
+   reason (because of a retransmit timeout, a Fast Retransmit, or in
+   response to an ECN Notification), the TCP sender sets the CWR flag in
+   the TCP header of the first new data packet sent after the window
+   reduction.  If that data packet is dropped in the network, then the
+
+
+
+Ramakrishnan, et al.        Standards Track                    [Page 18]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   sending TCP will have to reduce the congestion window again and
+   retransmit the dropped packet.
+
+   We ensure that the "Congestion Window Reduced" information is
+   reliably delivered to the TCP receiver.  This comes about from the
+   fact that if the new data packet carrying the CWR flag is dropped,
+   then the TCP sender will have to again reduce its congestion window,
+   and send another new data packet with the CWR flag set.  Thus, the
+   CWR bit in the TCP header SHOULD NOT be set on retransmitted packets.
+
+   When the TCP data sender is ready to set the CWR bit after reducing
+   the congestion window, it SHOULD set the CWR bit only on the first
+   new data packet that it transmits.
+
+   [Floyd94] discusses TCP's response to ECN in more detail.  [Floyd98]
+   discusses the validation test in the ns simulator, which illustrates
+   a wide range of ECN scenarios. These scenarios include the following:
+   an ECN followed by another ECN, a Fast Retransmit, or a Retransmit
+   Timeout; a Retransmit Timeout or a Fast Retransmit followed by an
+   ECN; and a congestion window of one packet followed by an ECN.
+
+   TCP follows existing algorithms for sending data packets in response
+   to incoming ACKs, multiple duplicate acknowledgments, or retransmit
+   timeouts [RFC2581].  TCP also follows the normal procedures for
+   increasing the congestion window when it receives ACK packets without
+   the ECN-Echo bit set [RFC2581].
+

@@ -29,7 +29,7 @@ match($0, /^(Appendix [\.[:upper:][:digit:]]*|[[:upper:]]\.[\.[:upper:][:digit:]
 }
 
 {
-    print $0 >> fn
+    print $0 >> gensub("/","::","g",fn)
     # print fn "    " $0
 }
 

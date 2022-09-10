@@ -1,0 +1,106 @@
+3.2.2.  Receiving protocol packets
+
+   Whenever an OSPF protocol packet is received by the router it is
+   marked with the interface it was received on.  For routers that have
+   virtual links configured, it may not be immediately obvious which
+   interface to associate the packet with.  For example, consider the
+   Router RT11 depicted in Figure 6 of [Ref1].  If RT11 receives an OSPF
+   protocol packet on its interface to Network N8, it may want to
+   associate the packet with the interface to Area 2, or with the
+   virtual link to Router RT10 (which is part of the backbone).      In
+   the following, we assume that the packet is initially associated with
+   the non-virtual link.
+
+   In order for the packet to be passed to OSPF for processing, the
+   following tests must be performed on the encapsulating IPv6 headers:
+
+   o  The packet's IP destination address must be one of the IPv6
+      unicast addresses associated with the receiving interface (this
+      includes link-local addresses), or one of the IP multicast
+      addresses AllSPFRouters or AllDRouters.
+
+
+
+Coltun, et al.              Standards Track                    [Page 17]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   o  The Next Header field of the immediately encapsulating IPv6 header
+      must specify the OSPF protocol (89).
+
+   o  Any encapsulating IP Authentication Headers (see [Ref19]) and the
+      IP Encapsulating Security Payloads (see [Ref20]) must be processed
+      and/or verified to ensure integrity and
+      authentication/confidentiality of OSPF routing exchanges.
+
+   o  Locally originated packets should not be passed on to OSPF.  That
+      is, the source IPv6 address should be examined to make sure this
+      is not a multicast packet that the router itself generated.
+
+   After processing the encapsulating IPv6 headers, the OSPF packet
+   header is processed.  The fields specified in the header must match
+   those configured for the receiving interface.  If they do not, the
+   packet should be discarded:
+
+   o  The version number field must specify protocol version 3.
+
+   o  The standard IPv6 16-bit one's complement checksum, covering the
+      entire OSPF packet and prepended IPv6 pseudo-header, must be
+      verified (see Section A.3.1).
+
+   o  The Area ID found in the OSPF header must be verified.  If both of
+      the following cases fail, the packet should be discarded.  The
+      Area ID specified in the header must either:
+
+      (1)   Match the Area ID of the receiving interface. In
+            this case, unlike for IPv4, the IPv6 source
+            address is not restricted to lie on the same IP
+            subnet as the receiving interface. IPv6 OSPF runs
+            per-link, instead of per-IP-subnet.
+
+      (2)   Indicate the backbone.  In this case, the packet
+            has been sent over a virtual link.  The receiving
+            router must be an area border router, and the
+            Router ID specified in the packet (the source
+            router) must be the other end of a configured
+            virtual link.  The receiving interface must also
+            attach to the virtual link's configured Transit
+            area.  If all of these checks succeed, the packet
+            is accepted and is from now on associated with
+            the virtual link (and the backbone area).
+
+   o  The Instance ID specified in the OSPF header must match the
+      receiving interface's Instance ID.
+
+
+
+
+
+Coltun, et al.              Standards Track                    [Page 18]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   o  Packets whose IP destination is AllDRouters should only be
+      accepted if the state of the receiving interface is DR or Backup
+      (see Section 9.1).
+
+   After header processing, the packet is further processed according to
+   its OSPF packet type.  OSPF packet types and functions are the same
+   for both IPv4 and IPv6.
+
+   If the packet type is Hello, it should then be further processed by
+   the Hello Protocol.  All other packet types are sent/received only on
+   adjacencies.  This means that the packet must have been sent by one
+   of the router's active neighbors. The neighbor is identified by the
+   Router ID appearing the the received packet's OSPF header. Packets
+   not matching any active neighbor are discarded.
+
+   The receive processing of Database Description Packets, Link State
+   Request Packets and Link State Acknowledgment Packets remains
+   unchanged from the IPv4 procedures documented in Sections 10.6, 10.7
+   and 13.7 of [Ref1] respectively. The receiving of Hello Packets is
+   documented in Section 3.2.2.1, and the receiving of Link State Update
+   Packets is documented in Section 3.5.1.
+

@@ -1,0 +1,127 @@
+3.1.3.  Traffic Control Service
+
+   This service provides the ability to provision, query or listen to
+   events under the auspices of traffic control.  These include queuing
+   disciplines, (schedulers and queue treatment algorithms -- e.g.,
+   priority-based scheduler or the RED algorithm) and classifiers.
+   Linux Traffic Control Service is very flexible and allows for
+   hierarchical cascading of the different blocks for traffic resource
+   sharing.
+
+          ++    ++                 +-----+   +-------+   ++     ++ .++
+          || .  ||     +------+    |     |-->| Qdisc |-->||     ||  ||
+          ||    ||---->|Filter|--->|Class|   +-------+   ||-+   ||  ||
+          ||    ||  |  +------+    |     +---------------+| |   ||  ||
+          || .  ||  |              +----------------------+ |   || .||
+          || .  ||  |  +------+                             |   ||  ||
+          ||    ||  +->|Filter|-_  +-----+   +-------+   ++ |   || .||
+          || -->||  |  +------+  ->|     |-->| Qdisc |-->|| |   ||->||
+          || .  ||  |              |Class|   +-------+   ||-+-->|| .||
+   ->dev->||    ||  |  +------+ _->|     +---------------+|     ||  ||
+          ||    ||  +->|Filter|-   +----------------------+     || .||
+          ||    ||     +------+                                 || .||
+          || .  |+----------------------------------------------+|  ||
+          ||    |          Parent Queuing discipline             | .||
+          || .  +------------------------------------------------+ .||
+          || . . .. . . .. . .                 . .. .. .. .      .. ||
+          |+--------------------------------------------------------+|
+          |                 Parent Queuing discipline                |
+          |                  (attached to egress device)             |
+          +----------------------------------------------------------+
+
+   The above diagram shows an example of the Egress TC block.  We try to
+   be very brief here.  For more information, please refer to [11].  A
+   packet first goes through a filter that is used to identify a class
+   to which the packet may belong.  A class is essentially a terminal
+
+
+
+Salim, et. al.               Informational                     [Page 21]
+
+RFC 3549        Linux Netlink as an IP Services Protocol       July 2003
+
+
+   queuing discipline and has a queue associated with it.  The queue may
+   be subject to a simple algorithm, like FIFO, or a more complex one,
+   like RED or a token bucket.  The outermost queuing discipline, which
+   is referred to as the parent is typically associated with a
+   scheduler.  Within this scheduler hierarchy, however, may be other
+   scheduling algorithms, making the Linux Egress TC very flexible.
+
+   The service message template that makes this possible is shown below.
+   This template is used in both the ingress and the egress queuing
+   disciplines (refer to the egress traffic control model in the FE
+   model section).  Each of the specific components of the model has
+   unique attributes that describe it best.  The common attributes are
+   described below.
+
+   0                   1                   2                   3
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   Family    |  Reserved1    |         Reserved2             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                     Interface Index                         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                      Qdisc handle                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                     Parent Qdisc                            |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                        TCM Info                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   Family: 8 bits
+   Address Family: AF_INET for IPv4; and AF_INET6 for IPV6.
+
+   Interface Index: 32 bits
+   The unique interface index.
+
+   Qdisc handle: 32 bits
+   Unique identifier for instance of queuing discipline.  Typically,
+   this is split into major:minor of 16 bits each.  The major number
+   would also be the major number of the parent of this instance.
+
+   Parent Qdisc: 32 bits
+   Used in hierarchical layering of queuing disciplines.  If this value
+   and the Qdisc handle are the same and equal to TC_H_ROOT, then the
+   defined qdisc is the top most layer known as the root qdisc.
+
+   TCM Info: 32 bits
+   Set by the FE to 1 typically, except when the Qdisc instance is in
+   use, in which case it is set to imply a reference count.  From the
+   CPC towards the direction of the FEC, this is typically set to 0
+
+
+
+Salim, et. al.               Informational                     [Page 22]
+
+RFC 3549        Linux Netlink as an IP Services Protocol       July 2003
+
+
+   except when used in the context of filters.  In that case, this 32-
+   bit field is split into a 16-bit priority field and 16-bit protocol
+   field.  The protocol is defined in kernel source
+   <include/linux/if_ether.h>, however, the most commonly used one is
+   ETH_P_IP (the IP protocol).
+
+   The priority is used for conflict resolution when filters intersect
+   in their expressions.
+
+   Generic attributes applicable to this service:
+                Attribute        Description
+                ------------------------------------
+                TCA_KIND         Canonical name of FE component.
+                TCA_STATS        Generic usage statistics of FEC
+                TCA_RATE         rate estimator being attached to
+                                 FEC.  Takes snapshots of stats to
+                                 compute rate.
+                TCA_XSTATS       Specific statistics of FEC.
+                TCA_OPTIONS      Nested FEC-specific attributes.
+
+   Appendix 3 has an example of configuring an FE component for a FIFO
+   Qdisc.
+
+   Additional Netlink message types applicable to this service:
+   RTM_NEWQDISC, RTM_DELQDISC, RTM_GETQDISC, RTM_NEWTCLASS,
+   RTM_DELTCLASS, RTM_GETTCLASS, RTM_NEWTFILTER, RTM_DELTFILTER, and
+   RTM_GETTFILTER.
+

@@ -1,0 +1,91 @@
+3.5.2.  Sending Link State Update packets
+
+   The sending of Link State Update packets is described in Section 13.3
+   of [Ref1]. For IPv4 and IPv6, the steps for sending a Link State
+   Update packet are the same (steps 1 through 5 of Section 13.3 in
+   [Ref1]). However, the list of eligible interfaces out which to flood
+   the LSA is different.  For IPv6, the eligible interfaces are selected
+   based on the following factors:
+
+   o  The LSA's flooding scope.
+
+   o  For LSAs with area or link-local flooding scoping, the particular
+      area or interface that the LSA is associated with.
+
+   o  Whether the LSA has a recognized LS type.
+
+   o  The setting of the U-bit in the LS type. If the U-bit is set to 0,
+      unrecognized LS types are treated as having link-local scope. If
+      set to 1, unrecognized LS types are stored and flooded as if they
+      were recognized.
+
+
+
+Coltun, et al.              Standards Track                    [Page 36]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   Choosing the set of eligible interfaces then breaks into the
+   following cases:
+
+   Case 1
+      The LSA's LS type is recognized. In this case, the set of eligible
+      interfaces is set depending on the flooding scope encoded in the
+      LS type. If the flooding scope is "AS flooding scope", the
+      eligible interfaces are all router interfaces excepting virtual
+      links. In addition, AS-external-LSAs are not flooded out
+      interfaces connecting to stub areas. If the flooding scope is
+      "area flooding scope", the set of eligible interfaces are those
+      interfaces connecting to the LSA's associated area. If the
+      flooding scope is "link-local flooding scope", then there is a
+      single eligible interface, the one connecting to the LSA's
+      associated link (which, when the LSA is received in a Link State
+      Update packet, is also the interface the LSA was received on).
+
+   Case 2
+      The LS type is unrecognized, and the U-bit in the LS Type is set
+      to 0 (treat the LSA as if it had link-local flooding scope). In
+      this case there is a single eligible interface, namely, the
+      interface on which the LSA was received.
+
+   Case 3
+      The LS type is unrecognized, and the U-bit in the LS Type is set
+      to 1 (store and flood the LSA, as if type understood). In this
+      case, select the eligible interfaces based on the encoded flooding
+      scope as in Case 1 above. However, in this case interfaces
+      attached to stub areas are always excluded.
+
+   A further decision must sometimes be made before adding an LSA to a
+   given neighbor's link-state retransmission list (Step 1d in Section
+   13.3 of [Ref1]). If the LS type is recognized by the router, but not
+   by the neighbor (as can be determined by examining the Options field
+   that the neighbor advertised in its Database Description packet) and
+   the LSA's U-bit is set to 0, then the LSA should be added to the
+   neighbor's link-state retransmission list if and only if that
+   neighbor is the Designated Router or Backup Designated Router for the
+   attached link. The LS types described in detail by this memo, namely
+   router-LSAs (LS type 0x2001), network-LSAs (0x2002), Inter-Area-
+   Prefix-LSAs (0x2003), Inter-Area-Router-LSAs (0x2004), AS-External-
+   LSAs (0x4005), Link-LSAs (0x0008) and Intra-Area-Prefix-LSAs (0x2009)
+   are assumed to be understood by all routers. However, as an example
+   the group-membership-LSA (0x2006) is understood only by MOSPF routers
+   and since it has its U-bit set to 0, it should only be forwarded to a
+   non-MOSPF neighbor (determined by examining the MC-bit in the
+   neighbor's Database Description packets' Options field) when the
+   neighbor is Designated Router or Backup Designated Router for the
+
+
+
+Coltun, et al.              Standards Track                    [Page 37]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   attached link.
+
+   The previous paragraph solves a problem in IPv4 OSPF extensions such
+   as MOSPF, which require that the Designated Router support the
+   extension in order to have the new LSA types flooded across broadcast
+   and NBMA networks (see Section 10.2 of [Ref8]).
+

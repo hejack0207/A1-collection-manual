@@ -1,0 +1,158 @@
+4.  Conclusions
+
+   Of the three fixes described in the previous section, fix (F1),
+   ignoring RST segments in TIME-WAIT state, seems like the best short-
+   term solution.  It is certainly the simplest.  It would be very
+   desirable to do an extended test of this change in a production
+   environment, to ensure there is no unexpected bad effect of ignoring
+   RSTs in TIME-WAIT state.
+
+   Fix (F2) is more complex and is at best a partial fix.  (F3), using
+   64-bit sequence numbers, would be a significant change in the
+   protocol, and its implications need to be thoroughly understood.
+   (F3) may turn out to be a long-term fix for the hazards discussed in
+   this note.
+
+APPENDIX: Using 64-bit Sequence Numbers
+
+   This appendix provides a justification of our statement that 64-bit
+   sequence numbers could prevent the TWA hazards.
+
+   The theoretical ISN calculation used by TCP is:
+
+       ISN = (R*T) mod 2**n.
+
+   where T is the real time in seconds (from an arbitrary origin, fixed
+   when the system is started), R is a constant, currently 250 KBps, and
+   n = 32 is the size of the sequence number field.
+
+   The limitations of current TCP are established by n, R, and the
+   maximum segment lifetime MSL = 4 minutes.  The shortest time Twrap to
+   wrap the sequence space is:
+
+       Twrap = (2**n)/r
+
+   where r is the maximum transfer rate.  To avoid old duplicate
+   segments in the same connection, we require that Twrap > MSL (in
+   practice, we need Twrap >> MSL).
+
+
+
+
+
+
+
+Braden                                                          [Page 9]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+   The clock-driven ISN numbers wrap in time TwrapISN:
+
+       TwrapISN = (2**n)/R
+
+   For current TCP, TwrapISN = 4.55 hours.
+
+   The cases for old duplicates from previous connections can be divided
+   into four regions along two dimensions:
+
+   *    Slow vs. fast connections, corresponding to r < R or r >= R.
+
+   *    Short vs. long connections, corresponding to duration E <
+        TwrapISN or E >= TwrapISN.
+
+   On short slow connections, the clock-driven ISN selection rejects old
+   duplicates.  For all other cases, the TIME-WAIT delay of 2*MSL is
+   required so old duplicates can expire before they infect a new
+   incarnation.  This is discussed in detail in the Appendix to [RFC-
+   1185].
+
+   With this background, we can consider the effect of increasing n to
+   64.  We would like to increase both R and TwrapISN far enough that
+   all connections will be short and slow, i.e., so that the clock-
+   driven ISN selection will reject all old duplicates.  Put another
+   way, we want to every connection to have a unique chunk of the
+   seqence space.  For this purpose, we need R larger than the maximum
+   foreseeable rate r, and TwrapISN greater than the longest foreseeable
+   connection duration E.
+
+   In fact, this appears feasible with n = 64 bits.  Suppose that we use
+   R = 2**33 Bps; this is approximately 8 gigabytes per second, a
+   reasonable upper limit on throughput of a single TCP connection.
+   Then TwrapISN = 68 years, a reasonable upper limit on TCP connection
+   duration.  Note that this particular choice of R corresponds to
+   incrementing the ISN by 2**32 every 0.5 seconds, as would happen with
+   the Berkeley BSD implementation of TCP.  Then the low-order 32 bits
+   of a 64-bit ISN would always be exactly zero.
+
+   REFERENCES
+
+      [RFC-793]  Postel, J., "Transmission Control Protocol", RFC-793,
+      USC/Information Sciences Institute, September 1981.
+
+      [RFC-1185]  Jacobson, V., Braden, R., and Zhang, L., "TCP
+      Extension for High-Speed Paths", RFC-1185, Lawrence Berkeley Labs,
+      USC/Information Sciences Institute, and Xerox Palo Alto Research
+      Center, October 1990.
+
+
+
+
+Braden                                                         [Page 10]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+      [RFC-1263]  O'Malley, S. and L. Peterson, "TCP Extensions
+      Considered Harmful", RFC-1263, University of Arizona, October
+      1991.
+
+      [RFC-1323]  Jacobson, V., Braden, R. and D. Borman "TCP Extensions
+      for High Performance", RFC-1323, Lawrence Berkeley Labs,
+      USC/Information Sciences Institute, and Cray Research, May 1992.
+
+Security Considerations
+
+   Security issues are not discussed in this memo.
+
+Author's Address:
+
+   Bob Braden
+   University of Southern California
+   Information Sciences Institute
+   4676 Admiralty Way
+   Marina del Rey, CA 90292
+
+   Phone: (213) 822-1511
+   EMail: Braden@ISI.EDU
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Braden                                                         [Page 11]
+

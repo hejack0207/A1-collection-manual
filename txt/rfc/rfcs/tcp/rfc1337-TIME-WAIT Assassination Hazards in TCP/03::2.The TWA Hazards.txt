@@ -1,0 +1,200 @@
+2. The TWA Hazards
+
+   2.1 Introduction
+
+      If the connection is immediately reopened after a TWA event, the
+      new incarnation will be exposed to old duplicate segments (except
+      for the initial <SYN> segment, which is handled by the 3-way
+      handshake).  There are three possible hazards that result:
+
+      H1.  Old duplicate data may be accepted erroneously.
+
+      H2.  The new connection may be de-synchronized, with the two ends
+           in permanent disagreement on the state.  Following the spec
+           of RFC-793, this desynchronization results in an infinite ACK
+
+
+
+Braden                                                          [Page 3]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+           loop.  (It might be reasonable to change this aspect of RFC-
+           793 and kill the connection instead.)
+
+           This hazard results from acknowledging something that was not
+           sent.  This may result from an old duplicate ACK or as a
+           side-effect of hazard H1.
+
+      H3.  The new connection may die.
+
+           A duplicate segment (data or ACK) arriving in SYN-SENT state
+           may kill the new connection after it has apparently opened
+           successfully.
+
+      Each of these hazards requires that the seqence space of the new
+      connection overlap to some extent with the sequence space of the
+      previous incarnation.  As noted above, this is only possible for
+      "fast" or "long" connections.  Since these hazards all require the
+      coincidence of an old duplicate falling into a particular range of
+      new sequence numbers, they are much less probable than TWA itself.
+
+      TWA and the three hazards H1, H2, and H3 have been demonstrated on
+      a stock Sun OS 4.1.1 TCP running in an simulated environment that
+      massively duplicates segments.  This environment is far more
+      hazardous than most real TCP's must cope with, and the conditions
+      were carefully tuned to create the necessary conditions for the
+      failures.  However, these demonstrations are in effect an
+      existence proof for the hazards.
+
+      We now present example scenarios for each of these hazards.  Each
+      scenario is assumed to follow immediately after a TWA event
+      terminated the previous incarnation of the same connection.
+
+   2.2  HAZARD H1: Acceptance of erroneous old duplicate data.
+
+      Without the protection of the TIME-WAIT delay, it is possible for
+      erroneous old duplicate data from the earlier incarnation to be
+      accepted.  Figure 2 shows precisely how this might happen.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Braden                                                          [Page 4]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+
+           TCP A                                                 TCP B
+
+      1. ESTABL.  --> <SEQ=400><ACK=101><DATA=100><CTL=ACK> --> ESTABL.
+
+      2. ESTABL.  <--     <SEQ=101><ACK=500><CTL=ACK>     <--   ESTABL.
+
+      3.  (old dupl)...<SEQ=560><ACK=101><DATA=80><CTL=ACK> --> ESTABL.
+
+      4. ESTABL.  <--     <SEQ=101><ACK=500><CTL=ACK>     <--   ESTABL.
+
+      5. ESTABL.  --> <SEQ=500><ACK=101><DATA=100><CTL=ACK> --> ESTABL.
+
+      6.             ...  <SEQ=101><ACK=640><CTL=ACK>     <--   ESTABL.
+
+     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+      7a. ESTABL. --> <SEQ=600><ACK=101><DATA=100><CTL=ACK> --> ESTABL.
+
+      8a. ESTABL.  <--    <SEQ=101><ACK=640><CTL=ACK> ...
+
+      9a. ESTABL. --> <SEQ=700><ACK=101><DATA=100><CTL=ACK> --> ESTABL.
+
+                    Figure 2: Accepting Erroneous Data
+
+      The connection has already been successfully reopened after the
+      assumed TWA event.  Segment 1 is a normal data segment and segment
+      2 is the corresponding ACK segment.  Old duplicate data segment 3
+      from the earlier incarnation happens to fall within the current
+      receive window, resulting in a duplicate ACK segment #4.  The
+      erroneous data is queued and "lurks" in the TCP reassembly queue
+      until data segment 5 overlaps it.  At that point, either 80 or 40
+      bytes of erroneous data is delivered to the user B; the choice
+      depends upon the particulars of the reassembly algorithm, which
+      may accept the first or the last duplicate data.
+
+      As a result, B sends segment 6, an ACK for sequence = 640, which
+      is 40 beyond any data sent by A.  Assume for the present that this
+      ACK arrives at A *after* A has sent segment 7a, the next full data
+      segment.  In that case, the ACK segment 8a acknowledges data that
+      has been sent, and the error goes undetected.  Another possible
+      continuation after segment 6 leads to hazard H3, shown below.
+
+   2.3  HAZARD H2: De-synchronized Connection
+
+      This hazard may result either as a side effect of H1 or directly
+      from an old duplicate ACK that happens to be acceptable but
+      acknowledges something that has not been sent.
+
+
+
+Braden                                                          [Page 5]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+      Referring to Figure 2 above, suppose that the ACK generated by the
+      old duplicate data segment arrived before the next data segment
+      had been sent.  The result is an infinite ACK loop, as shown by
+      the following alternate continuation of Figure 2.
+
+     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      7b. ESTABL.  <--    <SEQ=101><ACK=640><CTL=ACK>   ...
+     (ACK something not yet
+      sent => send ACK)
+
+      8b. ESTABL.  -->    <SEQ=600><ACK101><CTL=ACK>       -->   ESTABL.
+                                                       (Below window =>
+                                                            send ACK)
+
+      9b. ESTABL.  <--    <SEQ=101><ACK=640><CTL=ACK>     <--    ESTABL.
+
+                               (etc.!)
+
+                     Figure 3: Infinite ACK loop
+
+
+   2.4  HAZARD H3:  Connection Failure
+
+      An old duplicate ACK segment may lead to an apparent refusal of
+      TCP A's next connection attempt, as illustrated in Figure 4.  Here
+      <W=...> indicates the TCP window field SEG.WIND.*
+
+        TCP A                                                     TCP B
+
+    1.  CLOSED                                                   LISTEN
+
+    2.  SYN-SENT    --> <SEQ=100><CTL=SYN>                 --> SYN-RCVD
+
+    3.         ... <SEQ=400><ACK=101><CTL=SYN,ACK><W=800>  <-- SYN-RCVD
+
+    4.  SYN-SENT    <-- <SEQ=300><ACK=123><CTL=ACK> ... (old duplicate)
+
+    5.  SYN-SENT    --> <SEQ=123><CTL=RST>                   --> LISTEN
+
+    6.  ESTABLISHED <-- <SEQ=400><ACK=101><CTL=SYN,ACK><W=900> ...
+
+    7.  ESTABLISHED --> <SEQ=101><ACK=401><CTL=ACK>          --> LISTEN
+
+    8.  CLOSED      <--  <SEQ=401><CTL=RST>                  <-- LISTEN
+
+
+           Figure 4: Connection Failure from Old Duplicate
+
+
+
+
+Braden                                                          [Page 6]
+
+RFC 1337                 TCP TIME-WAIT Hazards                  May 1992
+
+
+      The key to the failure in Figure 4 is that the RST segment 5 is
+      acceptable to TCP B in SYN-RECEIVED state, because the sequence
+      space of the earlier connection that produced this old duplicate
+      overlaps the new connection space.  Thus, <SEQ=123> in segment #5
+      falls within TCP B's receive window [101,900).  In experiments,
+      this failure mode was very easy to demonstrate.  (Kurt Matthys has
+      pointed out that this scenario is time-dependent:  if TCP A should
+      timeout and retransmit the initial SYN after segment 5 arrives and
+      before segment 6, then the open will complete successfully.)
+

@@ -1,0 +1,69 @@
+5.4.  Early Retransmit Timeout
+
+   If the sender's RTO is too short, an early retransmission timeout can
+   occur when no packets have in fact been dropped in the network.  An
+   example of this is given below:
+
+             Transmitted    Received    ACK Sent
+             Segment        Segment     (Including SACK Blocks)
+
+             500-999        (delayed)
+             1000-1499      (delayed)
+             1500-1999      (delayed)
+             2000-2499      (delayed)
+             (timeout)
+             500-999        (delayed)
+                            500-999     1000
+             1000-1499      (delayed)
+                            1000-1499   1500
+             ...
+                            1500-1999   2000
+                            2000-2499   2500
+                            500-999     2500, SACK=500-1000
+                                                   --------
+                            1000-1499   2500, SACK=1000-1500
+                                                   ---------
+                            ...
+
+   In this case, the first packet is retransmitted following the
+   timeout.  Subsequently, the original window of packets arrives at the
+   receiver, resulting in ACKs for these segments.  Following this, the
+   retransmissions of these segments arrive, resulting in ACKs carrying
+   SACK blocks which identify the duplicate segments.
+
+   This can be identified as an early retransmission timeout because the
+   ACK for byte 1000 is received after the timeout with no SACK
+   information, followed by an ACK which carries SACK information (500-
+   999) indicating that the retransmitted segment had already been
+   received.
+
+   WITHOUT D-SACK:
+
+   If D-SACK was not used and one of the duplicate ACKs was piggybacked
+   on a data packet, the sender would not know how many duplicate
+   packets had been received.  If D-SACK was not used and none of the
+   duplicate ACKs were piggybacked on a data packet, then the sender
+   would have sent N duplicate packets, for some N, and received N
+   duplicate ACKs.  In this case, the sender could reasonably infer that
+
+
+
+
+Floyd, et al.               Standards Track                    [Page 13]
+
+RFC 2883                     SACK Extension                    July 2000
+
+
+   some data or ACK packet had been replicated in the network, or that
+   an early retransmission timeout had occurred (or that the receiver is
+   lying).
+
+   RESEARCH ISSUES:
+
+   After the sender determines that an unnecessary (i.e., early)
+   retransmit timeout has occurred, the sender could adjust parameters
+   for setting the RTO, to prevent more unnecessary retransmit timeouts.
+   Coupled with this, when the sender determines, after the fact, that
+   it has made an unnecessary window reduction, the sender has the
+   option of "undoing" that reduction in the congestion window.
+

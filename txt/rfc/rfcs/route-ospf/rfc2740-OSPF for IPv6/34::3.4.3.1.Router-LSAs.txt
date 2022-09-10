@@ -1,0 +1,118 @@
+3.4.3.1.  Router-LSAs
+
+   The LS type of a router-LSA is set to the value 0x2001.  Router-LSAs
+   have area flooding scope. A router may originate one or more router-
+   LSAs for a given area. Each router-LSA contains an integral number of
+   interface descriptions; taken together, the collection of router-LSAs
+   originated by the router for an area describes the collected states
+   of all the router's interfaces to the area. When multiple router-LSAs
+   are used, they are distinguished by their Link State ID fields.
+
+   The Options field in the router-LSA should be coded as follows. The
+   V6-bit should be set. The E-bit should be clear if and only if the
+   attached area is an OSPF stub area. The MC-bit should be set if and
+   only if the router is running MOSPF (see [Ref8]). The N-bit should be
+   set if and only if the attached area is an OSPF NSSA area.  The R-bit
+   should be set. The DC-bit should be set if and only if the router can
+   correctly process the DoNotAge bit when it appears in the LS age
+   field of LSAs (see [Ref11]). All unrecognized bits in the Options
+   field should be cleared
+
+   To the left of the Options field, the router capability bits V, E and
+   B should be coded according to Section 12.4.1 of [Ref1]. Bit W should
+   be coded according to [Ref8].
+
+   Each of the router's interfaces to the area are then described by
+   appending "link descriptions" to the router-LSA. Each link
+   description is 16 bytes long, consisting of 5 fields: (link) Type,
+   Metric, Interface ID, Neighbor Interface ID and Neighbor Router ID
+   (see Section A.4.3). Interfaces in state "Down" or "Loopback" are not
+   described (although looped back interfaces can contribute prefixes to
+   Intra-Area-Prefix-LSAs). Nor are interfaces without any full
+   adjacencies described. All other interfaces to the area add zero, one
+   or more link descriptions, the number and content of which depend on
+   the interface type. Within each link description, the Metric field is
+   always set the interface's output cost and the Interface ID field is
+   set to the interface's OSPF Interface ID.
+
+   Point-to-point interfaces
+      If the neighboring router is fully adjacent, add a Type 1 link
+      description (point-to-point). The Neighbor Interface ID field is
+      set to the Interface ID advertised by the neighbor in its Hello
+      packets, and the Neighbor Router ID field is set to the neighbor's
+      Router ID.
+
+
+
+
+
+
+
+
+Coltun, et al.              Standards Track                    [Page 25]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   Broadcast and NBMA interfaces
+      If the router is fully adjacent to the link's Designated Router,
+      or if the router itself is Designated Router and is fully adjacent
+      to at least one other router, add a single Type 2 link description
+      (transit network). The Neighbor Interface ID field is set to the
+      Interface ID advertised by the Designated Router in its Hello
+      packets, and the Neighbor Router ID field is set to the Designated
+      Router's Router ID.
+
+   Virtual links
+      If the neighboring router is fully adjacent, add a Type 4 link
+      description (virtual). The Neighbor Interface ID field is set to
+      the Interface ID advertised by the neighbor in its Hello packets,
+      and the Neighbor Router ID field is set to the neighbor's Router
+      ID. Note that the output cost of a virtual link is calculated
+      during the routing table calculation (see Section 3.7).
+
+   Point-to-MultiPoint interfaces
+      For each fully adjacent neighbor associated with the interface,
+      add a separate Type 1 link description (point-to-point) with
+      Neighbor Interface ID field set to the Interface ID advertised by
+      the neighbor in its Hello packets, and Neighbor Router ID field
+      set to the neighbor's Router ID.
+
+   As an example, consider the router-LSA that router RT3 would
+   originate for Area 1 in Figure 1. Only a single interface must be
+   described, namely that which connects to the transit network N3. It
+   assumes that RT4 has been elected Designated Router of Network N3.
+
+     ; RT3's router-LSA for Area 1
+
+     LS age = 0                     ;newly (re)originated
+     LS type = 0x2001               ;router-LSA
+     Link State ID = 0              ;first fragment
+     Advertising Router = 192.1.1.3 ;RT3's Router ID
+     bit E = 0                      ;not an AS boundary router
+     bit B = 1                      ;area border router
+     Options = (V6-bit|E-bit|R-bit)
+         Type = 2                     ;connects to N3
+         Metric = 1            ;cost to N3
+         Interface ID = 1             ;RT3's Interface ID on N3
+         Neighbor Interface ID = 1    ;RT4's Interface ID on N3
+         Neighbor Router ID = 192.1.1.4 ; RT4's Router ID
+
+   If for example another router was added to Network N4, RT3 would have
+   to advertise a second link description for its connection to (the now
+   transit) network N4. This could be accomplished by reoriginating the
+   above router-LSA, this time with two link descriptions. Or, a
+
+
+
+Coltun, et al.              Standards Track                    [Page 26]
+
+RFC 2740                     OSPF for IPv6                 December 1999
+
+
+   separate router-LSA could be originated with a separate Link State ID
+   (e.g., using a Link State ID of 1) to describe the connection to N4.
+
+   Host routes no longer appear in the router-LSA, but are instead
+   included in intra-area-prefix-LSAs.
+

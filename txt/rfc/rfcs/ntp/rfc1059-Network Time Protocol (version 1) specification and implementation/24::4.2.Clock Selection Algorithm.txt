@@ -1,0 +1,117 @@
+4.2.  Clock Selection Algorithm
+
+   The clock selection algorithm uses the values of peer.delay,
+   peer.offset and peer.dispersion calculated by the clock filter
+   algorithm and is called when these values change or when the
+   reachability status changes.  It constructs a list of candidate
+   estimates according to a set of criteria designed to maximize
+   accuracy and reliability, then sorts the list in order of estimated
+   precision.  Finally, it repeatedly casts out outlyers on the basis of
+   dispersion until only a single candidate is left.
+
+   The selection process operates on each peer in turn and inspects the
+   various data captured from the last received NTP message header, as
+   well as the latest clock filter estimates.  It selects only those
+   peers for which the following criteria are satisfied:
+
+
+
+
+Mills                                                          [Page 30]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+   1.  The peer must be reachable and operating in client or symmetric
+       modes.
+
+   2.  The peer logical clock must be synchronized, as indicated by the
+       Leap Indicator bits being other than 11.
+
+   3.  If the peer is operating at stratum two or greater, it must not
+       be synchronized to this host, which means its reference clock
+       identifier (peer.refid) must not match the Internet address of
+       this host.  This is analogous to the split-horizon rule used in
+       some variants of the Bellman-Ford routing algorithm.
+
+   4.  The sum of the peer synchronizing distance (peer.distance) plus
+       peer.delay must be less than 2^13 (8192) milliseconds.  Also, the
+       peer stratum (peer.stratum) must be less than eight and
+       peer.dispersion must be less than a configured threshold
+       PEER.THRESHOLD (currently 500 ms).  These range checks were
+       established through experience with the prototype implementation,
+       but may be changed in future.
+
+   For each peer which satisfies the above criteria, a sixteen-bit
+   keyword is constructed, with the low-order thirteen bits the sum of
+   peer.distance plus peer.delay and the high-order three bits the
+   peer.stratum reduced by one and truncated to three bits (thus mapping
+   zero to seven).  The keyword together with a pointer to the peer data
+   structure are inserted according to increasing keyword values and
+   truncated at a maximum of eight entries.  The resulting list
+   represents the order in which peers should be chosen according to the
+   estimated precision of measurement.  If no keywords are found, the
+   clock source variable (sys.peer) is set to zero and the algorithm
+   terminates.
+
+   The final procedure is designed to detect falsetickers or other
+   conditions which might result in gross errors.  Let m be the number
+   of samples remaining in the list.  For each i (0 =< i < m) compute
+   the dispersion d(i) of the list relative to i:
+
+                   d(i) = Sum(|X(j) - X(i)|*w^j) ,
+                       (0 =< j < m)
+
+   where w < 1 is a weighting factor experimentally adjusted for the
+   desired characteristic (see below).  Then cast out the entry with
+   maximum d(i) or, in case of ties, the maximum i, and repeat the
+   procedure.  When only a single entry remains in the list, sys.peer is
+   set as its peer data structure pointer and the peer.hpoll variable in
+   that structure is set to NTP.MINPOLL as required by the logical clock
+   mechanism described in Section 5.
+
+
+
+
+Mills                                                          [Page 31]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+   This procedure is designed to favor those peers near the head of the
+   list, which are at the highest stratum and lowest delay and
+   presumably can provide the most precise time.  With proper selection
+   of weighting factor w, also called PEER.SELECT, entries will be
+   trimmed from the tail of the list, unless a few outlyers disagree
+   significantly with respect to the remaining entries, in which case
+   the outlyers are discarded first.
+
+   In order to see how this procedure works to select outlyers, consider
+   the case of three entries and assume that one or more of the offsets
+   are clustered about zero and others are clustered about one.  For w =
+   0.75 as used in the prototype implementations and multiplying by 16
+   for convenience, the first entry has weight w^0 = 16, the second w^1
+   = 12 and the third w^2 = 9.  Table X shows for all combinations of
+   peer offsets the calculated dispersion about each of the three
+   entries, along with the results of the procedure.
+
+      Peer 0    1    2         Dispersion          Cast    Result
+    Weight 16   12   9     0       1       2       Out
+           ------------------------------------------------------
+           0    0    0     0       0       0       2       0    0
+           0    0    1     9       9       28      2       0    0
+           0    1    0     12      25      12      1       0    0
+           0    1    1     21      16      16      0       1    1
+           1    0    0     21      16      16      0       0    0
+           1    0    1     12      25      12      1       1    1
+           1    1    0     9       9       28      2       1    1
+           1    1    1     0       0       0       2       1    1
+
+                  Table 4.1. Outlyer Selection Procedure
+
+   In the four cases where peer 0 and peer 1 disagree, the outcome is
+   determined by peer 2.  Similar outcomes occur in the case of four
+   peers.  While these outcomes depend on judicious choice of w, the
+   behavior of the algorithm is substantially the same for values of w
+   between 0.5 and 1.0.
+

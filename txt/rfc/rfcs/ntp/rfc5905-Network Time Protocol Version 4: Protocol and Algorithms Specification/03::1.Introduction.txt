@@ -1,0 +1,96 @@
+1.  Introduction
+
+   This document defines the Network Time Protocol version 4 (NTPv4),
+   which is widely used to synchronize system clocks among a set of
+   distributed time servers and clients.  It describes the core
+   architecture, protocol, state machines, data structures, and
+   algorithms.  NTPv4 introduces new functionality to NTPv3, as
+   described in [RFC1305], and functionality expanded from Simple NTP
+   version 4 (SNTPv4) as described in [RFC4330] (SNTPv4 is a subset of
+   NTPv4).  This document obsoletes [RFC1305] and [RFC4330].  While
+   certain minor changes have been made in some protocol header fields,
+   these do not affect the interoperability between NTPv4 and previous
+   versions of NTP and SNTP.
+
+   The NTP subnet model includes a number of widely accessible primary
+   time servers synchronized by wire or radio to national standards.
+   The purpose of the NTP protocol is to convey timekeeping information
+   from these primary servers to secondary time servers and clients via
+   both private networks and the public Internet.  Precisely tuned
+   algorithms mitigate errors that may result from network disruptions,
+   server failures, and possible hostile actions.  Servers and clients
+   are configured such that values flow towards clients from the primary
+   servers at the root via branching secondary servers.
+
+   The NTPv4 design overcomes significant shortcomings in the NTPv3
+   design, corrects certain bugs, and incorporates new features.  In
+   particular, expanded NTP timestamp definitions encourage the use of
+   the floating double data type throughout the implementation.  As a
+   result, the time resolution is better than one nanosecond, and
+   frequency resolution is less than one nanosecond per second.
+   Additional improvements include a new clock discipline algorithm that
+   is more responsive to system clock hardware frequency fluctuations.
+   Typical primary servers using modern machines are precise within a
+   few tens of microseconds.  Typical secondary servers and clients on
+   fast LANs are within a few hundred microseconds with poll intervals
+   up to 1024 seconds, which was the maximum with NTPv3.  With NTPv4,
+   servers and clients are precise within a few tens of milliseconds
+   with poll intervals up to 36 hours.
+
+   The main body of this document describes the core protocol and data
+   structures necessary to interoperate between conforming
+   implementations.  Appendix A contains a full-featured example in the
+   form of a skeleton program, including data structures and code
+   segments for the core algorithms as well as the mitigation algorithms
+   used to enhance reliability and accuracy.  While the skeleton program
+   and other descriptions in this document apply to a particular
+   implementation, they are not intended as the only way the required
+   functions can be implemented.  The contents of Appendix A are non-
+
+
+
+Mills, et al.                Standards Track                    [Page 4]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   normative examples designed to illustrate the protocol's operation
+   and are not a requirement for a conforming implementation.  While the
+   NTPv3 symmetric key authentication scheme described in this document
+   has been carried over from NTPv3, the Autokey public key
+   authentication scheme new to NTPv4 is described in [RFC5906].
+
+   The NTP protocol includes modes of operation described in Section 2
+   using data types described in Section 6 and data structures described
+   in Section 7.  The implementation model described in Section 5 is
+   based on a threaded, multi-process architecture, although other
+   architectures could be used as well.  The on-wire protocol described
+   in Section 8 is based on a returnable-time design that depends only
+   on measured clock offsets, but does not require reliable message
+   delivery.  Reliable message delivery such as TCP [RFC0793] can
+   actually make the delivered NTP packet less reliable since retries
+   would increase the delay value and other errors.  The synchronization
+   subnet is a self-organizing, hierarchical, master-slave network with
+   synchronization paths determined by a shortest-path spanning tree and
+   defined metric.  While multiple masters (primary servers) may exist,
+   there is no requirement for an election protocol.
+
+   This document includes material from [ref9], which contains flow
+   charts and equations unsuited for RFC format.  There is much
+   additional information in [ref7], including an extensive technical
+   analysis and performance assessment of the protocol and algorithms in
+   this document.  The reference implementation is available at
+   www.ntp.org.
+
+   The remainder of this document contains numerous variables and
+   mathematical expressions.  Some variables take the form of Greek
+   characters, which are spelled out by their full case-sensitive name.
+   For example, DELTA refers to the uppercase Greek character, while
+   delta refers to the lowercase character.  Furthermore, subscripts are
+   denoted with '_'; for example, theta_i refers to the lowercase Greek
+   character theta with subscript i, or phonetically theta sub i.  In
+   this document, all time values are in seconds (s), and all
+   frequencies will be specified as fractional frequency offsets (FFOs)
+   (pure number).  It is often convenient to express these FFOs in parts
+   per million (ppm).
+

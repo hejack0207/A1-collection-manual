@@ -1,0 +1,136 @@
+13.2.3 Age Calculations
+
+   In order to know if a cached entry is fresh, a cache needs to know if
+   its age exceeds its freshness lifetime. We discuss how to calculate
+   the latter in section 13.2.4; this section describes how to calculate
+   the age of a response or cache entry.
+
+   In this discussion, we use the term "now" to mean "the current value
+   of the clock at the host performing the calculation." Hosts that use
+   HTTP, but especially hosts running origin servers and caches, SHOULD
+   use NTP [28] or some similar protocol to synchronize their clocks to
+   a globally accurate time standard.
+
+
+
+Fielding, et al.            Standards Track                    [Page 80]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+   HTTP/1.1 requires origin servers to send a Date header, if possible,
+   with every response, giving the time at which the response was
+   generated (see section 14.18). We use the term "date_value" to denote
+   the value of the Date header, in a form appropriate for arithmetic
+   operations.
+
+   HTTP/1.1 uses the Age response-header to convey the estimated age of
+   the response message when obtained from a cache. The Age field value
+   is the cache's estimate of the amount of time since the response was
+   generated or revalidated by the origin server.
+
+   In essence, the Age value is the sum of the time that the response
+   has been resident in each of the caches along the path from the
+   origin server, plus the amount of time it has been in transit along
+   network paths.
+
+   We use the term "age_value" to denote the value of the Age header, in
+   a form appropriate for arithmetic operations.
+
+   A response's age can be calculated in two entirely independent ways:
+
+      1. now minus date_value, if the local clock is reasonably well
+         synchronized to the origin server's clock. If the result is
+         negative, the result is replaced by zero.
+
+      2. age_value, if all of the caches along the response path
+         implement HTTP/1.1.
+
+   Given that we have two independent ways to compute the age of a
+   response when it is received, we can combine these as
+
+       corrected_received_age = max(now - date_value, age_value)
+
+   and as long as we have either nearly synchronized clocks or all-
+   HTTP/1.1 paths, one gets a reliable (conservative) result.
+
+   Because of network-imposed delays, some significant interval might
+   pass between the time that a server generates a response and the time
+   it is received at the next outbound cache or client. If uncorrected,
+   this delay could result in improperly low ages.
+
+   Because the request that resulted in the returned Age value must have
+   been initiated prior to that Age value's generation, we can correct
+   for delays imposed by the network by recording the time at which the
+   request was initiated. Then, when an Age value is received, it MUST
+   be interpreted relative to the time the request was initiated, not
+
+
+
+
+
+Fielding, et al.            Standards Track                    [Page 81]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+   the time that the response was received. This algorithm results in
+   conservative behavior no matter how much delay is experienced. So, we
+   compute:
+
+      corrected_initial_age = corrected_received_age
+                            + (now - request_time)
+
+   where "request_time" is the time (according to the local clock) when
+   the request that elicited this response was sent.
+
+   Summary of age calculation algorithm, when a cache receives a
+   response:
+
+      /*
+       * age_value
+       *      is the value of Age: header received by the cache with
+       *              this response.
+       * date_value
+       *      is the value of the origin server's Date: header
+       * request_time
+       *      is the (local) time when the cache made the request
+       *              that resulted in this cached response
+       * response_time
+       *      is the (local) time when the cache received the
+       *              response
+       * now
+       *      is the current (local) time
+       */
+
+      apparent_age = max(0, response_time - date_value);
+      corrected_received_age = max(apparent_age, age_value);
+      response_delay = response_time - request_time;
+      corrected_initial_age = corrected_received_age + response_delay;
+      resident_time = now - response_time;
+      current_age   = corrected_initial_age + resident_time;
+
+   The current_age of a cache entry is calculated by adding the amount
+   of time (in seconds) since the cache entry was last validated by the
+   origin server to the corrected_initial_age. When a response is
+   generated from a cache entry, the cache MUST include a single Age
+   header field in the response with a value equal to the cache entry's
+   current_age.
+
+   The presence of an Age header field in a response implies that a
+   response is not first-hand. However, the converse is not true, since
+   the lack of an Age header field in a response does not imply that the
+
+
+
+
+
+Fielding, et al.            Standards Track                    [Page 82]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+   response is first-hand unless all caches along the request path are
+   compliant with HTTP/1.1 (i.e., older HTTP caches did not implement
+   the Age header field).
+

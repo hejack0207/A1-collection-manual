@@ -1,0 +1,132 @@
+3.7.  Recreating Mappings on NAT Gateway Reboot
+
+   The NAT gateway MAY store mappings in persistent storage so that,
+   when it is powered off or rebooted, it remembers the port mapping
+   state of the network.
+
+   However, maintaining this state is not essential for correct
+   operation.  When the NAT gateway powers on or clears its port mapping
+   state as the result of a configuration change, it MUST reset the
+   epoch time and re-announce its IPv4 address as described in Section
+   3.2.1, "Announcing Address Changes".  Reception of this packet where
+   time has apparently gone backwards serves as a hint to clients on the
+   network that they SHOULD immediately send renewal packets (to
+   immediately recreate their mappings) instead of waiting until the
+   originally scheduled time for those renewals.  Clients who miss
+   receiving those gateway announcement packets for any reason will
+   still renew their mappings at the originally scheduled time and cause
+   their mappings to be recreated; it will just take a little longer for
+   these clients.
+
+
+
+
+
+
+
+
+
+Cheshire & Krochmal           Informational                    [Page 16]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+
+   A mapping renewal packet is formatted identically to an original
+   mapping request; from the point of view of the client, it is a
+   renewal of an existing mapping, but from the point of view of the
+   freshly rebooted NAT gateway, it appears as a new mapping request.
+
+   This self-healing property of the protocol is very important.
+
+   The remarkable reliability of the Internet as a whole derives in
+   large part from the fact that important state is held in the
+   endpoints, not in the network itself [ETEAISD].  Power-cycling an
+   Ethernet switch results only in a brief interruption in the flow of
+   packets; established TCP connections through that switch are not
+   broken, merely delayed for a few seconds.  Indeed, a failing Ethernet
+   switch can even be replaced with a new one, and as long as the cables
+   are transferred over reasonably quickly, after the upgrade all the
+   TCP connections that were previously going through the old switch
+   will be unbroken and now going through the new one.  The same is true
+   of IP routers, wireless base stations, etc.  The one exception is NAT
+   gateways.  Because the port mapping state is required for the NAT
+   gateway to know where to forward inbound packets, loss of that state
+   breaks connectivity through the NAT gateway.  By allowing clients to
+   detect when this loss of NAT gateway state has occurred, and recreate
+   it on demand, we turn hard state in the network into soft state, and
+   allow it to be recovered automatically when needed.
+
+   Without this automatic recreation of soft state in the NAT gateway,
+   reliable long-term networking would not be achieved.  As mentioned
+   above, the reliability of the Internet does not come from trying to
+   build a perfect network in which errors never happen, but from
+   accepting that in any sufficiently large system there will always be
+   some component somewhere that's failing, and designing mechanisms
+   that can handle those failures and recover.  To illustrate this point
+   with an example, consider the following scenario: Imagine a network
+   security camera that has a web interface and accepts incoming
+   connections from web browser clients.  Imagine this network security
+   camera uses NAT-PMP or a similar protocol to set up an inbound port
+   mapping in the NAT gateway so that it can receive incoming
+   connections from clients on the other side of the NAT gateway.  Now,
+   this camera may well operate for weeks, months, or even years.
+   During that time, it's possible that the NAT gateway could experience
+   a power failure or be rebooted.  The user could upgrade the NAT
+   gateway's firmware, or even replace the entire NAT gateway device
+   with a newer model.  The general point is that if the camera operates
+   for a long enough period of time, some kind of disruption to the NAT
+   gateway becomes inevitable.  The question is not whether the NAT
+   gateway will lose its port mappings, but when, and how often.  If the
+   network camera and devices like it on the network can detect when the
+   NAT gateway has lost its port mappings, and recreate them
+
+
+
+Cheshire & Krochmal           Informational                    [Page 17]
+
+RFC 6886                         NAT-PMP                      April 2013
+
+
+   automatically, then these disruptions are self-correcting and largely
+   invisible to the end user.  If, on the other hand, the disruptions
+   are not self-correcting, and after a NAT gateway reboot the user has
+   to manually reset or reboot all the other devices on the network too,
+   then these disruptions are *very* visible to the end user.  This
+   aspect of the design is part of what makes the difference between a
+   protocol that keeps on working indefinitely over a time scale of
+   months or years, and a protocol that works in brief testing, but in
+   the real world is continually failing and requiring manual
+   intervention to get it going again.
+
+   When a client renews its port mappings as the result of receiving a
+   packet where the Seconds Since Start of Epoch (SSSoE) field indicates
+   that a reboot or similar loss of state has occurred, the client MUST
+   first delay by a random amount of time selected with uniform random
+   distribution in the range 0 to 5 seconds, and then send its first
+   port mapping request.  After that request is acknowledged by the
+   gateway, the client may then send its second request, and so on, as
+   rapidly as the gateway allows.  The requests SHOULD be issued
+   serially, one at a time; the client SHOULD NOT issue multiple
+   concurrent requests.
+
+   The discussion in this section focuses on recreating inbound port
+   mappings after loss of NAT gateway state, because that is the more
+   serious problem.  Losing port mappings for outgoing connections
+   destroys those currently active connections, but does not prevent
+   clients from establishing new outgoing connections.  In contrast,
+   losing inbound port mappings not only destroys all existing inbound
+   connections, but also prevents the reception of any new inbound
+   connections until the port mapping is recreated.  Accordingly, we
+   consider recovery of inbound port mappings more important.  However,
+   clients that want outgoing connections to survive a NAT gateway
+   reboot can also achieve that using NAT-PMP, in the common case of a
+   residential NAT gateway with a single, relatively stable, external IP
+   address.  After initiating an outbound TCP connection (which will
+   cause the NAT gateway to establish an implicit port mapping), the
+   client should send the NAT gateway a port mapping request for the
+   source port of its TCP connection, which will cause the NAT gateway
+   to send a response giving the external port it allocated for that
+   mapping.  The client can then store this information, and use it
+   later to recreate the mapping if it determines that the NAT gateway
+   has lost its mapping state.
+

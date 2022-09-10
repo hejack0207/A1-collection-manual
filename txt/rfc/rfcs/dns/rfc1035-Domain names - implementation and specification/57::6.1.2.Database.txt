@@ -1,0 +1,90 @@
+6.1.2. Database
+
+While name server implementations are free to use any internal data
+structures they choose, the suggested structure consists of three major
+parts:
+
+   - A "catalog" data structure which lists the zones available to
+     this server, and a "pointer" to the zone data structure.  The
+     main purpose of this structure is to find the nearest ancestor
+     zone, if any, for arriving standard queries.
+
+   - Separate data structures for each of the zones held by the
+     name server.
+
+   - A data structure for cached data. (or perhaps separate caches
+     for different classes)
+
+All of these data structures can be implemented an identical tree
+structure format, with different data chained off the nodes in different
+parts: in the catalog the data is pointers to zones, while in the zone
+and cache data structures, the data will be RRs.  In designing the tree
+framework the designer should recognize that query processing will need
+to traverse the tree using case-insensitive label comparisons; and that
+
+
+
+Mockapetris                                                    [Page 37]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+in real data, a few nodes have a very high branching factor (100-1000 or
+more), but the vast majority have a very low branching factor (0-1).
+
+One way to solve the case problem is to store the labels for each node
+in two pieces: a standardized-case representation of the label where all
+ASCII characters are in a single case, together with a bit mask that
+denotes which characters are actually of a different case.  The
+branching factor diversity can be handled using a simple linked list for
+a node until the branching factor exceeds some threshold, and
+transitioning to a hash structure after the threshold is exceeded.  In
+any case, hash structures used to store tree sections must insure that
+hash functions and procedures preserve the casing conventions of the
+DNS.
+
+The use of separate structures for the different parts of the database
+is motivated by several factors:
+
+   - The catalog structure can be an almost static structure that
+     need change only when the system administrator changes the
+     zones supported by the server.  This structure can also be
+     used to store parameters used to control refreshing
+     activities.
+
+   - The individual data structures for zones allow a zone to be
+     replaced simply by changing a pointer in the catalog.  Zone
+     refresh operations can build a new structure and, when
+     complete, splice it into the database via a simple pointer
+     replacement.  It is very important that when a zone is
+     refreshed, queries should not use old and new data
+     simultaneously.
+
+   - With the proper search procedures, authoritative data in zones
+     will always "hide", and hence take precedence over, cached
+     data.
+
+   - Errors in zone definitions that cause overlapping zones, etc.,
+     may cause erroneous responses to queries, but problem
+     determination is simplified, and the contents of one "bad"
+     zone can't corrupt another.
+
+   - Since the cache is most frequently updated, it is most
+     vulnerable to corruption during system restarts.  It can also
+     become full of expired RR data.  In either case, it can easily
+     be discarded without disturbing zone data.
+
+A major aspect of database design is selecting a structure which allows
+the name server to deal with crashes of the name server's host.  State
+information which a name server should save across system crashes
+
+
+
+Mockapetris                                                    [Page 38]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+includes the catalog structure (including the state of refreshing for
+each zone) and the zone data itself.
+

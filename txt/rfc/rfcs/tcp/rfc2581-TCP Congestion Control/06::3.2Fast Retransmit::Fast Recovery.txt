@@ -1,0 +1,85 @@
+3.2 Fast Retransmit/Fast Recovery
+
+   A TCP receiver SHOULD send an immediate duplicate ACK when an out-
+   of-order segment arrives.  The purpose of this ACK is to inform the
+   sender that a segment was received out-of-order and which sequence
+   number is expected.  From the sender's perspective, duplicate ACKs
+   can be caused by a number of network problems.  First, they can be
+   caused by dropped segments.  In this case, all segments after the
+   dropped segment will trigger duplicate ACKs.  Second, duplicate ACKs
+   can be caused by the re-ordering of data segments by the network (not
+   a rare event along some network paths [Pax97]).  Finally, duplicate
+   ACKs can be caused by replication of ACK or data segments by the
+   network.  In addition, a TCP receiver SHOULD send an immediate ACK
+   when the incoming segment fills in all or part of a gap in the
+   sequence space.  This will generate more timely information for a
+   sender recovering from a loss through a retransmission timeout, a
+   fast retransmit, or an experimental loss recovery algorithm, such as
+   NewReno [FH98].
+
+   The TCP sender SHOULD use the "fast retransmit" algorithm to detect
+   and repair loss, based on incoming duplicate ACKs.  The fast
+   retransmit algorithm uses the arrival of 3 duplicate ACKs (4
+   identical ACKs without the arrival of any other intervening packets)
+   as an indication that a segment has been lost.  After receiving 3
+   duplicate ACKs, TCP performs a retransmission of what appears to be
+   the missing segment, without waiting for the retransmission timer to
+   expire.
+
+   After the fast retransmit algorithm sends what appears to be the
+   missing segment, the "fast recovery" algorithm governs the
+   transmission of new data until a non-duplicate ACK arrives.  The
+   reason for not performing slow start is that the receipt of the
+   duplicate ACKs not only indicates that a segment has been lost, but
+   also that segments are most likely leaving the network (although a
+   massive segment duplication by the network can invalidate this
+   conclusion).  In other words, since the receiver can only generate a
+   duplicate ACK when a segment has arrived, that segment has left the
+   network and is in the receiver's buffer, so we know it is no longer
+   consuming network resources.  Furthermore, since the ACK "clock"
+   [Jac88] is preserved, the TCP sender can continue to transmit new
+   segments (although transmission must continue using a reduced cwnd).
+
+   The fast retransmit and fast recovery algorithms are usually
+   implemented together as follows.
+
+   1.  When the third duplicate ACK is received, set ssthresh to no more
+       than the value given in equation 3.
+
+
+
+
+Allman, et. al.             Standards Track                     [Page 6]
+
+RFC 2581                 TCP Congestion Control               April 1999
+
+
+   2.  Retransmit the lost segment and set cwnd to ssthresh plus 3*SMSS.
+       This artificially "inflates" the congestion window by the number
+       of segments (three) that have left the network and which the
+       receiver has buffered.
+
+   3.  For each additional duplicate ACK received, increment cwnd by
+       SMSS.  This artificially inflates the congestion window in order
+       to reflect the additional segment that has left the network.
+
+   4.  Transmit a segment, if allowed by the new value of cwnd and the
+       receiver's advertised window.
+
+   5.  When the next ACK arrives that acknowledges new data, set cwnd to
+       ssthresh (the value set in step 1).  This is termed "deflating"
+       the window.
+
+       This ACK should be the acknowledgment elicited by the
+       retransmission from step 1, one RTT after the retransmission
+       (though it may arrive sooner in the presence of significant out-
+       of-order delivery of data segments at the receiver).
+       Additionally, this ACK should acknowledge all the intermediate
+       segments sent between the lost segment and the receipt of the
+       third duplicate ACK, if none of these were lost.
+
+   Note: This algorithm is known to generally not recover very
+   efficiently from multiple losses in a single flight of packets
+   [FF96].  One proposed set of modifications to address this problem
+   can be found in [FH98].
+

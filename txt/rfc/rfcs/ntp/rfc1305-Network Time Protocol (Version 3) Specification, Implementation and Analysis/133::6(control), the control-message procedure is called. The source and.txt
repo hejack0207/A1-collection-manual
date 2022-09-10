@@ -1,0 +1,119 @@
+6 (control), the control-message procedure is called. The source and
+destination Internet addresses and ports in the IP and UDP headers are
+matched to the correct peer. If there is no match a new instantiation of
+the protocol machine is created and the association mobilized.
+
+begin receive procedure
+        if (<$Eroman pkt.version~!=~roman NTP.VERSION>) exit;
+        #ifdef (control messages implemented)
+                if (<$Eroman pkt.mode~=~6>) call control-message;
+                #endef
+        for (all associations)                  /* access control goes
+here */
+                match addresses and ports to associations;
+        if (no matching association)
+                call receive-instantiation procedure;   /* create
+association */
+
+The call to decrypt is implemented only if authentication is
+implemented.
+
+        #ifdef (authentication implemented)     /* see Appendix C */
+                call decrypt;
+                #endef
+
+If the packet mode is nonzero, this becomes the value of mode used in
+the following step; otherwise, the peer is an old NTP version and mode
+is determined from the port numbers as described in Section 3.3.
+
+        if (pkt.mode = 0)                               /* for
+compatibility with old versions */
+                <$Emode~<<-~>(see Section 3.3);
+        else
+                <$Emode~<<-~roman pkt.mode>;
+
+Table 5<$&tab5> shows for each combination of peer.mode and mode the
+resulting case labels.
+
+        case (mode, peer.hostmode)              /* see Table 5 */
+
+If error the packet is simply ignored and the association demobilized,
+if not previously configured.
+error:          if (<$Eroman peer.config~=~0>) demobilize association;  
+/* see no evil */
+                break;
+
+If recv the packet is processed and the association marked reachable if
+tests five through eight (valid header) enumerated in the packet
+procedure succeed. If, in addition, tests one through four succeed
+(valid data), the clock-update procedure is called to update the local
+clock. Otherwise, if the association was not previously configured, it
+is demobilized.
+
+recv:           call packet;                            /* process
+packet */
+                if (valid header) begin         /* if valid header,
+update local clock */
+                        <$Eroman peer.reach~<<-~roman peer.reach~|~1>;
+                        if (valid data) call clock-update;
+                        endif
+                else
+                        if (<$Eroman peer.config~=~0>) demobilize
+association;
+                break;
+
+If xmit the packet is processed and an immediate reply is sent. The
+association is then demobilized if not previously configured.
+
+xmit:           call packet;                            /* process
+packet */
+                <$Eroman peer.hostpoll~<<-~roman peer.peerpoll>;        
+/* send immediate reply */
+                call poll-update;
+                call transmit;
+                if (<$Eroman peer.config~=~0>) demobilize association;
+                break;
+
+If pkt the packet is processed and the association marked reachable if
+tests five through eight (valid header) enumerated in the packet
+procedure succeed. If, in addition, tests one through four succeed
+(valid data), the clock-update procedure is called to update the local
+clock. Otherwise, if the association was not previously configured, an
+immediate reply is sent and the association demobilized.
+
+pkt:            call packet;                            /* process
+packet */
+                if (valid header) begin         /* if valid header,
+update local clock */
+                        <$Eroman peer.reach~<<-~roman peer.reach~|~1>;
+                        if (valid data) call clock-update;
+                        endif
+                else if (<$Eroman peer.config~=~0>) begin
+                        <$Eroman peer.hostpoll~<<-~roman
+peer.peerpoll>; /* send immediate reply */
+                        call poll-update;
+                        call transmit;
+                        demobilize association;
+                        endif
+                endcase
+        end receive procedure;
+
+Packet Procedure
+
+The packet procedure checks the message validity, computes delay/offset
+samples and calls other procedures to filter the data and select the
+synchronization source. Test 1 requires the transmit timestamp not match
+the last one received from the same peer; otherwise, the message might
+be an old duplicate. Test 2 requires the originate timestamp match the
+last one sent to the same peer; otherwise, the message might be out of
+order, bogus or worse. In case of broadcast mode (5) the apparent
+roundtrip delay will be zero and the full accuracy of the time-transfer
+operation may not be achievable. However, the accuracy achieved may be
+adequate for most purposes. The poll-update procedure is called with
+argument peer.hostpoll (peer.peerpoll may have changed).
+
+begin packet procedure
+        <$Eroman peer.rec~<<-~roman sys.clock>;                 /*
+capture receive timestamp */
+        if (<$Eroman pkt.mode ~!=~5>) begin
+                <$Etest1~<<-~( roman {pkt.xmt~!=~peer.org})>;   /* test

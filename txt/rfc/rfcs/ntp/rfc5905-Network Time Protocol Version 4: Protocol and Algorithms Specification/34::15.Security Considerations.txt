@@ -1,0 +1,141 @@
+15.  Security Considerations
+
+   NTP security requirements are even more stringent than most other
+   distributed services.  First, the operation of the authentication
+   mechanism and the time synchronization mechanism are inextricably
+   intertwined.  Reliable time synchronization requires cryptographic
+   keys that are valid only over a designated time interval; but, time
+   intervals can be enforced only when participating servers and clients
+
+
+
+Mills, et al.                Standards Track                   [Page 55]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   are reliably synchronized to UTC.  In addition, the NTP subnet is
+   hierarchical by nature, so time and trust flow from the primary
+   servers at the root through secondary servers to the clients at the
+   leaves.
+
+   An NTP client can claim to have authentic time to dependent
+   applications only if all servers on the path to the primary servers
+   are authenticated.  In NTP each server authenticates the next lower
+   stratum servers and authenticates by induction the lowest stratum
+   (primary) servers.  It is important to note that authentication in
+   the context of NTP does not necessarily imply the time is correct.
+   An NTP client mobilizes a number of concurrent associations with
+   different servers and uses a crafted agreement algorithm to pluck
+   truechimers from the population possibly including falsetickers.
+
+   The NTP specification assumes that the goal of the intruder is to
+   inject false time values, disrupt the protocol, or clog the network,
+   servers, or clients with spurious packets that exhaust resources and
+   deny service to legitimate applications.  There are a number of
+   defense mechanisms already built in the NTP architecture, protocol,
+   and algorithms.  The on-wire timestamp exchange scheme is inherently
+   resistant to spoofing, packet-loss, and replay attacks.  The
+   engineered clock filter, selection and clustering algorithms are
+   designed to defend against evil cliques of Byzantine traitors.  While
+   not necessarily designed to defeat determined intruders, these
+   algorithms and accompanying sanity checks have functioned well over
+   the years to deflect improperly operating but presumably friendly
+   scenarios.  However, these mechanisms do not securely identify and
+   authenticate servers to clients.  Without specific further
+   protection, an intruder can inject any or all of the following
+   attacks:
+
+   1.  An intruder can intercept and archive packets forever, as well as
+       all the public values ever generated and transmitted over the
+       net.
+
+   2.  An intruder can generate packets faster than the server, network
+       or client can process them, especially if they require expensive
+       cryptographic computations.
+
+   3.  In a wiretap attack, the intruder can intercept, modify, and
+       replay a packet.  However, it cannot permanently prevent onward
+       transmission of the original packet; that is, it cannot break the
+       wire, only tell lies and congest it.  Generally, the modified
+       packet cannot arrive at the victim before the original packet,
+       nor does it have the server private keys or identity parameters.
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 56]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   4.  In a middleman or masquerade attack, the intruder is positioned
+       between the server and client, so it can intercept, modify and
+       replay a packet and prevent onward transmission of the original
+       packet.  However, the middleman does not have the server private
+       keys.
+
+   The NTP security model assumes the following possible limitations:
+
+   1.  The running times for public key algorithms are relatively long
+       and highly variable.  In general, the performance of the time
+       synchronization function is badly degraded if these algorithms
+       must be used for every NTP packet.
+
+   2.  In some modes of operation, it is not feasible for a server to
+       retain state variables for every client.  It is however feasible
+       to regenerated them for a client upon arrival of a packet from
+       that client.
+
+   3.  The lifetime of cryptographic values must be enforced, which
+       requires a reliable system clock.  However, the sources that
+       synchronize the system clock must be trusted.  This circular
+       interdependence of the timekeeping and authentication functions
+       requires special handling.
+
+   4.  Client security functions must involve only public values
+       transmitted over the net.  Private values must never be disclosed
+       beyond the machine on which they were created, except in the case
+       of a special trusted agent (TA) assigned for this purpose.
+
+   Unlike the Secure Shell (SSH) security model, where the client must
+   be securely authenticated to the server, in NTP the server must be
+   securely authenticated to the client.  In SSH, each different
+   interface address can be bound to a different name, as returned by a
+   reverse-DNS query.  In this design, separate public/private key pairs
+   may be required for each interface address with a distinct name.  A
+   perceived advantage of this design is that the security compartment
+   can be different for each interface.  This allows a firewall, for
+   instance, to require some interfaces to authenticate the client and
+   others not.
+
+   In the case of NTP as specified herein, NTP broadcast clients are
+   vulnerable to disruption by misbehaving or hostile SNTP or NTP
+   broadcast servers elsewhere in the Internet.  Such disruption can be
+   minimized by several approaches.  Filtering can be employed to limit
+   the access of NTP clients to known or trusted NTP broadcast servers.
+   Such filtering will prevent malicious traffic from reaching the NTP
+   clients.  Cryptographic authentication at the client will only allow
+
+
+
+
+Mills, et al.                Standards Track                   [Page 57]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   timing information from properly signed NTP messages to be utilized
+   in synchronizing its clock.  Higher levels of authentication may be
+   gained by the use of the Autokey mechanism [RFC5906].
+
+   Section 8 describes a potential security concern with the replay of
+   client requests.  Following the recommendations in that section
+   provides protection against such attacks.
+
+   It should be noted that this specification is describing an existing
+   implementation.  While the security shortfalls of the MD5 algorithm
+   are well-known, its use in the NTP specification is consistent with
+   widescale deployment in the Internet community.
+

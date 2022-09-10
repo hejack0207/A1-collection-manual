@@ -1,0 +1,85 @@
+2.3  Type-7 LSAs
+
+   External routes are imported into NSSAs as Type-7 LSAs by NSSA AS
+   boundary routers.  An NSSA AS boundary router (ASBR) is a router that
+   has an interface associated with the NSSA and is exchanging routing
+   information with routers belonging to another AS.  Like OSPF ASBRs,
+   an NSSA router indicates it is an NSSA ASBR by setting the E-bit in
+   its router-LSA.  As with Type-5 LSAs a separate Type-7 LSA is
+   originated for each destination network.  To support NSSAs the link-
+   state database must therefore be expanded to contain Type-7 LSAs.
+
+   Type-7 LSAs are identical to Type-5 LSAs except for the following
+   (see [OSPF] Section 12.4.4, "AS external links").
+
+      1. The Type field in the LSA header is 7.
+
+      2. Type-7 LSAs are only flooded within the originating NSSA.  The
+         flooding of Type-7 LSAs follows the same rules as the flooding
+         of Type-1 and Type-2 LSAs.
+
+      3. Type-7 LSAs are only listed within the OSPF area data
+         structures of their respective NSSAs, making them area
+         specific.  Type-5 LSAs, which are flooded to all Type-5 capable
+         areas, have global scope and are listed in the OSPF protocol
+         data structure.
+
+      4. NSSA border routers select which Type-7 LSAs are translated
+         into Type-5 LSAs and flooded into the OSPF domain's transit
+         topology.
+
+      5. Type-7 LSAs have a propagate (P) bit that, when set, tells an
+         NSSA border router to translate a Type-7 LSA into a Type-5 LSA.
+
+      6. Those Type-7 LSAs that are to be translated into Type-5 LSAs
+         must have their forwarding address set.
+
+
+
+
+
+
+
+
+Murphy                      Standards Track                     [Page 8]
+
+RFC 3101       The OSPF Not-So-Stubby Area (NSSA) Option    January 2003
+
+
+   Type-5 LSAs that are translations of Type-7 LSAs copy the Type-7
+   LSAs' non-zero forwarding addresses.  Only those Type-5 LSAs that are
+   aggregations of Type-7 LSAs may have 0.0.0.0 as a forwarding address.
+   (See Section 3.2 for details.)  Non-zero forwarding addresses produce
+   efficient inter-area routing to an NSSA's AS external destinations
+   when it has multiple border routers.  Also the non-zero forwarding
+   addresses of Type-7 LSAs ease the process of their translation into
+   Type-5 LSAs, as NSSA border routers are not required to compute them.
+
+   Normally the next hop address of an installed AS external route
+   learned by an NSSA ASBR from an adjacent AS points at one of the
+   adjacent AS's gateway routers.  If this address belongs to a network
+   connected to the NSSA ASBR via one of its NSSAs' active interfaces,
+   then the NSSA ASBR copies this next hop address into the forwarding
+   address field of the route's Type-7 LSA that is originated into this
+   NSSA, as is currently done with Type-5 LSAs. (See [OSPF] Section
+   12.4.4.1.)  For an NSSA with no such network the forwarding address
+   field may only be filled with an address from one of the its active
+   interfaces or 0.0.0.0.  If the P-bit is set, the forwarding address
+   must be non-zero; otherwise it may be 0.0.0.0.  If an NSSA requires
+   the P-bit be set and a non-zero forwarding address is unavailable,
+   then the route's Type-7 LSA is not originated into this NSSA.
+
+   When a router is forced to pick a forwarding address for a Type-7
+   LSA, preference should be given first to the router's internal
+   addresses (provided internal addressing is supported).  If internal
+   addresses are not available, preference should be given to the
+   router's active OSPF stub network addresses.  These choices avoid the
+   possible extra hop that may happen when a transit network's address
+   is used.  When the interface whose IP address is the LSA's forwarding
+   address transitions to a Down state (see [OSPF] Section 9.3), the
+   router must select a new forwarding address for the LSA and then re-
+   originate it.  If one is not available the LSA should be flushed.
+
+   The metrics and path types of Type-5 LSAs are directly comparable
+   with the metrics and path types of Type-7 LSAs.
+

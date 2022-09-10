@@ -1,0 +1,206 @@
+3.2.  IP Service NETLINK_FIREWALL
+
+   This service allows CPCs to receive, manipulate, and re-inject
+   packets via the IPv4 firewall service modules in the FE.  A firewall
+   rule is first inserted to activate packet redirection.  The CPC
+   informs the FEC whether it would like to receive just the metadata on
+   the packet or the actual data and, if the metadata is desired, what
+   is the maximum data length to be redirected.  The redirected packets
+   are still stored in the FEC, waiting a verdict from the CPC.  The
+   verdict could constitute a simple accept or drop decision of the
+   packet, in which case the verdict is imposed on the packet still
+   sitting on the FEC.  The verdict may also include a modified packet
+   to be sent on as a replacement.
+
+
+
+
+
+
+
+
+
+
+Salim, et. al.               Informational                     [Page 23]
+
+RFC 3549        Linux Netlink as an IP Services Protocol       July 2003
+
+
+   Two types of messages exist that can be sent from CPC to FEC.  These
+   are: Mode messages and Verdict messages.  Mode messages are sent
+   immediately to the FEC to describe what the CPC would like to
+   receive.  Verdict messages are sent to the FEC after a decision has
+   been made on the fate of a received packet.  The formats are
+   described below.
+
+   The mode message is described first.
+
+   0                   1                   2                   3
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |   Mode    |    Reserved1  |           Reserved2             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                         Range                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   Mode: 8 bits
+   Control information on the packet to be sent to the CPC.  The
+   different types are:
+
+          IPQ_COPY_META   Copy only packet metadata to CPC.
+          IPQ_COPY_PACKET Copy packet metadata and packet payloads
+                          to CPC.
+
+   Range: 32 bits
+   If IPQ_COPY_PACKET, this defines the maximum length to copy.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Salim, et. al.               Informational                     [Page 24]
+
+RFC 3549        Linux Netlink as an IP Services Protocol       July 2003
+
+
+   A packet and associated metadata received from user space looks
+   as follows.
+
+   0                   1                   2                   3
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       Packet ID                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                          Mark                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       timestamp_m                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       timestamp_u                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                          hook                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       indev_name                            |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       outdev_name                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |           hw_protocol       |        hw_type                |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |         hw_addrlen          |           Reserved            |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       hw_addr                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       data_len                              |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                      Payload . . .                          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   Packet ID: 32 bits
+   The unique packet identifier as passed to the CPC by the FEC.
+
+   Mark: 32 bits
+   The internal metadata value set to describe the rule in which
+   the packet was picked.
+
+   timestamp_m: 32 bits
+   Packet arrival time (seconds)
+
+   timestamp_u: 32 bits
+   Packet arrival time (useconds in addition to the seconds in
+   timestamp_m)
+
+   hook: 32 bits
+   The firewall module from which the packet was picked.
+
+
+
+
+Salim, et. al.               Informational                     [Page 25]
+
+RFC 3549        Linux Netlink as an IP Services Protocol       July 2003
+
+
+   indev_name: 128 bits
+   ASCII name of incoming interface.
+
+   outdev_name: 128 bits
+   ASCII name of outgoing interface.
+
+   hw_protocol: 16 bits
+   Hardware protocol, in network order.
+
+   hw_type: 16 bits
+   Hardware type.
+
+   hw_addrlen: 8 bits
+   Hardware address length.
+
+   hw_addr: 64 bits
+   Hardware address.
+
+   data_len: 32 bits
+   Length of packet data.
+
+   Payload: size defined by data_len
+   The payload of the packet received.
+
+   The Verdict message format is as follows
+
+   0                   1                   2                   3
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                         Value                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                       Packet ID                             |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                      Data Length                            |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                      Payload . . .                          |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   Value: 32 bits
+
+   This is the verdict to be imposed on the packet still sitting
+   in the FEC.  Verdicts could be:
+
+           NF_ACCEPT   Accept the packet and let it continue its
+                       traversal.
+           NF_DROP     Drop the packet.
+
+
+
+
+
+Salim, et. al.               Informational                     [Page 26]
+
+RFC 3549        Linux Netlink as an IP Services Protocol       July 2003
+
+
+   Packet ID: 32 bits
+   The packet identifier as passed to the CPC by the FEC.
+
+   Data Length: 32 bits
+   The data length of the modified packet (in bytes).  If you don't
+   modify the packet just set it to 0.
+
+   Payload:
+   Size as defined by the Data Length field.
+

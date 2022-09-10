@@ -1,0 +1,137 @@
+Appendix F. The NTP Clock-Combining Algorithm
+
+Introduction
+
+A common problem in synchronization subnets is systematic time-offset
+errors resulting from asymmetric transmission paths, where the networks
+or transmission media in one direction are substantially different from
+the other. The errors can range from microseconds on high-speed ring
+networks to large fractions of a second on satellite/landline paths. It
+has been found experimentally that these errors can be considerably
+reduced by combining the apparent offsets of a number of time servers to
+produce a more accurate working offset. Following is a description of
+the combining method used in the NTP implementation for the Fuzzball
+[MIL88b]. The method is similar to that used by national standards
+laboratories to determine a synthetic laboratory timescale from an
+ensemble of cesium clocks [ALL74b]. These procedures are optional and
+not required in a conforming NTP implementation.
+
+In the following description the stability of a clock is how well it can
+maintain a constant frequency, the accuracy is how well its frequency
+and time compare with national standards and the precision is how
+precisely these quantities can be maintained within a particular
+timekeeping system. Unless indicated otherwise, The offset of two clocks
+is the time difference between them, while the skew is the frequency
+difference (first derivative of offset with time) between them. Real
+clocks exhibit some variation in skew (second derivative of offset with
+time), which is called drift.
+
+Determining Time and Frequency
+
+Figure 9<$&fig9> shows the overall organization of the NTP time-server
+model. Timestamps exchanged with possibly many other subnet peers are
+used to determine individual roundtrip delays and clock offsets relative
+to each peer as described in the NTP specification. As shown in the
+figure, the computed delays and offsets are processed by the clock
+filter to reduce incidental timing noise and the most accurate and
+reliable subset determined by the clock-selection algorithm. The
+resulting offsets of this subset are first combined as described below
+and then processed by the phase-locked loop (PLL). In the PLL the
+combined effects of the filtering, selection and combining operations is
+to produce a phase-correction term. This is processed by the loop filter
+to control the local clock, which functions as a voltage-controlled
+oscillator (VCO). The VCO furnishes the timing (phase) reference to
+produce the timestamps used in all calculations.
+
+Clock Modelling
+
+The International Standard (SI) definition of time interval is in terms
+of the standard second: <169>the duration of 9,192,631,770 periods of
+the radiation corresponding to the transition between the two hyperfine
+levels of the ground state of the cesium-133 atom.<170> Let u represent
+the standard unit of time interval so defined and <$Ev~=~1 over u> be
+the standard unit of frequency. The epoch, denoted by t, is defined as
+the reading of a counter that runs at frequency v and began counting at
+some agreed initial epoch t0, which defines the standard or absolute
+timescale. For the purposes of the following analysis, the epoch of the
+standard timescale, as well as the time indicated by a clock will be
+considered continuous. In practice, time is determined relative to a
+clock constructed from an atomic oscillator and system of
+counter/dividers, which defines a timescale associated with that
+particular oscillator. Standard time and frequency are then determined
+from an ensemble of such timescales and algorithms designed to combine
+them to produce a composite timescale approximating the standard
+timescale.
+
+Let <$ET(t)> be the time displayed by a clock at epoch t relative to the
+standard timescale:
+
+<$ET(t)~=~1/2 D(t sub 0 )[t~-~t sub 0 ] sup 2~+~R(t sub 0 )[t~-~t sub 0
+]~ +~T(t sub 0 )~+~x(t)> ,
+
+where <$ED(t sub 0 )> is the fractional frequency drift per unit time,
+<$ER(t sub 0 )> the frequency and <$ET(t sub 0 )> the time at some
+previous epoch t0. In the usual stationary model these quantities can be
+assumed constant or changing slowly with epoch. The random nature of the
+clock is characterized by <$Ex(t)>, which represents the random noise
+(jitter) relative to the standard timescale. In the usual analysis the
+second-order term <$ED(t sub 0 )> is ignored and the noise term <$Ex(t)>
+modelled as a normal distribution with predictable spectral density or
+autocorrelation function.
+
+The probability density function of time offset <$Eroman p (t~-~T(t))>
+usually appears as a bell-shaped curve centered somewhere near zero. The
+width and general shape of the curve are determined by <$Ex(t)>, which
+depends on the oscillator precision and jitter characteristics, as well
+as the measurement system and its transmission paths. Beginning at epoch
+t0 the offset is set to zero, following which the bell creeps either to
+the left or right, depending on the value of <$ER(t sub 0 )> and
+accelerates depending on the value of <$ED(t sub 0 )>.
+
+Development of a Composite Timescale
+
+Now consider the time offsets of a number of real clocks connected by
+real networks. A display of the offsets of all clocks relative to the
+standard timescale will appear as a system of bell-shaped curves slowly
+precessing relative to each other, but with some further away from
+nominal zero than others. The bells will normally be scattered over the
+offset space, more or less close to each other, with some overlapping
+and some not. The problem is to estimate the true offset relative to the
+standard timescale from a system of offsets collected routinely between
+the clocks.
+
+A composite timescale can be determined from a sequence of offsets
+measured between the n clocks of an ensemble at nominal intervals
+<$Etau>. Let <$ER sub i (t sub 0 )> be the frequency and <$ET sub i (t
+sub 0 )> the time of the ith clock at epoch t0 relative to the standard
+timescale and let <169>^<170> designate the associated estimates. Then,
+an estimator for Ti computed at t0 for epoch <$Et sub 0~+~tau> is
+
+<$ET hat sub i ( t sub 0~+~ tau )~=~R hat sub i (t sub 0 ) tau ~+~T sub
+i (t sub 0 )> ,
+
+neglecting second-order terms. Consider a set of n independent time-
+offset measurements made between the clocks at epoch <$Et sub 0 ~+~ tau>
+and let the offset between clock i and clock j at that epoch be <$ET sub
+ij (t sub 0~+~ tau )>, defined as
+
+<$ET sub ij (t sub 0~+~ tau )~==~T sub i (t sub 0~+~ tau )~-~T sub j (t
+sub 0~+~ tau )> .
+
+Note that <$ET sub ij~=~- T sub ji> and <$ET sub ii~=~0>. Let <$Ew sub i
+( tau )> be a previously determined weight factor associated with the
+ith clock for the nominal interval <$Etau>. The basis for new estimates
+at epoch <$Et sub 0~+~ tau > is
+
+<$ET sub j (t sub 0~+~tau )~=~sum from {i=1} to n w sub i ( tau )[ T hat
+sub i (t sub 0~+~tau )~+~T sub ji (t sub 0~+~tau )].>
+
+That is, the apparent time indicated by the jth clock is a weighted
+average of the estimated time of each clock at epoch <$Et sub 0 ~+~ tau>
+plus the time offset measured between the jth clock and that clock at
+epoch <$Et sub 0 ~+~ tau>.
+
+An intuitive grasp of the behavior of this algorithm can be gained with
+the aid of a few examples. For instance, if <$Ew sub i ( tau )> is unity
+for the ith clock and zero for all others, the apparent time for each of
+the other clocks is simply the estimated time <$ET hat sub i (t sub

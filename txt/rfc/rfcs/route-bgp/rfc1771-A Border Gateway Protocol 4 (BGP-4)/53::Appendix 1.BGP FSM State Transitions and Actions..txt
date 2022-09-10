@@ -1,0 +1,204 @@
+Appendix 1.  BGP FSM State Transitions and Actions.
+
+   This Appendix discusses the transitions between states in the BGP FSM
+   in response to BGP events.  The following is the list of these states
+   and events when the negotiated Hold Time value is non-zero.
+
+       BGP States:
+
+                1 - Idle
+                2 - Connect
+                3 - Active
+                4 - OpenSent
+                5 - OpenConfirm
+                6 - Established
+
+       BGP Events:
+
+                1 - BGP Start
+                2 - BGP Stop
+                3 - BGP Transport connection open
+                4 - BGP Transport connection closed
+                5 - BGP Transport connection open failed
+                6 - BGP Transport fatal error
+                7 - ConnectRetry timer expired
+                8 - Hold Timer expired
+                9 - KeepAlive timer expired
+               10 - Receive OPEN message
+               11 - Receive KEEPALIVE message
+               12 - Receive UPDATE messages
+               13 - Receive NOTIFICATION message
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Rekhter & Li                                                   [Page 48]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+   The following table describes the state transitions of the BGP FSM
+   and the actions triggered by these transitions.
+
+
+    Event                Actions               Message Sent   Next State
+    --------------------------------------------------------------------
+    Idle (1)
+     1            Initialize resources            none             2
+                  Start ConnectRetry timer
+                  Initiate a transport connection
+     others               none                    none             1
+
+    Connect(2)
+     1                    none                    none             2
+     3            Complete initialization         OPEN             4
+                  Clear ConnectRetry timer
+     5            Restart ConnectRetry timer      none             3
+     7            Restart ConnectRetry timer      none             2
+                  Initiate a transport connection
+     others       Release resources               none             1
+
+    Active (3)
+     1                    none                    none             3
+     3            Complete initialization         OPEN             4
+                  Clear ConnectRetry timer
+     5            Close connection                                 3
+                  Restart ConnectRetry timer
+     7            Restart ConnectRetry timer      none             2
+                  Initiate a transport connection
+     others       Release resources               none             1
+
+    OpenSent(4)
+     1                    none                    none             4
+     4            Close transport connection      none             3
+                  Restart ConnectRetry timer
+     6            Release resources               none             1
+    10            Process OPEN is OK            KEEPALIVE          5
+                  Process OPEN failed           NOTIFICATION       1
+    others        Close transport connection    NOTIFICATION       1
+                  Release resources
+
+
+
+
+
+
+
+
+
+
+
+Rekhter & Li                                                   [Page 49]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+    OpenConfirm (5)
+     1                   none                     none             5
+     4            Release resources               none             1
+     6            Release resources               none             1
+     9            Restart KeepAlive timer       KEEPALIVE          5
+    11            Complete initialization         none             6
+                  Restart Hold Timer
+    13            Close transport connection                       1
+                  Release resources
+    others        Close transport connection    NOTIFICATION       1
+                  Release resources
+
+    Established (6)
+     1                   none                     none             6
+     4            Release resources               none             1
+     6            Release resources               none             1
+     9            Restart KeepAlive timer       KEEPALIVE          6
+    11            Restart Hold Timer            KEEPALIVE          6
+    12            Process UPDATE is OK          UPDATE             6
+                  Process UPDATE failed         NOTIFICATION       1
+    13            Close transport connection                       1
+                  Release resources
+    others        Close transport connection    NOTIFICATION       1
+                  Release resources
+   ---------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Rekhter & Li                                                   [Page 50]
+
+RFC 1771                         BGP-4                        March 1995
+
+
+      The following is a condensed version of the above state transition
+      table.
+
+
+   Events| Idle | Connect | Active | OpenSent | OpenConfirm | Estab
+         | (1)  |   (2)   |  (3)   |    (4)   |     (5)     |   (6)
+         |--------------------------------------------------------------
+    1    |  2   |    2    |   3    |     4    |      5      |    6
+         |      |         |        |          |             |
+    2    |  1   |    1    |   1    |     1    |      1      |    1
+         |      |         |        |          |             |
+    3    |  1   |    4    |   4    |     1    |      1      |    1
+         |      |         |        |          |             |
+    4    |  1   |    1    |   1    |     3    |      1      |    1
+         |      |         |        |          |             |
+    5    |  1   |    3    |   3    |     1    |      1      |    1
+         |      |         |        |          |             |
+    6    |  1   |    1    |   1    |     1    |      1      |    1
+         |      |         |        |          |             |
+    7    |  1   |    2    |   2    |     1    |      1      |    1
+         |      |         |        |          |             |
+    8    |  1   |    1    |   1    |     1    |      1      |    1
+         |      |         |        |          |             |
+    9    |  1   |    1    |   1    |     1    |      5      |    6
+         |      |         |        |          |             |
+   10    |  1   |    1    |   1    |  1 or 5  |      1      |    1
+         |      |         |        |          |             |
+   11    |  1   |    1    |   1    |     1    |      6      |    6
+         |      |         |        |          |             |
+   12    |  1   |    1    |   1    |     1    |      1      | 1 or 6
+         |      |         |        |          |             |
+   13    |  1   |    1    |   1    |     1    |      1      |    1
+         |      |         |        |          |             |
+         ---------------------------------------------------------------
+
+

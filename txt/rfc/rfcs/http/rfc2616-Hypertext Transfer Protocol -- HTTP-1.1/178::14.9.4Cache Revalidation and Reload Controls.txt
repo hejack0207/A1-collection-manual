@@ -1,0 +1,139 @@
+14.9.4 Cache Revalidation and Reload Controls
+
+   Sometimes a user agent might want or need to insist that a cache
+   revalidate its cache entry with the origin server (and not just with
+   the next cache along the path to the origin server), or to reload its
+   cache entry from the origin server. End-to-end revalidation might be
+   necessary if either the cache or the origin server has overestimated
+   the expiration time of the cached response. End-to-end reload may be
+   necessary if the cache entry has become corrupted for some reason.
+
+   End-to-end revalidation may be requested either when the client does
+   not have its own local cached copy, in which case we call it
+   "unspecified end-to-end revalidation", or when the client does have a
+   local cached copy, in which case we call it "specific end-to-end
+   revalidation."
+
+   The client can specify these three kinds of action using Cache-
+   Control request directives:
+
+   End-to-end reload
+      The request includes a "no-cache" cache-control directive or, for
+      compatibility with HTTP/1.0 clients, "Pragma: no-cache". Field
+      names MUST NOT be included with the no-cache directive in a
+      request. The server MUST NOT use a cached copy when responding to
+      such a request.
+
+   Specific end-to-end revalidation
+      The request includes a "max-age=0" cache-control directive, which
+      forces each cache along the path to the origin server to
+      revalidate its own entry, if any, with the next cache or server.
+      The initial request includes a cache-validating conditional with
+      the client's current validator.
+
+   Unspecified end-to-end revalidation
+      The request includes "max-age=0" cache-control directive, which
+      forces each cache along the path to the origin server to
+      revalidate its own entry, if any, with the next cache or server.
+      The initial request does not include a cache-validating
+
+
+
+
+Fielding, et al.            Standards Track                   [Page 113]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+      conditional; the first cache along the path (if any) that holds a
+      cache entry for this resource includes a cache-validating
+      conditional with its current validator.
+
+   max-age
+      When an intermediate cache is forced, by means of a max-age=0
+      directive, to revalidate its own cache entry, and the client has
+      supplied its own validator in the request, the supplied validator
+      might differ from the validator currently stored with the cache
+      entry. In this case, the cache MAY use either validator in making
+      its own request without affecting semantic transparency.
+
+      However, the choice of validator might affect performance. The
+      best approach is for the intermediate cache to use its own
+      validator when making its request. If the server replies with 304
+      (Not Modified), then the cache can return its now validated copy
+      to the client with a 200 (OK) response. If the server replies with
+      a new entity and cache validator, however, the intermediate cache
+      can compare the returned validator with the one provided in the
+      client's request, using the strong comparison function. If the
+      client's validator is equal to the origin server's, then the
+      intermediate cache simply returns 304 (Not Modified). Otherwise,
+      it returns the new entity with a 200 (OK) response.
+
+      If a request includes the no-cache directive, it SHOULD NOT
+      include min-fresh, max-stale, or max-age.
+
+   only-if-cached
+      In some cases, such as times of extremely poor network
+      connectivity, a client may want a cache to return only those
+      responses that it currently has stored, and not to reload or
+      revalidate with the origin server. To do this, the client may
+      include the only-if-cached directive in a request. If it receives
+      this directive, a cache SHOULD either respond using a cached entry
+      that is consistent with the other constraints of the request, or
+      respond with a 504 (Gateway Timeout) status. However, if a group
+      of caches is being operated as a unified system with good internal
+      connectivity, such a request MAY be forwarded within that group of
+      caches.
+
+   must-revalidate
+      Because a cache MAY be configured to ignore a server's specified
+      expiration time, and because a client request MAY include a max-
+      stale directive (which has a similar effect), the protocol also
+      includes a mechanism for the origin server to require revalidation
+      of a cache entry on any subsequent use. When the must-revalidate
+      directive is present in a response received by a cache, that cache
+      MUST NOT use the entry after it becomes stale to respond to a
+
+
+
+Fielding, et al.            Standards Track                   [Page 114]
+
+RFC 2616                        HTTP/1.1                       June 1999
+
+
+      subsequent request without first revalidating it with the origin
+      server. (I.e., the cache MUST do an end-to-end revalidation every
+      time, if, based solely on the origin server's Expires or max-age
+      value, the cached response is stale.)
+
+      The must-revalidate directive is necessary to support reliable
+      operation for certain protocol features. In all circumstances an
+      HTTP/1.1 cache MUST obey the must-revalidate directive; in
+      particular, if the cache cannot reach the origin server for any
+      reason, it MUST generate a 504 (Gateway Timeout) response.
+
+      Servers SHOULD send the must-revalidate directive if and only if
+      failure to revalidate a request on the entity could result in
+      incorrect operation, such as a silently unexecuted financial
+      transaction. Recipients MUST NOT take any automated action that
+      violates this directive, and MUST NOT automatically provide an
+      unvalidated copy of the entity if revalidation fails.
+
+      Although this is not recommended, user agents operating under
+      severe connectivity constraints MAY violate this directive but, if
+      so, MUST explicitly warn the user that an unvalidated response has
+      been provided. The warning MUST be provided on each unvalidated
+      access, and SHOULD require explicit user confirmation.
+
+   proxy-revalidate
+      The proxy-revalidate directive has the same meaning as the must-
+      revalidate directive, except that it does not apply to non-shared
+      user agent caches. It can be used on a response to an
+      authenticated request to permit the user's cache to store and
+      later return the response without needing to revalidate it (since
+      it has already been authenticated once by that user), while still
+      requiring proxies that service many users to revalidate each time
+      (in order to make sure that each user has been authenticated).
+      Note that such authenticated responses also need the public cache
+      control directive in order to allow them to be cached at all.
+

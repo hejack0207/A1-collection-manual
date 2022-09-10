@@ -1,0 +1,71 @@
+3.3. Timers
+
+   This section describes all events that are triggered by timers.
+
+   Every 30 seconds, the output process is instructed to generate a
+   complete response to every neighboring gateway.  When there are many
+   gateways on a single network, there is a tendency for them to
+   synchronize with each other such that they all issue updates at the
+   same time.  This can happen whenever the 30 second timer is affected
+   by the processing load on the system.  It is undesirable for the
+   update messages to become synchronized, since it can lead to
+   unnecessary collisions on broadcast networks.  Thus, implementations
+   are required to take one of two precautions.
+
+      - The 30-second updates are triggered by a clock whose rate
+        is not affected by system load or the time required to
+        service the previous update timer.
+
+      - The 30-second timer is offset by addition of a small random
+        time each time it is set.
+
+   There are two timers associated with each route, a "timeout" and a
+   "garbage-collection time".  Upon expiration of the timeout, the route
+   is no longer valid.  However, it is retained in the table for a short
+   time, so that neighbors can be notified that the route has been
+   dropped.  Upon expiration of the garbage-collection timer, the route
+   is finally removed from the tables.
+
+   The timeout is initialized when a route is established, and any time
+   an update message is received for the route.  If 180 seconds elapse
+   from the last time the timeout was initialized, the route is
+   considered to have expired, and the deletion process which we are
+   about to describe is started for it.
+
+   Deletions can occur for one of two reasons: (1) the timeout expires,
+   or (2) the metric is set to 16 because of an update received from the
+   current gateway.  (See section 3.4.2 for a discussion processing
+   updates from other gateways.)  In either case, the following events
+   happen:
+
+      - The garbage-collection timer is set for 120 seconds.
+
+      - The metric for the route is set to 16 (infinity).  This
+        causes the route to be removed from service.
+
+
+
+
+Hedrick                                                        [Page 23]
+
+RFC 1058              Routing Information Protocol             June 1988
+
+
+      - A flag is set noting that this entry has been changed, and
+        the output process is signalled to trigger a response.
+
+   Until the garbage-collection timer expires, the route is included in
+   all updates sent by this host, with a metric of 16 (infinity).  When
+   the garbage-collection timer expires, the route is deleted from the
+   tables.
+
+   Should a new route to this network be established while the garbage-
+   collection timer is running, the new route will replace the one that
+   is about to be deleted.  In this case the garbage-collection timer
+   must be cleared.
+
+   See section 3.5 for a discussion of a delay that is required in
+   carrying out triggered updates.  Although implementation of that
+   delay will require a timer, it is more natural to discuss it in
+   section 3.5 than here.
+

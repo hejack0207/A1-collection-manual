@@ -1,0 +1,104 @@
+A.5.1.1.  packet()
+
+/*
+ * packet() - process packet and compute offset, delay, and
+ * dispersion.
+ */
+void
+packet(
+        struct p *p,            /* peer structure pointer */
+        struct r *r             /* receive packet pointer */
+        )
+{
+        double  offset;         /* sample offsset */
+        double  delay;          /* sample delay */
+        double  disp;           /* sample dispersion */
+
+        /*
+         * By golly the packet is valid.  Light up the remaining header
+         * fields.  Note that we map stratum 0 (unspecified) to MAXSTRAT
+         * to make stratum comparisons simpler and to provide a natural
+         * interface for radio clock drivers that operate for
+         *  convenience at stratum 0.
+         */
+        p->leap = r->leap;
+        if (r->stratum == 0)
+                p->stratum = MAXSTRAT;
+        else
+                p->stratum = r->stratum;
+        p->pmode = r->mode;
+        p->ppoll = r->poll;
+        p->rootdelay = FP2D(r->rootdelay);
+        p->rootdisp = FP2D(r->rootdisp);
+        p->refid = r->refid;
+        p->reftime = r->reftime;
+
+        /*
+         * Verify the server is synchronized with valid stratum and
+         * reference time not later than the transmit time.
+         */
+
+
+
+
+Mills, et al.                Standards Track                   [Page 83]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+        if (p->leap == NOSYNC || p->stratum >= MAXSTRAT)
+                return;                 /* unsynchronized */
+
+        /*
+         * Verify valid root distance.
+         */
+        if (r->rootdelay / 2 + r->rootdisp >= MAXDISP || p->reftime >
+            r->xmt)
+                return;                 /* invalid header values */
+
+        poll_update(p, p->hpoll);
+        p->reach |= 1;
+
+        /*
+         * Calculate offset, delay and dispersion, then pass to the
+         * clock filter.  Note carefully the implied processing.  The
+         * first-order difference is done directly in 64-bit arithmetic,
+         * then the result is converted to floating double.  All further
+         * processing is in floating-double arithmetic with rounding
+         * done by the hardware.  This is necessary in order to avoid
+         * overflow and preserve precision.
+         *
+         * The delay calculation is a special case.  In cases where the
+         * server and client clocks are running at different rates and
+         * with very fast networks, the delay can appear negative.  In
+         * order to avoid violating the Principle of Least Astonishment,
+         * the delay is clamped not less than the system precision.
+         */
+        if (p->pmode == M_BCST) {
+                offset = LFP2D(r->xmt - r->dst);
+                delay = BDELAY;
+                disp = LOG2D(r->precision) + LOG2D(s.precision) + PHI *
+                    2 * BDELAY;
+        } else {
+                offset = (LFP2D(r->rec - r->org) + LFP2D(r->dst -
+                    r->xmt)) / 2;
+                delay = max(LFP2D(r->dst - r->org) - LFP2D(r->rec -
+                    r->xmt), LOG2D(s.precision));
+                disp = LOG2D(r->precision) + LOG2D(s.precision) + PHI *
+                    LFP2D(r->dst - r->org);
+        }
+        clock_filter(p, offset, delay, disp);
+}
+
+
+
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 84]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+

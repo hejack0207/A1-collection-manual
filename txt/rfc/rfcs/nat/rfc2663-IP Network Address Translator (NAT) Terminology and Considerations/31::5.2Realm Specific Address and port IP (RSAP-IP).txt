@@ -1,0 +1,163 @@
+5.2 Realm Specific Address and port IP (RSAP-IP)
+
+   Realm Specific Address and port IP (RSAP-IP) is a variation of RSIP
+   in that multiple private hosts use a single external address,
+   multiplexing on transport IDentifiers (i.e., TCP/UDP port numbers and
+   ICMP Query IDs).
+
+
+
+
+Srisuresh & Holdrege         Informational                     [Page 18]
+
+RFC 2663           NAT Terminology and Considerations        August 1999
+
+
+   "RSAP-IP-Client" may be defined similar to RSA-IP-Client with the
+   variation that RSAP-IP-Client assumes a tuple of (external address,
+   transport Identifier) when connecting to hosts in external realm to
+   pursue end-to-end communication. As such, communication with external
+   nodes for an RSAP-IP-Client may be limited to TCP, UDP and ICMP
+   sessions.
+
+   "RSAP-IP-Server" is similar to RSA-IP-Server in that it facilitates
+   routing of external realm packets specific to RSAP-IP clients inside
+   a private realm. Typically, an RSAP-IP-Server would also be the one
+   to assign transport tuples to RSAP-IP-Clients.
+
+   A NAPT router enroute could serve as RSAP-IP-Server, when the outer
+   encapsulation is TCP/UDP based and is addressed between the RSAP-IP-
+   Client and external peer. This approach requires the external peer to
+   be  the end-point of TCP/UDP based tunnel. Using this approach,
+   RSAP-IP-Clients may pursue any of the IPsec techniques, namely
+   transport or tunnel mode authentication and confidentiality using AH
+   and ESP headers on the embedded packets.  Note however, IPsec tunnel
+   mode is not a valid type of encapsulation, as a NAPT router cannot
+   provide routing transparency to AH and ESP protocols.
+
+   Alternately, packets may be tunneled between RSAP-IP-Client and
+   RSAP-IP-Server such that RSAP-IP-Server would detunnel packets
+   outbound from RSAP-IP-Clients and forward to external hosts. On the
+   return path, RSAP-IP-Server  would locate RSAP-IP-Client tunnel,
+   based on the tuple of (destination address, transport Identifier) and
+   encapsulate the original packet within a tunnel to forward to RSAP-
+   IP-Client. With this approach, there is no limitation on the
+   tunneling technique employed between RSAP-IP-Client and RSAP-IP-
+   Server. However, there are limitations to applying IPsec based
+   security on end-to-end packets.  Transport mode based authentication
+   and integrity may be attained.  But, confidentiality cannot be
+   permitted because RSAP-IP-Server must be able to examine the
+   destination transport Identifier in order to identify the RSAP-IP-
+   tunnel to forward inbound packets to. For this reason, only the
+   transport mode TCP, UDP and ICMP packets protected by AH and ESP-
+   authentication can traverse a RSAP-IP-Server using this approach.
+
+   As an example, say Host-A in figure 2 above, obtains a tuple of
+   (Addr-Nx, TCP port T-Nx) from NAPT router to act as RSAP-IP-Client to
+   initiate end-to-end TCP sessions with Host-X.  Traversal of end-to-
+   end packets within private realm may be illustrated as follows. In
+   the first method, outer layer of the outgoing packet from Host-A uses
+   (private address Addr-A, source port T-Na) as source tuple to
+   communicate with Host-X. NAPT router enroute translates this tuple
+   into (Addr-Nx, Port T-Nxa). This translation is independent of RSAP-
+   IP-Client tuple parameters used in the embedded packet.
+
+
+
+Srisuresh & Holdrege         Informational                     [Page 19]
+
+RFC 2663           NAT Terminology and Considerations        August 1999
+
+
+   First method, using NAPT router enroute to translate:
+   ====================================================
+
+   Host-A               NAPT router              Host-X
+   ------               -----------              ------
+
+   <Outer TCP/UDP packet, with
+   src=Addr-A, Src Port=T-Na,
+   Dest=Addr-X>,
+   embedding
+   <End-to-end packet, with
+   src=Addr-Nx, Src Port=T-Nx, Dest=Addr-X>
+   ----------------------------->
+
+                        <Outer TCP/UDP packet, with
+                        src=Addr-Nx, Src Port=T-Nxa,
+                        Dest=Addr-X>,
+                        embedding
+                        <End-to-end packet, with
+                        src=Addr-Nx, Src Port=T-Nx, Dest=Addr-X>
+                        --------------------------------------->
+
+                             .
+                             .
+                             .
+
+                                             <Outer TCP/UDP packet with
+                                             src=Addr-X, Dest=Addr-Nx,
+                                             Dest Port=T-Nxa>,
+                                             embedding
+                                             <End-to-end packet, with
+                                             src=Addr-X, Dest=Addr-Nx,
+                                             Dest Port=T-Nx>
+                                     <----------------------------------
+
+                        <Outer TCP/UDP packet, with
+                        src=Addr-X, Dest=Addr-A,
+                        Dest Port=T-Na>,
+                        embedding
+                        <End-to-end packet, with
+                        src=Addr-X, Dest=Addr-Nx,
+                        Dest Port=T-Nx>
+              <-----------------------------------
+
+
+
+
+
+
+
+
+Srisuresh & Holdrege         Informational                     [Page 20]
+
+RFC 2663           NAT Terminology and Considerations        August 1999
+
+
+   Second method, using a tunnel within private realm:
+   ==================================================
+
+   Host-A               NAPT router              Host-X
+   ------               -----------              ------
+
+   <Outer IP header, with
+   src=Addr-A, Dest=Addr-Np>,
+   embedding
+   <End-to-end packet, with
+   src=Addr-Nx, Src Port=T-Nx,
+   Dest=Addr-X>
+   ----------------------------->
+
+                        <End-to-end packet, with
+                        src=Addr-Nx, Src Port=T-Nx,
+                        Dest=Addr-X>
+                        -------------------------------->
+
+                             .
+                             .
+                             .
+
+                                             <End-to-end packet, with
+                                             src=Addr-X, Dest=Addr-Nx,
+                                             Dest Port=T-Nx>
+                                   <----------------------------------
+
+                        <Outer IP header, with
+                        src=Addr-Np, Dest=Addr-A>,
+                        embedding
+                        <End-to-end packet, with
+                        src=Addr-X, Dest=Addr-Nx,
+                        Dest Port=T-Nx>
+                <----------------------------------
+

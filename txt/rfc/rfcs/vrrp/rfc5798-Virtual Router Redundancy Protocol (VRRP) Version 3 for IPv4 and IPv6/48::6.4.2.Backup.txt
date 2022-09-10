@@ -1,0 +1,115 @@
+6.4.2.  Backup
+
+   The purpose of the {Backup} state is to monitor the availability and
+   state of the Master router.
+
+   (300) While in this state, a VRRP router MUST do the following:
+
+      (305) - If the protected IPvX address is an IPv4 address, then:
+
+         (310) + MUST NOT respond to ARP requests for the IPv4
+         address(es) associated with the virtual router.
+
+      (315) - else // protected addr is IPv6
+
+         (320) + MUST NOT respond to ND Neighbor Solicitation messages
+         for the IPv6 address(es) associated with the virtual router.
+
+         (325) + MUST NOT send ND Router Advertisement messages for the
+         virtual router.
+
+      (330) -endif // was protected addr IPv4?
+
+      (335) - MUST discard packets with a destination link-layer MAC
+      address equal to the virtual router MAC address.
+
+
+
+
+Nadas                        Standards Track                   [Page 22]
+
+RFC 5798                VRRPv3 for IPv4 and IPv6              March 2010
+
+
+      (340) - MUST NOT accept packets addressed to the IPvX address(es)
+      associated with the virtual router.
+
+      (345) - If a Shutdown event is received, then:
+
+         (350) + Cancel the Master_Down_Timer
+
+         (355) + Transition to the {Initialize} state
+
+      (360) -endif // shutdown recv
+
+      (365) - If the Master_Down_Timer fires, then:
+
+         (370) + Send an ADVERTISEMENT
+
+         (375) + If the protected IPvX address is an IPv4 address, then:
+
+            (380) * Broadcast a gratuitous ARP request on that interface
+            containing the virtual router MAC address for each IPv4
+            address associated with the virtual router.
+
+         (385) + else // ipv6
+
+            (390) * Compute and join the Solicited-Node multicast
+            address [RFC4291] for the IPv6 address(es) associated with
+            the virtual router.
+
+            (395) * For each IPv6 address associated with the virtual
+            router, send an unsolicited ND Neighbor Advertisement with
+            the Router Flag (R) set, the Solicited Flag (S) unset, the
+            Override flag (O) set, the target address set to the IPv6
+            address of the virtual router, and the target link-layer
+            address set to the virtual router MAC address.
+
+         (400) +endif // was protected addr ipv4?
+
+         (405) + Set the Adver_Timer to Advertisement_Interval
+
+         (410) + Transition to the {Master} state
+
+      (415) -endif // Master_Down_Timer fired
+
+      (420) - If an ADVERTISEMENT is received, then:
+
+         (425) + If the Priority in the ADVERTISEMENT is zero, then:
+
+            (430) * Set the Master_Down_Timer to Skew_Time
+
+
+
+
+Nadas                        Standards Track                   [Page 23]
+
+RFC 5798                VRRPv3 for IPv4 and IPv6              March 2010
+
+
+         (440) + else // priority non-zero
+
+            (445) * If Preempt_Mode is False, or if the Priority in the
+            ADVERTISEMENT is greater than or equal to the local
+            Priority, then:
+
+               (450) @ Set Master_Adver_Interval to Adver Interval
+               contained in the ADVERTISEMENT
+
+               (455) @ Recompute the Master_Down_Interval
+
+               (460) @ Reset the Master_Down_Timer to
+               Master_Down_Interval
+
+            (465) * else // preempt was true or priority was less
+
+               (470) @ Discard the ADVERTISEMENT
+
+            (475) *endif // preempt test
+
+         (480) +endif // was priority zero?
+
+      (485) -endif // was advertisement recv?
+
+   (490) endwhile // Backup state
+

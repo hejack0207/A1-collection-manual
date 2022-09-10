@@ -1,0 +1,100 @@
+A.5.5.4.  clock_update()
+
+/*
+ * clock_update() - update the system clock
+ */
+void
+clock_update(
+        struct p *p             /* peer structure pointer */
+        )
+{
+        double dtemp;
+
+        /*
+         * If this is an old update, for instance, as the result of a
+         * system peer change, avoid it.  We never use an old sample or
+         * the same sample twice.
+         */
+        if (s.t >= p->t)
+                return;
+
+        /*
+         * Combine the survivor offsets and update the system clock; the
+         * local_clock() routine will tell us the good or bad news.
+         */
+        s.t = p->t;
+        clock_combine();
+        switch (local_clock(p, s.offset)) {
+
+
+
+Mills, et al.                Standards Track                   [Page 95]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+        /*
+         * The offset is too large and probably bogus.  Complain to the
+         * system log and order the operator to set the clock manually
+         * within PANIC range.  The reference implementation includes a
+         * command line option to disable this check and to change the
+         * panic threshold from the default 1000 s as required.
+         */
+        case PANIC:
+                exit (0);
+
+        /*
+         * The offset is more than the step threshold (0.125 s by
+         * default).  After a step, all associations now have
+         * inconsistent time values, so they are reset and started
+         * fresh.  The step threshold can be changed in the reference
+         * implementation in order to lessen the chance the clock might
+         * be stepped backwards.  However, there may be serious
+         * consequences, as noted in the white papers at the NTP project
+         * site.
+         */
+        case STEP:
+                while (/* all associations */ 0)
+                        clear(p, X_STEP);
+                s.stratum = MAXSTRAT;
+                s.poll = MINPOLL;
+                break;
+
+        /*
+         * The offset was less than the step threshold, which is the
+         * normal case.  Update the system variables from the peer
+         * variables.  The lower clamp on the dispersion increase is to
+         * avoid timing loops and clockhopping when highly precise
+         * sources are in play.  The clamp can be changed from the
+         * default .01 s in the reference implementation.
+         */
+        case SLEW:
+                s.leap = p->leap;
+                s.stratum = p->stratum + 1;
+                s.refid = p->refid;
+                s.reftime = p->reftime;
+                s.rootdelay = p->rootdelay + p->delay;
+                dtemp = SQRT(SQUARE(p->jitter) + SQUARE(s.jitter));
+                dtemp += max(p->disp + PHI * (c.t - p->t) +
+                    fabs(p->offset), MINDISP);
+                s.rootdisp = p->rootdisp + dtemp;
+                break;
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 96]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+        /*
+         * Some samples are discarded while, for instance, a direct
+         * frequency measurement is being made.
+         */
+        case IGNORE:
+                break;
+        }
+}
+

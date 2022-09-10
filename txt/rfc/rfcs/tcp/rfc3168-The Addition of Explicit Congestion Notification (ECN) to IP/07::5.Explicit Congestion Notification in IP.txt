@@ -1,0 +1,205 @@
+5.  Explicit Congestion Notification in IP
+
+   This document specifies that the Internet provide a congestion
+   indication for incipient congestion (as in RED and earlier work
+   [RJ90]) where the notification can sometimes be through marking
+   packets rather than dropping them.  This uses an ECN field in the IP
+   header with two bits, making four ECN codepoints, '00' to '11'.  The
+   ECN-Capable Transport (ECT) codepoints '10' and '01' are set by the
+   data sender to indicate that the end-points of the transport protocol
+   are ECN-capable; we call them ECT(0) and ECT(1) respectively.  The
+   phrase "the ECT codepoint" in this documents refers to either of the
+   two ECT codepoints.  Routers treat the ECT(0) and ECT(1) codepoints
+   as equivalent.  Senders are free to use either the ECT(0) or the
+   ECT(1) codepoint to indicate ECT, on a packet-by-packet basis.
+
+
+
+
+Ramakrishnan, et al.        Standards Track                     [Page 6]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   The use of both the two codepoints for ECT, ECT(0) and ECT(1), is
+   motivated primarily by the desire to allow mechanisms for the data
+   sender to verify that network elements are not erasing the CE
+   codepoint, and that data receivers are properly reporting to the
+   sender the receipt of packets with the CE codepoint set, as required
+   by the transport protocol.  Guidelines for the senders and receivers
+   to differentiate between the ECT(0) and ECT(1) codepoints will be
+   addressed in separate documents, for each transport protocol.  In
+   particular, this document does not address mechanisms for TCP end-
+   nodes to differentiate between the ECT(0) and ECT(1) codepoints.
+   Protocols and senders that only require a single ECT codepoint SHOULD
+   use ECT(0).
+
+   The not-ECT codepoint '00' indicates a packet that is not using ECN.
+   The CE codepoint '11' is set by a router to indicate congestion to
+   the end nodes.  Routers that have a packet arriving at a full queue
+   drop the packet, just as they do in the absence of ECN.
+
+      +-----+-----+
+      | ECN FIELD |
+      +-----+-----+
+        ECT   CE         [Obsolete] RFC 2481 names for the ECN bits.
+         0     0         Not-ECT
+         0     1         ECT(1)
+         1     0         ECT(0)
+         1     1         CE
+
+      Figure 1: The ECN Field in IP.
+
+   The use of two ECT codepoints essentially gives a one-bit ECN nonce
+   in packet headers, and routers necessarily "erase" the nonce when
+   they set the CE codepoint [SCWA99].  For example, routers that erased
+   the CE codepoint would face additional difficulty in reconstructing
+   the original nonce, and thus repeated erasure of the CE codepoint
+   would be more likely to be detected by the end-nodes.  The ECN nonce
+   also can address the problem of misbehaving transport receivers lying
+   to the transport sender about whether or not the CE codepoint was set
+   in a packet.  The motivations for the use of two ECT codepoints is
+   discussed in more detail in Section 20, along with some discussion of
+   alternate possibilities for the fourth ECT codepoint (that is, the
+   codepoint '01').  Backwards compatibility with earlier ECN
+   implementations that do not understand the ECT(1) codepoint is
+   discussed in Section 11.
+
+   In RFC 2481 [RFC2481], the ECN field was divided into the ECN-Capable
+   Transport (ECT) bit and the CE bit.  The ECN field with only the
+   ECN-Capable Transport (ECT) bit set in RFC 2481 corresponds to the
+   ECT(0) codepoint in this document, and the ECN field with both the
+
+
+
+Ramakrishnan, et al.        Standards Track                     [Page 7]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   ECT and CE bit in RFC 2481 corresponds to the CE codepoint in this
+   document.  The '01' codepoint was left undefined in RFC 2481, and
+   this is the reason for recommending the use of ECT(0) when only a
+   single ECT codepoint is needed.
+
+         0     1     2     3     4     5     6     7
+      +-----+-----+-----+-----+-----+-----+-----+-----+
+      |          DS FIELD, DSCP           | ECN FIELD |
+      +-----+-----+-----+-----+-----+-----+-----+-----+
+
+        DSCP: differentiated services codepoint
+        ECN:  Explicit Congestion Notification
+
+      Figure 2: The Differentiated Services and ECN Fields in IP.
+
+   Bits 6 and 7 in the IPv4 TOS octet are designated as the ECN field.
+   The IPv4 TOS octet corresponds to the Traffic Class octet in IPv6,
+   and the ECN field is defined identically in both cases.  The
+   definitions for the IPv4 TOS octet [RFC791] and the IPv6 Traffic
+   Class octet have been superseded by the six-bit DS (Differentiated
+   Services) Field [RFC2474, RFC2780].  Bits 6 and 7 are listed in
+   [RFC2474] as Currently Unused, and are specified in RFC 2780 as
+   approved for experimental use for ECN.  Section 22 gives a brief
+   history of the TOS octet.
+
+   Because of the unstable history of the TOS octet, the use of the ECN
+   field as specified in this document cannot be guaranteed to be
+   backwards compatible with those past uses of these two bits that
+   pre-date ECN.  The potential dangers of this lack of backwards
+   compatibility are discussed in Section 22.
+
+   Upon the receipt by an ECN-Capable transport of a single CE packet,
+   the congestion control algorithms followed at the end-systems MUST be
+   essentially the same as the congestion control response to a *single*
+   dropped packet.  For example, for ECN-Capable TCP the source TCP is
+   required to halve its congestion window for any window of data
+   containing either a packet drop or an ECN indication.
+
+   One reason for requiring that the congestion-control response to the
+   CE packet be essentially the same as the response to a dropped packet
+   is to accommodate the incremental deployment of ECN in both end-
+   systems and in routers.  Some routers may drop ECN-Capable packets
+   (e.g., using the same AQM policies for congestion detection) while
+   other routers set the CE codepoint, for equivalent levels of
+   congestion.  Similarly, a router might drop a non-ECN-Capable packet
+   but set the CE codepoint in an ECN-Capable packet, for equivalent
+
+
+
+
+
+Ramakrishnan, et al.        Standards Track                     [Page 8]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   levels of congestion.  If there were different congestion control
+   responses to a CE codepoint than to a packet drop, this could result
+   in unfair treatment for different flows.
+
+   An additional goal is that the end-systems should react to congestion
+   at most once per window of data (i.e., at most once per round-trip
+   time), to avoid reacting multiple times to multiple indications of
+   congestion within a round-trip time.
+
+   For a router, the CE codepoint of an ECN-Capable packet SHOULD only
+   be set if the router would otherwise have dropped the packet as an
+   indication of congestion to the end nodes. When the router's buffer
+   is not yet full and the router is prepared to drop a packet to inform
+   end nodes of incipient congestion, the router should first check to
+   see if the ECT codepoint is set in that packet's IP header.  If so,
+   then instead of dropping the packet, the router MAY instead set the
+   CE codepoint in the IP header.
+
+   An environment where all end nodes were ECN-Capable could allow new
+   criteria to be developed for setting the CE codepoint, and new
+   congestion control mechanisms for end-node reaction to CE packets.
+   However, this is a research issue, and as such is not addressed in
+   this document.
+
+   When a CE packet (i.e., a packet that has the CE codepoint set) is
+   received by a router, the CE codepoint is left unchanged, and the
+   packet is transmitted as usual. When severe congestion has occurred
+   and the router's queue is full, then the router has no choice but to
+   drop some packet when a new packet arrives.  We anticipate that such
+   packet losses will become relatively infrequent when a majority of
+   end-systems become ECN-Capable and participate in TCP or other
+   compatible congestion control mechanisms. In an ECN-Capable
+   environment that is adequately-provisioned, packet losses should
+   occur primarily during transients or in the presence of non-
+   cooperating sources.
+
+   The above discussion of when CE may be set instead of dropping a
+   packet applies by default to all Differentiated Services Per-Hop
+   Behaviors (PHBs) [RFC 2475].  Specifications for PHBs MAY provide
+   more specifics on how a compliant implementation is to choose between
+   setting CE and dropping a packet, but this is NOT REQUIRED.  A router
+   MUST NOT set CE instead of dropping a packet when the drop that would
+   occur is caused by reasons other than congestion or the desire to
+   indicate incipient congestion to end nodes (e.g., a diffserv edge
+   node may be configured to unconditionally drop certain classes of
+   traffic to prevent them from entering its diffserv domain).
+
+
+
+
+
+Ramakrishnan, et al.        Standards Track                     [Page 9]
+
+RFC 3168               The Addition of ECN to IP          September 2001
+
+
+   We expect that routers will set the CE codepoint in response to
+   incipient congestion as indicated by the average queue size, using
+   the RED algorithms suggested in [FJ93, RFC2309].  To the best of our
+   knowledge, this is the only proposal currently under discussion in
+   the IETF for routers to drop packets proactively, before the buffer
+   overflows.  However, this document does not attempt to specify a
+   particular mechanism for active queue management, leaving that
+   endeavor, if needed, to other areas of the IETF.  While ECN is
+   inextricably tied up with the need to have a reasonable active queue
+   management mechanism at the router, the reverse does not hold; active
+   queue management mechanisms have been developed and deployed
+   independent of ECN, using packet drops as indications of congestion
+   in the absence of ECN in the IP architecture.
+

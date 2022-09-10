@@ -1,0 +1,77 @@
+3.4.1.  Timeout Procedure
+
+   The timeout procedure is called in client and symmetric modes when
+   the peer timer (peer.timer) reaches the value of the timer threshold
+   (peer.threshold) variable.  First, the reachability register
+   (peer.reach) is shifted one position to the left and a zero replaces
+   the vacated bit.  Then an NTP message is constructed and sent to the
+   peer.  If operating in active state or in passive state and
+   peer.reach is nonzero (reachable), the peer.timer is reinitialized
+   (resumes counting from zero) and the value of peer.threshold is set
+   to:
+
+           peer.threshold <- max( min( peer.ppoll, peer.hpoll,
+                           NTP.MAXPOLL), NTP.MINPOLL) .
+
+   If operating in active state and peer.reach is zero (unreachable),
+   the peer variables are updated as follows:
+
+                   peer.hpoll <- NTP.MINPOLL
+                   peer.disp <- NTP.MAXDISP
+                   peer.filter <- 0 (cleared)
+                   peer.org <- 0
+                   peer.rec <- 0
+
+   Then the clock selection algorithm is called, which may result in a
+   new clock source (sys.peer).  In other cases the protocol ceases
+   operation and the storage and timer resources are reclaimed for
+   subsequent use.
+
+   An NTP message is constructed as follows (see Appendices A and B for
+   formats).  First, the IP and UDP packet variables are copied from the
+   peer variables (note the interchange of source and destination
+   addresses and ports):
+
+           pkt.srcadr <- peer.dstadr       pkt.srcport <- peer.dstport
+           pkt.dstadr <- peer.srcadr       pkt.dstport <- peer.srcport
+
+   Next, the NTP packet variables are copied (rescaled as necessary)
+   from the system and peer variables:
+
+           pkt.leap <- sys.leap            pkt.distance <- sys.distance
+           pkt.version <- NTP.VERSION      pkt.drift <- sys.drift
+           pkt.stratum <- sys.stratum      pkt.refid <- sys.refid
+           pkt.poll <- peer.hpoll          pkt.reftime <- sys.reftime
+           pkt.precision <- sys.precision
+
+   Finally, the NTP packet timestamp variables are copied, depending on
+   whether the peer is operating in symmetric mode and reachable, in
+
+
+
+Mills                                                          [Page 23]
+
+RFC 1059                 Network Time Protocol                 July 1988
+
+
+   symmetric mode and not reachable (but active) or in client mode:
+
+   Symmetric Reachable     Symmetric Active        Client
+   - -------------------     -------------------     -------------------
+   pkt.org <- peer.org     pkt.org <- 0            pkt.org <- sys.clock
+   pkt.rec <- peer.rec     pkt.rec <- 0            pkt.rec <- sys.clock
+   pkt.xmt <- sys.clock    pkt.xmt <- sys.clock    pkt.xmt <- sys.clock
+
+   Note that the order of copying should be designed so that the time to
+   perform the copy operations themselves does not degrade the
+   measurement accuracy, which implies that the sys.clock values should
+   be copied last.  The reason for the choice of zeros to fill the
+   pkt.org and pkt.rec packet variables in the symmetric unreachable
+   case is to avoid the use of old data after a possibly extensive
+   period of unreachability.  The reason for the choice of sys.clock to
+   fill these variables in the client case is that, if for some reason
+   the NTP message is returned by the recipient unaltered, as when
+   testing with an Internet-echo server, this convention still allows at
+   least the roundtrip time to be accurately determined without special
+   handling.
+

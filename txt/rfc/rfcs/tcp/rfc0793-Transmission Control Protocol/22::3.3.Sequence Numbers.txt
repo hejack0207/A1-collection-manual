@@ -1,0 +1,382 @@
+3.3.  Sequence Numbers
+
+  A fundamental notion in the design is that every octet of data sent
+  over a TCP connection has a sequence number.  Since every octet is
+  sequenced, each of them can be acknowledged.  The acknowledgment
+  mechanism employed is cumulative so that an acknowledgment of sequence
+  number X indicates that all octets up to but not including X have been
+  received.  This mechanism allows for straight-forward duplicate
+  detection in the presence of retransmission.  Numbering of octets
+  within a segment is that the first data octet immediately following
+  the header is the lowest numbered, and the following octets are
+  numbered consecutively.
+
+  It is essential to remember that the actual sequence number space is
+  finite, though very large.  This space ranges from 0 to 2**32 - 1.
+  Since the space is finite, all arithmetic dealing with sequence
+  numbers must be performed modulo 2**32.  This unsigned arithmetic
+  preserves the relationship of sequence numbers as they cycle from
+  2**32 - 1 to 0 again.  There are some subtleties to computer modulo
+  arithmetic, so great care should be taken in programming the
+  comparison of such values.  The symbol "=<" means "less than or equal"
+  (modulo 2**32).
+
+  The typical kinds of sequence number comparisons which the TCP must
+  perform include:
+
+    (a)  Determining that an acknowledgment refers to some sequence
+         number sent but not yet acknowledged.
+
+    (b)  Determining that all sequence numbers occupied by a segment
+         have been acknowledged (e.g., to remove the segment from a
+         retransmission queue).
+
+    (c)  Determining that an incoming segment contains sequence numbers
+         which are expected (i.e., that the segment "overlaps" the
+         receive window).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[Page 24]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                Functional Specification
+
+
+
+  In response to sending data the TCP will receive acknowledgments.  The
+  following comparisons are needed to process the acknowledgments.
+
+    SND.UNA = oldest unacknowledged sequence number
+
+    SND.NXT = next sequence number to be sent
+
+    SEG.ACK = acknowledgment from the receiving TCP (next sequence
+              number expected by the receiving TCP)
+
+    SEG.SEQ = first sequence number of a segment
+
+    SEG.LEN = the number of octets occupied by the data in the segment
+              (counting SYN and FIN)
+
+    SEG.SEQ+SEG.LEN-1 = last sequence number of a segment
+
+  A new acknowledgment (called an "acceptable ack"), is one for which
+  the inequality below holds:
+
+    SND.UNA < SEG.ACK =< SND.NXT
+
+  A segment on the retransmission queue is fully acknowledged if the sum
+  of its sequence number and length is less or equal than the
+  acknowledgment value in the incoming segment.
+
+  When data is received the following comparisons are needed:
+
+    RCV.NXT = next sequence number expected on an incoming segments, and
+        is the left or lower edge of the receive window
+
+    RCV.NXT+RCV.WND-1 = last sequence number expected on an incoming
+        segment, and is the right or upper edge of the receive window
+
+    SEG.SEQ = first sequence number occupied by the incoming segment
+
+    SEG.SEQ+SEG.LEN-1 = last sequence number occupied by the incoming
+        segment
+
+  A segment is judged to occupy a portion of valid receive sequence
+  space if
+
+    RCV.NXT =< SEG.SEQ < RCV.NXT+RCV.WND
+
+  or
+
+    RCV.NXT =< SEG.SEQ+SEG.LEN-1 < RCV.NXT+RCV.WND
+
+
+
+                                                               [Page 25]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Functional Specification
+
+
+
+  The first part of this test checks to see if the beginning of the
+  segment falls in the window, the second part of the test checks to see
+  if the end of the segment falls in the window; if the segment passes
+  either part of the test it contains data in the window.
+
+  Actually, it is a little more complicated than this.  Due to zero
+  windows and zero length segments, we have four cases for the
+  acceptability of an incoming segment:
+
+    Segment Receive  Test
+    Length  Window
+    ------- -------  -------------------------------------------
+
+       0       0     SEG.SEQ = RCV.NXT
+
+       0      >0     RCV.NXT =< SEG.SEQ < RCV.NXT+RCV.WND
+
+      >0       0     not acceptable
+
+      >0      >0     RCV.NXT =< SEG.SEQ < RCV.NXT+RCV.WND
+                  or RCV.NXT =< SEG.SEQ+SEG.LEN-1 < RCV.NXT+RCV.WND
+
+  Note that when the receive window is zero no segments should be
+  acceptable except ACK segments.  Thus, it is be possible for a TCP to
+  maintain a zero receive window while transmitting data and receiving
+  ACKs.  However, even when the receive window is zero, a TCP must
+  process the RST and URG fields of all incoming segments.
+
+  We have taken advantage of the numbering scheme to protect certain
+  control information as well.  This is achieved by implicitly including
+  some control flags in the sequence space so they can be retransmitted
+  and acknowledged without confusion (i.e., one and only one copy of the
+  control will be acted upon).  Control information is not physically
+  carried in the segment data space.  Consequently, we must adopt rules
+  for implicitly assigning sequence numbers to control.  The SYN and FIN
+  are the only controls requiring this protection, and these controls
+  are used only at connection opening and closing.  For sequence number
+  purposes, the SYN is considered to occur before the first actual data
+  octet of the segment in which it occurs, while the FIN is considered
+  to occur after the last actual data octet in a segment in which it
+  occurs.  The segment length (SEG.LEN) includes both data and sequence
+  space occupying controls.  When a SYN is present then SEG.SEQ is the
+  sequence number of the SYN.
+
+
+
+
+
+
+
+[Page 26]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                Functional Specification
+
+
+
+  Initial Sequence Number Selection
+
+  The protocol places no restriction on a particular connection being
+  used over and over again.  A connection is defined by a pair of
+  sockets.  New instances of a connection will be referred to as
+  incarnations of the connection.  The problem that arises from this is
+  -- "how does the TCP identify duplicate segments from previous
+  incarnations of the connection?"  This problem becomes apparent if the
+  connection is being opened and closed in quick succession, or if the
+  connection breaks with loss of memory and is then reestablished.
+
+  To avoid confusion we must prevent segments from one incarnation of a
+  connection from being used while the same sequence numbers may still
+  be present in the network from an earlier incarnation.  We want to
+  assure this, even if a TCP crashes and loses all knowledge of the
+  sequence numbers it has been using.  When new connections are created,
+  an initial sequence number (ISN) generator is employed which selects a
+  new 32 bit ISN.  The generator is bound to a (possibly fictitious) 32
+  bit clock whose low order bit is incremented roughly every 4
+  microseconds.  Thus, the ISN cycles approximately every 4.55 hours.
+  Since we assume that segments will stay in the network no more than
+  the Maximum Segment Lifetime (MSL) and that the MSL is less than 4.55
+  hours we can reasonably assume that ISN's will be unique.
+
+  For each connection there is a send sequence number and a receive
+  sequence number.  The initial send sequence number (ISS) is chosen by
+  the data sending TCP, and the initial receive sequence number (IRS) is
+  learned during the connection establishing procedure.
+
+  For a connection to be established or initialized, the two TCPs must
+  synchronize on each other's initial sequence numbers.  This is done in
+  an exchange of connection establishing segments carrying a control bit
+  called "SYN" (for synchronize) and the initial sequence numbers.  As a
+  shorthand, segments carrying the SYN bit are also called "SYNs".
+  Hence, the solution requires a suitable mechanism for picking an
+  initial sequence number and a slightly involved handshake to exchange
+  the ISN's.
+
+  The synchronization requires each side to send it's own initial
+  sequence number and to receive a confirmation of it in acknowledgment
+  from the other side.  Each side must also receive the other side's
+  initial sequence number and send a confirming acknowledgment.
+
+    1) A --> B  SYN my sequence number is X
+    2) A <-- B  ACK your sequence number is X
+    3) A <-- B  SYN my sequence number is Y
+    4) A --> B  ACK your sequence number is Y
+
+
+
+                                                               [Page 27]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Functional Specification
+
+
+
+  Because steps 2 and 3 can be combined in a single message this is
+  called the three way (or three message) handshake.
+
+  A three way handshake is necessary because sequence numbers are not
+  tied to a global clock in the network, and TCPs may have different
+  mechanisms for picking the ISN's.  The receiver of the first SYN has
+  no way of knowing whether the segment was an old delayed one or not,
+  unless it remembers the last sequence number used on the connection
+  (which is not always possible), and so it must ask the sender to
+  verify this SYN.  The three way handshake and the advantages of a
+  clock-driven scheme are discussed in [3].
+
+  Knowing When to Keep Quiet
+
+  To be sure that a TCP does not create a segment that carries a
+  sequence number which may be duplicated by an old segment remaining in
+  the network, the TCP must keep quiet for a maximum segment lifetime
+  (MSL) before assigning any sequence numbers upon starting up or
+  recovering from a crash in which memory of sequence numbers in use was
+  lost.  For this specification the MSL is taken to be 2 minutes.  This
+  is an engineering choice, and may be changed if experience indicates
+  it is desirable to do so.  Note that if a TCP is reinitialized in some
+  sense, yet retains its memory of sequence numbers in use, then it need
+  not wait at all; it must only be sure to use sequence numbers larger
+  than those recently used.
+
+  The TCP Quiet Time Concept
+
+    This specification provides that hosts which "crash" without
+    retaining any knowledge of the last sequence numbers transmitted on
+    each active (i.e., not closed) connection shall delay emitting any
+    TCP segments for at least the agreed Maximum Segment Lifetime (MSL)
+    in the internet system of which the host is a part.  In the
+    paragraphs below, an explanation for this specification is given.
+    TCP implementors may violate the "quiet time" restriction, but only
+    at the risk of causing some old data to be accepted as new or new
+    data rejected as old duplicated by some receivers in the internet
+    system.
+
+    TCPs consume sequence number space each time a segment is formed and
+    entered into the network output queue at a source host. The
+    duplicate detection and sequencing algorithm in the TCP protocol
+    relies on the unique binding of segment data to sequence space to
+    the extent that sequence numbers will not cycle through all 2**32
+    values before the segment data bound to those sequence numbers has
+    been delivered and acknowledged by the receiver and all duplicate
+    copies of the segments have "drained" from the internet.  Without
+    such an assumption, two distinct TCP segments could conceivably be
+
+
+[Page 28]                                                               
+
+
+September 1981                                                          
+                                           Transmission Control Protocol
+                                                Functional Specification
+
+
+
+    assigned the same or overlapping sequence numbers, causing confusion
+    at the receiver as to which data is new and which is old.  Remember
+    that each segment is bound to as many consecutive sequence numbers
+    as there are octets of data in the segment.
+
+    Under normal conditions, TCPs keep track of the next sequence number
+    to emit and the oldest awaiting acknowledgment so as to avoid
+    mistakenly using a sequence number over before its first use has
+    been acknowledged.  This alone does not guarantee that old duplicate
+    data is drained from the net, so the sequence space has been made
+    very large to reduce the probability that a wandering duplicate will
+    cause trouble upon arrival.  At 2 megabits/sec. it takes 4.5 hours
+    to use up 2**32 octets of sequence space.  Since the maximum segment
+    lifetime in the net is not likely to exceed a few tens of seconds,
+    this is deemed ample protection for foreseeable nets, even if data
+    rates escalate to l0's of megabits/sec.  At 100 megabits/sec, the
+    cycle time is 5.4 minutes which may be a little short, but still
+    within reason.
+
+    The basic duplicate detection and sequencing algorithm in TCP can be
+    defeated, however, if a source TCP does not have any memory of the
+    sequence numbers it last used on a given connection. For example, if
+    the TCP were to start all connections with sequence number 0, then
+    upon crashing and restarting, a TCP might re-form an earlier
+    connection (possibly after half-open connection resolution) and emit
+    packets with sequence numbers identical to or overlapping with
+    packets still in the network which were emitted on an earlier
+    incarnation of the same connection.  In the absence of knowledge
+    about the sequence numbers used on a particular connection, the TCP
+    specification recommends that the source delay for MSL seconds
+    before emitting segments on the connection, to allow time for
+    segments from the earlier connection incarnation to drain from the
+    system.
+
+    Even hosts which can remember the time of day and used it to select
+    initial sequence number values are not immune from this problem
+    (i.e., even if time of day is used to select an initial sequence
+    number for each new connection incarnation).
+
+    Suppose, for example, that a connection is opened starting with
+    sequence number S.  Suppose that this connection is not used much
+    and that eventually the initial sequence number function (ISN(t))
+    takes on a value equal to the sequence number, say S1, of the last
+    segment sent by this TCP on a particular connection.  Now suppose,
+    at this instant, the host crashes, recovers, and establishes a new
+    incarnation of the connection. The initial sequence number chosen is
+    S1 = ISN(t) -- last used sequence number on old incarnation of
+    connection!  If the recovery occurs quickly enough, any old
+
+
+                                                               [Page 29]
+
+
+                                                          September 1981
+Transmission Control Protocol
+Functional Specification
+
+
+
+    duplicates in the net bearing sequence numbers in the neighborhood
+    of S1 may arrive and be treated as new packets by the receiver of
+    the new incarnation of the connection.
+
+    The problem is that the recovering host may not know for how long it
+    crashed nor does it know whether there are still old duplicates in
+    the system from earlier connection incarnations.
+
+    One way to deal with this problem is to deliberately delay emitting
+    segments for one MSL after recovery from a crash- this is the "quite
+    time" specification.  Hosts which prefer to avoid waiting are
+    willing to risk possible confusion of old and new packets at a given
+    destination may choose not to wait for the "quite time".
+    Implementors may provide TCP users with the ability to select on a
+    connection by connection basis whether to wait after a crash, or may
+    informally implement the "quite time" for all connections.
+    Obviously, even where a user selects to "wait," this is not
+    necessary after the host has been "up" for at least MSL seconds.
+
+    To summarize: every segment emitted occupies one or more sequence
+    numbers in the sequence space, the numbers occupied by a segment are
+    "busy" or "in use" until MSL seconds have passed, upon crashing a
+    block of space-time is occupied by the octets of the last emitted
+    segment, if a new connection is started too soon and uses any of the
+    sequence numbers in the space-time footprint of the last segment of
+    the previous connection incarnation, there is a potential sequence
+    number overlap area which could cause confusion at the receiver.
+

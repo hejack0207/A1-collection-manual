@@ -1,0 +1,250 @@
+Appendix C represent one mechanism to enforce this; however, the
+encryption algorithms can be quite CPU-intensive and can seriously
+degrade accuracy, unless precautions such as mentioned in the
+description of the transmit procedure are taken.
+
+While not a required feature of NTP itself, some implementations may
+include an access-control feature that prevents unauthorized access and
+controls which peers are allowed to update the local clock. For this
+purpose it is useful to distinguish between three categories of access:
+those that are preauthorized as trusted, preauthorized as friendly and
+all other (non-preauthorized) accesses. Presumably, preauthorization is
+accomplished by entries in the configuration file or some kind of
+ticket-management system such as Kerberos [STE88]. In this model only
+trusted accesses can result in the peer becoming the synchronization
+source. While friendly accesses cannot result in the peer becoming the
+synchronization source, NTP messages and timestamps are returned as
+specified.
+
+It does not seem useful to maintain a secret clock, as would result from
+restricting non-preauthorized accesses, unless the intent is to hide the
+existence of the time server itself. Well-behaved Internet hosts are
+expected to return an ICMP service-unavailable error message if a
+service is not implemented or resources are not available; however, in
+the case of NTP the resources required are minimal, so there is little
+need to restrict requests intended only to read the clock. A simple but
+effective access-control mechanism is then to consider all associations
+preconfigured in a symmetric mode or client mode (modes 1, 2 and 3) as
+trusted and all other associations, preconfigured or not, as friendly.
+
+If a more comprehensive trust model is required, the design can be based
+on an access-control list with each entry consisting of a 32-bit
+Internet address, 32-bit mask and three-bit mode. If the logical AND of
+the source address (pkt.peeraddr) and the mask in an entry matches the
+corresponding address in the entry and the mode (pkt.mode) matches the
+mode in the entry, the access is allowed; otherwise an ICMP error
+message is returned to the requestor. Through appropriate choice of
+mask, it is possible to restrict requests by mode to individual
+addresses, a particular subnet or net addresses, or have no restriction
+at all. The access-control list would then serve as a filter controlling
+which peers could create associations.
+
+Filtering and Selection Algorithms
+
+A most important factor affecting the accuracy and reliability of time
+distribution is the complex of algorithms used to reduce the effect of
+statistical errors and falsetickers due to failure of various subnet
+components, reference sources or propagation media. The algorithms
+suggested in this section were developed and refined over several years
+of operation in the Internet under widely varying topologies, speeds and
+traffic regimes. While these algorithms are believed the best available
+at the present time, they are not an integral part of the NTP
+specification, since other algorithms with similar or superior
+performance may be devised in future.
+
+However, it is important to observe that not all time servers or clients
+in an NTP synchronization subnet must implement these algorithms. For
+instance, simple workstations may dispense with one or both of them in
+the interests of simplicity if accuracy and reliability requirements
+justify. Nevertheless, it would be expected that an NTP server providing
+synchronization to a sizable community, such as a university campus or
+research laboratory, would be expected to implement these algorithms or
+others proved to have equivalent functionality. A comprehensive
+discussion of the design principles and performance is given in
+[MIL91a].
+
+In order for the NTP filter and selection algorithms to operate
+effectively, it is useful to have a measure of recent sample variance
+recorded for each peer. The measure adopted is based on first-order
+differences, which are easy to compute and effective for the purposes
+intended. There are two measures, one called the filter dispersion
+<$Eepsilon sub sigma> and the other the select dispersion <$Eepsilon sub
+xi>. Both are computed as the weighted sum of the clock offsets in a
+temporary list sorted by synchronization distance. If <$Etheta sub i
+~(0~<<=~i~<<~n)> is the offset of the ith entry, then the sample
+difference <$Eepsilon sub ij> of the ith entry relative to the jth entry
+is defined <$Eepsilon sub ij~<~>=~| theta sub i~-~theta sub j |> . The
+dispersion relative to the jth entry is defined <$Eepsilon sub j> and
+computed as the weighted sum
+
+<$Eepsilon sub j~=~sum from {i~=~0} to {n~-~1}~epsilon sub ij~w~sup
+{i+1}> ,
+
+where w is a weighting factor chosen to control the influence of
+synchronization distance in the dispersion budget. In the NTP algorithms
+w is chosen less than <$E1 / 2>: <$Ew~=~roman NTP.FILTER> for filter
+dispersion and <$Ew~=~roman NTP.SELECT> for select dispersion. The
+(absolute) dispersion <$Eepsilon sub sigma> and <$Eepsilon sub xi> as
+used in the NTP algorithms are defined relative to the 0th entry
+<$Eepsilon sub 0>.
+
+There are two procedures described in the following, the clock-filter
+procedure, which is used to select the best offset samples from a given
+clock, and the clock-selection procedure, which is used to select the
+best clock among a hierarchical set of clocks.
+
+Clock-Filter Procedure
+
+The clock-filter procedure is executed upon arrival of an NTP message or
+other event that results in new data samples. It takes arguments of the
+form (<$Etheta ,~delta ,~epsilon>), where <$Etheta> is a sample clock
+offset measurement and <$Edelta> and <$Eepsilon> are the associated
+roundtrip delay and dispersion. It determines the filtered clock offset
+(peer.offset), roundtrip delay (peer.delay) and dispersion
+(peer.dispersion). It also updates the dispersion of samples already
+recorded and saves the current time (peer.update).
+
+The basis of the clock-filter procedure is the filter shift register
+(peer.filter), which consists of NTP.SHIFT stages, each stage containing
+a 3-tuple <$E[ theta sub i ,~delta sub i ,~epsilon sub i ]>, with
+indices numbered from zero on the left. The filter is initialized with
+the value <$E[0,~0,~roman NTP.MAXDISPERSE]> in all stages by the clear
+procedure. New data samples are shifted into the filter at the left end,
+causing first NULLs then old samples to fall off the right end. The
+packet procedure provides samples of the form (<$Etheta ,~delta
+,~epsilon>) as new updates arrive, while the transmit procedure provides
+samples of the form <$E[0,~0,~roman NTP.MAXDISPERSE]> when two poll
+intervals elapse without a fresh update. While the same symbols
+(<$Etheta ,~delta ,~epsilon>) are used here for the arguments, clock-
+filter contents and peer variables, the meaning will be clear from
+context. The following pseudo-code describes this procedure.
+
+begin clock-filter procedure (<$Etheta ,~delta ,~epsilon>)
+
+The dispersion <$Eepsilon sub i> for all valid samples in the filter
+register must be updated to account for the skew-error accumulation
+since the last update. These samples are also inserted on a temporary
+list with entry format <$E[distance,index]>. The samples in the register
+are shifted right one stage, with the overflow sample discarded and the
+new sample inserted at the leftmost stage. The temporary list is then
+sorted by increasing distance. If no samples remain in the list, the
+procedure exits without updating the peer variables.
+
+        for (i from NTP.SIZE <196> 1 to 1) begin        /* update
+dispersion */
+                <$E[ theta sub i ,~delta sub i ,~epsilon sub i ]~<<-~[
+theta sub {i-1} ,~delta sub {i-1} ,~epsilon sub {i-1} ]>;               
+/* shift stage right */
+                <$Eepsilon sub i~=~epsilon sub i~+~phi tau>;
+                add <$E[ lambda sub i~==~epsilon sub i~+~{| delta  sub i
+|} over 2 ,~i]> to temporary list;
+                endfor;
+        <$E[ theta sub 0 ,~delta sub 0 ,~epsilon sub 0 ]~<<-~[ theta
+,~delta ,~epsilon ]>;                   /* insert new sample */
+        add <$E[ lambda~==~epsilon~+~{| delta |} over 2 ,~0]> to
+temporary list;
+        <$Eroman peer.update~<<-~roman sys.clock>;                      
+/* reset base time */
+        sort temporary list by increasing <$E[distance~||index]>;
+
+where <$E[distance~||index]> represents the concatenation of the
+distance and index fields and distance is the high-order field. The
+filter dispersion <$Eepsilon sub sigma> is computed and included in the
+peer dispersion. Note that for this purpose the temporary list is
+already sorted.
+
+        <$Eepsilon sub sigma~<<-~0>;
+        for (i from NTP.SHIFT<196>1 to 0)               /* compute
+filter dispersion */
+                if (<$Eroman peer.dispersion sub index[i]~>>=~roman
+NTP.MAXDISPERSE> or
+                        <$E| theta sub i~-~theta sub 0 |~>>~roman
+NTP.MAXDISPERSE>)
+                        <$Eepsilon sub sigma~<~><<-~( epsilon sub
+sigma~+~roman NTP.MAXDISPERSE)~times~roman NTP.FILTER>;
+                else
+                        <$Eepsilon sub sigma~<~><<-~( epsilon sub
+sigma~+~| theta sub i~-~theta sub 0 |)~times~roman NTP.FILTER>;
+
+The peer offset <$Etheta sub 0>, delay <$Edelta sub 0> and dispersion
+<$Eepsilon sub 0> are chosen as the values corresponding to the minimum-
+distance sample; in other words, the sample corresponding to the first
+entry on the temporary list, here represented as the 0th subscript.
+
+        <$Eroman peer.offset~<<-~theta sub 0>;                          
+/* update peer variables */
+        <$Eroman peer.delay~<<-~delta sub 0>;
+        <$Eroman peer.dispersion~<<-~min ( epsilon sub 0~+~epsilon sub
+sigma ,~roman NTP.MAXDISPERSE)>;
+        end clock-filter procedure
+
+The peer.offset and peer.delay variables represent the clock offset and
+roundtrip delay of the local clock relative to the peer clock. Both of
+these are precision quantities and can usually be averaged over long
+intervals in order to improve accuracy and stability without bias
+accumulation (see Appendix H). The peer.dispersion variable represents
+the maximum error due to measurement error, skew-error accumulation and
+sample variance. All three variables are used in the clock-selection and
+clock-combining procedures to select the peer clock(s) used for
+synchronization and to maximize the accuracy and stability of the
+indications.
+
+Clock-Selection Procedure
+
+The clock-selection procedure uses the peer variables <$ETHETA>,
+<$EDELTA>, <$EEPSILON> and <$Etau> and is called when these variables
+change or when the reachability status changes. It consists of two
+algorithms, the intersection algorithm and the clustering algorithm. The
+intersection algorithm constructs a list of candidate peers eligible to
+become the synchronization source, computes a confidence interval for
+each and casts out falsetickers using a technique adapted from Marzullo
+and Owicki [MAR85]. The clustering algorithm sorts the list of surviving
+candidates in order of stratum and synchronization distance and
+repeatedly casts out outlyers on the basis of select dispersion until
+only the most accurate, precise and stable survivors are left. A bit is
+set for each survivor to indicate the outcome of the selection process.
+The system variable sys.peer is set as a pointer to the most likely
+survivor, if there is one, or to the NULL value if not.
+
+Intersection Algorithm
+
+        begin clock-selection procedure
+
+Each peer is examined in turn and added to an endpoint list only if it
+passes several sanity checks designed to avoid loops and use of
+exceptionally noisy data. If no peers survive the sanity checks, the
+procedure exits without finding a synchronization source. For each of m
+survivors three entries of the form <$E[endpoint,~type]> are added to
+the endpoint list: <$E[ THETA~-~LAMBDA ,~-~1]>, <$E[ THETA ,~0]> and
+<$E[ THETA~+~LAMBDA ,~1]>. There will be <$E3 m> entries on the list,
+which is then sorted by increasing endpoint.
+
+        <$Em~<<-~0>;
+        for (each peer)                         /* calling all peers */
+                if (<$Eroman {peer.reach~!=~0~bold
+and~peer.dispersion~<<~NTP.MAXDISPERSE}> and
+                        not (peer.stratum >> 1 and peer.refid =
+peer.hostaddr)) begin
+                        <$ELAMBDA~<MO>
+<~>an distance (peer)>;                 /* make list entry */
+                        add <$E[ THETA~-~LAMBDA ,~-1]> to endpoint list;
+                        add <$E[ THETA ,~0]> to endpoint list;
+                        add <$E[ THETA~+~LAMBDA ,~1]> to endpoint list;
+                        <$Em~<<-~m~+~1>;
+                        <B>endif
+                endfor
+        if (<$Em~=~0>) begin                            /* skedaddle if
+no candidates */
+                <$Eroman sys.peer~<<-~roman NULL>;
+                <$Eroman sys.stratum~<<-~0~(undefined)>;
+                exit;
+                endif
+        sort endpoint list by increasing endpoint||type;
+
+The following algorithm is adapted from DTS [DEC89] and is designed to
+produce the largest single intersection containing only truechimers. The
+algorithm begins by initializing a value f and counters i and c to zero.
+Then, starting from the lowest endpoint of the sorted endpoint list, for
+each entry <$E[endpoint,~type]> the value of type is subtracted from the
+counter i, which is the number of intersections. If type is zero,
+increment the value of c, which is the number of falsetickers (see

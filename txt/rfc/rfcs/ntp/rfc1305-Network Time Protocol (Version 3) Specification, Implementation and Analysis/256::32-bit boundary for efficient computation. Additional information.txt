@@ -1,0 +1,106 @@
+32-bit boundary for efficient computation. Additional information
+required in some implementations, such as certificate authority and
+encryption algorithm, can be inserted between the (padded) NTP message
+and the key identifier, as long as the alignment conditions are met.
+Like the authenticator itself, this information is not included in the
+crypto-checksum. Use of these data are beyond the scope of this
+specification. These conventions may be changed in future as the result
+of other standardization activities.
+
+NTP Authentication Procedures
+When authentication is implemented there are two additional procedures
+added to those described in the NTP specification. One of these
+(encrypt) constructs the crypto-checksum in transmitted messages, while
+the other (decrypt) checks this quantity in received messages. The
+procedures use a variant of the cipher-block chaining method described
+in [NBS80] as applied to DES. In principal, the procedure is independent
+of DES and requires only that the encryption algorithm operate on 64-bit
+blocks. While the NTP authentication mechanism specifies the use of DES,
+other algorithms could be used by prior arrangement.
+
+Encrypt Procedure
+
+For ordinary NTP messages the encryption procedure operates as follows.
+If authentication is not enabled, the procedure simply exits. If the
+association is active (modes 1, 3, 5), the key is determined from the
+system key identifier. If the association is passive (modes 2, 4) the
+key is determined from the peer key identifier, if the authentic bit is
+set, or as the default key (zero) otherwise. These conventions allow
+further protection against replay attacks and keying errors, as well as
+facilitate testing and migration to new versions. The crypto-checksum is
+calculated using the 64-bit NTP header and data words, but not the
+authenticator or padding bits.
+
+begin encrypt procedure
+        if (<$Eroman peer.authenable~=~0>) exit;                /* do
+nothing if not enabled */
+        if (<$Eroman {peer.hostmode~=~1~bold or~peer.hostmode~=~3~bold
+or~peer.hostmode ~=~5}>)
+                <$Ekeyid~<<-~roman peer.hostkeyid>;             /*
+active modes use system key */
+        else
+                if (<$Eroman peer.authentic~=~1>)               /*
+passive modes use peer key */
+                         <$Ekeyid~<<-~roman peer.peerkeyid>;
+                else
+                         <$Ekeyid~<<-~0>;                       /*
+unauthenticated use key 0 */
+        <$Etemp~<<-~0>;                                 /* calculate
+crypto-checksum */
+        for (each 64-bit header and data word) begin
+                <$Etemp~<<-~temp~roman bold xor~word>;
+                <$Etemp~<<-~roman DES (temp,~keyid)>;
+                endfor;
+        <$Eroman pkt.keyid~<<-~keyid>;                          /*
+insert packet variables */
+        <$Eroman pkt.check~<<-~temp>;
+        end encrypt procedure;
+
+Decrypt Procedure
+
+For ordinary messages the decryption procedure operates as follows. If
+the peer is not configured, the data portion of the message is inspected
+to determine if the authenticator fields are present. If so,
+authentication is enabled; otherwise, it is disabled. If authentication
+is enabled and the authenticator fields are present and the crypto-
+checksum succeeds, the authentication bit is set to one; otherwise, it
+is set to zero.
+
+begin decrypt procedure
+        <$Eroman peer.authentic~<<-~0>;
+        if (<$Eroman peer.config~=~0>)                          /* if
+not configured, enable per packet */
+                if (authenticator present)
+                        <$Eroman peer.authenable~<<-~1>;
+                else
+                        <$Eroman peer.authenable~<<-~0>;
+        if (<$Eroman peer.authenable~=~0> or authenticator not present))
+exit;
+        <$Eroman {peer.peerkeyid~<<-~pkt.keyid}>;               /* use
+peer key */
+        <$Etemp~<<-~0>;                                 /* calculate
+crypto-checksum */
+        for (each 64-bit header and data word) begin
+                <$Etemp~<<-~temp~roman bold xor~word>;
+                <$Etemp~<<-~roman DES (temp,~roman peer.peerkeyid)>;
+                endfor;
+        if (temp == pkt.check) <$Eroman peer.authentic~<<-~1>;  /*
+declare result */
+        end decrypt procedure;
+
+Control-Message Procedures
+
+In anticipation that the functions provided by the NTP control messages
+will eventually be subsumed by a comprehensive network-managment
+function, the peer variables are not used for control message
+authentication. If an NTP command message is received with an
+authenticator field, the crypto-checksum is computed as in the decrypt
+procedure and the response message includes the authenticator field as
+computed by the encrypt procedure. If the received authenticator is
+correct, the key for the response is the same as in the command;
+otherwise, the default key (zero) is used. Commands causing a change to
+the peer data base, such as the write variables and set trap
+address/port commands, must be correctly authenticated; however, the
+remaining commands are normally not authenticated in order to minimize
+the encryption overhead.
+

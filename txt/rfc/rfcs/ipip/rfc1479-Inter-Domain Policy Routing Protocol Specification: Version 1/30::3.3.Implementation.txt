@@ -1,0 +1,102 @@
+3.3.  Implementation
+
+   We recommend implementing the up/down protocol using a sliding
+   window.  Each window slot indicates the UP/DOWN message activity
+   during a given period, containing either a "hit" for receipt of an
+   acceptable UP/DOWN message or a "miss" for failure to receive an
+   acceptable UP/DOWN message.  In addition to the sliding window, the
+   implementation should include a tally of hits recorded during the
+   current period and a tally of misses recorded over the current
+   window.
+
+   When the direct connection moves to the down state, the initial
+   values of the up/down protocol parameters must be set as follows:
+
+   -   The sliding window size is equal to m.
+
+   -   Each window slot contains a miss.
+
+   -   The current period hit tally is equal to 0.
+
+
+
+
+Steenstrup                                                     [Page 33]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   -   The current window miss tally is equal to m.
+
+   When the direct connection moves to the up state, the initial values
+   of the up/down protocol parameters must be set as follows:
+
+   -   The sliding window size is equal to n.
+
+   -   Each window slot contains a hit.
+
+   -   The current period hit tally is equal to 0.
+
+   -   The current window miss tally is equal to 0.
+
+   At the conclusion of each period, a policy gateway computes the miss
+   tally and determines whether there has been a state transition of the
+   direct connection to the adjacent policy gateway.  In the down state,
+   a miss tally of no more than m - j signals a transition to the up
+   state.  In the up state, a miss tally of no less than n - k signals a
+   transition to the down state.
+
+   Computing the correct miss tally involves several steps.  First, the
+   policy gateway prepares to slide the window by one slot so that the
+   oldest slot disappears, making room for the newest slot.  However,
+   before sliding the window, the policy gateway checks the contents of
+   the oldest window slot.  If this slot contains a miss, the policy
+   gateway decrements the miss tally by 1, as this slot is no longer
+   part of the current window.
+
+   After sliding the window, the policy gateway determines the proper
+   contents.  If the hit tally for the current period equals 0, the
+   policy gateway records a miss for the newest slot and increments the
+   miss tally by 1.  Otherwise, if the hit tally for the current period
+   is greater than 0, the policy gateway records a hit for the newest
+   slot and decrements the hit tally by 1.  Moreover, the policy gateway
+   applies any remaining hits to slots containing misses, beginning with
+   the newest and progressing to the oldest such slot.  For each such
+   slot containing a miss, the policy gateway records a hit in that slot
+   and decrements both the hit and miss tallies by 1, as the hit cancels
+   out a miss.  The policy gateway continues to apply each remaining hit
+   tallied to any slot containing a miss, until either all such hits are
+   exhausted or all such slots are accounted for.  Before beginning the
+   next up/down period, the policy gateway resets the hit tally to 0.
+
+   Although we expect the hit tally, within any given period, to be no
+   greater than 1, we do anticipate the occasional period in which a
+   policy gateway receives more than one UP/DOWN message from an
+   adjacent policy gateway.  The most common reasons for this occurrence
+   are message delay and clock drift.  When an UP/DOWN message is
+
+
+
+Steenstrup                                                     [Page 34]
+
+RFC 1479                     IDPR Protocol                     July 1993
+
+
+   delayed, the receiving policy gateway observes a miss in one period
+   followed by two hits in the next period, one of which cancels the
+   previous miss.  However, excess hits remaining in the tally after
+   miss cancellation indicate a problem, such as clock drift.  Thus,
+   whenever a policy gateway accumulates excess hits, it logs the event
+   for network management.
+
+   When clock drift occurs between two adjacent policy gateways, it
+   causes the period of one policy gateway to grow with respect to the
+   period of the other policy gateway.  Let p(X) be the period for PG X,
+   let p(Y) be the period for PG Y, and let g and h be the smallest
+   positive integers such that g * p(X) = h * p(Y).  Suppose that p(Y) >
+   p(X) because of clock drift.  In this case, PG X observes g - h
+   misses in g consecutive periods, while PG Y observes g - h surplus
+   hits in h consecutive periods.  As long as (g - h)/g < (n - k)/n and
+   (g - h)/g < or = (m - j)/m, the clock drift itself will not cause the
+   direct connection to enter or remain in the down state.
+

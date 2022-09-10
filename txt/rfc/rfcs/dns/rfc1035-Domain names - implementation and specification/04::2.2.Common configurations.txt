@@ -1,0 +1,194 @@
+2.2. Common configurations
+
+A host can participate in the domain name system in a number of ways,
+depending on whether the host runs programs that retrieve information
+from the domain system, name servers that answer queries from other
+hosts, or various combinations of both functions.  The simplest, and
+perhaps most typical, configuration is shown below:
+
+                 Local Host                        |  Foreign
+                                                   |
+    +---------+               +----------+         |  +--------+
+    |         | user queries  |          |queries  |  |        |
+    |  User   |-------------->|          |---------|->|Foreign |
+    | Program |               | Resolver |         |  |  Name  |
+    |         |<--------------|          |<--------|--| Server |
+    |         | user responses|          |responses|  |        |
+    +---------+               +----------+         |  +--------+
+                                |     A            |
+                cache additions |     | references |
+                                V     |            |
+                              +----------+         |
+                              |  cache   |         |
+                              +----------+         |
+
+User programs interact with the domain name space through resolvers; the
+format of user queries and user responses is specific to the host and
+its operating system.  User queries will typically be operating system
+calls, and the resolver and its cache will be part of the host operating
+system.  Less capable hosts may choose to implement the resolver as a
+subroutine to be linked in with every program that needs its services.
+Resolvers answer user queries with information they acquire via queries
+to foreign name servers and the local cache.
+
+Note that the resolver may have to make several queries to several
+different foreign name servers to answer a particular user query, and
+hence the resolution of a user query may involve several network
+accesses and an arbitrary amount of time.  The queries to foreign name
+servers and the corresponding responses have a standard format described
+
+
+
+Mockapetris                                                     [Page 4]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+in this memo, and may be datagrams.
+
+Depending on its capabilities, a name server could be a stand alone
+program on a dedicated machine or a process or processes on a large
+timeshared host.  A simple configuration might be:
+
+                 Local Host                        |  Foreign
+                                                   |
+      +---------+                                  |
+     /         /|                                  |
+    +---------+ |             +----------+         |  +--------+
+    |         | |             |          |responses|  |        |
+    |         | |             |   Name   |---------|->|Foreign |
+    |  Master |-------------->|  Server  |         |  |Resolver|
+    |  files  | |             |          |<--------|--|        |
+    |         |/              |          | queries |  +--------+
+    +---------+               +----------+         |
+
+Here a primary name server acquires information about one or more zones
+by reading master files from its local file system, and answers queries
+about those zones that arrive from foreign resolvers.
+
+The DNS requires that all zones be redundantly supported by more than
+one name server.  Designated secondary servers can acquire zones and
+check for updates from the primary server using the zone transfer
+protocol of the DNS.  This configuration is shown below:
+
+                 Local Host                        |  Foreign
+                                                   |
+      +---------+                                  |
+     /         /|                                  |
+    +---------+ |             +----------+         |  +--------+
+    |         | |             |          |responses|  |        |
+    |         | |             |   Name   |---------|->|Foreign |
+    |  Master |-------------->|  Server  |         |  |Resolver|
+    |  files  | |             |          |<--------|--|        |
+    |         |/              |          | queries |  +--------+
+    +---------+               +----------+         |
+                                A     |maintenance |  +--------+
+                                |     +------------|->|        |
+                                |      queries     |  |Foreign |
+                                |                  |  |  Name  |
+                                +------------------|--| Server |
+                             maintenance responses |  +--------+
+
+In this configuration, the name server periodically establishes a
+virtual circuit to a foreign name server to acquire a copy of a zone or
+to check that an existing copy has not changed.  The messages sent for
+
+
+
+Mockapetris                                                     [Page 5]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+these maintenance activities follow the same form as queries and
+responses, but the message sequences are somewhat different.
+
+The information flow in a host that supports all aspects of the domain
+name system is shown below:
+
+                 Local Host                        |  Foreign
+                                                   |
+    +---------+               +----------+         |  +--------+
+    |         | user queries  |          |queries  |  |        |
+    |  User   |-------------->|          |---------|->|Foreign |
+    | Program |               | Resolver |         |  |  Name  |
+    |         |<--------------|          |<--------|--| Server |
+    |         | user responses|          |responses|  |        |
+    +---------+               +----------+         |  +--------+
+                                |     A            |
+                cache additions |     | references |
+                                V     |            |
+                              +----------+         |
+                              |  Shared  |         |
+                              | database |         |
+                              +----------+         |
+                                A     |            |
+      +---------+     refreshes |     | references |
+     /         /|               |     V            |
+    +---------+ |             +----------+         |  +--------+
+    |         | |             |          |responses|  |        |
+    |         | |             |   Name   |---------|->|Foreign |
+    |  Master |-------------->|  Server  |         |  |Resolver|
+    |  files  | |             |          |<--------|--|        |
+    |         |/              |          | queries |  +--------+
+    +---------+               +----------+         |
+                                A     |maintenance |  +--------+
+                                |     +------------|->|        |
+                                |      queries     |  |Foreign |
+                                |                  |  |  Name  |
+                                +------------------|--| Server |
+                             maintenance responses |  +--------+
+
+The shared database holds domain space data for the local name server
+and resolver.  The contents of the shared database will typically be a
+mixture of authoritative data maintained by the periodic refresh
+operations of the name server and cached data from previous resolver
+requests.  The structure of the domain data and the necessity for
+synchronization between name servers and resolvers imply the general
+characteristics of this database, but the actual format is up to the
+local implementor.
+
+
+
+
+Mockapetris                                                     [Page 6]
+
+RFC 1035        Domain Implementation and Specification    November 1987
+
+
+Information flow can also be tailored so that a group of hosts act
+together to optimize activities.  Sometimes this is done to offload less
+capable hosts so that they do not have to implement a full resolver.
+This can be appropriate for PCs or hosts which want to minimize the
+amount of new network code which is required.  This scheme can also
+allow a group of hosts can share a small number of caches rather than
+maintaining a large number of separate caches, on the premise that the
+centralized caches will have a higher hit ratio.  In either case,
+resolvers are replaced with stub resolvers which act as front ends to
+resolvers located in a recursive server in one or more name servers
+known to perform that service:
+
+                   Local Hosts                     |  Foreign
+                                                   |
+    +---------+                                    |
+    |         | responses                          |
+    | Stub    |<--------------------+              |
+    | Resolver|                     |              |
+    |         |----------------+    |              |
+    +---------+ recursive      |    |              |
+                queries        |    |              |
+                               V    |              |
+    +---------+ recursive     +----------+         |  +--------+
+    |         | queries       |          |queries  |  |        |
+    | Stub    |-------------->| Recursive|---------|->|Foreign |
+    | Resolver|               | Server   |         |  |  Name  |
+    |         |<--------------|          |<--------|--| Server |
+    +---------+ responses     |          |responses|  |        |
+                              +----------+         |  +--------+
+                              |  Central |         |
+                              |   cache  |         |
+                              +----------+         |
+
+In any case, note that domain components are always replicated for
+reliability whenever possible.
+

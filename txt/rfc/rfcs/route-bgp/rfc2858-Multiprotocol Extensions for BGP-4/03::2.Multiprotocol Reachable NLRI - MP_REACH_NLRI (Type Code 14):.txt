@@ -1,0 +1,182 @@
+2. Multiprotocol Reachable NLRI - MP_REACH_NLRI (Type Code 14):
+
+   This is an optional non-transitive attribute that can be used for the
+   following purposes:
+
+      (a) to advertise a feasible route to a peer
+
+      (b) to permit a router to advertise the Network Layer address of
+          the router that should be used as the next hop to the
+          destinations listed in the Network Layer Reachability
+          Information field of the MP_NLRI attribute.
+
+      (c) to allow a given router to report some or all of the
+          Subnetwork Points of Attachment (SNPAs) that exist within the
+          local system
+
+
+
+
+
+
+
+
+Bates, et al.               Standards Track                     [Page 2]
+
+RFC 2858           Multiprotocol Extensions for BGP-4          June 2000
+
+
+   The attribute is encoded as shown below:
+
+      +---------------------------------------------------------+
+      | Address Family Identifier (2 octets)                    |
+      +---------------------------------------------------------+
+      | Subsequent Address Family Identifier (1 octet)          |
+      +---------------------------------------------------------+
+      | Length of Next Hop Network Address (1 octet)            |
+      +---------------------------------------------------------+
+      | Network Address of Next Hop (variable)                  |
+      +---------------------------------------------------------+
+      | Number of SNPAs (1 octet)                               |
+      +---------------------------------------------------------+
+      | Length of first SNPA(1 octet)                           |
+      +---------------------------------------------------------+
+      | First SNPA (variable)                                   |
+      +---------------------------------------------------------+
+      | Length of second SNPA (1 octet)                         |
+      +---------------------------------------------------------+
+      | Second SNPA (variable)                                  |
+      +---------------------------------------------------------+
+      | ...                                                     |
+      +---------------------------------------------------------+
+      | Length of Last SNPA (1 octet)                           |
+      +---------------------------------------------------------+
+      | Last SNPA (variable)                                    |
+      +---------------------------------------------------------+
+      | Network Layer Reachability Information (variable)       |
+      +---------------------------------------------------------+
+
+   The use and meaning of these fields are as follows:
+
+      Address Family Identifier:
+
+         This field carries the identity of the Network Layer protocol
+         associated with the Network Address that follows. Presently
+         defined values for this field are specified in RFC 1700 (see
+         the Address Family Numbers section).
+
+      Subsequent Address Family Identifier:
+
+         This field provides additional information about the type of
+         the Network Layer Reachability Information carried in the
+         attribute.
+
+
+
+
+
+
+
+Bates, et al.               Standards Track                     [Page 3]
+
+RFC 2858           Multiprotocol Extensions for BGP-4          June 2000
+
+
+      Length of Next Hop Network Address:
+
+         A 1 octet field whose value expresses the length of the
+         "Network Address of Next Hop" field as measured in octets
+
+      Network Address of Next Hop:
+
+         A variable length field that contains the Network Address of
+         the next router on the path to the destination system
+
+      Number of SNPAs:
+
+         A 1 octet field which contains the number of distinct SNPAs to
+         be listed in the following fields.  The value 0 may be used to
+         indicate that no SNPAs are listed in this attribute.
+
+      Length of Nth SNPA:
+
+         A 1 octet field whose value expresses the length of the "Nth
+         SNPA of Next Hop" field as measured in semi-octets
+
+      Nth SNPA of Next Hop:
+
+         A variable length field that contains an SNPA of the router
+         whose Network Address is contained in the "Network Address of
+         Next Hop" field.  The field length is an integral number of
+         octets in length, namely the rounded-up integer value of one
+         half the SNPA length expressed in semi-octets; if the SNPA
+         contains an odd number of semi-octets, a value in this field
+         will be padded with a trailing all-zero semi-octet.
+
+      Network Layer Reachability Information:
+
+         A variable length field that lists NLRI for the feasible routes
+         that are being advertised in this attribute. When the
+         Subsequent Address Family Identifier field is set to one of the
+         values defined in this document, each NLRI is encoded as
+         specified in the "NLRI encoding" section of this document.
+
+   The next hop information carried in the MP_REACH_NLRI path attribute
+   defines the Network Layer address of the border router that should be
+   used as the next hop to the destinations listed in the MP_NLRI
+   attribute in the UPDATE message.  When advertising a MP_REACH_NLRI
+   attribute to an external peer, a router may use one of its own
+   interface addresses in the next hop component of the attribute,
+   provided the external peer to which the route is being advertised
+   shares a common subnet with the next hop address.  This is known as a
+   "first party" next hop.  A BGP speaker can advertise to an external
+
+
+
+Bates, et al.               Standards Track                     [Page 4]
+
+RFC 2858           Multiprotocol Extensions for BGP-4          June 2000
+
+
+   peer an interface of any internal peer router in the next hop
+   component, provided the external peer to which the route is being
+   advertised shares a common subnet with the next hop address.  This is
+   known as a "third party" next hop information.  A BGP speaker can
+   advertise any external peer router in the next hop component,
+   provided that the Network Layer address of this border router was
+   learned from an external peer, and the external peer to which the
+   route is being advertised shares a common subnet with the next hop
+   address.  This is a second form of "third party" next hop
+   information.
+
+   Normally the next hop information is chosen such that the shortest
+   available path will be taken.  A BGP speaker must be able to support
+   disabling advertisement of third party next hop information to handle
+   imperfectly bridged media or for reasons of policy.
+
+   A BGP speaker must never advertise an address of a peer to that peer
+   as a next hop, for a route that the speaker is originating.  A BGP
+   speaker must never install a route with itself as the next hop.
+
+   When a BGP speaker advertises the route to an internal peer, the
+   advertising speaker should not modify the next hop information
+   associated with the route.  When a BGP speaker receives the route via
+   an internal link, it may forward packets to the next hop address if
+   the address contained in the attribute is on a common subnet with the
+   local and remote BGP speakers.
+
+   An UPDATE message that carries the MP_REACH_NLRI must also carry the
+   ORIGIN and the AS_PATH attributes (both in EBGP and in IBGP
+   exchanges).  Moreover, in IBGP exchanges such a message must also
+   carry the LOCAL_PREF attribute. If such a message is received from an
+   external peer, the local system shall check whether the leftmost AS
+   in the AS_PATH attribute is equal to the autonomous system number of
+   the peer than sent the message. If that is not the case, the local
+   system shall send the NOTIFICATION message with Error Code UPDATE
+   Message Error, and the Error Subcode set to Malformed AS_PATH.
+
+   An UPDATE message that carries no NLRI, other than the one encoded in
+   the MP_REACH_NLRI attribute, should not carry the NEXT_HOP attribute.
+   If such a message contains the NEXT_HOP attribute, the BGP speaker
+   that receives the message should ignore this attribute.
+

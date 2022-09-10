@@ -1,0 +1,195 @@
+4.3.1 DHCPDISCOVER message
+
+   When a server receives a DHCPDISCOVER message from a client, the
+   server chooses a network address for the requesting client.  If no
+   address is available, the server may choose to report the problem to
+   the system administrator. If an address is available, the new address
+   SHOULD be chosen as follows:
+
+      o The client's current address as recorded in the client's current
+        binding, ELSE
+
+      o The client's previous address as recorded in the client's (now
+        expired or released) binding, if that address is in the server's
+        pool of available addresses and not already allocated, ELSE
+
+      o The address requested in the 'Requested IP Address' option, if that
+        address is valid and not already allocated, ELSE
+
+      o A new address allocated from the server's pool of available
+        addresses; the address is selected based on the subnet from which
+        the message was received (if 'giaddr' is 0) or on the address of
+        the relay agent that forwarded the message ('giaddr' when not 0).
+
+   As described in section 4.2, a server MAY, for administrative
+   reasons, assign an address other than the one requested, or may
+   refuse to allocate an address to a particular client even though free
+   addresses are available.
+
+   Note that, in some network architectures (e.g., internets with more
+   than one IP subnet assigned to a physical network segment), it may be
+   the case that the DHCP client should be assigned an address from a
+   different subnet than the address recorded in 'giaddr'.  Thus, DHCP
+   does not require that the client be assigned as address from the
+   subnet in 'giaddr'.  A server is free to choose some other subnet,
+   and it is beyond the scope of the DHCP specification to describe ways
+   in which the assigned IP address might be chosen.
+
+   While not required for correct operation of DHCP, the server SHOULD
+   NOT reuse the selected network address before the client responds to
+   the server's DHCPOFFER message.  The server may choose to record the
+   address as offered to the client.
+
+   The server must also choose an expiration time for the lease, as
+   follows:
+
+
+
+Droms                       Standards Track                    [Page 27]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+   o IF the client has not requested a specific lease in the
+     DHCPDISCOVER message and the client already has an assigned network
+     address, the server returns the lease expiration time previously
+     assigned to that address (note that the client must explicitly
+     request a specific lease to extend the expiration time on a
+     previously assigned address), ELSE
+
+   o IF the client has not requested a specific lease in the
+     DHCPDISCOVER message and the client does not have an assigned
+     network address, the server assigns a locally configured default
+     lease time, ELSE
+
+   o IF the client has requested a specific lease in the DHCPDISCOVER
+     message (regardless of whether the client has an assigned network
+     address), the server may choose either to return the requested
+     lease (if the lease is acceptable to local policy) or select
+     another lease.
+
+Field      DHCPOFFER            DHCPACK             DHCPNAK
+-----      ---------            -------             -------
+'op'       BOOTREPLY            BOOTREPLY           BOOTREPLY
+'htype'    (From "Assigned Numbers" RFC)
+'hlen'     (Hardware address length in octets)
+'hops'     0                    0                   0
+'xid'      'xid' from client    'xid' from client   'xid' from client
+           DHCPDISCOVER         DHCPREQUEST         DHCPREQUEST
+           message              message             message
+'secs'     0                    0                   0
+'ciaddr'   0                    'ciaddr' from       0
+                                DHCPREQUEST or 0
+'yiaddr'   IP address offered   IP address          0
+           to client            assigned to client
+'siaddr'   IP address of next   IP address of next  0
+           bootstrap server     bootstrap server
+'flags'    'flags' from         'flags' from        'flags' from
+           client DHCPDISCOVER  client DHCPREQUEST  client DHCPREQUEST
+           message              message             message
+'giaddr'   'giaddr' from        'giaddr' from       'giaddr' from
+           client DHCPDISCOVER  client DHCPREQUEST  client DHCPREQUEST
+           message              message             message
+'chaddr'   'chaddr' from        'chaddr' from       'chaddr' from
+           client DHCPDISCOVER  client DHCPREQUEST  client DHCPREQUEST
+           message              message             message
+'sname'    Server host name     Server host name    (unused)
+           or options           or options
+'file'     Client boot file     Client boot file    (unused)
+           name or options      name or options
+'options'  options              options
+
+
+
+Droms                       Standards Track                    [Page 28]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+Option                    DHCPOFFER    DHCPACK            DHCPNAK
+------                    ---------    -------            -------
+Requested IP address      MUST NOT     MUST NOT           MUST NOT
+IP address lease time     MUST         MUST (DHCPREQUEST) MUST NOT
+                                       MUST NOT (DHCPINFORM)
+Use 'file'/'sname' fields MAY          MAY                MUST NOT
+DHCP message type         DHCPOFFER    DHCPACK            DHCPNAK
+Parameter request list    MUST NOT     MUST NOT           MUST NOT
+Message                   SHOULD       SHOULD             SHOULD
+Client identifier         MUST NOT     MUST NOT           MAY
+Vendor class identifier   MAY          MAY                MAY
+Server identifier         MUST         MUST               MUST
+Maximum message size      MUST NOT     MUST NOT           MUST NOT
+All others                MAY          MAY                MUST NOT
+
+           Table 3:  Fields and options used by DHCP servers
+
+   Once the network address and lease have been determined, the server
+   constructs a DHCPOFFER message with the offered configuration
+   parameters.  It is important for all DHCP servers to return the same
+   parameters (with the possible exception of a newly allocated network
+   address) to ensure predictable client behavior regardless of which
+   server the client selects.  The configuration parameters MUST be
+   selected by applying the following rules in the order given below.
+   The network administrator is responsible for configuring multiple
+   DHCP servers to ensure uniform responses from those servers.  The
+   server MUST return to the client:
+
+   o The client's network address, as determined by the rules given
+     earlier in this section,
+
+   o The expiration time for the client's lease, as determined by the
+     rules given earlier in this section,
+
+   o Parameters requested by the client, according to the following
+     rules:
+
+        -- IF the server has been explicitly configured with a default
+           value for the parameter, the server MUST include that value
+           in an appropriate option in the 'option' field, ELSE
+
+        -- IF the server recognizes the parameter as a parameter
+           defined in the Host Requirements Document, the server MUST
+           include the default value for that parameter as given in the
+           Host Requirements Document in an appropriate option in the
+           'option' field, ELSE
+
+        -- The server MUST NOT return a value for that parameter,
+
+
+
+Droms                       Standards Track                    [Page 29]
+
+RFC 2131          Dynamic Host Configuration Protocol         March 1997
+
+
+     The server MUST supply as many of the requested parameters as
+     possible and MUST omit any parameters it cannot provide.  The
+     server MUST include each requested parameter only once unless
+     explicitly allowed in the DHCP Options and BOOTP Vendor
+     Extensions document.
+
+   o Any parameters from the existing binding that differ from the Host
+     Requirements Document defaults,
+
+   o Any parameters specific to this client (as identified by
+     the contents of 'chaddr' or 'client identifier' in the DHCPDISCOVER
+     or DHCPREQUEST message), e.g., as configured by the network
+     administrator,
+
+   o Any parameters specific to this client's class (as identified
+     by the contents of the 'vendor class identifier'
+     option in the DHCPDISCOVER or DHCPREQUEST message),
+     e.g., as configured by the network administrator; the parameters
+     MUST be identified by an exact match between the client's vendor
+     class identifiers and the client's classes identified in the
+     server,
+
+   o Parameters with non-default values on the client's subnet.
+
+   The server MAY choose to return the 'vendor class identifier' used to
+   determine the parameters in the DHCPOFFER message to assist the
+   client in selecting which DHCPOFFER to accept.  The server inserts
+   the 'xid' field from the DHCPDISCOVER message into the 'xid' field of
+   the DHCPOFFER message and sends the DHCPOFFER message to the
+   requesting client.
+

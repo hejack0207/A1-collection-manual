@@ -1,0 +1,658 @@
+13.  The Flooding Procedure
+
+    Link State Update packets provide the mechanism for flooding LSAs.
+    A Link State Update packet may contain several distinct LSAs, and
+    floods each LSA one hop further from its point of origination.  To
+    make the flooding procedure reliable, each LSA must be acknowledged
+    separately.  Acknowledgments are transmitted in Link State
+    Acknowledgment packets.  Many separate acknowledgments can also be
+    grouped together into a single packet.
+
+    The flooding procedure starts when a Link State Update packet has
+    been received.  Many consistency checks have been made on the
+    received packet before being handed to the flooding procedure (see
+    Section 8.2).  In particular, the Link State Update packet has been
+    associated with a particular neighbor, and a particular area.  If
+    the neighbor is in a lesser state than Exchange, the packet should
+    be dropped without further processing.
+
+    All types of LSAs, other than AS-external-LSAs, are associated with
+    a specific area.  However, LSAs do not contain an area field.  An
+    LSA's area must be deduced from the Link State Update packet header.
+
+    For each LSA contained in a Link State Update packet, the following
+    steps are taken:
+
+
+    (1) Validate the LSA's LS checksum.  If the checksum turns out to be
+        invalid, discard the LSA and get the next one from the Link
+        State Update packet.
+
+    (2) Examine the LSA's LS type.  If the LS type is unknown, discard
+        the LSA and get the next one from the Link State Update Packet.
+        This specification defines LS types 1-5 (see Section 4.3).
+
+    (3) Else if this is an AS-external-LSA (LS type = 5), and the area
+        has been configured as a stub area, discard the LSA and get the
+        next one from the Link State Update Packet.  AS-external-LSAs
+        are not flooded into/throughout stub areas (see Section 3.6).
+
+    (4) Else if the LSA's LS age is equal to MaxAge, and there is
+        currently no instance of the LSA in the router's link state
+        database, and none of router's neighbors are in states Exchange
+
+
+
+Moy                         Standards Track                   [Page 143]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        or Loading, then take the following actions: a) Acknowledge the
+        receipt of the LSA by sending a Link State Acknowledgment packet
+        back to the sending neighbor (see Section 13.5), and b) Discard
+        the LSA and examine the next LSA (if any) listed in the Link
+        State Update packet.
+
+    (5) Otherwise, find the instance of this LSA that is currently
+        contained in the router's link state database.  If there is no
+        database copy, or the received LSA is more recent than the
+        database copy (see Section 13.1 below for the determination of
+        which LSA is more recent) the following steps must be performed:
+
+        (a) If there is already a database copy, and if the database
+            copy was received via flooding and installed less than
+            MinLSArrival seconds ago, discard the new LSA (without
+            acknowledging it) and examine the next LSA (if any) listed
+            in the Link State Update packet.
+
+        (b) Otherwise immediately flood the new LSA out some subset of
+            the router's interfaces (see Section 13.3).  In some cases
+            (e.g., the state of the receiving interface is DR and the
+            LSA was received from a router other than the Backup DR) the
+            LSA will be flooded back out the receiving interface.  This
+            occurrence should be noted for later use by the
+            acknowledgment process (Section 13.5).
+
+        (c) Remove the current database copy from all neighbors' Link
+            state retransmission lists.
+
+        (d) Install the new LSA in the link state database (replacing
+            the current database copy).  This may cause the routing
+            table calculation to be scheduled.  In addition, timestamp
+            the new LSA with the current time (i.e., the time it was
+            received).  The flooding procedure cannot overwrite the
+            newly installed LSA until MinLSArrival seconds have elapsed.
+            The LSA installation process is discussed further in Section
+            13.2.
+
+        (e) Possibly acknowledge the receipt of the LSA by sending a
+            Link State Acknowledgment packet back out the receiving
+            interface.  This is explained below in Section 13.5.
+
+
+
+
+Moy                         Standards Track                   [Page 144]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        (f) If this new LSA indicates that it was originated by the
+            receiving router itself (i.e., is considered a self-
+            originated LSA), the router must take special action, either
+            updating the LSA or in some cases flushing it from the
+            routing domain. For a description of how self-originated
+            LSAs are detected and subsequently handled, see Section
+            13.4.
+
+    (6) Else, if there is an instance of the LSA on the sending
+        neighbor's Link state request list, an error has occurred in the
+        Database Exchange process.  In this case, restart the Database
+        Exchange process by generating the neighbor event BadLSReq for
+        the sending neighbor and stop processing the Link State Update
+        packet.
+
+    (7) Else, if the received LSA is the same instance as the database
+        copy (i.e., neither one is more recent) the following two steps
+        should be performed:
+
+        (a) If the LSA is listed in the Link state retransmission list
+            for the receiving adjacency, the router itself is expecting
+            an acknowledgment for this LSA.  The router should treat the
+            received LSA as an acknowledgment by removing the LSA from
+            the Link state retransmission list.  This is termed an
+            "implied acknowledgment".  Its occurrence should be noted
+            for later use by the acknowledgment process (Section 13.5).
+
+        (b) Possibly acknowledge the receipt of the LSA by sending a
+            Link State Acknowledgment packet back out the receiving
+            interface.  This is explained below in Section 13.5.
+
+    (8) Else, the database copy is more recent.  If the database copy
+        has LS age equal to MaxAge and LS sequence number equal to
+        MaxSequenceNumber, simply discard the received LSA without
+        acknowledging it. (In this case, the LSA's LS sequence number is
+        wrapping, and the MaxSequenceNumber LSA must be completely
+        flushed before any new LSA instance can be introduced).
+        Otherwise, as long as the database copy has not been sent in a
+        Link State Update within the last MinLSArrival seconds, send the
+        database copy back to the sending neighbor, encapsulated within
+        a Link State Update Packet. The Link State Update Packet should
+        be sent directly to the neighbor. In so doing, do not put the
+
+
+
+Moy                         Standards Track                   [Page 145]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        database copy of the LSA on the neighbor's link state
+        retransmission list, and do not acknowledge the received (less
+        recent) LSA instance.
+
+
+    13.1.  Determining which LSA is newer
+
+        When a router encounters two instances of an LSA, it must
+        determine which is more recent.  This occurred above when
+        comparing a received LSA to its database copy.  This comparison
+        must also be done during the Database Exchange procedure which
+        occurs during adjacency bring-up.
+
+        An LSA is identified by its LS type, Link State ID and
+        Advertising Router.  For two instances of the same LSA, the LS
+        sequence number, LS age, and LS checksum fields are used to
+        determine which instance is more recent:
+
+
+        o   The LSA having the newer LS sequence number is more recent.
+            See Section 12.1.6 for an explanation of the LS sequence
+            number space.  If both instances have the same LS sequence
+            number, then:
+
+        o   If the two instances have different LS checksums, then the
+            instance having the larger LS checksum (when considered as a
+            16-bit unsigned integer) is considered more recent.
+
+        o   Else, if only one of the instances has its LS age field set
+            to MaxAge, the instance of age MaxAge is considered to be
+            more recent.
+
+        o   Else, if the LS age fields of the two instances differ by
+            more than MaxAgeDiff, the instance having the smaller
+            (younger) LS age is considered to be more recent.
+
+        o   Else, the two instances are considered to be identical.
+
+
+
+
+
+
+
+
+Moy                         Standards Track                   [Page 146]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    13.2.  Installing LSAs in the database
+
+        Installing a new LSA in the database, either as the result of
+        flooding or a newly self-originated LSA, may cause the OSPF
+        routing table structure to be recalculated.  The contents of the
+        new LSA should be compared to the old instance, if present.  If
+        there is no difference, there is no need to recalculate the
+        routing table. When comparing an LSA to its previous instance,
+        the following are all considered to be differences in contents:
+
+            o   The LSA's Options field has changed.
+
+            o   One of the LSA instances has LS age set to MaxAge, and
+                the other does not.
+
+            o   The length field in the LSA header has changed.
+
+            o   The body of the LSA (i.e., anything outside the 20-byte
+                LSA header) has changed. Note that this excludes changes
+                in LS Sequence Number and LS Checksum.
+
+        If the contents are different, the following pieces of the
+        routing table must be recalculated, depending on the new LSA's
+        LS type field:
+
+
+        Router-LSAs and network-LSAs
+            The entire routing table must be recalculated, starting with
+            the shortest path calculations for each area (not just the
+            area whose link-state database has changed).  The reason
+            that the shortest path calculation cannot be restricted to
+            the single changed area has to do with the fact that AS
+            boundary routers may belong to multiple areas.  A change in
+            the area currently providing the best route may force the
+            router to use an intra-area route provided by a different
+            area.[19]
+
+        Summary-LSAs
+            The best route to the destination described by the summary-
+            LSA must be recalculated (see Section 16.5).  If this
+            destination is an AS boundary router, it may also be
+            necessary to re-examine all the AS-external-LSAs.
+
+
+
+Moy                         Standards Track                   [Page 147]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        AS-external-LSAs
+            The best route to the destination described by the AS-
+            external-LSA must be recalculated (see Section 16.6).
+
+
+        Also, any old instance of the LSA must be removed from the
+        database when the new LSA is installed.  This old instance must
+        also be removed from all neighbors' Link state retransmission
+        lists (see Section 10).
+
+
+    13.3.  Next step in the flooding procedure
+
+        When a new (and more recent) LSA has been received, it must be
+        flooded out some set of the router's interfaces.  This section
+        describes the second part of flooding procedure (the first part
+        being the processing that occurred in Section 13), namely,
+        selecting the outgoing interfaces and adding the LSA to the
+        appropriate neighbors' Link state retransmission lists.  Also
+        included in this part of the flooding procedure is the
+        maintenance of the neighbors' Link state request lists.
+
+        This section is equally applicable to the flooding of an LSA
+        that the router itself has just originated (see Section 12.4).
+        For these LSAs, this section provides the entirety of the
+        flooding procedure (i.e., the processing of Section 13 is not
+        performed, since, for example, the LSA has not been received
+        from a neighbor and therefore does not need to be acknowledged).
+
+        Depending upon the LSA's LS type, the LSA can be flooded out
+        only certain interfaces.  These interfaces, defined by the
+        following, are called the eligible interfaces:
+
+
+        AS-external-LSAs (LS Type = 5)
+            AS-external-LSAs are flooded throughout the entire AS, with
+            the exception of stub areas (see Section 3.6).  The eligible
+            interfaces are all the router's interfaces, excluding
+            virtual links and those interfaces attaching to stub areas.
+
+        All other LS types
+            All other types are specific to a single area (Area A).  The
+
+
+
+Moy                         Standards Track                   [Page 148]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            eligible interfaces are all those interfaces attaching to
+            the Area A.  If Area A is the backbone, this includes all
+            the virtual links.
+
+
+        Link state databases must remain synchronized over all
+        adjacencies associated with the above eligible interfaces.  This
+        is accomplished by executing the following steps on each
+        eligible interface.  It should be noted that this procedure may
+        decide not to flood an LSA out a particular interface, if there
+        is a high probability that the attached neighbors have already
+        received the LSA.  However, in these cases the flooding
+        procedure must be absolutely sure that the neighbors eventually
+        do receive the LSA, so the LSA is still added to each
+        adjacency's Link state retransmission list.  For each eligible
+        interface:
+
+
+        (1) Each of the neighbors attached to this interface are
+            examined, to determine whether they must receive the new
+            LSA.  The following steps are executed for each neighbor:
+
+            (a) If the neighbor is in a lesser state than Exchange, it
+                does not participate in flooding, and the next neighbor
+                should be examined.
+
+            (b) Else, if the adjacency is not yet full (neighbor state
+                is Exchange or Loading), examine the Link state request
+                list associated with this adjacency.  If there is an
+                instance of the new LSA on the list, it indicates that
+                the neighboring router has an instance of the LSA
+                already.  Compare the new LSA to the neighbor's copy:
+
+                o   If the new LSA is less recent, then examine the next
+                    neighbor.
+
+                o   If the two copies are the same instance, then delete
+                    the LSA from the Link state request list, and
+                    examine the next neighbor.[20]
+
+                o   Else, the new LSA is more recent.  Delete the LSA
+                    from the Link state request list.
+
+
+
+Moy                         Standards Track                   [Page 149]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            (c) If the new LSA was received from this neighbor, examine
+                the next neighbor.
+
+            (d) At this point we are not positive that the neighbor has
+                an up-to-date instance of this new LSA.  Add the new LSA
+                to the Link state retransmission list for the adjacency.
+                This ensures that the flooding procedure is reliable;
+                the LSA will be retransmitted at intervals until an
+                acknowledgment is seen from the neighbor.
+
+        (2) The router must now decide whether to flood the new LSA out
+            this interface.  If in the previous step, the LSA was NOT
+            added to any of the Link state retransmission lists, there
+            is no need to flood the LSA out the interface and the next
+            interface should be examined.
+
+        (3) If the new LSA was received on this interface, and it was
+            received from either the Designated Router or the Backup
+            Designated Router, chances are that all the neighbors have
+            received the LSA already.  Therefore, examine the next
+            interface.
+
+        (4) If the new LSA was received on this interface, and the
+            interface state is Backup (i.e., the router itself is the
+            Backup Designated Router), examine the next interface.  The
+            Designated Router will do the flooding on this interface.
+            However, if the Designated Router fails the router (i.e.,
+            the Backup Designated Router) will end up retransmitting the
+            updates.
+
+        (5) If this step is reached, the LSA must be flooded out the
+            interface.  Send a Link State Update packet (including the
+            new LSA as contents) out the interface.  The LSA's LS age
+            must be incremented by InfTransDelay (which must be > 0)
+            when it is copied into the outgoing Link State Update packet
+            (until the LS age field reaches the maximum value of
+            MaxAge).
+
+            On broadcast networks, the Link State Update packets are
+            multicast.  The destination IP address specified for the
+            Link State Update Packet depends on the state of the
+            interface.  If the interface state is DR or Backup, the
+
+
+
+Moy                         Standards Track                   [Page 150]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            address AllSPFRouters should be used.  Otherwise, the
+            address AllDRouters should be used.
+
+            On non-broadcast networks, separate Link State Update
+            packets must be sent, as unicasts, to each adjacent neighbor
+            (i.e., those in state Exchange or greater).  The destination
+            IP addresses for these packets are the neighbors' IP
+            addresses.
+
+
+    13.4.  Receiving self-originated LSAs
+
+        It is a common occurrence for a router to receive self-
+        originated LSAs via the flooding procedure. A self-originated
+        LSA is detected when either 1) the LSA's Advertising Router is
+        equal to the router's own Router ID or 2) the LSA is a network-
+        LSA and its Link State ID is equal to one of the router's own IP
+        interface addresses.
+
+        However, if the received self-originated LSA is newer than the
+        last instance that the router actually originated, the router
+        must take special action.  The reception of such an LSA
+        indicates that there are LSAs in the routing domain that were
+        originated by the router before the last time it was restarted.
+        In most cases, the router must then advance the LSA's LS
+        sequence number one past the received LS sequence number, and
+        originate a new instance of the LSA.
+
+        It may be the case the router no longer wishes to originate the
+        received LSA. Possible examples include: 1) the LSA is a
+        summary-LSA or AS-external-LSA and the router no longer has an
+        (advertisable) route to the destination, 2) the LSA is a
+        network-LSA but the router is no longer Designated Router for
+        the network or 3) the LSA is a network-LSA whose Link State ID
+        is one of the router's own IP interface addresses but whose
+        Advertising Router is not equal to the router's own Router ID
+        (this latter case should be rare, and it indicates that the
+        router's Router ID has changed since originating the LSA).  In
+        all these cases, instead of updating the LSA, the LSA should be
+        flushed from the routing domain by incrementing the received
+        LSA's LS age to MaxAge and reflooding (see Section 14.1).
+
+
+
+
+Moy                         Standards Track                   [Page 151]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    13.5.  Sending Link State Acknowledgment packets
+
+        Each newly received LSA must be acknowledged.  This is usually
+        done by sending Link State Acknowledgment packets.  However,
+        acknowledgments can also be accomplished implicitly by sending
+        Link State Update packets (see step 7a of Section 13).
+
+        Many acknowledgments may be grouped together into a single Link
+        State Acknowledgment packet.  Such a packet is sent back out the
+        interface which received the LSAs.  The packet can be sent in
+        one of two ways: delayed and sent on an interval timer, or sent
+        directly to a particular neighbor.  The particular
+        acknowledgment strategy used depends on the circumstances
+        surrounding the receipt of the LSA.
+
+        Sending delayed acknowledgments accomplishes several things: 1)
+        it facilitates the packaging of multiple acknowledgments in a
+        single Link State Acknowledgment packet, 2) it enables a single
+        Link State Acknowledgment packet to indicate acknowledgments to
+        several neighbors at once (through multicasting) and 3) it
+        randomizes the Link State Acknowledgment packets sent by the
+        various routers attached to a common network.  The fixed
+        interval between a router's delayed transmissions must be short
+        (less than RxmtInterval) or needless retransmissions will ensue.
+
+        Direct acknowledgments are sent directly to a particular
+        neighbor in response to the receipt of duplicate LSAs. Direct
+        acknowledgments are sent immediately when the duplicate is
+        received. On multi-access networks, these acknowledgments are
+        sent directly to the neighbor's IP address.
+
+        The precise procedure for sending Link State Acknowledgment
+        packets is described in Table 19.  The circumstances surrounding
+        the receipt of the LSA are listed in the left column.  The
+        acknowledgment action then taken is listed in one of the two
+        right columns.  This action depends on the state of the
+        concerned interface; interfaces in state Backup behave
+        differently from interfaces in all other states.  Delayed
+        acknowledgments must be delivered to all adjacent routers
+        associated with the interface.  On broadcast networks, this is
+        accomplished by sending the delayed Link State Acknowledgment
+        packets as multicasts.  The Destination IP address used depends
+
+
+
+Moy                         Standards Track                   [Page 152]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+
+
+
+
+                                     Action taken in state
+   Circumstances            Backup                All other states
+   _________________________________________________________________
+   LSA  has                 No  acknowledgment    No  acknowledgment
+   been  flooded back       sent.                 sent.
+   out receiving  in-
+   terface  (see Sec-
+   tion 13, step 5b).
+   _________________________________________________________________
+   LSA   is                 Delayed acknowledg-   Delayed       ack-
+   more  recent  than       ment sent if adver-   nowledgment sent.
+   database copy, but       tisement   received
+   was   not  flooded       from    Designated
+   back out receiving       Router,  otherwise
+   interface                do nothing
+   _________________________________________________________________
+   LSA is a                 Delayed acknowledg-   No  acknowledgment
+   duplicate, and was       ment sent if adver-   sent.
+   treated as an  im-       tisement   received
+   plied  acknowledg-       from    Designated
+   ment (see  Section       Router,  otherwise
+   13, step 7a).            do nothing
+   _________________________________________________________________
+   LSA is a                 Direct acknowledg-    Direct acknowledg-
+   duplicate, and was       ment sent.            ment sent.
+   not treated as  an
+   implied       ack-
+   nowledgment.
+   _________________________________________________________________
+   LSA's LS                 Direct acknowledg-    Direct acknowledg-
+   age is equal to          ment sent.            ment sent.
+   MaxAge, and there is
+   no current instance
+   of the LSA
+   in the link state
+   database, and none
+   of router's neighbors
+   are in states Exchange
+
+
+
+Moy                         Standards Track                   [Page 153]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+   or Loading (see
+   Section 13, step 4).
+
+
+             Table 19: Sending link state acknowledgements.
+
+
+
+
+        on the state of the interface.  If the interface state is DR or
+        Backup, the destination AllSPFRouters is used.  In all other
+        states, the destination AllDRouters is used.  On non-broadcast
+        networks, delayed Link State Acknowledgment packets must be
+        unicast separately over each adjacency (i.e., neighbor whose
+        state is >= Exchange).
+
+        The reasoning behind sending the above packets as multicasts is
+        best explained by an example.  Consider the network
+        configuration depicted in Figure 15.  Suppose RT4 has been
+        elected as Designated Router, and RT3 as Backup Designated
+        Router for the network N3.  When Router RT4 floods a new LSA to
+        Network N3, it is received by routers RT1, RT2, and RT3.  These
+        routers will not flood the LSA back onto net N3, but they still
+        must ensure that their link-state databases remain synchronized
+        with their adjacent neighbors.  So RT1, RT2, and RT4 are waiting
+        to see an acknowledgment from RT3.  Likewise, RT4 and RT3 are
+        both waiting to see acknowledgments from RT1 and RT2.  This is
+        best achieved by sending the acknowledgments as multicasts.
+
+        The reason that the acknowledgment logic for Backup DRs is
+        slightly different is because they perform differently during
+        the flooding of LSAs (see Section 13.3, step 4).
+
+
+
+    13.6.  Retransmitting LSAs
+
+        LSAs flooded out an adjacency are placed on the adjacency's Link
+        state retransmission list.  In order to ensure that flooding is
+        reliable, these LSAs are retransmitted until they are
+        acknowledged.  The length of time between retransmissions is a
+        configurable per-interface value, RxmtInterval.  If this is set
+
+
+
+Moy                         Standards Track                   [Page 154]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        too low for an interface, needless retransmissions will ensue.
+        If the value is set too high, the speed of the flooding, in the
+        face of lost packets, may be affected.
+
+        Several retransmitted LSAs may fit into a single Link State
+        Update packet.  When LSAs are to be retransmitted, only the
+        number fitting in a single Link State Update packet should be
+        sent.  Another packet of retransmissions can be sent whenever
+        some of the LSAs are acknowledged, or on the next firing of the
+        retransmission timer.
+
+        Link State Update Packets carrying retransmissions are always
+        sent directly to the neighbor. On multi-access networks, this
+        means that retransmissions are sent directly to the neighbor's
+        IP address.  Each LSA's LS age must be incremented by
+        InfTransDelay (which must be > 0) when it is copied into the
+        outgoing Link State Update packet (until the LS age field
+        reaches the maximum value of MaxAge).
+
+        If an adjacent router goes down, retransmissions may occur until
+        the adjacency is destroyed by OSPF's Hello Protocol.  When the
+        adjacency is destroyed, the Link state retransmission list is
+        cleared.
+
+
+    13.7.  Receiving link state acknowledgments
+
+        Many consistency checks have been made on a received Link State
+        Acknowledgment packet before it is handed to the flooding
+        procedure.  In particular, it has been associated with a
+        particular neighbor.  If this neighbor is in a lesser state than
+        Exchange, the Link State Acknowledgment packet is discarded.
+
+        Otherwise, for each acknowledgment in the Link State
+        Acknowledgment packet, the following steps are performed:
+
+
+        o   Does the LSA acknowledged have an instance on the Link state
+            retransmission list for the neighbor?  If not, examine the
+            next acknowledgment.  Otherwise:
+
+
+
+
+
+Moy                         Standards Track                   [Page 155]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        o   If the acknowledgment is for the same instance that is
+            contained on the list, remove the item from the list and
+            examine the next acknowledgment.  Otherwise:
+
+        o   Log the questionable acknowledgment, and examine the next
+            one.
+
+

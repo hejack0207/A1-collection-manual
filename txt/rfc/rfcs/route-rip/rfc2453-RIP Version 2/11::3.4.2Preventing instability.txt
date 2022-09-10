@@ -1,0 +1,126 @@
+3.4.2 Preventing instability
+
+   The algorithm as presented up to this point will always allow a host
+   or router to calculate a correct routing table.  However, that is
+   still not quite enough to make it useful in practice.  The proofs
+   referred to above only show that the routing tables will converge to
+   the correct values in finite time.  They do not guarantee that this
+   time will be small enough to be useful, nor do they say what will
+   happen to the metrics for networks that become inaccessible.
+
+   It is easy enough to extend the mathematics to handle routes becoming
+   inaccessible.  The convention suggested above will do that.  We
+   choose a large metric value to represent "infinity".  This value must
+   be large enough that no real metric would ever get that large.  For
+   the purposes of this example, we will use the value 16.  Suppose a
+   network becomes inaccessible.  All of the immediately neighboring
+   routers time out and set the metric for that network to 16.  For
+   purposes of analysis, we can assume that all the neighboring routers
+   have gotten a new piece of hardware that connects them directly to
+   the vanished network, with a cost of 16.  Since that is the only
+   connection to the vanished network, all the other routers in the
+   system will converge to new routes that go through one of those
+   routers.  It is easy to see that once convergence has happened, all
+   the routers will have metrics of at least 16 for the vanished
+   network.  Routers one hop away from the original neighbors would end
+   up with metrics of at least 17; routers two hops away would end up
+   with at least 18, etc.  As these metrics are larger than the maximum
+   metric value, they are all set to 16.  It is obvious that the system
+   will now converge to a metric of 16 for the vanished network at all
+   routers.
+
+   Unfortunately, the question of how long convergence will take is not
+   amenable to quite so simple an answer.  Before going any further, it
+   will be useful to look at an example (taken from [2]).  Note that
+   what we are about to show will not happen with a correct
+   implementation of RIP.  We are trying to show why certain features
+   are needed.  In the following example the letters correspond to
+   routers, and the lines to networks.
+
+
+
+
+
+
+
+
+Malkin                      Standards Track                    [Page 13]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+     A-----B
+      \   / \
+       \ /  |
+        C  /    all networks have cost 1, except
+        | /     for the direct link from C to D, which
+        |/      has cost 10
+        D
+        |<=== target network
+
+   Each router will have a table showing a route to each network.
+
+   However, for purposes of this illustration, we show only the routes
+   from each router to the network marked at the bottom of the diagram.
+
+           D:  directly connected, metric 1
+           B:  route via D, metric 2
+           C:  route via B, metric 3
+           A:  route via B, metric 3
+
+   Now suppose that the link from B to D fails.  The routes should now
+   adjust to use the link from C to D.  Unfortunately, it will take a
+   while for this to this to happen.  The routing changes start when B
+   notices that the route to D is no longer usable.  For simplicity, the
+   chart below assumes that all routers send updates at the same time.
+   The chart shows the metric for the target network, as it appears in
+   the routing table at each router.
+
+       time ------>
+
+       D: dir, 1   dir, 1   dir, 1   dir, 1  ...  dir, 1   dir, 1
+       B: unreach  C,   4   C,   5   C,   6       C,  11   C,  12
+       C: B,   3   A,   4   A,   5   A,   6       A,  11   D,  11
+       A: B,   3   C,   4   C,   5   C,   6       C,  11   C,  12
+
+       dir = directly connected
+       unreach = unreachable
+
+   Here's the problem:  B is able to get rid of its failed route using a
+   timeout mechanism, but vestiges of that route persist in the system
+   for a long time.  Initially, A and C still think they can get to D
+   via B.  So, they keep sending updates listing metrics of 3.  In the
+   next iteration, B will then claim that it can get to D via either A
+   or C.  Of course, it can't.  The routes being claimed by A and C are
+   now gone, but they have no way of knowing that yet.  And even when
+   they discover that their routes via B have gone away, they each think
+   there is a route available via the other.  Eventually the system
+   converges, as all the mathematics claims it must.  But it can take
+   some time to do so.  The worst case is when a network becomes
+
+
+
+Malkin                      Standards Track                    [Page 14]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   completely inaccessible from some part of the system.  In that case,
+   the metrics may increase slowly in a pattern like the one above until
+   they finally reach infinity.  For this reason, the problem is called
+   "counting to infinity".
+
+   You should now see why "infinity" is chosen to be as small as
+   possible.  If a network becomes completely inaccessible, we want
+   counting to infinity to be stopped as soon as possible.  Infinity
+   must be large enough that no real route is that big.  But it
+   shouldn't be any bigger than required.  Thus the choice of infinity
+   is a tradeoff between network size and speed of convergence in case
+   counting to infinity happens.  The designers of RIP believed that the
+   protocol was unlikely to be practical for networks with a diameter
+   larger than 15.
+
+   There are several things that can be done to prevent problems like
+   this.  The ones used by RIP are called "split horizon with poisoned
+   reverse", and "triggered updates".
+

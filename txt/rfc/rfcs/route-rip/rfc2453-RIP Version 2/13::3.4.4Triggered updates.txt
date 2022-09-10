@@ -1,0 +1,69 @@
+3.4.4  Triggered updates
+
+   Split horizon with poisoned reverse will prevent any routing loops
+   that involve only two routers.  However, it is still possible to end
+   up with patterns in which three routers are engaged in mutual
+   deception.  For example, A may believe it has a route through B, B
+   through C, and C through A.  Split horizon cannot stop such a loop.
+   This loop will only be resolved when the metric reaches infinity and
+   the network involved is then declared unreachable.  Triggered updates
+   are an attempt to speed up this convergence.  To get triggered
+   updates, we simply add a rule that whenever a router changes the
+   metric for a route, it is required to send update messages almost
+   immediately, even if it is not yet time for one of the regular update
+   message.  (The timing details will differ from protocol to protocol.
+   Some distance vector protocols, including RIP, specify a small time
+   delay, in order to avoid having triggered updates generate excessive
+   network traffic.)  Note how this combines with the rules for
+   computing new metrics.  Suppose a router's route to destination N
+   goes through router G.  If an update arrives from G itself, the
+   receiving router is required to believe the new information, whether
+   the new metric is higher or lower than the old one.  If the result is
+   a change in metric, then the receiving router will send triggered
+   updates to all the hosts and routers directly connected to it.  They
+   in turn may each send updates to their neighbors.  The result is a
+   cascade of triggered updates.  It is easy to show which routers and
+   hosts are involved in the cascade.  Suppose a router G times out a
+   route to destination N.  G will send triggered updates to all of its
+   neighbors.  However, the only neighbors who will believe the new
+   information are those whose routes for N go through G.  The other
+   routers and hosts will see this as information about a new route that
+   is worse than the one they are already using, and ignore it.  The
+   neighbors whose routes go through G will update their metrics and
+   send triggered updates to all of their neighbors.  Again, only those
+   neighbors whose routes go through them will pay attention.  Thus, the
+   triggered updates will propagate backwards along all paths leading to
+   router G, updating the metrics to infinity.  This propagation will
+   stop as soon as it reaches a portion of the network whose route to
+   destination N takes some other path.
+
+   If the system could be made to sit still while the cascade of
+   triggered updates happens, it would be possible to prove that
+   counting to infinity will never happen.  Bad routes would always be
+   removed immediately, and so no routing loops could form.
+
+   Unfortunately, things are not so nice.  While the triggered updates
+   are being sent, regular updates may be happening at the same time.
+   Routers that haven't received the triggered update yet will still be
+   sending out information based on the route that no longer exists.  It
+
+
+
+Malkin                      Standards Track                    [Page 17]
+
+RFC 2453                     RIP Version 2                 November 1998
+
+
+   is possible that after the triggered update has gone through a
+   router, it might receive a normal update from one of these routers
+   that hasn't yet gotten the word.  This could reestablish an orphaned
+   remnant of the faulty route.  If triggered updates happen quickly
+   enough, this is very unlikely.  However, counting to infinity is
+   still possible.
+
+   The router requirements RFC [11] specifies that all implementation of
+   RIP must implement triggered update for deleted routes and may
+   implement triggered updates for new routes or change of routes.  RIP
+   implementations must also limit the rate which of triggered updates
+   may be trandmitted. (see section 3.10.1)
+

@@ -1,0 +1,178 @@
+7 - Design, Implementation, Operation, and Protocol Notes
+
+   Some of the principles which guided the design of this UPDATE
+   specification are as follows.  Note that these are not part of the
+   formal specification and any disagreement between this section and
+   any other section of this document should be resolved in favour of
+   the other section.
+
+   7.1. Using metavalues for CLASS is possible only because all RRs in
+   the packet are assumed to be in the same zone, and CLASS is an
+   attribute of a zone rather than of an RRset.  (It is for this reason
+   that the Zone Section is not optional.)
+
+   7.2. Since there are no data-present or data-absent errors possible
+   from processing the Update Section, any necessary data-present and
+   data- absent dependencies should be specified in the Prerequisite
+   Section.
+
+   7.3. The Additional Data Section can be used to supply a server with
+   out of zone glue that will be needed in referrals.  For example, if
+   adding a new NS RR to HOME.VIX.COM specifying a nameserver called
+   NS.AU.OZ, the A RR for NS.AU.OZ can be included in the Additional
+   Data Section.  Servers can use this information or ignore it, at the
+   discretion of the implementor.  We discourage caching this
+   information for use in subsequent DNS responses.
+
+   7.4. The Additional Data Section might be used if some of the RRs
+   later needed for Secure DNS Update are not actually zone updates, but
+   rather ancillary keys or signatures not intended to be stored in the
+   zone (as an update would be), yet necessary for validating the update
+   operation.
+
+   7.5. It is expected that in the absence of Secure DNS Update, a
+   server will only accept updates if they come from a source address
+   that has been statically configured in the server's description of a
+   primary master zone.  DHCP servers would be likely candidates for
+   inclusion in this statically configured list.
+
+   7.6. It is not possible to create a zone using this protocol, since
+   there is no provision for a slave server to be told who its master
+   servers are.  It is expected that this protocol will be extended in
+   the future to cover this case.  Therefore, at this time, the addition
+   of SOA RRs is unsupported.  For similar reasons, deletion of SOA RRs
+   is also unsupported.
+
+
+
+
+
+
+
+Vixie, et. al.              Standards Track                    [Page 21]
+
+RFC 2136                       DNS Update                     April 1997
+
+
+   7.7. The prerequisite for specifying that a name own at least one RR
+   differs semantically from QUERY, in that QUERY would return
+   <NOERROR,ANCOUNT=0> rather than NXDOMAIN if queried for an RRset at
+   this name, while UPDATE's prerequisite condition [Section 2.4.4]
+   would NOT be satisfied.
+
+   7.8. It is possible for a UDP response to be lost in transit and for
+   a request to be retried due to a timeout condition.  In this case an
+   UPDATE that was successful the first time it was received by the
+   primary master might ultimately appear to have failed when the
+   response to a duplicate request is finally received by the requestor.
+   (This is because the original prerequisites may no longer be
+   satisfied after the update has been applied.)  For this reason,
+   requestors who require an accurate response code must use TCP.
+
+   7.9. Because a requestor who requires an accurate response code will
+   initiate their UPDATE transaction using TCP, a forwarder who receives
+   a request via TCP must forward it using TCP.
+
+   7.10. Deferral of SOA SERIAL autoincrements is made possible so that
+   serial numbers can be conserved and wraparound at 2**32 can be made
+   an infrequent occurance.  Visible (to DNS clients) SOA SERIALs need
+   to differ if the zone differs.  Note that the Authority Section SOA
+   in a QUERY response is a form of visibility, for the purposes of this
+   prerequisite.
+
+   7.11. A zone's SOA SERIAL should never be set to zero (0) due to
+   interoperability problems with some older but widely installed
+   implementations of DNS.  When incrementing an SOA SERIAL, if the
+   result of the increment is zero (0) (as will be true when wrapping
+   around 2**32), it is necessary to increment it again or set it to one
+   (1).  See [RFC1982] for more detail on this subject.
+
+   7.12. Due to the TTL minimalization necessary when caching an RRset,
+   it is recommended that all TTLs in an RRset be set to the same value.
+   While the DNS Message Format permits variant TTLs to exist in the
+   same RRset, and this variance can exist inside a zone, such variance
+   will have counterintuitive results and its use is discouraged.
+
+   7.13. Zone cut management presents some obscure corner cases to the
+   add and delete operations in the Update Section.  It is possible to
+   delete an NS RR as long as it is not the last NS RR at the root of a
+   zone.  If deleting all RRs from a name, SOA and NS RRs at the root of
+   a zone are unaffected.  If deleting RRsets, it is not possible to
+   delete either SOA or NS RRsets at the top of a zone.  An attempt to
+   add an SOA will be treated as a replace operation if an SOA already
+   exists, or as a no-op if the SOA would be new.
+
+
+
+
+Vixie, et. al.              Standards Track                    [Page 22]
+
+RFC 2136                       DNS Update                     April 1997
+
+
+   7.14. No semantic checking is required in the primary master server
+   when adding new RRs.  Therefore a requestor can cause CNAME or NS or
+   any other kind of RR to be added even if their target name does not
+   exist or does not have the proper RRsets to make the original RR
+   useful.  Primary master servers that DO implement this kind of
+   checking should take great care to avoid out-of-zone dependencies
+   (whose veracity cannot be authoritatively checked) and should
+   implement all such checking during the prescan phase.
+
+   7.15. Nonterminal or wildcard CNAMEs are not well specified by
+   [RFC1035] and their use will probably lead to unpredictable results.
+   Their use is discouraged.
+
+   7.16. Empty nonterminals (nodes with children but no RRs of their
+   own) will cause <NOERROR,ANCOUNT=0> responses to be sent in response
+   to a query of any type for that name.  There is no provision for
+   empty terminal nodes -- so if all RRs of a terminal node are deleted,
+   the name is no longer in use, and queries of any type for that name
+   will result in an NXDOMAIN response.
+
+   7.17. In a deep AXFR dependency graph, it has not historically been
+   an error for slaves to depend mutually upon each other.  This
+   configuration has been used to enable a zone to flow from the primary
+   master to all slaves even though not all slaves have continuous
+   connectivity to the primary master.  UPDATE's use of the AXFR
+   dependency graph for forwarding prohibits this kind of dependency
+   loop, since UPDATE forwarding has no loop detection analagous to the
+   SOA SERIAL pretest used by AXFR.
+
+   7.18. Previously existing names which are occluded by a new zone cut
+   are still considered part of the parent zone, for the purposes of
+   zone transfers, even though queries for such names will be referred
+   to the new subzone's servers.  If a zone cut is removed, all parent
+   zone names that were occluded by it will again become visible to
+   queries.  (This is a clarification of [RFC1034].)
+
+   7.19. If a server is authoritative for both a zone and its child,
+   then queries for names at the zone cut between them will be answered
+   authoritatively using only data from the child zone.  (This is a
+   clarification of [RFC1034].)
+
+
+
+
+
+
+
+
+
+
+
+Vixie, et. al.              Standards Track                    [Page 23]
+
+RFC 2136                       DNS Update                     April 1997
+
+
+   7.20. Update ordering using the SOA RR is problematic since there is
+   no way to know which of a zone's NS RRs represents the primary
+   master, and the zone slaves can be out of date if their SOA.REFRESH
+   timers have not elapsed since the last time the zone was changed on
+   the primary master.  We recommend that a zone needing ordered updates
+   use only servers which implement NOTIFY (see [RFC1996]) and IXFR (see
+   [RFC1995]), and that a client receiving a prerequisite error while
+   attempting an ordered update simply retry after a random delay period
+   to allow the zone to settle.
+

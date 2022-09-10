@@ -1,0 +1,698 @@
+6.  REFERENCES
+
+      [Clark87]  Clark, D., Lambert, M., and L. Zhang, "NETBLT: A Bulk
+      Data Transfer Protocol", RFC 998, MIT, March 1987.
+
+      [Garlick77]  Garlick, L., R. Rom, and J. Postel, "Issues in
+      Reliable Host-to-Host Protocols", Proc. Second Berkeley Workshop
+      on Distributed Data Management and Computer Networks, May 1977.
+
+      [Hamming77]  Hamming, R., "Digital Filters", ISBN 0-13-212571-4,
+      Prentice Hall, Englewood Cliffs, N.J., 1977.
+
+      [Cheriton88]  Cheriton, D., "VMTP: Versatile Message Transaction
+      Protocol", RFC 1045, Stanford University, February 1988.
+
+      [Jacobson88a] Jacobson, V., "Congestion Avoidance and Control",
+      SIGCOMM '88, Stanford, CA., August 1988.
+
+      [Jacobson88b]  Jacobson, V., and R. Braden, "TCP Extensions for
+      Long-Delay Paths", RFC-1072, LBL and USC/Information Sciences
+      Institute, October 1988.
+
+
+
+Jacobson, Braden, & Borman                                     [Page 25]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      [Jacobson90a]  Jacobson, V., "4BSD Header Prediction", ACM
+      Computer Communication Review, April 1990.
+
+      [Jacobson90b]  Jacobson, V., Braden, R., and Zhang, L., "TCP
+      Extension for High-Speed Paths", RFC-1185, LBL and USC/Information
+      Sciences Institute, October 1990.
+
+      [Jacobson90c]  Jacobson, V., "Modified TCP congestion avoidance
+      algorithm", Message to end2end-interest mailing list, April 1990.
+
+      [Jain86]  Jain, R., "Divergence of Timeout Algorithms for Packet
+      Retransmissions", Proc. Fifth Phoenix Conf. on Comp. and Comm.,
+      Scottsdale, Arizona, March 1986.
+
+      [Karn87]  Karn, P. and C. Partridge, "Estimating Round-Trip Times
+      in Reliable Transport Protocols", Proc. SIGCOMM '87, Stowe, VT,
+      August 1987.
+
+      [McKenzie89]  McKenzie, A., "A Problem with the TCP Big Window
+      Option", RFC 1110, BBN STC, August 1989.
+
+      [Nagle84]  Nagle, J., "Congestion Control in IP/TCP
+      Internetworks", RFC 896, FACC, January 1984.
+
+      [NBS85]  Colella, R., Aronoff, R., and K. Mills, "Performance
+      Improvements for ISO Transport", Ninth Data Comm Symposium,
+      published in ACM SIGCOMM Comp Comm Review, vol. 15, no. 5,
+      September 1985.
+
+      [Postel81]  Postel, J., "Transmission Control Protocol - DARPA
+      Internet Program Protocol Specification", RFC 793, DARPA,
+      September 1981.
+
+      [Velten84] Velten, D., Hinden, R., and J. Sax, "Reliable Data
+      Protocol", RFC 908, BBN, July 1984.
+
+      [Watson81]  Watson, R., "Timer-based Mechanisms in Reliable
+      Transport Protocol Connection Management", Computer Networks, Vol.
+      5, 1981.
+
+      [Zhang86]  Zhang, L., "Why TCP Timers Don't Work Well", Proc.
+      SIGCOMM '86, Stowe, Vt., August 1986.
+
+
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 26]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+APPENDIX A:  IMPLEMENTATION SUGGESTIONS
+
+   The following layouts are recommended for sending options on non-SYN
+   segments, to achieve maximum feasible alignment of 32-bit and 64-bit
+   machines.
+
+
+       +--------+--------+--------+--------+
+       |   NOP  |  NOP   |  TSopt |   10   |
+       +--------+--------+--------+--------+
+       |          TSval   timestamp        |
+       +--------+--------+--------+--------+
+       |          TSecr   timestamp        |
+       +--------+--------+--------+--------+
+
+
+APPENDIX B: DUPLICATES FROM EARLIER CONNECTION INCARNATIONS
+
+   There are two cases to be considered:  (1) a system crashing (and
+   losing connection state) and restarting, and (2) the same connection
+   being closed and reopened without a loss of host state.  These will
+   be described in the following two sections.
+
+   B.1  System Crash with Loss of State
+
+      TCP's quiet time of one MSL upon system startup handles the loss
+      of connection state in a system crash/restart.  For an
+      explanation, see for example "When to Keep Quiet" in the TCP
+      protocol specification [Postel81].  The MSL that is required here
+      does not depend upon the transfer speed.  The current TCP MSL of 2
+      minutes seems acceptable as an operational compromise, as many
+      host systems take this long to boot after a crash.
+
+      However, the timestamp option may be used to ease the MSL
+      requirements (or to provide additional security against data
+      corruption).  If timestamps are being used and if the timestamp
+      clock can be guaranteed to be monotonic over a system
+      crash/restart, i.e., if the first value of the sender's timestamp
+      clock after a crash/restart can be guaranteed to be greater than
+      the last value before the restart, then a quiet time will be
+      unnecessary.
+
+      To dispense totally with the quiet time would require that the
+      host clock be synchronized to a time source that is stable over
+      the crash/restart period, with an accuracy of one timestamp clock
+      tick or better.  We can back off from this strict requirement to
+      take advantage of approximate clock synchronization.  Suppose that
+      the clock is always re-synchronized to within N timestamp clock
+
+
+
+Jacobson, Braden, & Borman                                     [Page 27]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      ticks and that booting (extended with a quiet time, if necessary)
+      takes more than N ticks.  This will guarantee monotonicity of the
+      timestamps, which can then be used to reject old duplicates even
+      without an enforced MSL.
+
+   B.2  Closing and Reopening a Connection
+
+      When a TCP connection is closed, a delay of 2*MSL in TIME-WAIT
+      state ties up the socket pair for 4 minutes (see Section 3.5 of
+      [Postel81].  Applications built upon TCP that close one connection
+      and open a new one (e.g., an FTP data transfer connection using
+      Stream mode) must choose a new socket pair each time.  The TIME-
+      WAIT delay serves two different purposes:
+
+      (a)  Implement the full-duplex reliable close handshake of TCP.
+
+           The proper time to delay the final close step is not really
+           related to the MSL; it depends instead upon the RTO for the
+           FIN segments and therefore upon the RTT of the path.  (It
+           could be argued that the side that is sending a FIN knows
+           what degree of reliability it needs, and therefore it should
+           be able to determine the length of the TIME-WAIT delay for
+           the FIN's recipient.  This could be accomplished with an
+           appropriate TCP option in FIN segments.)
+
+           Although there is no formal upper-bound on RTT, common
+           network engineering practice makes an RTT greater than 1
+           minute very unlikely.  Thus, the 4 minute delay in TIME-WAIT
+           state works satisfactorily to provide a reliable full-duplex
+           TCP close.  Note again that this is independent of MSL
+           enforcement and network speed.
+
+           The TIME-WAIT state could cause an indirect performance
+           problem if an application needed to repeatedly close one
+           connection and open another at a very high frequency, since
+           the number of available TCP ports on a host is less than
+           2**16.  However, high network speeds are not the major
+           contributor to this problem; the RTT is the limiting factor
+           in how quickly connections can be opened and closed.
+           Therefore, this problem will be no worse at high transfer
+           speeds.
+
+      (b)  Allow old duplicate segments to expire.
+
+           To replace this function of TIME-WAIT state, a mechanism
+           would have to operate across connections.  PAWS is defined
+           strictly within a single connection; the last timestamp is
+           TS.Recent is kept in the connection control block, and
+
+
+
+Jacobson, Braden, & Borman                                     [Page 28]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+           discarded when a connection is closed.
+
+           An additional mechanism could be added to the TCP, a per-host
+           cache of the last timestamp received from any connection.
+           This value could then be used in the PAWS mechanism to reject
+           old duplicate segments from earlier incarnations of the
+           connection, if the timestamp clock can be guaranteed to have
+           ticked at least once since the old connection was open.  This
+           would require that the TIME-WAIT delay plus the RTT together
+           must be at least one tick of the sender's timestamp clock.
+           Such an extension is not part of the proposal of this RFC.
+
+           Note that this is a variant on the mechanism proposed by
+           Garlick, Rom, and Postel [Garlick77], which required each
+           host to maintain connection records containing the highest
+           sequence numbers on every connection.  Using timestamps
+           instead, it is only necessary to keep one quantity per remote
+           host, regardless of the number of simultaneous connections to
+           that host.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 29]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+APPENDIX C: CHANGES FROM RFC-1072, RFC-1185
+
+   The protocol extensions defined in this document differ in several
+   important ways from those defined in RFC-1072 and RFC-1185.
+
+   (a)  SACK has been deferred to a later memo.
+
+   (b)  The detailed rules for sending timestamp replies (see Section
+        3.4) differ in important ways.  The earlier rules could result
+        in an under-estimate of the RTT in certain cases (packets
+        dropped or out of order).
+
+   (c)  The same value TS.Recent is now shared by the two distinct
+        mechanisms RTTM and PAWS.  This simplification became possible
+        because of change (b).
+
+   (d)  An ambiguity in RFC-1185 was resolved in favor of putting
+        timestamps on ACK as well as data segments.  This supports the
+        symmetry of the underlying TCP protocol.
+
+   (e)  The echo and echo reply options of RFC-1072 were combined into a
+        single Timestamps option, to reflect the symmetry and to
+        simplify processing.
+
+   (f)  The problem of outdated timestamps on long-idle connections,
+        discussed in Section 4.2.2, was realized and resolved.
+
+   (g)  RFC-1185 recommended that header prediction take precedence over
+        the timestamp check.  Based upon some scepticism about the
+        probabilistic arguments given in Section 4.2.4, it was decided
+        to recommend that the timestamp check be performed first.
+
+   (h)  The spec was modified so that the extended options will be sent
+        on <SYN,ACK> segments only when they are received in the
+        corresponding <SYN> segments.  This provides the most
+        conservative possible conditions for interoperation with
+        implementations without the extensions.
+
+   In addition to these substantive changes, the present RFC attempts to
+   specify the algorithms unambiguously by presenting modifications to
+   the Event Processing rules of RFC-793; see Appendix E.
+
+
+
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 30]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+APPENDIX D: SUMMARY OF NOTATION
+
+   The following notation has been used in this document.
+
+   Options
+
+       WSopt:       TCP Window Scale Option
+       TSopt:       TCP Timestamps Option
+
+   Option Fields
+
+       shift.cnt:   Window scale byte in WSopt.
+       TSval:       32-bit Timestamp Value field in TSopt.
+       TSecr:       32-bit Timestamp Reply field in TSopt.
+
+   Option Fields in Current Segment
+
+       SEG.TSval:   TSval field from TSopt in current segment.
+       SEG.TSecr:   TSecr field from TSopt in current segment.
+       SEG.WSopt:   8-bit value in WSopt
+
+   Clock Values
+
+       my.TSclock:      Local source of 32-bit timestamp values
+       my.TSclock.rate: Period of my.TSclock (1 ms to 1 sec).
+
+   Per-Connection State Variables
+
+       TS.Recent:       Latest received Timestamp
+       Last.ACK.sent:   Last ACK field sent
+
+       Snd.TS.OK:       1-bit flag
+       Snd.WS.OK:       1-bit flag
+
+       Rcv.Wind.Scale:  Receive window scale power
+       Snd.Wind.Scale:  Send window scale power
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 31]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+APPENDIX E: EVENT PROCESSING
+
+
+Event Processing
+
+  OPEN Call
+
+     ...
+    An initial send sequence number (ISS) is selected.  Send a SYN
+    segment of the form:
+
+        <SEQ=ISS><CTL=SYN><TSval=my.TSclock><WSopt=Rcv.Wind.Scale>
+
+      ...
+
+  SEND Call
+
+    CLOSED STATE (i.e., TCB does not exist)
+
+      ...
+
+    LISTEN STATE
+
+      If the foreign socket is specified, then change the connection
+      from passive to active, select an ISS.  Send a SYN segment
+      containing the options: <TSval=my.TSclock> and
+      <WSopt=Rcv.Wind.Scale>.  Set SND.UNA to ISS, SND.NXT to ISS+1.
+      Enter SYN-SENT state. ...
+
+    SYN-SENT STATE
+    SYN-RECEIVED STATE
+
+      ...
+
+    ESTABLISHED STATE
+    CLOSE-WAIT STATE
+
+      Segmentize the buffer and send it with a piggybacked
+      acknowledgment (acknowledgment value = RCV.NXT).  ...
+
+      If the urgent flag is set ...
+
+      If the Snd.TS.OK flag is set, then include the TCP Timestamps
+      option <TSval=my.TSclock,TSecr=TS.Recent> in each data segment.
+
+      Scale the receive window for transmission in the segment header:
+
+            SEG.WND = (SND.WND >> Rcv.Wind.Scale).
+
+
+
+Jacobson, Braden, & Borman                                     [Page 32]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+  SEGMENT ARRIVES
+
+     ...
+
+    If the state is LISTEN then
+
+      first check for an RST
+
+        ...
+
+      second check for an ACK
+
+        ...
+
+      third check for a SYN
+
+        if the SYN bit is set, check the security.  If the ...
+
+         ...
+
+        If the SEG.PRC is less than the TCB.PRC then continue.
+
+        Check for a Window Scale option (WSopt); if one is found, save
+        SEG.WSopt in Snd.Wind.Scale and set Snd.WS.OK flag on.
+        Otherwise, set both Snd.Wind.Scale and Rcv.Wind.Scale to zero
+        and clear Snd.WS.OK flag.
+
+        Check for a TSopt option; if one is found, save SEG.TSval in the
+        variable TS.Recent and turn on the Snd.TS.OK bit.
+
+        Set RCV.NXT to SEG.SEQ+1, IRS is set to SEG.SEQ and any other
+        control or text should be queued for processing later.  ISS
+        should be selected and a SYN segment sent of the form:
+
+          <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
+
+        If the Snd.WS.OK bit is on, include a WSopt option
+        <WSopt=Rcv.Wind.Scale> in this segment.  If the Snd.TS.OK bit is
+        on, include a TSopt <TSval=my.TSclock,TSecr=TS.Recent> in this
+        segment.  Last.ACK.sent is set to RCV.NXT.
+
+        SND.NXT is set to ISS+1 and SND.UNA to ISS.  The connection
+        state should be changed to SYN-RECEIVED.  Note that any other
+        incoming control or data (combined with SYN) will be processed
+        in the SYN-RECEIVED state, but processing of SYN and ACK should
+        not be repeated.  If the listen was not fully specified (i.e.,
+        the foreign socket was not fully specified), then the
+        unspecified fields should be filled in now.
+
+
+
+Jacobson, Braden, & Borman                                     [Page 33]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+      fourth other text or control
+
+       ...
+
+    If the state is SYN-SENT then
+
+      first check the ACK bit
+
+        ...
+
+      fourth check the SYN bit
+
+         ...
+
+        If the SYN bit is on and the security/compartment and precedence
+        are acceptable then, RCV.NXT is set to SEG.SEQ+1, IRS is set to
+        SEG.SEQ, and any acknowledgements on the retransmission queue
+        which are thereby acknowledged should be removed.
+
+        Check for a Window Scale option (WSopt); if is found, save
+        SEG.WSopt in Snd.Wind.Scale; otherwise, set both Snd.Wind.Scale
+        and Rcv.Wind.Scale to zero.
+
+        Check for a TSopt option; if one is found, save SEG.TSval in
+        variable TS.Recent and turn on the Snd.TS.OK bit in the
+        connection control block.  If the ACK bit is set, use my.TSclock
+        - SEG.TSecr as the initial RTT estimate.
+
+        If SND.UNA > ISS (our SYN has been ACKed), change the connection
+        state to ESTABLISHED, form an ACK segment:
+
+            <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+
+        and send it.  If the Snd.Echo.OK bit is on, include a TSopt
+        option <TSval=my.TSclock,TSecr=TS.Recent> in this ACK segment.
+        Last.ACK.sent is set to RCV.NXT.
+
+        Data or controls which were queued for transmission may be
+        included.  If there are other controls or text in the segment
+        then continue processing at the sixth step below where the URG
+        bit is checked, otherwise return.
+
+        Otherwise enter SYN-RECEIVED, form a SYN,ACK segment:
+
+            <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
+
+        and send it.  If the Snd.Echo.OK bit is on, include a TSopt
+        option <TSval=my.TSclock,TSecr=TS.Recent> in this segment.  If
+
+
+
+Jacobson, Braden, & Borman                                     [Page 34]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+        the Snd.WS.OK bit is on, include a WSopt option
+        <WSopt=Rcv.Wind.Scale> in this segment.  Last.ACK.sent is set to
+        RCV.NXT.
+
+        If there are other controls or text in the segment, queue them
+        for processing after the ESTABLISHED state has been reached,
+        return.
+
+      fifth, if neither of the SYN or RST bits is set then drop the
+      segment and return.
+
+
+    Otherwise,
+
+    First, check sequence number
+
+      SYN-RECEIVED STATE
+      ESTABLISHED STATE
+      FIN-WAIT-1 STATE
+      FIN-WAIT-2 STATE
+      CLOSE-WAIT STATE
+      CLOSING STATE
+      LAST-ACK STATE
+      TIME-WAIT STATE
+
+        Segments are processed in sequence.  Initial tests on arrival
+        are used to discard old duplicates, but further processing is
+        done in SEG.SEQ order.  If a segment's contents straddle the
+        boundary between old and new, only the new parts should be
+        processed.
+
+        Rescale the received window field:
+
+            TrueWindow = SEG.WND << Snd.Wind.Scale,
+
+        and use "TrueWindow" in place of SEG.WND in the following steps.
+
+        Check whether the segment contains a Timestamps option and bit
+        Snd.TS.OK is on.  If so:
+
+          If SEG.TSval < TS.Recent, then test whether connection has
+          been idle less than 24 days; if both are true, then the
+          segment is not acceptable; follow steps below for an
+          unacceptable segment.
+
+          If SEG.SEQ is equal to Last.ACK.sent, then save SEG.ECopt in
+          variable TS.Recent.
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 35]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+        There are four cases for the acceptability test for an incoming
+        segment:
+
+          ...
+
+        If an incoming segment is not acceptable, an acknowledgment
+        should be sent in reply (unless the RST bit is set, if so drop
+        the segment and return):
+
+          <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+
+        Last.ACK.sent is set to SEG.ACK of the acknowledgment.  If the
+        Snd.Echo.OK bit is on, include the Timestamps option
+        <TSval=my.TSclock,TSecr=TS.Recent> in this ACK segment.  Set
+        Last.ACK.sent to SEG.ACK and send the ACK segment.  After
+        sending the acknowledgment, drop the unacceptable segment and
+        return.
+
+          ...
+
+    fifth check the ACK field.
+
+      if the ACK bit is off drop the segment and return.
+
+      if the ACK bit is on
+
+        ...
+
+        ESTABLISHED STATE
+
+          If SND.UNA < SEG.ACK =< SND.NXT then, set SND.UNA <- SEG.ACK.
+          Also compute a new estimate of round-trip time.  If Snd.TS.OK
+          bit is on, use my.TSclock - SEG.TSecr; otherwise use the
+          elapsed time since the first segment in the retransmission
+          queue was sent.  Any segments on the retransmission queue
+          which are thereby entirely acknowledged...
+
+            ...
+
+    Seventh, process the segment text.
+
+      ESTABLISHED STATE
+      FIN-WAIT-1 STATE
+      FIN-WAIT-2 STATE
+
+          ...
+
+        Send an acknowledgment of the form:
+
+
+
+Jacobson, Braden, & Borman                                     [Page 36]
+
+RFC 1323          TCP Extensions for High Performance           May 1992
+
+
+          <SEQ=SND.NXT><ACK=RCV.NXT><CTL=ACK>
+
+        If the Snd.TS.OK bit is on, include Timestamps option
+        <TSval=my.TSclock,TSecr=TS.Recent> in this ACK segment.  Set
+        Last.ACK.sent to SEG.ACK of the acknowledgment, and send it.
+        This acknowledgment should be piggy-backed on a segment being
+        transmitted if possible without incurring undue delay.
+
+
+         ...
+
+
+Security Considerations
+
+   Security issues are not discussed in this memo.
+
+Authors' Addresses
+
+   Van Jacobson
+   University of California
+   Lawrence Berkeley Laboratory
+   Mail Stop 46A
+   Berkeley, CA 94720
+
+   Phone: (415) 486-6411
+   EMail: van@CSAM.LBL.GOV
+
+
+   Bob Braden
+   University of Southern California
+   Information Sciences Institute
+   4676 Admiralty Way
+   Marina del Rey, CA 90292
+
+   Phone: (310) 822-1511
+   EMail: Braden@ISI.EDU
+
+
+   Dave Borman
+   Cray Research
+   655-E Lone Oak Drive
+   Eagan, MN 55121
+
+   Phone: (612) 683-5571
+   Email: dab@cray.com
+
+
+
+
+
+
+Jacobson, Braden, & Borman                                     [Page 37]
+

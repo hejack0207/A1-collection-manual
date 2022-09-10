@@ -1,0 +1,274 @@
+8.  Protocol Packet Processing
+
+    This section discusses the general processing of OSPF routing
+    protocol packets.  It is very important that the router link-state
+    databases remain synchronized.  For this reason, routing protocol
+    packets should get preferential treatment over ordinary data
+    packets, both in sending and receiving.
+
+    Routing protocol packets are sent along adjacencies only (with the
+    exception of Hello packets, which are used to discover the
+    adjacencies).  This means that all routing protocol packets travel a
+    single IP hop, except those sent over virtual links.
+
+    All routing protocol packets begin with a standard header.  The
+    sections below provide details on how to fill in and verify this
+    standard header.  Then, for each packet type, the section giving
+    more details on that particular packet type's processing is listed.
+
+    8.1.  Sending protocol packets
+
+        When a router sends a routing protocol packet, it fills in the
+        fields of the standard OSPF packet header as follows.  For more
+        details on the header format consult Section A.3.1:
+
+        Version #
+            Set to 2, the version number of the protocol as documented
+            in this specification.
+
+        Packet type
+            The type of OSPF packet, such as Link state Update or Hello
+            Packet.
+
+
+
+
+
+Moy                         Standards Track                    [Page 58]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        Packet length
+            The length of the entire OSPF packet in bytes, including the
+            standard OSPF packet header.
+
+        Router ID
+            The identity of the router itself (who is originating the
+            packet).
+
+        Area ID
+            The OSPF area that the packet is being sent into.
+
+        Checksum
+            The standard IP 16-bit one's complement checksum of the
+            entire OSPF packet, excluding the 64-bit authentication
+            field.  This checksum is calculated as part of the
+            appropriate authentication procedure; for some OSPF
+            authentication types, the checksum calculation is omitted.
+            See Section D.4 for details.
+
+        AuType and Authentication
+            Each OSPF packet exchange is authenticated.  Authentication
+            types are assigned by the protocol and are documented in
+            Appendix D.  A different authentication procedure can be
+            used for each IP network/subnet.  Autype indicates the type
+            of authentication procedure in use. The 64-bit
+            authentication field is then for use by the chosen
+            authentication procedure.  This procedure should be the last
+            called when forming the packet to be sent. See Section D.4
+            for details.
+
+
+        The IP destination address for the packet is selected as
+        follows.  On physical point-to-point networks, the IP
+        destination is always set to the address AllSPFRouters.  On all
+        other network types (including virtual links), the majority of
+        OSPF packets are sent as unicasts, i.e., sent directly to the
+        other end of the adjacency.  In this case, the IP destination is
+        just the Neighbor IP address associated with the other end of
+        the adjacency (see Section 10).  The only packets not sent as
+        unicasts are on broadcast networks; on these networks Hello
+        packets are sent to the multicast destination AllSPFRouters, the
+        Designated Router and its Backup send both Link State Update
+
+
+
+Moy                         Standards Track                    [Page 59]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        Packets and Link State Acknowledgment Packets to the multicast
+        address AllSPFRouters, while all other routers send both their
+        Link State Update and Link State Acknowledgment Packets to the
+        multicast address AllDRouters.
+
+        Retransmissions of Link State Update packets are ALWAYS sent
+        directly to the neighbor. On multi-access networks, this means
+        that retransmissions should be sent to the neighbor's IP
+        address.
+
+        The IP source address should be set to the IP address of the
+        sending interface.  Interfaces to unnumbered point-to-point
+        networks have no associated IP address.  On these interfaces,
+        the IP source should be set to any of the other IP addresses
+        belonging to the router.  For this reason, there must be at
+        least one IP address assigned to the router.[2] Note that, for
+        most purposes, virtual links act precisely the same as
+        unnumbered point-to-point networks.  However, each virtual link
+        does have an IP interface address (discovered during the routing
+        table build process) which is used as the IP source when sending
+        packets over the virtual link.
+
+        For more information on the format of specific OSPF packet
+        types, consult the sections listed in Table 10.
+
+
+
+             Type   Packet name            detailed section (transmit)
+             _________________________________________________________
+             1      Hello                  Section  9.5
+             2      Database description   Section 10.8
+             3      Link state request     Section 10.9
+             4      Link state update      Section 13.3
+             5      Link state ack         Section 13.5
+
+
+      Table 10: Sections describing OSPF protocol packet transmission.
+
+
+
+
+
+
+
+
+Moy                         Standards Track                    [Page 60]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+    8.2.  Receiving protocol packets
+
+        Whenever a protocol packet is received by the router it is
+        marked with the interface it was received on.  For routers that
+        have virtual links configured, it may not be immediately obvious
+        which interface to associate the packet with.  For example,
+        consider the Router RT11 depicted in Figure 6.  If RT11 receives
+        an OSPF protocol packet on its interface to Network N8, it may
+        want to associate the packet with the interface to Area 2, or
+        with the virtual link to Router RT10 (which is part of the
+        backbone).  In the following, we assume that the packet is
+        initially associated with the non-virtual  link.[3]
+
+        In order for the packet to be accepted at the IP level, it must
+        pass a number of tests, even before the packet is passed to OSPF
+        for processing:
+
+
+        o   The IP checksum must be correct.
+
+        o   The packet's IP destination address must be the IP address
+            of the receiving interface, or one of the IP multicast
+            addresses AllSPFRouters or AllDRouters.
+
+        o   The IP protocol specified must be OSPF (89).
+
+        o   Locally originated packets should not be passed on to OSPF.
+            That is, the source IP address should be examined to make
+            sure this is not a multicast packet that the router itself
+            generated.
+
+
+        Next, the OSPF packet header is verified.  The fields specified
+        in the header must match those configured for the receiving
+        interface.  If they do not, the packet should be discarded:
+
+
+        o   The version number field must specify protocol version 2.
+
+        o   The Area ID found in the OSPF header must be verified.  If
+            both of the following cases fail, the packet should be
+            discarded.  The Area ID specified in the header must either:
+
+
+
+Moy                         Standards Track                    [Page 61]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+            (1) Match the Area ID of the receiving interface.  In this
+                case, the packet has been sent over a single hop.
+                Therefore, the packet's IP source address is required to
+                be on the same network as the receiving interface.  This
+                can be verified by comparing the packet's IP source
+                address to the interface's IP address, after masking
+                both addresses with the interface mask.  This comparison
+                should not be performed on point-to-point networks. On
+                point-to-point networks, the interface addresses of each
+                end of the link are assigned independently, if they are
+                assigned at all.
+
+            (2) Indicate the backbone.  In this case, the packet has
+                been sent over a virtual link.  The receiving router
+                must be an area border router, and the Router ID
+                specified in the packet (the source router) must be the
+                other end of a configured virtual link.  The receiving
+                interface must also attach to the virtual link's
+                configured Transit area.  If all of these checks
+                succeed, the packet is accepted and is from now on
+                associated with the virtual link (and the backbone
+                area).
+
+        o   Packets whose IP destination is AllDRouters should only be
+            accepted if the state of the receiving interface is DR or
+            Backup (see Section 9.1).
+
+        o   The AuType specified in the packet must match the AuType
+            specified for the associated area.
+
+        o   The packet must be authenticated.  The authentication
+            procedure is indicated by the setting of AuType (see
+            Appendix D).  The authentication procedure may use one or
+            more Authentication keys, which can be configured on a per-
+            interface basis.  The authentication procedure may also
+            verify the checksum field in the OSPF packet header (which,
+            when used, is set to the standard IP 16-bit one's complement
+            checksum of the OSPF packet's contents after excluding the
+            64-bit authentication field).  If the authentication
+            procedure fails, the packet should be discarded.
+
+
+
+
+
+Moy                         Standards Track                    [Page 62]
+
+RFC 2328                     OSPF Version 2                   April 1998
+
+
+        If the packet type is Hello, it should then be further processed
+        by the Hello Protocol (see Section 10.5).  All other packet
+        types are sent/received only on adjacencies.  This means that
+        the packet must have been sent by one of the router's active
+        neighbors.  If the receiving interface connects to a broadcast
+        network, Point-to-MultiPoint network or NBMA network the sender
+        is identified by the IP source address found in the packet's IP
+        header.  If the receiving interface connects to a point-to-point
+        network or a virtual link, the sender is identified by the
+        Router ID (source router) found in the packet's OSPF header.
+        The data structure associated with the receiving interface
+        contains the list of active neighbors.  Packets not matching any
+        active neighbor are discarded.
+
+        At this point all received protocol packets are associated with
+        an active neighbor.  For the further input processing of
+        specific packet types, consult the sections listed in Table 11.
+
+
+
+              Type   Packet name            detailed section (receive)
+              ________________________________________________________
+              1      Hello                  Section 10.5
+              2      Database description   Section 10.6
+              3      Link state request     Section 10.7
+              4      Link state update      Section 13
+              5      Link state ack         Section 13.7
+
+
+      Table 11: Sections describing OSPF protocol packet reception.
+
+
+

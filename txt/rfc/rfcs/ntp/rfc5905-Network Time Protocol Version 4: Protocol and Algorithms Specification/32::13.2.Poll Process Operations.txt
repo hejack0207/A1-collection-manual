@@ -1,0 +1,113 @@
+13.2.  Poll Process Operations
+
+   As described previously, once each second the clock-adjust process is
+   called.  This routine calls the poll routine for each association in
+   turn.  If the time for the next poll message is greater than the
+   seconds counter, the routine returns immediately.  Symmetric (modes
+   1, 2), client (mode 3), and broadcast server (mode 5) associations
+   routinely send packets.  A broadcast client (mode 6) association runs
+   the routine to update the reach and unreach variables, but does not
+   send packets.  The poll process calls the transmit process to send a
+   packet.  If in a burst (burst > 0), nothing further is done except
+   call the poll update routine to set the next poll interval.
+
+
+
+
+Mills, et al.                Standards Track                   [Page 52]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+   If not in a burst, the reach variable is shifted left by one bit,
+   with zero replacing the rightmost bit.  If the server has not been
+   heard for the last three poll intervals, the clock filter routine is
+   called to increase the dispersion.  An example is shown in
+   Appendix A.5.7.3.
+
+   If the BURST flag is lit and the server is reachable and a valid
+   source of synchronization is available, the client sends a burst of
+   BCOUNT (8) packets at each poll interval.  The interval between
+   packets in the burst is two seconds.  This is useful to accurately
+   measure jitter with long poll intervals.  If the IBURST flag is lit
+   and this is the first packet sent when the server has been
+   unreachable, the client sends a burst.  This is useful to quickly
+   reduce the synchronization distance below the distance threshold and
+   synchronize the clock.
+
+   If the P_MANY flag is lit in the p.flags word of the association,
+   this is a manycast client association.  Manycast client associations
+   send client mode packets to designated multicast group addresses at
+   MINPOLL intervals.  The association starts out with a TTL of 1.  If
+   by the time of the next poll there are fewer than MINCLOCK servers
+   have been mobilized, the ttl is increased by one.  If the ttl reaches
+   the limit TTLMAX, without finding MINCLOCK servers, the poll interval
+   increases until reaching BEACON, when it starts over from the
+   beginning.
+
+   The poll() routine includes a feature that backs off the poll
+   interval if the server becomes unreachable.  If reach is nonzero, the
+   server is reachable and unreach is set to zero; otherwise, unreach is
+   incremented by one for each poll to the maximum UNREACH.  Thereafter
+   for each poll hpoll is increased by one, which doubles the poll
+   interval up to the maximum MAXPOLL determined by the poll_update()
+   routine.  When the server again becomes reachable, unreach is set to
+   zero, hpoll is reset to the tc system variable, and operation resumes
+   normally.
+
+   A packet is sent by the transmit process.  Some header values are
+   copied from the peer variables left by a previous packet and others
+   from the system variables.  Figure 30 shows which values are copied
+   to each header field.  In those implementations, using floating
+   double data types for root delay and root dispersion, these must be
+   converted to NTP short format.  All other fields are either copied
+   intact from peer and system variables or struck as a timestamp from
+   the system clock.
+
+
+
+
+
+
+
+Mills, et al.                Standards Track                   [Page 53]
+
+RFC 5905                   NTPv4 Specification                 June 2010
+
+
+                   +-----------------------------------+
+                   | Packet Variable <--   Variable    |
+                   +-----------------------------------+
+                   | x.leap        <--     s.leap      |
+                   | x.version     <--     s.version   |
+                   | x.mode        <--     s.mode      |
+                   | x.stratum     <--     s.stratum   |
+                   | x.poll        <--     s.poll      |
+                   | x.precision   <--     s.precision |
+                   | x.rootdelay   <--     s.rootdelay |
+                   | x.rootdisp    <--     s.rootdisp  |
+                   | x.refid       <--     s.refid     |
+                   | x.reftime     <--     s.reftime   |
+                   | x.org         <--     p.xmt       |
+                   | x.rec         <--     p.dst       |
+                   | x.xmt         <--     clock       |
+                   | x.keyid       <--     p.keyid     |
+                   | x.digest      <--     md5 digest  |
+                   +-----------------------------------+
+
+                   Figure 30: xmit_packet Packet Header
+
+   The poll update routine is called when a valid packet is received and
+   immediately after a poll message has been sent.  If in a burst, the
+   poll interval is fixed at 2 s; otherwise, the host poll exponent
+   hpoll is set to the minimum of ppoll from the last packet received
+   and hpoll from the poll routine, but not less than MINPOLL or greater
+   than MAXPOLL.  Thus, the clock discipline can be oversampled but not
+   undersampled.  This is necessary to preserve subnet dynamic behavior
+   and protect against protocol errors.
+
+   The poll exponent is converted to an interval, which, when added to
+   the last poll time variable, determines the value of the next poll
+   time variable.  Finally, the last poll time variable is set to the
+   current seconds counter.
+
