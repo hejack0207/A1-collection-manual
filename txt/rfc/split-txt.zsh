@@ -22,6 +22,6 @@ if ! find | grep -q Abstract; then
 	    awk -f "$awkscript" $(basename "$f")
 	    popd
 	fi
-    done <<<$(find "rfcs" -name '*.txt')
+    done <<<$(find rfcs -type f -name '*.txt')
 fi
 
