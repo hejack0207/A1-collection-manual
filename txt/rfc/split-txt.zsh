@@ -21,7 +21,9 @@ if ! find | grep -q Abstract; then
 	if [[ "$f" != *rfc0826* ]]; then
 	    dir=$(dirname "$f")
 	    pushd "$dir"
-	    awk -f "$awkscript" "$(basename ${(q)f})"
+	    fn=$(basename ${f})
+	    awk -f "$awkscript" "$fn"
+	    # test -f "$fn" || { echo "$fn not exists"; echo * }
 	    popd
 	fi
     done <<<$(find rfcs -type f -name '*.txt')
