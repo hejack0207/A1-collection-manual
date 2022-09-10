@@ -31,6 +31,13 @@ fi
 
 while read f; do
     if [[ "$f" != *rfc0826* ]]; then
-	print "$f"
+	# print "$f"
+	pp=$(dirname $f)
+	fn=$(basename $f)
+	fb=${fn%.txt}
+	if [[ "$(basename $pp)" == "$fb" ]]; then
+	    # echo "$f"
+	    mv "$f" "$pp/.."
+	fi
     fi
-done <<<$(find rfcs -regextype awk -regex '^[^[:digit:]]+*.txt')
+done <<<$(find rfcs -regextype awk -regex '.*/[^[:digit:]]+[^/]*\.txt')
