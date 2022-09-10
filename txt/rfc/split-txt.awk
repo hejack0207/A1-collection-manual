@@ -20,7 +20,7 @@ match($0, /^([\.[:digit:]]+)[[:space:]]*(.*)$/, m) {
     filename["index"]++
 }
 
-match($0, /^(Appendix [\.[:upper:][:digit:]]*|[[:upper:]]\.[\.[:upper:][:digit:]]*)[[:space:]]*(.*)$/, m) {
+match($0, /^(Appendix [\.[:upper:][:digit:]]*|[[:upper:]]\.[\.[:digit:]]*)[[:space:]]*(.*)$/, m) {
     gsub(/^[[:space:]]+/,"",m[2])
     gsub(/[[:space:]]+$/,"",m[2])
     filename["name"]=sprintf("%02d::%s%s.txt", filename["index"], m[1],  m[2])
