@@ -1,0 +1,1 @@
+../../translations/it_IT/core-api/memory-allocation.rst
