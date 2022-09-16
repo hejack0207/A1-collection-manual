@@ -18,8 +18,8 @@ fi
 key=${1:?key not specified}
 
 if [[ -n ${opts[(i)-d]} ]]; then
-    find ../.. -name "*$key*" -type f | grep -v links/$key | while read p; do echo "$p"; done
+    find ../.. -path "*$key*" -type f | grep -v links/$key | while read p; do echo "$p"; done
 else
-    find ../.. -name "*$key*" -type f | grep -v links/$key | while read p; do ln -s $p ${${p#../../}//\//__}; done
+    find ../.. -path "*$key*" -type f | grep -v links/$key | while read p; do ln -s $p ${${p#../../}//\//__}; done
 fi
 
