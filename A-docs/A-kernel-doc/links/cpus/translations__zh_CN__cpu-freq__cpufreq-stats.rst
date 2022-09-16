@@ -1,0 +1,1 @@
+../../translations/zh_CN/cpu-freq/cpufreq-stats.rst

@@ -1,0 +1,1 @@
+../../translations/zh_CN/admin-guide/cpu-load.rst
