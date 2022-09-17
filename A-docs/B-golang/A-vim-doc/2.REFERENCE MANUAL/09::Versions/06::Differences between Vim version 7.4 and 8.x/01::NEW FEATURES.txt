@@ -1,0 +1,383 @@
+NEW FEATURES						*new-8*
+
+First an overview of the more interesting new features.  A comprehensive list
+is below.
+
+
+Asynchronous I/O support, channels ~
+
+Vim can now exchange messages with other processes in the background.  This
+makes it possible to have servers do work and send back the results to Vim.
+See |channel-demo| for an example, this shows communicating with a Python
+server.
+
+Closely related to channels is JSON support.  JSON is widely supported and can
+easily be used for inter-process communication, allowing for writing a server
+in any language.  The functions to use are |json_encode()| and |json_decode()|.
+
+This makes it possible to build very complex plugins, written in any language
+and running in a separate process.
+
+
+Jobs ~
+
+Vim can now start a job, communicate with it and stop it.  This is very useful
+to run a process for completion, syntax checking, etc.  Channels are used to
+communicate with the job.  Jobs can also read from or write to a buffer or a
+file.  See |job_start()|.
+
+
+Timers ~
+
+Also asynchronous are timers.  They can fire once or repeatedly and invoke a
+function to do any work.  For example: >
+	let tempTimer = timer_start(4000, 'CheckTemp')
+This will call the CheckTemp() function four seconds (4000 milli seconds)
+later.  See |timer_start()|.
+
+
+Partials ~
+
+Vim already had a Funcref, a reference to a function.  A partial also refers
+to a function, and additionally binds arguments and/or a dictionary.  This is
+especially useful for callbacks on channels and timers.  E.g., for the timer
+example above, to pass an argument to the function: >
+	let tempTimer = timer_start(4000, function('CheckTemp', ['out']))
+This will call CheckTemp('out') four seconds later.
+
+
+Lambda and Closure ~
+
+A short way to create a function has been added: {args -> expr}.  See |lambda|.
+This is useful for functions such as `filter()` and `map()`, which now also
+accept a function argument.  Example: >
+	:call filter(mylist, {idx, val -> val > 20})
+
+A lambda can use variables defined in the scope where the lambda is defined.
+This is usually called a |closure|.
+
+User defined functions can also be a closure by adding the "closure" argument
+|:func-closure|.
+
+
+Packages ~
+
+Plugins keep growing and more of them are available than ever before.  To keep
+the collection of plugins manageable package support has been added.  This is
+a convenient way to get one or more plugins, drop them in a directory and
+possibly keep them updated.  Vim will load them automatically, or only when
+desired.  See |packages|.
+
+
+New style tests ~
+
+This is for Vim developers.  So far writing tests for Vim has not been easy.
+Vim 8 adds assert functions and a framework to run tests.  This makes it a lot
+simpler to write tests and keep them updated.  Also new are several functions
+that are added specifically for testing. See |test-functions|.
+
+
+Window IDs ~
+
+Previously windows could only be accessed by their number. And every time a
+window would open, close or move that number changes.  Each window now has a
+unique ID, so that they are easy to find.  See |win_getid()| and |win_id2win()|.
+
+
+Viminfo uses timestamps ~
+
+Previously the information stored in viminfo was whatever the last Vim wrote
+there.  Now timestamps are used to always keep the most recent items.
+See |viminfo-timestamp|.
+
+
+Wrapping lines with indent ~
+
+The 'breakindent' option has been added to be able to wrap lines without
+changing the amount of indent.
+
+
+Windows: DirectX support ~
+
+This adds the 'renderoptions' option to allow for switching on DirectX
+(DirectWrite) support on MS-Windows.
+
+
+GTK+ 3 support ~
+
+The GTK+ 3 GUI works just like GTK+ 2 except for hardly noticeable technical
+differences between them.  Configure still chooses GTK+ 2 if both 2 and 3 are
+available.  See src/Makefile for how to use GTK+ 3 instead.  See
+|gui-x11-compiling| for other details.
+
+
+Vim script enhancements					*new-vim-script-8*
+-----------------------
+
+In Vim script the following types have been added:
+
+	|Special|	|v:false|, |v:true|, |v:none| and |v:null|
+	|Channel|	connection to another process for asynchronous I/O
+	|Job|		process control
+
+Many functions and commands have been added to support the new types.
+
+On some systems the numbers used in Vim script are now 64 bit.  This can be
+checked with the |+num64| feature.
+
+Many items were added to support |new-style-testing|.
+
+printf() now accepts any type of argument for %s.  It is converted to a string
+like with string().
+
+
+Various new items					*new-items-8*
+-----------------
+
+Visual mode commands: ~
+
+|v_CTRL-A|	CTRL-A		add N to number in highlighted text
+|v_CTRL-X|	CTRL-X		subtract N from number in highlighted text
+|v_g_CTRL-A|	g CTRL-A	add N to number in highlighted text
+|v_g_CTRL-X|	g CTRL-X	subtract N from number in highlighted text
+
+
+Insert mode commands: ~
+
+|i_CTRL-G_U|	CTRL-G U	don't break undo with next cursor movement
+
+
+Cmdline mode commands: ~
+
+|/_CTRL-G|	CTRL-G		move to the next match in 'incsearch' mode
+|/_CTRL-T|	CTRL-T		move to the previous match in 'incsearch' mode
+
+
+Options: ~
+
+'belloff'		do not ring the bell for these reasons
+'breakindent'		wrapped line repeats indent
+'breakindentopt'	settings for 'breakindent'.
+'emoji'			emoji characters are considered full width
+'fixendofline'		make sure last line in file has <EOL>
+'langremap'		do apply 'langmap' to mapped characters
+'luadll'		name of the Lua dynamic library
+'packpath'		list of directories used for packages
+'perldll'		name of the Perl dynamic library
+'pythondll'		name of the Python 2 dynamic library
+'pythonthreedll'	name of the Python 3 dynamic library
+'renderoptions'		options for text rendering on Windows
+'rubydll'		name of the Ruby dynamic library
+'signcolumn'		when to display the sign column
+'tagcase'		how to handle case when searching in tags files
+'tcldll'		name of the Tcl dynamic library
+'termguicolors'		use GUI colors for the terminal
+
+
+Ex commands: ~
+
+|:cbottom|		scroll to the bottom of the quickfix window
+|:cdo|			execute command in each valid error list entry
+|:cfdo|			execute command in each file in error list
+|:chistory|		display quickfix list stack
+|:clearjumps|		clear the jump list
+|:filter|		only output lines that (do not) match a pattern
+|:helpclose|		close one help window
+|:lbottom|		scroll to the bottom of the location window
+|:ldo|			execute command in valid location list entries
+|:lfdo|			execute command in each file in location list
+|:lhistory|		display location list stack
+|:noswapfile|		following commands don't create a swap file
+|:packadd|		add a plugin from 'packpath'
+|:packloadall|		load all packages under 'packpath'
+|:smile|		make the user happy
+
+
+Ex command modifiers: ~
+
+|:keeppatterns|		following command keeps search pattern history
+|<mods>|		supply command modifiers to user defined commands
+
+
+New and extended functions: ~
+
+|arglistid()|		get id of the argument list
+|assert_equal()|	assert that two expressions values are equal
+|assert_exception()|	assert that a command throws an exception
+|assert_fails()|	assert that a function call fails
+|assert_false()|	assert that an expression is false
+|assert_inrange()|	assert that an expression is inside a range
+|assert_match()|	assert that a pattern matches the value
+|assert_notequal()|	assert that two expressions values are not equal
+|assert_notmatch()|	assert that a pattern does not match the value
+|assert_true()|		assert that an expression is true
+|bufwinid()|		get the window ID of a specific buffer
+|byteidxcomp()|		like byteidx() but count composing characters
+|ch_close()|		close a channel
+|ch_close_in()|		close the in part of a channel
+|ch_evalexpr()|		evaluates an expression over channel
+|ch_evalraw()|		evaluates a raw string over channel
+|ch_getbufnr()|		get the buffer number of a channel
+|ch_getjob()|		get the job associated with a channel
+|ch_info()|		get channel information
+|ch_log()|		write a message in the channel log file
+|ch_logfile()|		set the channel log file
+|ch_open()|		open a channel
+|ch_read()|		read a message from a channel
+|ch_readraw()|		read a raw message from a channel
+|ch_sendexpr()|		send a JSON message over a channel
+|ch_sendraw()|		send a raw message over a channel
+|ch_setoptions()|	set the options for a channel
+|ch_status()|		get status of a channel
+|execute()|		execute an Ex command and get the output
+|exepath()|		full path of an executable program
+|funcref()|		return a reference to function {name}
+|getbufinfo()|		get a list with buffer information
+|getcharsearch()|	return character search information
+|getcmdwintype()|	return the current command-line window type
+|getcompletion()|	return a list of command-line completion matches
+|getcurpos()|		get position of the cursor
+|gettabinfo()|		get a list with tab page information
+|getwininfo()|		get a list with window information
+|glob2regpat()|		convert a glob pattern into a search pattern
+|isnan()|		check for not a number
+|job_getchannel()|	get the channel used by a job
+|job_info()|		get information about a job
+|job_setoptions()|	set options for a job
+|job_start()|		start a job
+|job_status()|		get the status of a job
+|job_stop()|		stop a job
+|js_decode()|		decode a JSON string to Vim types
+|js_encode()|		encode an expression to a JSON string
+|json_decode()|		decode a JSON string to Vim types
+|json_encode()|		encode an expression to a JSON string
+|matchaddpos()|		define a list of positions to highlight
+|matchstrpos()|		match and positions of a pattern in a string
+|perleval()|		evaluate Perl expression
+|reltimefloat()|	convert reltime() result to a Float
+|setcharsearch()|	set character search information
+|setfperm()|		set the permissions of a file
+|strcharpart()|		get part of a string using char index
+|strgetchar()|		get character from a string using char index
+|systemlist()|		get the result of a shell command as a list
+|test_alloc_fail()|	make memory allocation fail
+|test_autochdir()|	test 'autochdir' functionality
+|test_garbagecollect_now()| free memory right now
+|test_null_channel()|	return a null Channel
+|test_null_dict()|	return a null Dict
+|test_null_job()|	return a null Job
+|test_null_list()|	return a null List
+|test_null_partial()|	return a null Partial function
+|test_null_string()|	return a null String
+|test_settime()|	set the time Vim uses internally
+|timer_info()|		get information about timers
+|timer_pause()|		pause or unpause a timer
+|timer_start()|		create a timer
+|timer_stop()|		stop a timer
+|timer_stopall()|	stop all timers
+|uniq()|		remove copies of repeated adjacent items
+|win_findbuf()|		find windows containing a buffer
+|win_getid()|		get window ID of a window
+|win_gotoid()|		go to window with ID
+|win_id2tabwin()|	get tab and window nr from window ID
+|win_id2win()|		get window nr from window ID
+|wordcount()|		get byte/word/char count of buffer
+
+
+New Vim variables: ~
+
+|v:beval_winid|		Window ID of the window where the mouse pointer is
+|v:completed_item|	complete items for the most recently completed word
+|v:errors|		errors found by assert functions
+|v:false|		a Number with value zero
+|v:hlsearch|		indicates whether search highlighting is on
+|v:mouse_winid|		Window ID for a mouse click obtained with |getchar()|
+|v:none|		an empty String, used for JSON
+|v:null|		an empty String, used for JSON
+|v:option_new|    	new value of the option, used by |OptionSet|
+|v:option_old|    	old value of the option, used by |OptionSet|
+|v:option_oldlocal|	old local value of the option, used by |OptionSet|
+|v:option_oldglobal|	old global value of the option, used by |OptionSet|
+|v:option_type|   	scope of the set command, used by |OptionSet|
+|v:option_command|	command used to set the option, used by |OptionSet|
+|v:progpath|		the command with which Vim was invoked
+|v:t_bool|		value of Boolean type
+|v:t_channel|		value of Channel type
+|v:t_dict|		value of Dictionary type
+|v:t_float|		value of Float type
+|v:t_func|		value of Funcref type
+|v:t_job|		value of Job type
+|v:t_list|		value of List type
+|v:t_none|		value of None type
+|v:t_number|		value of Number type
+|v:t_string|		value of String type
+|v:testing|		must be set before using `test_garbagecollect_now()`
+|v:true|		a Number with value one
+|v:vim_did_enter|	set just before VimEnter autocommands are triggered
+
+
+New autocommand events: ~
+
+|CmdUndefined|		a user command is used but it isn't defined
+|OptionSet|		after setting any option
+|TabClosed|		after closing a tab page
+|TabNew|		after creating a new tab page
+|TextChangedI|		after a change was made to the text in Insert mode
+|TextChanged|		after a change was made to the text in Normal mode
+|WinNew|		after creating a new window
+
+
+New highlight groups: ~
+
+EndOfBuffer		filler lines (~) after the last line in the buffer.
+			|hl-EndOfBuffer|
+
+
+New items in search patterns: ~
+
+|/\%C|	\%C		match any composing characters
+
+
+New Syntax/Indent/FTplugin files: ~
+
+AVR Assembler (Avra) syntax
+Arduino syntax
+Bazel syntax and indent and ftplugin
+Dockerfile syntax and ftplugin
+Eiffel ftplugin
+Euphoria 3 and 4 syntax
+Go syntax and indent and ftplugin
+Godoc syntax
+Groovy ftplugin
+HGcommit ftplugin
+Hog indent and ftplugin
+Innovation Data Processing upstream.pt syntax
+J syntax and indent and ftplugin
+Jproperties ftplugin
+Json syntax and indent and ftplugin
+Kivy syntax
+Less syntax and indent
+Mix syntax
+Motorola S-Record syntax
+R ftplugin
+ReStructuredText syntax and indent and ftplugin
+Registry ftplugin
+Rhelp indent and ftplugin
+Rmd (markdown with R code chunks) syntax and indent
+Rmd ftplugin
+Rnoweb ftplugin
+Rnoweb indent
+Scala syntax and indent and ftplugin
+SystemVerilog syntax and indent and ftplugin
+Systemd syntax and indent and ftplugin
+Teraterm (TTL) syntax and indent
+Text ftplugin
+Vroom syntax and indent and ftplugin
+
+
+New Keymaps: ~
+
+Armenian eastern and western
+Russian jcukenwintype
+Vietnamese telex and vni
+

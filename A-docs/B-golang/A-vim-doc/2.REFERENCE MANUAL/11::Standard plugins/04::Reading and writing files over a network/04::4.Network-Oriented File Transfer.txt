@@ -1,0 +1,208 @@
+4. Network-Oriented File Transfer			*netrw-xfer* {{{1
+
+Network-oriented file transfer under Vim is implemented by a vim script
+(<netrw.vim>) using plugin techniques.  It currently supports both reading and
+writing across networks using rcp, scp, ftp or ftp+<.netrc>, scp, fetch,
+dav/cadaver, rsync, or sftp.
+
+http is currently supported read-only via use of wget or fetch.
+
+<netrw.vim> is a standard plugin which acts as glue between Vim and the
+various file transfer programs.  It uses autocommand events (BufReadCmd,
+FileReadCmd, BufWriteCmd) to intercept reads/writes with url-like filenames. >
+
+	ex. vim ftp://hostname/path/to/file
+<
+The characters preceding the colon specify the protocol to use; in the
+example, it's ftp.  The <netrw.vim> script then formulates a command or a
+series of commands (typically ftp) which it issues to an external program
+(ftp, scp, etc) which does the actual file transfer/protocol.  Files are read
+from/written to a temporary file (under Unix/Linux, /tmp/...) which the
+<netrw.vim> script will clean up.
+
+Now, a word about Jan Minář's "FTP User Name and Password Disclosure"; first,
+ftp is not a secure protocol.  User names and passwords are transmitted "in
+the clear" over the internet; any snooper tool can pick these up; this is not
+a netrw thing, this is a ftp thing.  If you're concerned about this, please
+try to use scp or sftp instead.
+
+Netrw re-uses the user id and password during the same vim session and so long
+as the remote hostname remains the same.
+
+Jan seems to be a bit confused about how netrw handles ftp; normally multiple
+commands are performed in a "ftp session", and he seems to feel that the
+uid/password should only be retained over one ftp session.  However, netrw
+does every ftp operation in a separate "ftp session"; so remembering the
+uid/password for just one "ftp session" would be the same as not remembering
+the uid/password at all.  IMHO this would rapidly grow tiresome as one
+browsed remote directories, for example.
+
+On the other hand, thanks go to Jan M. for pointing out the many
+vulnerabilities that netrw (and vim itself) had had in handling "crafted"
+filenames.  The |shellescape()| and |fnameescape()| functions were written in
+response by Bram Moolenaar to handle these sort of problems, and netrw has
+been modified to use them.  Still, my advice is, if the "filename" looks like
+a vim command that you aren't comfortable with having executed, don't open it.
+
+				*netrw-putty* *netrw-pscp* *netrw-psftp*
+One may modify any protocol's implementing external application by setting a
+variable (ex. scp uses the variable g:netrw_scp_cmd, which is defaulted to
+"scp -q").  As an example, consider using PuTTY: >
+
+	let g:netrw_scp_cmd = '"c:\Program Files\PuTTY\pscp.exe" -q -batch'
+	let g:netrw_sftp_cmd= '"c:\Program Files\PuTTY\psftp.exe"'
+<
+(note: it has been reported that windows 7 with putty v0.6's "-batch" option
+       doesn't work, so its best to leave it off for that system)
+
+See |netrw-p8| for more about putty, pscp, psftp, etc.
+
+Ftp, an old protocol, seems to be blessed by numerous implementations.
+Unfortunately, some implementations are noisy (ie., add junk to the end of the
+file).  Thus, concerned users may decide to write a NetReadFixup() function
+that will clean up after reading with their ftp.  Some Unix systems (ie.,
+FreeBSD) provide a utility called "fetch" which uses the ftp protocol but is
+not noisy and more convenient, actually, for <netrw.vim> to use.
+Consequently, if "fetch" is available (ie. executable), it may be preferable
+to use it for ftp://... based transfers.
+
+For rcp, scp, sftp, and http, one may use network-oriented file transfers
+transparently; ie.
+>
+	vim rcp://[user@]machine/path
+	vim scp://[user@]machine/path
+<
+If your ftp supports <.netrc>, then it too can be transparently used
+if the needed triad of machine name, user id, and password are present in
+that file.  Your ftp must be able to use the <.netrc> file on its own, however.
+>
+	vim ftp://[user@]machine[[:#]portnumber]/path
+<
+Windows provides an ftp (typically c:\Windows\System32\ftp.exe) which uses
+an option, -s:filename (filename can and probably should be a full path)
+which contains ftp commands which will be automatically run whenever ftp
+starts.  You may use this feature to enter a user and password for one site: >
+	userid
+	password
+<				*netrw-windows-netrc*  *netrw-windows-s*
+If |g:netrw_ftp_cmd| contains -s:[path/]MACHINE, then (on Windows machines
+only) netrw will substitute the current machine name requested for ftp
+connections for MACHINE.  Hence one can have multiple machine.ftp files
+containing login and password for ftp.  Example: >
+
+    let g:netrw_ftp_cmd= 'c:\Windows\System32\ftp -s:C:\Users\Myself\MACHINE'
+    vim ftp://myhost.somewhere.net/
+
+will use a file >
+
+	C:\Users\Myself\myhost.ftp
+<
+Often, ftp will need to query the user for the userid and password.
+The latter will be done "silently"; ie. asterisks will show up instead of
+the actually-typed-in password.  Netrw will retain the userid and password
+for subsequent read/writes from the most recent transfer so subsequent
+transfers (read/write) to or from that machine will take place without
+additional prompting.
+
+								*netrw-urls*
+  +=================================+============================+============+
+  |  Reading                        | Writing                    |  Uses      |
+  +=================================+============================+============+
+  | DAV:                            |                            |            |
+  |  dav://host/path                |                            | cadaver    |
+  |  :Nread dav://host/path         | :Nwrite dav://host/path    | cadaver    |
+  +---------------------------------+----------------------------+------------+
+  | DAV + SSL:                      |                            |            |
+  |  davs://host/path               |                            | cadaver    |
+  |  :Nread davs://host/path        | :Nwrite davs://host/path   | cadaver    |
+  +---------------------------------+----------------------------+------------+
+  | FETCH:                          |                            |            |
+  |  fetch://[user@]host/path       |                            |            |
+  |  fetch://[user@]host:http/path  |  Not Available             | fetch      |
+  |  :Nread fetch://[user@]host/path|                            |            |
+  +---------------------------------+----------------------------+------------+
+  | FILE:                           |                            |            |
+  |  file:///*                      | file:///*                  |            |
+  |  file://localhost/*             | file://localhost/*         |            |
+  +---------------------------------+----------------------------+------------+
+  | FTP:          (*3)              |              (*3)          |            |
+  |  ftp://[user@]host/path         | ftp://[user@]host/path     | ftp  (*2)  |
+  |  :Nread ftp://host/path         | :Nwrite ftp://host/path    | ftp+.netrc |
+  |  :Nread host path               | :Nwrite host path          | ftp+.netrc |
+  |  :Nread host uid pass path      | :Nwrite host uid pass path | ftp        |
+  +---------------------------------+----------------------------+------------+
+  | HTTP: wget is executable: (*4)  |                            |            |
+  |  http://[user@]host/path        |        Not Available       | wget       |
+  +---------------------------------+----------------------------+------------+
+  | HTTP: fetch is executable (*4)  |                            |            |
+  |  http://[user@]host/path        |        Not Available       | fetch      |
+  +---------------------------------+----------------------------+------------+
+  | RCP:                            |                            |            |
+  |  rcp://[user@]host/path         | rcp://[user@]host/path     | rcp        |
+  +---------------------------------+----------------------------+------------+
+  | RSYNC:                          |                            |            |
+  |  rsync://[user@]host/path       | rsync://[user@]host/path   | rsync      |
+  |  :Nread rsync://host/path       | :Nwrite rsync://host/path  | rsync      |
+  |  :Nread rcp://host/path         | :Nwrite rcp://host/path    | rcp        |
+  +---------------------------------+----------------------------+------------+
+  | SCP:                            |                            |            |
+  |  scp://[user@]host/path         | scp://[user@]host/path     | scp        |
+  |  :Nread scp://host/path         | :Nwrite scp://host/path    | scp  (*1)  |
+  +---------------------------------+----------------------------+------------+
+  | SFTP:                           |                            |            |
+  |  sftp://[user@]host/path        | sftp://[user@]host/path    | sftp       |
+  |  :Nread sftp://host/path        | :Nwrite sftp://host/path   | sftp  (*1) |
+  +=================================+============================+============+
+
+	(*1) For an absolute path use scp://machine//path.
+
+	(*2) if <.netrc> is present, it is assumed that it will
+	work with your ftp client.  Otherwise the script will
+	prompt for user-id and password.
+
+        (*3) for ftp, "machine" may be machine#port or machine:port
+	if a different port is needed than the standard ftp port
+
+	(*4) for http:..., if wget is available it will be used.  Otherwise,
+	if fetch is available it will be used.
+
+Both the :Nread and the :Nwrite ex-commands can accept multiple filenames.
+
+
+NETRC							*netrw-netrc*
+
+The <.netrc> file, typically located in your home directory, contains lines
+therein which map a hostname (machine name) to the user id and password you
+prefer to use with it.
+
+The typical syntax for lines in a <.netrc> file is given as shown below.
+Ftp under Unix usually supports <.netrc>; ftp under Windows usually doesn't.
+>
+	machine {full machine name} login {user-id} password "{password}"
+	default login {user-id} password "{password}"
+
+Your ftp client must handle the use of <.netrc> on its own, but if the
+<.netrc> file exists, an ftp transfer will not ask for the user-id or
+password.
+
+	Note:
+	Since this file contains passwords, make very sure nobody else can
+	read this file!  Most programs will refuse to use a .netrc that is
+	readable for others.  Don't forget that the system administrator can
+	still read the file!  Ie. for Linux/Unix: chmod 600 .netrc
+
+Even though Windows' ftp clients typically do not support .netrc, netrw has
+a work-around: see |netrw-windows-s|.
+
+
+PASSWORD						*netrw-passwd*
+
+The script attempts to get passwords for ftp invisibly using |inputsecret()|,
+a built-in Vim function.  See |netrw-userpass| for how to change the password
+after one has set it.
+
+Unfortunately there doesn't appear to be a way for netrw to feed a password to
+scp.  Thus every transfer via scp will require re-entry of the password.
+However, |netrw-ssh-hack| can help with this problem.
+
+

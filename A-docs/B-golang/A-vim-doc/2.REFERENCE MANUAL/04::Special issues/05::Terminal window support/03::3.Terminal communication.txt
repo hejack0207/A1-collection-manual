@@ -1,0 +1,106 @@
+3. Terminal communication			 *terminal-communication*
+
+There are several ways to communicate with the job running in a terminal:
+- Use |term_sendkeys()| to send text and escape sequences from Vim to the job.
+- Use the JSON API to send encoded commands from the job to Vim.
+- Use the |client-server| mechanism. This works on machines with an X server
+  and on MS-Windows.
+
+
+Vim to job: term_sendkeys() ~
+							*terminal-to-job*
+This allows for remote controlling the job running in the terminal.  It is a
+one-way mechanism.  The job can update the display to signal back to Vim.
+For example, if a shell is running in a terminal, you can do: >
+	call term_sendkeys(buf, "ls *.java\<CR>")
+
+This requires for the job to be in the right state where it will do the right
+thing when receiving the keys.  For the above example, the shell must be
+waiting for a command to be typed.
+
+For a job that was written for the purpose, you can use the JSON API escape
+sequence in the other direction.  E.g.: >
+	call term_sendkeys(buf, "\<Esc>]51;["response"]\x07")
+
+
+Job to Vim: JSON API ~
+							*terminal-api*
+The job can send JSON to Vim, using a special escape sequence.  The JSON
+encodes a command that Vim understands.  Example of such a message: >
+	<Esc>]51;["drop", "README.md"]<07>
+
+The body is always a list, making it easy to find the end: ]<07>.
+The <Esc>]51;msg<07> sequence is reserved by xterm for "Emacs shell", which is
+similar to what we are doing here.
+
+Currently supported commands:
+
+	call {funcname} {argument}
+
+		Call a user defined function with {argument}.
+		The function is called with two arguments: the buffer number
+		of the terminal and {argument}, the decoded JSON argument.
+		By default, the function name must start with "Tapi_" to avoid
+		accidentally calling a function not meant to be used for the
+		terminal API.  This can be changed with |term_setapi()|.
+		The user function should sanity check the argument.
+		The function can use |term_sendkeys()| to send back a reply.
+		Example in JSON: >
+			["call", "Tapi_Impression", ["play", 14]]
+<		Calls a function defined like this: >
+			function Tapi_Impression(bufnum, arglist)
+			  if len(a:arglist) == 2
+			    echomsg "impression " . a:arglist[0]
+			    echomsg "count " . a:arglist[1]
+			  endif
+			endfunc
+<		Output from `:echo` may be erased by a redraw, use `:echomsg`
+		to be able to see it with `:messages`.
+
+	drop {filename} [options]
+
+		Let Vim open a file, like the `:drop` command.  If {filename}
+		is already open in a window, switch to that window.  Otherwise
+		open a new window to edit {filename}.
+		Note that both the job and Vim may change the current
+		directory, thus it's best to use the full path.
+
+		[options] is only used when opening a new window.  If present,
+		it must be a Dict.  Similarly to |++opt|, these entries are
+		recognized:
+		  "ff"		file format: "dos", "mac" or "unix"
+		  "fileformat"	idem
+		  "enc"		overrides 'fileencoding'
+		  "encoding"	idem
+		  "bin"		sets 'binary'
+		  "binary"	idem
+		  "nobin"	resets 'binary'
+		  "nobinary"	idem
+		  "bad"		specifies behavior for bad characters, see
+				|++bad|
+
+		Example in JSON: >
+			["drop", "path/file.txt", {"ff": "dos"}]
+
+A trick to have Vim send this escape sequence: >
+	exe "set t_ts=\<Esc>]51; t_fs=\x07"
+	let &titlestring = '["call","Tapi_TryThis",["hello",123]]'
+	redraw
+	set t_ts& t_fs&
+
+Rationale: Why not allow for any command or expression?  Because that might
+create a security problem.
+
+
+Using the client-server feature ~
+						*terminal-client-server*
+This only works when v:servername is not empty.  If needed you can set it,
+before opening the terminal, with: >
+	call remote_startserver('vim-server')
+
+$VIM_SERVERNAME is set in the terminal to pass on the server name.
+
+In the job you can then do something like: >
+	vim --servername $VIM_SERVERNAME --remote +123 some_file.c
+This will open the file "some_file.c" and put the cursor on line 123.
+

@@ -1,0 +1,78 @@
+*44.10*	Synchronizing
+
+Compilers have it easy.  They start at the beginning of a file and parse it
+straight through.  Vim does not have it so easy.  It must start in the middle,
+where the editing is being done.  So how does it tell where it is?
+   The secret is the ":syntax sync" command.  This tells Vim how to figure out
+where it is.  For example, the following command tells Vim to scan backward
+for the beginning or end of a C-style comment and begin syntax coloring from
+there: >
+
+	:syntax sync ccomment
+
+You can tune this processing with some arguments.  The "minlines" argument
+tells Vim the minimum number of lines to look backward, and "maxlines" tells
+the editor the maximum number of lines to scan.
+   For example, the following command tells Vim to look at least 10 lines
+before the top of the screen: >
+
+	:syntax sync ccomment minlines=10 maxlines=500
+
+If it cannot figure out where it is in that space, it starts looking farther
+and farther back until it figures out what to do.  But it looks no farther
+back than 500 lines.  (A large "maxlines" slows down processing.  A small one
+might cause synchronization to fail.)
+   To make synchronizing go a bit faster, tell Vim which syntax items can be
+skipped.  Every match and region that only needs to be used when actually
+displaying text can be given the "display" argument.
+   By default, the comment to be found will be colored as part of the Comment
+syntax group.  If you want to color things another way, you can specify a
+different syntax group: >
+
+	:syntax sync ccomment xAltComment
+
+If your programming language does not have C-style comments in it, you can try
+another method of synchronization.  The simplest way is to tell Vim to space
+back a number of lines and try to figure out things from there.  The following
+command tells Vim to go back 150 lines and start parsing from there: >
+
+	:syntax sync minlines=150
+
+A large "minlines" value can make Vim slower, especially when scrolling
+backwards in the file.
+   Finally, you can specify a syntax group to look for by using this command:
+>
+	:syntax sync match {sync-group-name}
+		\ grouphere {group-name} {pattern}
+
+This tells Vim that when it sees {pattern} the syntax group named {group-name}
+begins just after the pattern given.  The {sync-group-name} is used to give a
+name to this synchronization specification.  For example, the sh scripting
+language begins an if statement with "if" and ends it with "fi":
+
+	if [ --f file.txt ] ; then ~
+		echo "File exists" ~
+	fi ~
+
+To define a "grouphere" directive for this syntax, you use the following
+command: >
+
+	:syntax sync match shIfSync grouphere shIf "\<if\>"
+
+The "groupthere" argument tells Vim that the pattern ends a group.  For
+example, the end of the if/fi group is as follows: >
+
+	:syntax sync match shIfSync groupthere NONE "\<fi\>"
+
+In this example, the NONE tells Vim that you are not in any special syntax
+region.  In particular, you are not inside an if block.
+
+You also can define matches and regions that are with no "grouphere" or
+"groupthere" arguments.  These groups are for syntax groups skipped during
+synchronization.  For example, the following skips over anything inside {},
+even if it would normally match another synchronization method: >
+
+	:syntax sync match xSpecial /{.*}/
+
+More about synchronizing in the reference manual: |:syn-sync|.
+

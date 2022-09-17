@@ -1,0 +1,306 @@
+INCOMPATIBLE CHANGES				*incompatible-6*
+
+These changes are incompatible with previous releases.  Check this list if you
+run into a problem when upgrading from Vim 5.x to 6.0
+
+
+Cursor position in Visual mode			*curpos-visual*
+------------------------------
+
+When going from one window to another window on the same buffer while in
+Visual mode, the cursor position of the other window is adjusted to keep the
+same Visual area.  This can be used to set the start of the Visual area in one
+window and the end in another.  In vim 5.x the cursor position of the other
+window would be used, which could be anywhere and was not very useful.
+
+
+Substitute command Vi compatible		*substitute-CR*
+--------------------------------
+
+The substitute string (the "to" part of the substitute command) has been made
+Vi compatible.  Previously a CTRL-V had a special meaning and could be used to
+prevent a <CR> to insert a line break.  This made it impossible to insert a
+CTRL-V before a line break.  Now a backslash is used to prevent a <CR> to
+cause a line break.  Since the number of backslashes is halved, it is still
+possible to insert a line break at the end of the line.  This now works just
+like Vi, but it's not compatible with Vim versions before 6.0.
+
+When a ":s" command doesn't make any substitutions, it no longer sets the '[
+and '] marks.  This is not related to Vi, since it doesn't have these marks.
+
+
+Global option values introduced			*new-global-values*
+-------------------------------
+
+There are now global values for options which are local to a buffer or window.
+Previously the local options were copied from one buffer to another.  When
+editing another file this could cause option values from a modeline to be used
+for the wrong file.  Now the global values are used when entering a buffer
+that has not been used before.  Also, when editing another buffer in a window,
+the local window options are reset to their global values.  The ":set" command
+sets both the local and global values, this is still compatible.  But a
+modeline only sets the local value, this is not backwards compatible.
+
+":let &opt = val" now sets the local and global values, like ":set".  New
+commands have been added to set the global or local value:
+	:let &opt = val		like ":set"
+	:let &g:opt = val	like ":setglobal"
+	:let &l:opt = val	like ":setlocal"
+
+
+'fileencoding' changed				*fileencoding-changed*
+----------------------
+
+'fileencoding' was used in Vim 5.x to set the encoding used inside all of Vim.
+This was a bit strange, because it was local to a buffer and worked for all
+buffers.  It could never be different between buffers, because it changed the
+way text in all buffers was interpreted.
+It is now used for the encoding of the file related to the buffer.  If you
+still set 'fileencoding' it is likely to be overwritten by the detected
+encoding from 'fileencodings', thus it is "mostly harmless".
+The old FileEncoding autocommand now does the same as the new EncodingChanged
+event.
+
+
+Digraphs changed				*digraphs-changed*
+----------------
+
+The default digraphs now correspond to RFC1345.  This is very different from
+what was used in Vim 5.x. |digraphs|
+
+
+Filetype detection changed			*filetypedetect-changed*
+--------------------------
+
+The filetype detection previously was using the "filetype" autocommand group.
+This caused confusion with the FileType event name (case is ignored).  The
+group is now called "filetypedetect".  It still works, but if the "filetype"
+group is used the autocommands will not be removed by ":filetype off".
+   The support for 'runtimepath' has made the "myfiletypefile" and
+"mysyntaxfile" mechanism obsolete.  They are still used for backwards
+compatibility.
+
+The connection between the FileType event and setting the 'syntax' option was
+previously in the "syntax" autocommand group.  That caused confusion with the
+Syntax event name.  The group is now called "syntaxset".
+
+The distributed syntax files no longer contain "syntax clear".  That makes it
+possible to include one in the other without tricks.  The syntax is now
+cleared when the 'syntax' option is set (by an autocommand added from
+synload.vim).  This makes the syntax cleared when the value of 'syntax' does
+not correspond to a syntax file.  Previously the existing highlighting was
+kept.
+
+
+Unlisted buffers introduced			*new-unlisted-buffers*
+---------------------------
+
+There is now a difference between buffers which don't appear in the buffer
+list and buffers which are really not in the buffer list.  Commands like
+":ls", ":bnext", ":blast" and the Buffers menu will skip buffers not in the
+buffer list. |unlisted-buffer|
+The 'buflisted' option can be used to make a buffer appear in the buffer list
+or not.
+
+Several commands that previously added a buffer to the buffer list now create
+an unlisted buffer.  This means that a ":bnext" and ":ball" will not find these
+files until they have actually been edited.  For example, buffers used for the
+alternative file by ":write file" and ":read file".
+   Other commands previously completely deleted a buffer and now only remove
+the buffer from the buffer list.  Commands relying on a buffer not to be
+present might fail.  For example, a ":bdelete" command in an autocommand that
+relied on something following to fail (was used in the automatic tests).
+|:bwipeout| can be used for the old meaning of ":bdelete".
+
+The BufDelete autocommand event is now triggered when a buffer is removed from
+the buffer list.  The BufCreate event is only triggered when a buffer is
+created that is added to the buffer list, or when an existing buffer is added
+to the buffer list.  BufAdd is a new name for BufCreate.
+The new BufNew event is for creating any buffer and BufWipeout for really
+deleting a buffer.
+
+When doing Insert mode completion, only buffers in the buffer list are
+scanned.  Added the 'U' flag to 'complete' to do completion from unlisted
+buffers.
+
+Unlisted buffers are not stored in a viminfo file.
+
+
+CTRL-U in Command-line mode changed		*CTRL-U-changed*
+-----------------------------------
+
+Using CTRL-U when editing the command line cleared the whole line.  Most
+shells only delete the characters before the cursor.  Made it work like that.
+(Steve Wall)
+
+You can get the old behavior with CTRL-E CTRL-U: >
+	:cnoremap <C-U> <C-E><C-U>
+
+
+Ctags gone					*ctags-gone*
+----------
+
+Ctags is no longer part of the Vim distribution.  It's now a grown-up program
+by itself, it deserves to be distributed separately.
+Ctags can be found here: http://ctags.sf.net/.
+
+
+Documentation reorganized			*documentation-6*
+-------------------------
+
+The documentation has been reorganized, an item may not be where you found it
+in Vim 5.x.
+- The user manual was added, some items have been moved to it from the
+  reference manual.
+- The quick reference is now in a separate file (so that it can be printed).
+
+The examples in the documentation were previously marked with a ">" in the
+first column.  This made it difficult to copy/paste them.  There is now a
+single ">" before the example and it ends at a "<" or a non-blank in the first
+column.  This also looks better without highlighting.
+
+'helpfile' is no longer used to find the help tags file.  This allows a user
+to add its own help files (e.g., for plugins).
+
+
+Modeless selection and clipboard		*modeless-and-clipboard*
+--------------------------------
+
+The modeless selection is used to select text when Visual mode can't be used,
+for example when editing the command line or at the more prompt.
+In Vim 5.x the modeless selection was always used.  On MS-Windows this caused
+the clipboard to be overwritten, with no way to avoid that.  The modeless
+selection now obeys the 'a' and 'A' flags in 'guioptions' and "autoselect" and
+"autoselectml" in 'clipboard'.  By default there is no automatic copy on
+MS-Windows.  Use the |c_CTRL-Y| command to manually copy the selection.
+
+To get the old behavior back, do this: >
+
+	:set clipboard^=autoselectml guioptions+=A
+
+
+Small incompatibilities				*incomp-small-6*
+-----------------------
+
+'backupdir', 'cdpath', 'directory', 'equalprg', 'errorfile', 'formatprg',
+'grepprg', 'helpfile', 'makeef', 'makeprg', 'keywordprg', 'cscopeprg',
+'viminfo' and 'runtimepath' can no longer be set from a modeline, for better
+security.
+
+Removed '_' from the 'breakat' default: It's commonly used in keywords.
+
+The default for 'mousehide' is on, because this works well for most people.
+
+The Amiga binary is now always compiled with "big" features.  The "big" binary
+archive no longer exists.
+
+The items "[RO]", "[+]", "[help]", "[Preview]" and "[filetype]" in
+'statusline' no longer have a leading space.
+
+Non-Unix systems: When expanding wildcards for the Vim arguments, don't use
+'suffixes'.  It now works as if the shell had expanded the arguments.
+
+The 'lisp', 'smartindent' and 'cindent' options are not switched off when
+'paste' is set.  The auto-indenting is disabled when 'paste' is set, but
+manual indenting with "=" still works.
+
+When formatting with "=" uses 'cindent' or 'indentexpr' indenting, and there
+is no change in indent, this is not counted as a change ('modified' isn't set
+and there is nothing to undo).
+
+Report 'modified' as changed when 'fileencoding' or 'fileformat' was set.
+Thus it reflects the possibility to abandon the buffer without losing changes.
+
+The "Save As" menu entry now edits the saved file.  Most people expect it to
+work like this.
+
+A buffer for a directory is no longer added to the Buffers menu.
+
+Renamed <Return> to <Enter>, since that's what it's called on most keyboards.
+Thus it's now the hit-enter prompt instead of the hit-return prompt.
+Can map <Enter> just like <CR> or <Return>.
+
+The default for the 'viminfo' option is now '20,"50,h when 'compatible' isn't
+set.  Most people will want to use it, including beginners, but it required
+setting the option, which isn't that easy.
+
+After using ":colder" the newer error lists are overwritten.  This makes it
+possible to use ":grep" to browse in a tree-like way.  Must use ":cnewer 99"
+to get the old behavior.
+
+The patterns in 'errorformat' would sometimes ignore case (MS-Windows) and
+sometimes not (Unix).  Now case is always ignored.  Add "\C" to the pattern to
+match case.
+
+The 16 bit MS-DOS version is now compiled without the +listcmds feature
+(buffer list manipulation commands).  They are not often needed and this
+executable needs to be smaller.
+
+'sessionoptions' now includes "curdir" by default.  This means that restoring
+a session will result in the current directory being restored, instead of
+going to the directory where the session file is located.
+
+A session deleted all buffers, deleting all marks.  Now keep the buffer list,
+it shouldn't hurt for some existing buffers to remain present.
+When the argument list is empty ":argdel *" caused an error message.
+
+No longer put the search pattern from a tag jump in the history.
+
+Use "SpecialKey" highlighting for unprintable characters instead of "NonText".
+The idea is that unprintable text or any text that's displayed differently
+from the characters in the file is using "SpecialKey", and "NonText" is used
+for text that doesn't really exist in the file.
+
+Motif now uses the system default colors for the menu and scrollbar.  Used to
+be grey.  It's still possible to set the colors with ":highlight" commands and
+resources.
+
+Formatting text with "gq" breaks a paragraph at a non-empty blank line.
+Previously the line would be removed, which wasn't very useful.
+
+":normal" does no longer hang when the argument ends in half a command.
+Previously Vim would wait for more characters to be typed, without updating
+the screen.  Now it pretends an <Esc> was typed.
+
+Bitmaps for the toolbar are no longer searched for in "$VIM/bitmaps" but in
+the "bitmaps" directories in 'runtimepath'.
+
+Now use the Cmdline-mode menus for the hit-enter prompt instead of the Normal
+mode menus.  This generally works better and allows using the "Copy" menu to
+produce CTRL-Y to copy the modeless selection.
+
+Moved the font selection from the Window to the Edit menu, together with the
+other settings.
+
+The default values for 'isfname' include more characters to make "gf" work
+better.
+
+Changed the license for the documentation to the Open Publication License.
+This seemed fair, considering the inclusion of parts of the Vim book, which is
+also published under the OPL.  The downside is that we can't force someone who
+would sell copies of the manual to contribute to Uganda.
+
+After  "ayy  don't let  ""yy  or  :let @" = val  overwrite the "a register.
+Use the unnamed register instead.
+
+MSDOS: A pattern "*.*" previously also matched a file name without a dot.
+This was inconsistent with other versions.
+
+In Insert mode, CTRL-O CTRL-\ CTRL-N {cmd} remains in Normal mode.  Previously
+it would go back to Insert mode, thus confusing the meaning of CTRL-\ CTRL-N,
+which is supposed to take us to Normal mode (especially in ":amenu").
+
+Allow using ":" commands after an operator.  Could be used to implement a new
+movement command.  Thus it no longer aborts a pending operator.
+
+For the Amiga the "-d {device}" argument was possible.  When compiled with the
+diff feature, this no longer works.  Use "-dev {device}" instead. |-dev|
+
+Made the default mappings for <S-Insert> in Insert mode insert the text
+literally, avoids that special characters like BS cause side effects.
+
+Using ":confirm" applied to the rest of the line.  Now it applies only to the
+command right after it.  Thus ":confirm if x | edit | endif" no longer works,
+use ":if x | confirm edit | endif".  This was the original intention, that it
+worked differently was a bug.
+

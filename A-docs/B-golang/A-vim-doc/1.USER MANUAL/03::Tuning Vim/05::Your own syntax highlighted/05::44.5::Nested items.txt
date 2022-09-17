@@ -1,0 +1,94 @@
+*44.5*	Nested items
+
+Take a look at this comment:
+
+	%Get input  TODO: Skip white space ~
+
+You want to highlight TODO in big yellow letters, even though it is in a
+comment that is highlighted blue.  To let Vim know about this, you define the
+following syntax groups: >
+
+	:syntax keyword xTodo TODO contained
+	:syntax match xComment /%.*/ contains=xTodo
+
+In the first line, the "contained" argument tells Vim that this keyword can
+exist only inside another syntax item.  The next line has "contains=xTodo".
+This indicates that the xTodo syntax element is inside it.  The result is that
+the comment line as a whole is matched with "xComment" and made blue.  The
+word TODO inside it is matched by xTodo and highlighted yellow (highlighting
+for xTodo was setup for this).
+
+
+RECURSIVE NESTING
+
+The x language defines code blocks in curly braces.  And a code block may
+contain other code blocks.  This can be defined this way: >
+
+	:syntax region xBlock start=/{/ end=/}/ contains=xBlock
+
+Suppose you have this text:
+
+	while i < b { ~
+		if a { ~
+			b = c; ~
+		} ~
+	} ~
+
+First a xBlock starts at the { in the first line.  In the second line another
+{ is found.  Since we are inside a xBlock item, and it contains itself, a
+nested xBlock item will start here.  Thus the "b = c" line is inside the
+second level xBlock region.  Then a } is found in the next line, which matches
+with the end pattern of the region.  This ends the nested xBlock.  Because the
+} is included in the nested region, it is hidden from the first xBlock region.
+Then at the last } the first xBlock region ends.
+
+
+KEEPING THE END
+
+Consider the following two syntax items: >
+
+	:syntax region xComment start=/%/ end=/$/ contained
+	:syntax region xPreProc start=/#/ end=/$/ contains=xComment
+
+You define a comment as anything from % to the end of the line.  A
+preprocessor directive is anything from # to the end of the line.  Because you
+can have a comment on a preprocessor line, the preprocessor definition
+includes a "contains=xComment" argument.  Now look what happens with this
+text:
+
+	#define X = Y  % Comment text ~
+	int foo = 1; ~
+
+What you see is that the second line is also highlighted as xPreProc.  The
+preprocessor directive should end at the end of the line.  That is why
+you have used "end=/$/".  So what is going wrong?
+   The problem is the contained comment.  The comment starts with % and ends
+at the end of the line.  After the comment ends, the preprocessor syntax
+continues.  This is after the end of the line has been seen, so the next
+line is included as well.
+   To avoid this problem and to avoid a contained syntax item eating a needed
+end of line, use the "keepend" argument.  This takes care of
+the double end-of-line matching: >
+
+	:syntax region xComment start=/%/ end=/$/ contained
+	:syntax region xPreProc start=/#/ end=/$/ contains=xComment keepend
+
+
+CONTAINING MANY ITEMS
+
+You can use the contains argument to specify that everything can be contained.
+For example: >
+
+	:syntax region xList start=/\[/ end=/\]/ contains=ALL
+
+All syntax items will be contained in this one.  It also contains itself, but
+not at the same position (that would cause an endless loop).
+   You can specify that some groups are not contained.  Thus contain all
+groups but the ones that are listed:
+>
+	:syntax region xList start=/\[/ end=/\]/ contains=ALLBUT,xString
+
+With the "TOP" item you can include all items that don't have a "contained"
+argument.  "CONTAINED" is used to only include items with a "contained"
+argument.  See |:syn-contains| for the details.
+

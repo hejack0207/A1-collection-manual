@@ -1,0 +1,122 @@
+2. Automatically setting options			*auto-setting*
+
+Besides changing options with the ":set" command, there are three alternatives
+to set options automatically for one or more files:
+
+1. When starting Vim initializations are read from various places.  See
+   |initialization|.  Most of them are performed for all editing sessions,
+   and some of them depend on the directory where Vim is started.
+   You can create an initialization file with |:mkvimrc|, |:mkview| and
+   |:mksession|.
+2. If you start editing a new file, the automatic commands are executed.
+   This can be used to set options for files matching a particular pattern and
+   many other things.  See |autocommand|.
+3. If you start editing a new file, and the 'modeline' option is on, a
+   number of lines at the beginning and end of the file are checked for
+   modelines.  This is explained here.
+
+					*modeline* *vim:* *vi:* *ex:* *E520*
+There are two forms of modelines.  The first form:
+	[text{white}]{vi:|vim:|ex:}[white]{options}
+
+[text{white}]		empty or any text followed by at least one blank
+			character (<Space> or <Tab>); "ex:" always requires at
+			least one blank character
+{vi:|vim:|ex:}		the string "vi:", "vim:" or "ex:"
+[white]			optional white space
+{options}		a list of option settings, separated with white space
+			or ':', where each part between ':' is the argument
+			for a ":set" command (can be empty)
+
+Examples:
+   vi:noai:sw=3 ts=6 ~
+   vim: tw=77 ~
+
+The second form (this is compatible with some versions of Vi):
+
+	[text{white}]{vi:|vim:|Vim:|ex:}[white]se[t] {options}:[text]
+
+[text{white}]		empty or any text followed by at least one blank
+			character (<Space> or <Tab>); "ex:" always requires at
+			least one blank character
+{vi:|vim:|Vim:|ex:}	the string "vi:", "vim:", "Vim:" or "ex:"
+[white]			optional white space
+se[t]			the string "set " or "se " (note the space); When
+			"Vim" is used it must be "set".
+{options}		a list of options, separated with white space, which
+			is the argument for a ":set" command
+:			a colon
+[text]			any text or empty
+
+Examples:
+   /* vim: set ai tw=75: */ ~
+   /* Vim: set ai tw=75: */ ~
+
+The white space before {vi:|vim:|Vim:|ex:} is required.  This minimizes the
+chance that a normal word like "lex:" is caught.  There is one exception:
+"vi:" and "vim:" can also be at the start of the line (for compatibility with
+version 3.0).  Using "ex:" at the start of the line will be ignored (this
+could be short for "example:").
+
+							*modeline-local*
+The options are set like with ":setlocal": The new value only applies to the
+buffer and window that contain the file.  Although it's possible to set global
+options from a modeline, this is unusual.  If you have two windows open and
+the files in it set the same global option to a different value, the result
+depends on which one was opened last.
+
+When editing a file that was already loaded, only the window-local options
+from the modeline are used.  Thus if you manually changed a buffer-local
+option after opening the file, it won't be changed if you edit the same buffer
+in another window.  But window-local options will be set.
+
+							*modeline-version*
+If the modeline is only to be used for some versions of Vim, the version
+number can be specified where "vim:" or "Vim:" is used:
+	vim{vers}:	version {vers} or later
+	vim<{vers}:	version before {vers}
+	vim={vers}:	version {vers}
+	vim>{vers}:	version after {vers}
+{vers} is 700 for Vim 7.0 (hundred times the major version plus minor).
+For example, to use a modeline only for Vim 7.0:
+	/* vim700: set foldmethod=marker */ ~
+To use a modeline for Vim after version 7.2:
+	/* vim>702: set cole=2: */ ~
+There can be no blanks between "vim" and the ":".
+
+
+The number of lines that are checked can be set with the 'modelines' option.
+If 'modeline' is off or 'modelines' is 0 no lines are checked.
+
+Note that for the first form all of the rest of the line is used, thus a line
+like:
+   /* vi:ts=4: */ ~
+will give an error message for the trailing "*/".  This line is OK:
+   /* vi:set ts=4: */ ~
+
+If an error is detected the rest of the line is skipped.
+
+If you want to include a ':' in a set command precede it with a '\'.  The
+backslash in front of the ':' will be removed.  Example:
+   /* vi:set fillchars=stl\:^,vert\:\|: */ ~
+This sets the 'fillchars' option to "stl:^,vert:\|".  Only a single backslash
+before the ':' is removed.  Thus to include "\:" you have to specify "\\:".
+							*E992*
+No other commands than "set" are supported, for security reasons (somebody
+might create a Trojan horse text file with modelines).  And not all options
+can be set.  For some options a flag is set, so that when the value is used
+the |sandbox| is effective.  Some options can only be set from the modeline
+when 'modelineexpr' is set (the default is off).
+
+Still, there is always a small risk that a modeline causes trouble.  E.g.,
+when some joker sets 'textwidth' to 5 all your lines are wrapped unexpectedly.
+So disable modelines before editing untrusted text.  The mail ftplugin does
+this, for example.
+
+Hint: If you would like to do something else than setting an option, you could
+define an autocommand that checks the file for a specific string.  For
+example: >
+	au BufReadPost * if getline(1) =~ "VAR" | call SetVar() | endif
+And define a function SetVar() that does something with the line containing
+"VAR".
+

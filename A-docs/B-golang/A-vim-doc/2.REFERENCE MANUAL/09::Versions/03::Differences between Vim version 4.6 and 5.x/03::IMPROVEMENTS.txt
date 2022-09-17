@@ -1,0 +1,293 @@
+				 IMPROVEMENTS		*improvements-5*
+
+Performance:
+- When 'showcmd' was set, mappings would execute much more slowly because the
+  output would be flushed very often.  Helps a lot when executing the "life"
+  macros with 'showcmd' set.
+- Included patches for binary searching in tags file (David O'Neill).
+  Can be disabled by resetting the 'tagbsearch' option.
+- Don't update the ruler when repeating insert (slowed it down a lot).
+- For Unix, file name expansion is now done internally instead of starting a
+  shell for it.
+- Expand environment variables with expand_env(), instead of calling the
+  shell.  Makes ":so $VIMRUNTIME/syntax/syntax.vim" a LOT faster.
+- Reduced output for cursor positioning: Use CR-LF for moving to first few
+  columns in next few lines;  Don't output CR twice when using termios.
+- Optimized cursor positioning.  Use CR, BS and NL when it's shorter than
+  absolute cursor positioning.
+- Disable redrawing while repeating insert "1000ii<Esc>".
+- Made "d$" or "D" for long lines a lot faster (delete all characters at once,
+  instead of one by one).
+- Access option table by first letter, instead of searching from start.
+- Made setting special highlighting attributes a lot faster by using
+  highlight_attr[], instead of searching in the 'highlight' string.
+- Don't show the mode when redrawing is disabled.
+- When setting an option, only redraw the screen when required.
+- Improved performance of Ex commands by using a lookup table for the first
+  character.
+
+Options:
+'cinoptions'	Added 'g' flag, for C++ scope declarations.
+'cpoptions'	Added 'E' flag: Disallow yanking, deleting, etc. empty text
+		area.  Default is to allow empty yanks.  When 'E' is included,
+		"y$" in an empty line now is handled as an error (Vi
+		compatible).
+		Added 'j' flag: Only add two spaces for a join after a '.',
+		not after a '?' or '!'.
+		Added 'A' flag: don't give ATTENTION message.
+		Added 'L' flag: When not included, and 'list' is set,
+		'textwidth' formatting works like 'list' is not set.
+		Added 'W' flag:  Let ":w!" behave like Vi: don't overwrite
+		readonly files, or a file owned by someone else.
+'highlight'	Added '@' flag, for '@' characters after the last line on the
+		screen, and '$' at the end of the line when 'list' is set.
+		Added 'i' flag: Set highlighting for 'incsearch'.  Default
+		uses "IncSearch" highlight group, which is linked to "Visual".
+		Disallow 'h' flag in 'highlight' (wasn't used anymore since
+		3.0).
+'guifont'	Win32 GUI only: When set to "*" brings up a font requester.
+'guipty'	Default on, because so many people need it.
+'path'		Can contain wildcards, and "**" for searching a whole tree.
+'shortmess'	Added 'I' flag to avoid the intro message.
+'viminfo'	Added '%' flag: Store buffer list in viminfo file.
+
+- Increased defaults for 'maxmem' and 'maxmemtot' for Unix and Win32.  Most
+  machines have much more RAM now that prices have dropped.
+- Implemented ":set all&", set all options to their default value. |:set|
+
+Swap file:
+- Don't create a swap file for a readonly file.  Then create one on the first
+  change.  Also create a swapfile when the amount of memory used is getting
+  too high. |swap-file|
+- Make swap file "hidden", if possible.  On Unix this is done by prepending a
+  dot to the swap file name.  When long file names are used, the DJGPP and
+  Win32 versions also prepend a dot, in case a file on a mounted Unix file
+  system is edited.  |:swapname|  On MSDOS the hidden file attribute is NOT
+  set, because this causes problems with share.exe.
+- 'updatecount' always defaults to non-zero, also for Vi compatible mode.
+  This means there is a swap file, which can be used for recovery.
+
+Tags:
+- Included ctags 2.0 (Darren Hiebert).  The syntax for static tags changed
+  from
+	{tag}:{fname}	{fname}	{command}
+  to
+	{tag}	{fname}	{command};"	file:
+  Which is both faster to parse, shorter and Vi compatible.  The old format is
+  also still accepted, unless disabled in src/feature.h (see OLD_STATIC_TAGS).
+  |tags-file-format|
+- Completion of tags now also includes static tags for other files, at the
+  end.
+- Included "shtags" from Stephen Riehm.
+- When finding a matching tag, but the file doesn't exist, continue searching
+  for another match.  Helps when using the same tags file (with links) for
+  different versions of source code.
+- Give a tag with a global match in the current file a higher priority than a
+  global match in another file.
+
+Included xxd version V1.8 (Juergen Weigert).
+
+Autocommands:
+- VimLeave autocommands are executed after writing the viminfo file, instead
+  of before.  |VimLeave|
+- Allow changing autocommands while executing them.  This allows for
+  self-modifying autocommands.  (idea from Goldberg)
+- When using autocommands with two or more patterns, could not split
+  ":if/:endif" over two lines.  Now all matching autocommands are executed in
+  one do_cmdline().
+- Autocommands no longer change the command repeated with ".".
+- Search patterns are restored after executing autocommands.  This avoids
+  that the 'hlsearch' highlighting is messed up by autocommands.
+- When trying to execute an autocommand, also try matching the pattern with
+  the short file name.  Helps when short file name is different from full
+  file name (expanded symbolic links). |autocmd-patterns|
+- Made the output of ":autocmd" shorter and look better.
+- Expand <sfile> in an ":autocmd" when it is defined.  |<sfile>|
+- Added "nested" flag to ":autocmd", allows nesting.  |autocmd-nested|
+- Added [group] argument to ":autocmd".  Overrides the currently set group.
+  |autocmd-groups|
+- new events:
+  |BufUnload|		before a buffer is unloaded
+  |BufDelete|		before a buffer is deleted from the buffer list
+  |FileChangedShell|	when a file's modification time has changed after
+			executing a shell command
+  |User|		user-defined autocommand
+- When 'modified' was set by a BufRead* autocommand, it was reset again
+  afterwards.  Now the ":set modified" is remembered.
+
+GUI:
+- Improved GUI scrollbar handling when redrawing is slower than the scrollbar
+  events are generated.
+- "vim -u NONE" now also stops loading the .gvimrc and other GUI inits.  |-u|
+  Use "-U" to use another gvimrc file.  |-U|
+- Handle CTRL-C for external command, also for systems where "setsid()" is
+  supported.
+- When starting the GUI, restrict the window size to the screen size.
+- The default menus are read from $VIMRUNTIME/menu.vim.  This allows for a
+  customized default menu.  |menu.vim|
+- Improved the default menus.  Added File/Print, a Window menu, Syntax menu,
+  etc.
+- Added priority to the ":menu" command.  Now each menu can be put in a place
+  where you want it, independent of the order in which the menus are defined.
+  |menu-priority|
+
+Give a warning in the intro screen when running the Win32 console version on
+Windows 95 because there are problems using this version under Windows 95.
+|win32-problems|
+
+Added 'e' flag for ":substitute" command: Don't complain when not finding a
+match (Campbell).  |:s|
+
+When using search commands in a mapping, only the last one is kept in the
+history.  Avoids that the history is trashed by long mappings.
+
+Ignore characters after "ex", "view" and "gvim" when checking startup mode.
+Allows the use of "gvim5" et. al.  |gvim| "gview" starts the GUI in readonly
+mode.  |gview|
+
+When resizing windows, the cursor is kept in the same relative position, if
+possible.  (Webb)
+
+":all" and ":ball" no longer close and then open a window for the same buffer.
+Avoids losing options, jumplist, and other info.
+
+"-f" command-line argument is now ignored if Vim was compiled without GUI.
+|-f|
+
+In Visual block mode, the right mouse button picks up the nearest corner.
+
+Changed default mappings for DOS et al.  Removed the DOS-specific mappings,
+only use the Windows ones.  Added Shift-Insert, Ctrl-Insert, Ctrl-Del and
+Shift-Del.
+
+Changed the numbers in the output of ":jumps", so you can see where {count}
+CTRL-O takes you.  |:jumps|
+
+Using "~" for $HOME now works for all systems.  |$HOME|
+
+Unix: Besides using CTRL-C, also use the INTR character from the tty settings.
+Somebody has INTR set to DEL.
+
+Allow a <LF> in a ":help" command argument to end the help command, so another
+command can follow.
+
+Doing "%" on a line that starts with "   #if" didn't jump to matching "#else".
+Don't recognize "#if", "#else" etc. for '%' when 'cpo' contains the '%' flag.
+|%|
+
+Insert mode expansion with "CTRL-N", "CTRL-P" and "CTRL-X" improved
+|ins-completion|:
+- 'complete' option added.
+- When 'nowrapscan' is set, and no match found, report the searched direction
+  in the error message.
+- Repeating CTRL-X commands adds following words/lines after the match.
+- When adding-expansions, accept single character matches.
+- Made repeated CTRL-X CTRL-N not break undo, and "." repeats the whole
+  insertion.  Also fixes not being able to backspace over a word that has been
+  inserted with CTRL-N.
+
+When copying characters in Insert mode from previous/next line, with CTRL-E or
+CTRL-Y, 'textwidth' is no longer used.  |i_CTRL-E|
+
+Commands that move in the arglist, like ":n" and ":rew", keep the old cursor
+position of the file (this is mostly Vi compatible).
+
+Vim now remembers the '< and '> marks for each buffer.  This fixes a problem
+that a line-delete in one buffer invalidated the '< and '> marks in another
+buffer.  |'<|
+
+For MSDOS, Unix and OS/2: When $VIM not set, use the path from the executable.
+When using the executable path for $VIM, remove "src/" when present.  Should
+make Vim find the docs and syntax files when it is run directly after
+compiling.  |$VIM|
+
+When quitting Visual mode with <Esc>, the cursor is put at start of the Visual
+area (like after executing an operator).
+
+Win32 and Unix version: Removed 1100 character limit on external commands.
+
+Added possibility to include a space in a ":edit +command" argument, by
+putting a backslash before it.  |+cmd|
+
+After recovery, BufReadPost autocommands are applied.  |:recover|
+
+Added color support for "os2ansi", OS/2 console. (Slootman)
+
+Allow "%:p:h" when % is empty.  |:_%|
+
+Included "<sfile>": file name from the ":source" command.  |<sfile>|
+
+Added "<Bslash>" special character.  Helps for avoiding multiple backslashes
+in mappings and menus.
+
+In a help window, a double-click jumps to the tag under the cursor (like
+CTRL-]).
+
+<C-Left> and <C-Right> now work like <S-Left> and <S-Right>, move a word
+forward/backward (Windows compatible). |<C-Left>|
+
+Removed the requirement for a ":version" command in a .vimrc file.  It wasn't
+used for anything.  You can use ":if" to handle differences between versions.
+|:version|
+
+For MS-DOS, Win32 and OS/2: When comparing file names for autocommands, don't
+make a difference between '/' and '\' for path separator.
+
+New termcap options:
+"mb": blink.  Can only be used by assigning it to one of the other highlight
+      options.  |t_mb|
+"bc": backspace character.  |t_bc|
+"nd": Used for moving the cursor right in the GUI, to avoid removing one line
+      of pixels from the last bold character.  |t_nd|
+"xs": highlighting not erased by overwriting, for hpterm.  Combined with
+      'weirdinvert'.  Visual mode works on hpterm now.  |t_xs|
+
+Unix: Set time of patch and backup file same as original file.  (Hiebert).
+
+Amiga: In QuickFix mode no longer opens another window.  Shell commands can be
+used now.
+
+Added decmouse patches from David Binette.  Can now use Dec and Netterm mouse.
+But only when enabled at compile time.
+
+Added '#' register: Alternate file name |quote#|.  Display '#' register with
+":dis" command. |:display|
+
+Removed ':' from 'isfname' default for Unix.  Check for "://" in a file name
+anyway.  Also check for ":\\", for MS-DOS.
+
+Added count to "K"eyword command, when 'keywordprg' is "man", is inserted in
+the man command.  "2K" results in "!man 2 <cword>".  |K|
+
+When using "gf" on a relative path name, remove "../" from the file name, like
+it's done for file names in the tags file. |gf|
+
+When finishing recording, don't make the recorded register the default put
+register.
+
+When using "!!", don't put ":5,5!" on the command-line, but ":.!".  And some
+other enhancements to replace the line number with "." or "$" when possible.
+
+MSDOS et al.: Renamed $VIM/viminfo to $VIM/_viminfo.  It's more consistent:
+.vimrc/_vimrc and .viminfo/_viminfo
+
+For systems where case doesn't matter in file names (MSDOS, Amiga), ignore
+case while sorting file names.  For buffer names too.
+
+When reading from stdin doesn't work, read from stderr (helps for "foo | xargs
+vim").
+
+32 bit MS-DOS version: Replaced csdpmi3 by csdpmi4.
+
+Changed <C-Left> and <C-Right> to skip a WORD instead of a word.
+
+Warning for changed modified time when overwriting a file now also works on
+other systems than Unix.
+
+Unix: Changed the defaults for configure to be the same as the defaults for
+Makefile: include GUI, Perl, and Python.
+
+Some versions of Motif require "-lXpm".  Added check for this in configure.
+
+Don't add "-L/usr/lib" to the link line, causes problems on a few systems.
+

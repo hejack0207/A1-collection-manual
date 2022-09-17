@@ -1,0 +1,93 @@
+9. Examples						*eval-examples*
+
+Printing in Binary ~
+>
+  :" The function Nr2Bin() returns the binary string representation of a number.
+  :func Nr2Bin(nr)
+  :  let n = a:nr
+  :  let r = ""
+  :  while n
+  :    let r = '01'[n % 2] . r
+  :    let n = n / 2
+  :  endwhile
+  :  return r
+  :endfunc
+
+  :" The function String2Bin() converts each character in a string to a
+  :" binary string, separated with dashes.
+  :func String2Bin(str)
+  :  let out = ''
+  :  for ix in range(strlen(a:str))
+  :    let out = out . '-' . Nr2Bin(char2nr(a:str[ix]))
+  :  endfor
+  :  return out[1:]
+  :endfunc
+
+Example of its use: >
+  :echo Nr2Bin(32)
+result: "100000" >
+  :echo String2Bin("32")
+result: "110011-110010"
+
+
+Sorting lines ~
+
+This example sorts lines with a specific compare function. >
+
+  :func SortBuffer()
+  :  let lines = getline(1, '$')
+  :  call sort(lines, function("Strcmp"))
+  :  call setline(1, lines)
+  :endfunction
+
+As a one-liner: >
+  :call setline(1, sort(getline(1, '$'), function("Strcmp")))
+
+
+scanf() replacement ~
+							*sscanf*
+There is no sscanf() function in Vim.  If you need to extract parts from a
+line, you can use matchstr() and substitute() to do it.  This example shows
+how to get the file name, line number and column number out of a line like
+"foobar.txt, 123, 45". >
+   :" Set up the match bit
+   :let mx='\(\f\+\),\s*\(\d\+\),\s*\(\d\+\)'
+   :"get the part matching the whole expression
+   :let l = matchstr(line, mx)
+   :"get each item out of the match
+   :let file = substitute(l, mx, '\1', '')
+   :let lnum = substitute(l, mx, '\2', '')
+   :let col = substitute(l, mx, '\3', '')
+
+The input is in the variable "line", the results in the variables "file",
+"lnum" and "col". (idea from Michael Geddes)
+
+
+getting the scriptnames in a Dictionary ~
+						*scriptnames-dictionary*
+The |:scriptnames| command can be used to get a list of all script files that
+have been sourced.  There is no equivalent function or variable for this
+(because it's rarely needed).  In case you need to manipulate the list this
+code can be used: >
+    " Get the output of ":scriptnames" in the scriptnames_output variable.
+    let scriptnames_output = ''
+    redir => scriptnames_output
+    silent scriptnames
+    redir END
+
+    " Split the output into lines and parse each line.	Add an entry to the
+    " "scripts" dictionary.
+    let scripts = {}
+    for line in split(scriptnames_output, "\n")
+      " Only do non-blank lines.
+      if line =~ '\S'
+	" Get the first number in the line.
+	let nr = matchstr(line, '\d\+')
+	" Get the file name, remove the script number " 123: ".
+	let name = substitute(line, '.\+:\s*', '', '')
+	" Add an item to the Dictionary
+	let scripts[nr] = name
+      endif
+    endfor
+    unlet scriptnames_output
+

@@ -1,0 +1,58 @@
+4. Using a JSON or JS channel					*channel-use*
+
+If mode is JSON then a message can be sent synchronously like this: >
+    let response = ch_evalexpr(channel, {expr})
+This awaits a response from the other side.
+
+When mode is JS this works the same, except that the messages use
+JavaScript encoding.  See |js_encode()| for the difference.
+
+To send a message, without handling a response or letting the channel callback
+handle the response: >
+    call ch_sendexpr(channel, {expr})
+
+To send a message and letting the response handled by a specific function,
+asynchronously: >
+    call ch_sendexpr(channel, {expr}, {'callback': Handler})
+
+Vim will match the response with the request using the message ID.  Once the
+response is received the callback will be invoked.  Further responses with the
+same ID will be ignored.  If your server sends back multiple responses you
+need to send them with ID zero, they will be passed to the channel callback.
+
+The {expr} is converted to JSON and wrapped in an array.  An example of the
+message that the receiver will get when {expr} is the string "hello":
+	[12,"hello"] ~
+
+The format of the JSON sent is:
+    [{number},{expr}]
+
+In which {number} is different every time.  It must be used in the response
+(if any):
+
+    [{number},{response}]
+
+This way Vim knows which sent message matches with which received message and
+can call the right handler.  Also when the messages arrive out of order.
+
+A newline character is terminating the JSON text.  This can be used to
+separate the read text.  For example, in Python:
+	splitidx = read_text.find('\n')
+	message = read_text[:splitidx]
+	rest = read_text[splitidx + 1:]
+
+The sender must always send valid JSON to Vim.  Vim can check for the end of
+the message by parsing the JSON.  It will only accept the message if the end
+was received.  A newline after the message is optional.
+
+When the process wants to send a message to Vim without first receiving a
+message, it must use the number zero:
+    [0,{response}]
+
+Then channel handler will then get {response} converted to Vim types.  If the
+channel does not have a handler the message is dropped.
+
+It is also possible to use ch_sendraw() and ch_evalraw() on a JSON or JS
+channel.  The caller is then completely responsible for correct encoding and
+decoding.
+

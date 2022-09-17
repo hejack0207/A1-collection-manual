@@ -1,0 +1,163 @@
+3. Ex command-lines					*cmdline-lines*
+
+The Ex commands have a few specialties:
+
+							*:quote* *:comment*
+'"' at the start of a line causes the whole line to be ignored.  '"'
+after a command causes the rest of the line to be ignored.  This can be used
+to add comments.  Example: >
+	:set ai		"set 'autoindent' option
+It is not possible to add a comment to a shell command ":!cmd" or to the
+":map" command and a few others (mainly commands that expect expressions)
+that see the '"' as part of their argument:
+
+    :argdo
+    :autocmd
+    :bufdo
+    :cexpr (and the like)
+    :cdo (and the like)
+    :command
+    :cscope (and the like)
+    :debug
+    :display
+    :echo (and the like)
+    :elseif
+    :execute
+    :folddoopen
+    :folddoclosed
+    :for
+    :grep (and the like)
+    :help (and the like)
+    :if
+    :let
+    :make
+    :map (and the like including :abbrev commands)
+    :menu (and the like)
+    :mkspell
+    :normal
+    :ownsyntax
+    :popup
+    :promptfind (and the like)
+    :registers
+    :return
+    :sort
+    :syntax
+    :tabdo
+    :tearoff
+    :vimgrep (and the like)
+    :while
+    :windo
+
+							*:bar* *:\bar*
+'|' can be used to separate commands, so you can give multiple commands in one
+line.  If you want to use '|' in an argument, precede it with '\'.
+
+These commands see the '|' as their argument, and can therefore not be
+followed by another Vim command:
+    :argdo
+    :autocmd
+    :bufdo
+    :cdo
+    :cfdo
+    :command
+    :cscope
+    :debug
+    :eval
+    :folddoopen
+    :folddoclosed
+    :function
+    :global
+    :help
+    :helpfind
+    :lcscope
+    :ldo
+    :lfdo
+    :make
+    :normal
+    :perl
+    :perldo
+    :promptfind
+    :promptrepl
+    :pyfile
+    :python
+    :registers
+    :read !
+    :scscope
+    :sign
+    :tcl
+    :tcldo
+    :tclfile
+    :terminal
+    :vglobal
+    :windo
+    :write !
+    :[range]!
+    a user defined command without the "-bar" argument |:command|
+
+Note that this is confusing (inherited from Vi): With ":g" the '|' is included
+in the command, with ":s" it is not.
+
+To be able to use another command anyway, use the ":execute" command.
+Example (append the output of "ls" and jump to the first line): >
+	:execute 'r !ls' | '[
+
+There is one exception: When the 'b' flag is present in 'cpoptions', with the
+":map" and ":abbr" commands and friends CTRL-V needs to be used instead of
+'\'.  You can also use "<Bar>" instead.  See also |map_bar|.
+
+Examples: >
+	:!ls | wc		view the output of two commands
+	:r !ls | wc		insert the same output in the text
+	:%g/foo/p|>		moves all matching lines one shiftwidth
+	:%s/foo/bar/|>		moves one line one shiftwidth
+	:map q 10^V|		map "q" to "10|"
+	:map q 10\| map \ l	map "q" to "10\" and map "\" to "l"
+					(when 'b' is present in 'cpoptions')
+
+You can also use <NL> to separate commands in the same way as with '|'.  To
+insert a <NL> use CTRL-V CTRL-J.  "^@" will be shown.  Using '|' is the
+preferred method.  But for external commands a <NL> must be used, because a
+'|' is included in the external command.  To avoid the special meaning of <NL>
+it must be preceded with a backslash.  Example: >
+	:r !date<NL>-join
+This reads the current date into the file and joins it with the previous line.
+
+Note that when the command before the '|' generates an error, the following
+commands will not be executed.
+
+
+Because of Vi compatibility the following strange commands are supported: >
+	:|			print current line (like ":p")
+	:3|			print line 3 (like ":3p")
+	:3			goto line 3
+
+A colon is allowed between the range and the command name.  It is ignored
+(this is Vi compatible).  For example: >
+	:1,$:s/pat/string
+
+When the character '%' or '#' is used where a file name is expected, they are
+expanded to the current and alternate file name (see the chapter "editing
+files" |:_%| |:_#|).
+
+Embedded spaces in file names are allowed on the Amiga if one file name is
+expected as argument.  Trailing spaces will be ignored, unless escaped with a
+backslash or CTRL-V.  Note that the ":next" command uses spaces to separate
+file names.  Escape the spaces to include them in a file name.  Example: >
+	:next foo\ bar goes\ to school\
+starts editing the three files "foo bar", "goes to" and "school ".
+
+When you want to use the special characters '"' or '|' in a command, or want
+to use '%' or '#' in a file name, precede them with a backslash.  The
+backslash is not required in a range and in the ":substitute" command.
+See also |`=|.
+
+							*:_!*
+The '!' (bang) character after an Ex command makes the command behave in a
+different way.  The '!' should be placed immediately after the command, without
+any blanks in between.  If you insert blanks the '!' will be seen as an
+argument for the command, which has a different meaning.  For example:
+	:w! name	write the current buffer to file "name", overwriting
+			any existing file
+	:w !name	send the current buffer as standard input to command
+			"name"
+

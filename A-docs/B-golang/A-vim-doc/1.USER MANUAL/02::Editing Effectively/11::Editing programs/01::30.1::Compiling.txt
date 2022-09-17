@@ -1,0 +1,178 @@
+*30.1*	Compiling
+
+Vim has a set of so called "quickfix" commands.  They enable you to compile a
+program from within Vim and then go through the errors generated and fix them
+(hopefully).  You can then recompile and fix any new errors that are found
+until finally your program compiles without any error.
+
+The following command runs the program "make" (supplying it with any argument
+you give) and captures the results: >
+
+	:make {arguments}
+
+If errors were generated, they are captured and the editor positions you where
+the first error occurred.
+   Take a look at an example ":make" session.  (Typical :make sessions generate
+far more errors and fewer stupid ones.)  After typing ":make" the screen looks
+like this:
+
+	:!make | &tee /tmp/vim215953.err ~
+	gcc -g -Wall -o prog main.c sub.c ~
+	main.c: In function 'main': ~
+	main.c:6: too many arguments to function 'do_sub' ~
+	main.c: At top level: ~
+	main.c:10: parse error before '}' ~
+	make: *** [prog] Error 1 ~
+
+	2 returned ~
+	"main.c" 11L, 111C ~
+	(3 of 6): too many arguments to function 'do_sub' ~
+	Press ENTER or type command to continue ~
+
+From this you can see that you have errors in the file "main.c".  When you
+press <Enter>, Vim displays the file "main.c", with the cursor positioned on
+line 6, the first line with an error.  You did not need to specify the file or
+the line number, Vim knew where to go by looking in the error messages.
+
+		+---------------------------------------------------+
+		|int main()					    |
+		|{						    |
+		|	int i=3;				    |
+      cursor -> |	do_sub("foo");				    |
+		|	++i;					    |
+		|	return (0);				    |
+		|}						    |
+		|}						    |
+		| ~						    |
+		|(3 of 12): too many arguments to function 'do_sub' |
+		+---------------------------------------------------+
+
+The following command goes to where the next error occurs: >
+
+	:cnext
+
+Vim jumps to line 10, the last line in the file, where there is an extra '}'.
+   When there is not enough room, Vim will shorten the error message.  To see
+the whole message use: >
+
+	:cc
+
+You can get an overview of all the error messages with the ":clist" command.
+The output looks like this: >
+
+	:clist
+<	3 main.c: 6:too many arguments to function 'do_sub' ~
+	5 main.c: 10:parse error before '}' ~
+
+Only the lines where Vim recognized a file name and line number are listed
+here.  It assumes those are the interesting lines and the rest is just boring
+messages.  However, sometimes unrecognized lines do contain something you want
+to see.  Output from the linker, for example, about an undefined function.
+To see all the messages add a "!" to the command: >
+
+	:clist!
+<	1 gcc -g -Wall -o prog main.c sub.c ~
+	2 main.c: In function 'main': ~
+	3 main.c:6: too many arguments to function 'do_sub' ~
+	4 main.c: At top level: ~
+	5 main.c:10: parse error before '}' ~
+	6 make: *** [prog] Error 1 ~
+
+Vim will highlight the current error.  To go back to the previous error, use:
+>
+	:cprevious
+
+Other commands to move around in the error list:
+
+	:cfirst		to first error
+	:clast		to last error
+	:cc 3		to error nr 3
+
+
+USING ANOTHER COMPILER
+
+The name of the program to run when the ":make" command is executed is defined
+by the 'makeprg' option.  Usually this is set to "make", but Visual C++ users
+should set this to "nmake" by executing the following command: >
+
+	:set makeprg=nmake
+
+You can also include arguments in this option.  Special characters need to
+be escaped with a backslash.  Example: >
+
+	:set makeprg=nmake\ -f\ project.mak
+
+You can include special Vim keywords in the command specification.  The %
+character expands to the name of the current file.  So if you execute the
+command: >
+	:set makeprg=make\ %:S
+
+When you are editing main.c, then ":make" executes the following command: >
+
+	make main.c
+
+This is not too useful, so you will refine the command a little and use the :r
+(root) modifier: >
+
+	:set makeprg=make\ %:r:S.o
+
+Now the command executed is as follows: >
+
+	make main.o
+
+More about these modifiers here: |filename-modifiers|.
+
+
+OLD ERROR LISTS
+
+Suppose you ":make" a program.  There is a warning message in one file and an
+error message in another.  You fix the error and use ":make" again to check if
+it was really fixed.  Now you want to look at the warning message.  It doesn't
+show up in the last error list, since the file with the warning wasn't
+compiled again.  You can go back to the previous error list with: >
+
+	:colder
+
+Then use ":clist" and ":cc {nr}" to jump to the place with the warning.
+   To go forward to the next error list: >
+
+	:cnewer
+
+Vim remembers ten error lists.
+
+
+SWITCHING COMPILERS
+
+You have to tell Vim what format the error messages are that your compiler
+produces.  This is done with the 'errorformat' option.  The syntax of this
+option is quite complicated and it can be made to fit almost any compiler.
+You can find the explanation here: |errorformat|.
+
+You might be using various different compilers.  Setting the 'makeprg' option,
+and especially the 'errorformat' each time is not easy.  Vim offers a simple
+method for this.  For example, to switch to using the Microsoft Visual C++
+compiler: >
+
+	:compiler msvc
+
+This will find the Vim script for the "msvc" compiler and set the appropriate
+options.
+   You can write your own compiler files.  See |write-compiler-plugin|.
+
+
+OUTPUT REDIRECTION
+
+The ":make" command redirects the output of the executed program to an error
+file.  How this works depends on various things, such as the 'shell'.  If your
+":make" command doesn't capture the output, check the 'makeef' and
+'shellpipe' options.  The 'shellquote' and 'shellxquote' options might also
+matter.
+
+In case you can't get ":make" to redirect the file for you, an alternative is
+to compile the program in another window and redirect the output into a file.
+Then have Vim read this file with: >
+
+	:cfile {filename}
+
+Jumping to errors will work like with the ":make" command.
+

@@ -1,0 +1,263 @@
+2. Remarks on spell checking				*spell-remarks*
+
+PERFORMANCE
+
+Vim does on-the-fly spell checking.  To make this work fast the word list is
+loaded in memory.  Thus this uses a lot of memory (1 Mbyte or more).  There
+might also be a noticeable delay when the word list is loaded, which happens
+when 'spell' is set and when 'spelllang' is set while 'spell' was already set.
+To minimize the delay each word list is only loaded once, it is not deleted
+when 'spelllang' is made empty or 'spell' is reset.  When 'encoding' is set
+all the word lists are reloaded, thus you may notice a delay then too.
+
+
+REGIONS
+
+A word may be spelled differently in various regions.  For example, English
+comes in (at least) these variants:
+
+	en		all regions
+	en_au		Australia
+	en_ca		Canada
+	en_gb		Great Britain
+	en_nz		New Zealand
+	en_us		USA
+
+Words that are not used in one region but are used in another region are
+highlighted with SpellLocal |hl-SpellLocal|.
+
+Always use lowercase letters for the language and region names.
+
+When adding a word with |zg| or another command it's always added for all
+regions.  You can change that by manually editing the 'spellfile'.  See
+|spell-wordlist-format|.  Note that the regions as specified in the files in
+'spellfile' are only used when all entries in 'spelllang' specify the same
+region (not counting files specified by their .spl name).
+
+							*spell-german*
+Specific exception: For German these special regions are used:
+	de		all German words accepted
+	de_de		old and new spelling
+	de_19		old spelling
+	de_20		new spelling
+	de_at		Austria
+	de_ch		Switzerland
+
+							*spell-russian*
+Specific exception: For Russian these special regions are used:
+	ru		all Russian words accepted
+	ru_ru		"IE" letter spelling
+	ru_yo		"YO" letter spelling
+
+							*spell-yiddish*
+Yiddish requires using "utf-8" encoding, because of the special characters
+used.  If you are using latin1 Vim will use transliterated (romanized) Yiddish
+instead.  If you want to use transliterated Yiddish with utf-8 use "yi-tr".
+In a table:
+	'encoding'	'spelllang'
+	utf-8		yi		Yiddish
+	latin1		yi		transliterated Yiddish
+	utf-8		yi-tr		transliterated Yiddish
+
+							*spell-cjk*
+Chinese, Japanese and other East Asian characters are normally marked as
+errors, because spell checking of these characters is not supported. If
+'spelllang' includes "cjk", these characters are not marked as errors.  This
+is useful when editing text with spell checking while some Asian words are
+present.
+
+
+SPELL FILES						*spell-load*
+
+Vim searches for spell files in the "spell" subdirectory of the directories in
+'runtimepath'.  The name is: LL.EEE.spl, where:
+	LL	the language name
+	EEE	the value of 'encoding'
+
+The value for "LL" comes from 'spelllang', but excludes the region name.
+Examples:
+	'spelllang'	LL ~
+	en_us		en
+	en-rare		en-rare
+	medical_ca	medical
+
+Only the first file is loaded, the one that is first in 'runtimepath'.  If
+this succeeds then additionally files with the name LL.EEE.add.spl are loaded.
+All the ones that are found are used.
+
+If no spell file is found the |SpellFileMissing| autocommand event is
+triggered.  This may trigger the |spellfile.vim| plugin to offer you
+downloading the spell file.
+
+Additionally, the files related to the names in 'spellfile' are loaded.  These
+are the files that |zg| and |zw| add good and wrong words to.
+
+Exceptions:
+- Vim uses "latin1" when 'encoding' is "iso-8859-15".  The euro sign doesn't
+  matter for spelling.
+- When no spell file for 'encoding' is found "ascii" is tried.  This only
+  works for languages where nearly all words are ASCII, such as English.  It
+  helps when 'encoding' is not "latin1", such as iso-8859-2, and English text
+  is being edited.  For the ".add" files the same name as the found main
+  spell file is used.
+
+For example, with these values:
+	'runtimepath' is "~/.vim,/usr/share/vim82,~/.vim/after"
+	'encoding'    is "iso-8859-2"
+	'spelllang'   is "pl"
+
+Vim will look for:
+1. ~/.vim/spell/pl.iso-8859-2.spl
+2. /usr/share/vim82/spell/pl.iso-8859-2.spl
+3. ~/.vim/spell/pl.iso-8859-2.add.spl
+4. /usr/share/vim82/spell/pl.iso-8859-2.add.spl
+5. ~/.vim/after/spell/pl.iso-8859-2.add.spl
+
+This assumes 1. is not found and 2. is found.
+
+If 'encoding' is "latin1" Vim will look for:
+1. ~/.vim/spell/pl.latin1.spl
+2. /usr/share/vim82/spell/pl.latin1.spl
+3. ~/.vim/after/spell/pl.latin1.spl
+4. ~/.vim/spell/pl.ascii.spl
+5. /usr/share/vim82/spell/pl.ascii.spl
+6. ~/.vim/after/spell/pl.ascii.spl
+
+This assumes none of them are found (Polish doesn't make sense when leaving
+out the non-ASCII characters).
+
+Spelling for EBCDIC is currently not supported.
+
+A spell file might not be available in the current 'encoding'.  See
+|spell-mkspell| about how to create a spell file.  Converting a spell file
+with "iconv" will NOT work!
+
+Note: on VMS ".{enc}.spl" is changed to "_{enc}.spl" to avoid trouble with
+filenames.
+
+						    *spell-sug-file* *E781*
+If there is a file with exactly the same name as the ".spl" file but ending in
+".sug", that file will be used for giving better suggestions.  It isn't loaded
+before suggestions are made to reduce memory use.
+
+				    *E758* *E759* *E778* *E779* *E780* *E782*
+When loading a spell file Vim checks that it is properly formatted.  If you
+get an error the file may be truncated, modified or intended for another Vim
+version.
+
+
+SPELLFILE CLEANUP					*spellfile-cleanup*
+
+The |zw| command turns existing entries in 'spellfile' into comment lines.
+This avoids having to write a new file every time, but results in the file
+only getting longer, never shorter.  To clean up the comment lines in all
+".add" spell files do this: >
+	:runtime spell/cleanadd.vim
+
+This deletes all comment lines, except the ones that start with "##".  Use
+"##" lines to add comments that you want to keep.
+
+You can invoke this script as often as you like.  A variable is provided to
+skip updating files that have been changed recently.  Set it to the number of
+seconds that has passed since a file was changed before it will be cleaned.
+For example, to clean only files that were not changed in the last hour: >
+      let g:spell_clean_limit = 60 * 60
+The default is one second.
+
+
+WORDS
+
+Vim uses a fixed method to recognize a word.  This is independent of
+'iskeyword', so that it also works in help files and for languages that
+include characters like '-' in 'iskeyword'.  The word characters do depend on
+'encoding'.
+
+The table with word characters is stored in the main .spl file.  Therefore it
+matters what the current locale is when generating it!  A .add.spl file does
+not contain a word table though.
+
+For a word that starts with a digit the digit is ignored, unless the word as a
+whole is recognized.  Thus if "3D" is a word and "D" is not then "3D" is
+recognized as a word, but if "3D" is not a word then only the "D" is marked as
+bad.  Hex numbers in the form 0x12ab and 0X12AB are recognized.
+
+
+WORD COMBINATIONS
+
+It is possible to spell-check words that include a space.  This is used to
+recognize words that are invalid when used by themselves, e.g. for "et al.".
+It can also be used to recognize "the the" and highlight it.
+
+The number of spaces is irrelevant.  In most cases a line break may also
+appear.  However, this makes it difficult to find out where to start checking
+for spelling mistakes.  When you make a change to one line and only that line
+is redrawn Vim won't look in the previous line, thus when "et" is at the end
+of the previous line "al." will be flagged as an error.  And when you type
+"the<CR>the" the highlighting doesn't appear until the first line is redrawn.
+Use |CTRL-L| to redraw right away.  "[s" will also stop at a word combination
+with a line break.
+
+When encountering a line break Vim skips characters such as '*', '>' and '"',
+so that comments in C, shell and Vim code can be spell checked.
+
+
+SYNTAX HIGHLIGHTING					*spell-syntax*
+
+Files that use syntax highlighting can specify where spell checking should be
+done:
+
+1.  everywhere			   default
+2.  in specific items		   use "contains=@Spell"
+3.  everywhere but specific items  use "contains=@NoSpell"
+
+For the second method adding the @NoSpell cluster will disable spell checking
+again.  This can be used, for example, to add @Spell to the comments of a
+program, and add @NoSpell for items that shouldn't be checked.
+Also see |:syn-spell| for text that is not in a syntax item.
+
+
+VIM SCRIPTS
+
+If you want to write a Vim script that does something with spelling, you may
+find these functions useful:
+
+    spellbadword()	find badly spelled word at the cursor
+    spellsuggest()	get list of spelling suggestions
+    soundfold()		get the sound-a-like version of a word
+
+
+SETTING 'spellcapcheck' AUTOMATICALLY			*set-spc-auto*
+
+After the 'spelllang' option has been set successfully, Vim will source the
+files "spell/LANG.vim" in 'runtimepath'.  "LANG" is the value of 'spelllang'
+up to the first comma, dot or underscore.  This can be used to set options
+specifically for the language, especially 'spellcapcheck'.
+
+The distribution includes a few of these files.  Use this command to see what
+they do: >
+	:next $VIMRUNTIME/spell/*.vim
+
+Note that the default scripts don't set 'spellcapcheck' if it was changed from
+the default value.  This assumes the user prefers another value then.
+
+
+DOUBLE SCORING						*spell-double-scoring*
+
+The 'spellsuggest' option can be used to select "double" scoring.  This
+mechanism is based on the principle that there are two kinds of spelling
+mistakes:
+
+1. You know how to spell the word, but mistype something.  This results in a
+   small editing distance (character swapped/omitted/inserted) and possibly a
+   word that sounds completely different.
+
+2. You don't know how to spell the word and type something that sounds right.
+   The edit distance can be big but the word is similar after sound-folding.
+
+Since scores for these two mistakes will be very different we use a list
+for each and mix them.
+
+The sound-folding is slow and people that know the language won't make the
+second kind of mistakes.  Therefore 'spellsuggest' can be set to select the
+preferred method for scoring the suggestions.
+

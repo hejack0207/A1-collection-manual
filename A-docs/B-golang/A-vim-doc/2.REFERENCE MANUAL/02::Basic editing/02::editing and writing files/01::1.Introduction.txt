@@ -1,0 +1,168 @@
+1. Introduction						*edit-intro*
+
+Editing a file with Vim means:
+
+1. reading the file into a buffer
+2. changing the buffer with editor commands
+3. writing the buffer into a file
+
+							*current-file*
+As long as you don't write the buffer, the original file remains unchanged.
+If you start editing a file (read a file into the buffer), the file name is
+remembered as the "current file name".  This is also known as the name of the
+current buffer.  It can be used with "%" on the command line |:_%|.
+
+							*alternate-file*
+If there already was a current file name, then that one becomes the alternate
+file name.  It can be used with "#" on the command line |:_#| and you can use
+the |CTRL-^| command to toggle between the current and the alternate file.
+However, the alternate file name is not changed when |:keepalt| is used.
+An alternate file name is remembered for each window.
+
+							*:keepalt* *:keepa*
+:keepalt {cmd}		Execute {cmd} while keeping the current alternate file
+			name.  Note that commands invoked indirectly (e.g.,
+			with a function) may still set the alternate file
+			name.
+
+All file names are remembered in the buffer list.  When you enter a file name,
+for editing (e.g., with ":e filename") or writing (e.g., with ":w filename"),
+the file name is added to the list.  You can use the buffer list to remember
+which files you edited and to quickly switch from one file to another (e.g.,
+to copy text) with the |CTRL-^| command.  First type the number of the file
+and then hit CTRL-^.
+
+
+CTRL-G		or				*CTRL-G* *:f* *:fi* *:file*
+:f[ile]			Prints the current file name (as typed, unless ":cd"
+			was used), the cursor position (unless the 'ruler'
+			option is set), and the file status (readonly,
+			modified, read errors, new file).  See the 'shortmess'
+			option about how to make this message shorter.
+
+:f[ile]!		like |:file|, but don't truncate the name even when
+			'shortmess' indicates this.
+
+{count}CTRL-G		Like CTRL-G, but prints the current file name with
+			full path.  If the count is higher than 1 the current
+			buffer number is also given.
+
+					*g_CTRL-G* *word-count* *byte-count*
+g CTRL-G		Prints the current position of the cursor in five
+			ways: Column, Line, Word, Character and Byte.  If the
+			number of Characters and Bytes is the same then the
+			Character position is omitted.
+			If there are characters in the line that take more
+			than one position on the screen (<Tab> or special
+			character), both the "real" column and the screen
+			column are shown, separated with a dash.
+			Also see the 'ruler' option and the |wordcount()|
+			function.
+
+							*v_g_CTRL-G*
+{Visual}g CTRL-G	Similar to "g CTRL-G", but Word, Character, Line, and
+			Byte counts for the visually selected region are
+			displayed.
+			In Blockwise mode, Column count is also shown.  (For
+			{Visual} see |Visual-mode|.)
+
+							*:file_f*
+:f[ile][!] {name}	Sets the current file name to {name}.  The optional !
+			avoids truncating the message, as with |:file|.
+			If the buffer did have a name, that name becomes the
+			|alternate-file| name.  An unlisted buffer is created
+			to hold the old name.
+							*:0file*
+:0f[ile][!]		Remove the name of the current buffer.  The optional !
+			avoids truncating the message, as with |:file|.
+
+:buffers
+:files
+:ls			List all the currently known file names.  See
+			|windows.txt| |:files| |:buffers| |:ls|.
+
+Vim will remember the full path name of a file name that you enter.  In most
+cases when the file name is displayed only the name you typed is shown, but
+the full path name is being used if you used the ":cd" command |:cd|.
+
+							*home-replace*
+If the environment variable $HOME is set, and the file name starts with that
+string, it is often displayed with HOME replaced with "~".  This was done to
+keep file names short.  When reading or writing files the full name is still
+used, the "~" is only used when displaying file names.  When replacing the
+file name would result in just "~", "~/" is used instead (to avoid confusion
+between options set to $HOME with 'backupext' set to "~").
+
+When writing the buffer, the default is to use the current file name.  Thus
+when you give the "ZZ" or ":wq" command, the original file will be
+overwritten.  If you do not want this, the buffer can be written into another
+file by giving a file name argument to the ":write" command.  For example: >
+
+	vim testfile
+	[change the buffer with editor commands]
+	:w newfile
+	:q
+
+This will create a file "newfile", that is a modified copy of "testfile".
+The file "testfile" will remain unchanged.  Anyway, if the 'backup' option is
+set, Vim renames or copies the original file before it will be overwritten.
+You can use this file if you discover that you need the original file.  See
+also the 'patchmode' option.  The name of the backup file is normally the same
+as the original file with 'backupext' appended.  The default "~" is a bit
+strange to avoid accidentally overwriting existing files.  If you prefer ".bak"
+change the 'backupext' option.  Extra dots are replaced with '_' on MS-Windows
+machines, when Vim has detected that an MS-DOS-like filesystem is being used
+(e.g., messydos or crossdos) or when the 'shortname' option is on.  The
+backup file can be placed in another directory by setting 'backupdir'.
+
+							*auto-shortname*
+Technical: On the Amiga you can use 30 characters for a file name.  But on an
+	   MS-DOS-compatible filesystem only 8 plus 3 characters are
+	   available.  Vim tries to detect the type of filesystem when it is
+	   creating the .swp file.  If an MS-DOS-like filesystem is suspected,
+	   a flag is set that has the same effect as setting the 'shortname'
+	   option.  This flag will be reset as soon as you start editing a
+	   new file.  The flag will be used when making the file name for the
+	   ".swp" and ".~" files for the current file.  But when you are
+	   editing a file in a normal filesystem and write to an MS-DOS-like
+	   filesystem the flag will not have been set.  In that case the
+	   creation of the ".~" file may fail and you will get an error
+	   message.  Use the 'shortname' option in this case.
+
+When you started editing without giving a file name, "No File" is displayed in
+messages.  If the ":write" command is used with a file name argument, the file
+name for the current file is set to that file name.  This only happens when
+the 'F' flag is included in 'cpoptions' (by default it is included) |cpo-F|.
+This is useful when entering text in an empty buffer and then writing it to a
+file.  If 'cpoptions' contains the 'f' flag (by default it is NOT included)
+|cpo-f| the file name is set for the ":read file" command.  This is useful
+when starting Vim without an argument and then doing ":read file" to start
+editing a file.
+When the file name was set and 'filetype' is empty the filetype detection
+autocommands will be triggered.
+							*not-edited*
+Because the file name was set without really starting to edit that file, you
+are protected from overwriting that file.  This is done by setting the
+"notedited" flag.  You can see if this flag is set with the CTRL-G or ":file"
+command.  It will include "[Not edited]" when the "notedited" flag is set.
+When writing the buffer to the current file name (with ":w!"), the "notedited"
+flag is reset.
+
+							*abandon*
+Vim remembers whether you have changed the buffer.  You are protected from
+losing the changes you made.  If you try to quit without writing, or want to
+start editing another file, Vim will refuse this.  In order to overrule this
+protection, add a '!' to the command.  The changes will then be lost.  For
+example: ":q" will not work if the buffer was changed, but ":q!" will.  To see
+whether the buffer was changed use the "CTRL-G" command.  The message includes
+the string "[Modified]" if the buffer has been changed, or "+" if the 'm' flag
+is in 'shortmess'.
+
+If you want to automatically save the changes without asking, switch on the
+'autowriteall' option.  'autowrite' is the associated Vi-compatible option
+that does not work for all commands.
+
+If you want to keep the changed buffer without saving it, switch on the
+'hidden' option.  See |hidden-buffer|.  Some commands work like this even when
+'hidden' is not set, check the help for the command.
+

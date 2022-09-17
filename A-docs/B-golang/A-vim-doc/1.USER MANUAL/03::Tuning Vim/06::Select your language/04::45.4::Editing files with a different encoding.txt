@@ -1,0 +1,63 @@
+*45.4*	Editing files with a different encoding
+
+Suppose you have setup Vim to use Unicode, and you want to edit a file that is
+in 16-bit Unicode.  Sounds simple, right?  Well, Vim actually uses utf-8
+encoding internally, thus the 16-bit encoding must be converted, since there
+is a difference between the character set (Unicode) and the encoding (utf-8 or
+16-bit).
+   Vim will try to detect what kind of file you are editing.  It uses the
+encoding names in the 'fileencodings' option.  When using Unicode, the default
+value is: "ucs-bom,utf-8,latin1".  This means that Vim checks the file to see
+if it's one of these encodings:
+
+	ucs-bom		File must start with a Byte Order Mark (BOM).  This
+			allows detection of 16-bit, 32-bit and utf-8 Unicode
+			encodings.
+	utf-8		utf-8 Unicode.  This is rejected when a sequence of
+			bytes is illegal in utf-8.
+	latin1		The good old 8-bit encoding.  Always works.
+
+When you start editing that 16-bit Unicode file, and it has a BOM, Vim will
+detect this and convert the file to utf-8 when reading it.  The 'fileencoding'
+option (without s at the end) is set to the detected value.  In this case it
+is "utf-16le".  That means it's Unicode, 16-bit and little-endian.  This
+file format is common on MS-Windows (e.g., for registry files).
+   When writing the file, Vim will compare 'fileencoding' with 'encoding'.  If
+they are different, the text will be converted.
+   An empty value for 'fileencoding' means that no conversion is to be done.
+Thus the text is assumed to be encoded with 'encoding'.
+
+If the default 'fileencodings' value is not good for you, set it to the
+encodings you want Vim to try.  Only when a value is found to be invalid will
+the next one be used.  Putting "latin1" first doesn't work, because it is
+never illegal.  An example, to fall back to Japanese when the file doesn't
+have a BOM and isn't utf-8: >
+
+	:set fileencodings=ucs-bom,utf-8,sjis
+
+See |encoding-values| for suggested values.  Other values may work as well.
+This depends on the conversion available.
+
+
+FORCING AN ENCODING
+
+If the automatic detection doesn't work you must tell Vim what encoding the
+file is.  Example: >
+
+	:edit ++enc=koi8-r russian.txt
+
+The "++enc" part specifies the name of the encoding to be used for this file
+only.  Vim will convert the file from the specified encoding, Russian in this
+example, to 'encoding'.  'fileencoding' will also be set to the specified
+encoding, so that the reverse conversion can be done when writing the file.
+   The same argument can be used when writing the file.  This way you can
+actually use Vim to convert a file.  Example: >
+
+	:write ++enc=utf-8 russian.txt
+<
+	Note:
+	Conversion may result in lost characters.  Conversion from an encoding
+	to Unicode and back is mostly free of this problem, unless there are
+	illegal characters.  Conversion from Unicode to other encodings often
+	loses information when there was more than one language in the file.
+

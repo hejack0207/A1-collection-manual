@@ -1,0 +1,449 @@
+4. Complex changes					*complex-change*
+
+4.1 Filter commands					*filter*
+
+A filter is a program that accepts text at standard input, changes it in some
+way, and sends it to standard output.  You can use the commands below to send
+some text through a filter, so that it is replaced by the filter output.
+Examples of filters are "sort", which sorts lines alphabetically, and
+"indent", which formats C program files (you need a version of indent that
+works like a filter; not all versions do).  The 'shell' option specifies the
+shell Vim uses to execute the filter command (See also the 'shelltype'
+option).  You can repeat filter commands with ".".  Vim does not recognize a
+comment (starting with '"') after the `:!` command.
+
+							*!*
+!{motion}{filter}	Filter {motion} text lines through the external
+			program {filter}.
+
+							*!!*
+!!{filter}		Filter [count] lines through the external program
+			{filter}.
+
+							*v_!*
+{Visual}!{filter}	Filter the highlighted lines through the external
+			program {filter} (for {Visual} see |Visual-mode|).
+
+:{range}![!]{filter} [!][arg]				*:range!*
+			Filter {range} lines through the external program
+			{filter}.  Vim replaces the optional bangs with the
+			latest given command and appends the optional [arg].
+			Vim saves the output of the filter command in a
+			temporary file and then reads the file into the buffer
+			|tempfile|.  Vim uses the 'shellredir' option to
+			redirect the filter output to the temporary file.
+			However, if the 'shelltemp' option is off then pipes
+			are used when possible (on Unix).
+			When the 'R' flag is included in 'cpoptions' marks in
+			the filtered lines are deleted, unless the
+			|:keepmarks| command is used.  Example: >
+				:keepmarks '<,'>!sort
+<			When the number of lines after filtering is less than
+			before, marks in the missing lines are deleted anyway.
+
+							*=*
+={motion}		Filter {motion} lines through the external program
+			given with the 'equalprg' option.  When the 'equalprg'
+			option is empty (this is the default), use the
+			internal formatting function |C-indenting| and
+			|'lisp'|.  But when 'indentexpr' is not empty, it will
+			be used instead |indent-expression|.  When Vim was
+			compiled without internal formatting then the "indent"
+			program is used as a last resort.
+
+							*==*
+==			Filter [count] lines like with ={motion}.
+
+							*v_=*
+{Visual}=		Filter the highlighted lines like with ={motion}.
+
+
+						*tempfile* *setuid*
+Vim uses temporary files for filtering, generating diffs and also for
+tempname().  For Unix, the file will be in a private directory (only
+accessible by the current user) to avoid security problems (e.g., a symlink
+attack or other people reading your file).  When Vim exits the directory and
+all files in it are deleted.  When Vim has the setuid bit set this may cause
+problems, the temp file is owned by the setuid user but the filter command
+probably runs as the original user.
+On MS-Windows the first of these directories that works is used: $TMP,
+$TEMP, c:\TMP, c:\TEMP.
+For Unix the list of directories is: $TMPDIR, /tmp, current-dir, $HOME.
+For MS-Windows the GetTempFileName() system function is used.
+For other systems the tmpnam() library function is used.
+
+
+
+4.2 Substitute						*:substitute*
+							*:s* *:su*
+:[range]s[ubstitute]/{pattern}/{string}/[flags] [count]
+			For each line in [range] replace a match of {pattern}
+			with {string}.
+			For the {pattern} see |pattern|.
+			{string} can be a literal string, or something
+			special; see |sub-replace-special|.
+			When [range] and [count] are omitted, replace in the
+			current line only.  When [count] is given, replace in
+			[count] lines, starting with the last line in [range].
+			When [range] is omitted start in the current line.
+							*E939*
+			[count] must be a positive number.  Also see
+			|cmdline-ranges|.
+
+			See |:s_flags| for [flags].
+			The delimiter doesn't need to be /, see
+			|pattern-delimiter|.
+
+:[range]s[ubstitute] [flags] [count]
+:[range]&[&][flags] [count]					*:&*
+			Repeat last :substitute with same search pattern and
+			substitute string, but without the same flags.  You
+			may add [flags], see |:s_flags|.
+			Note that after `:substitute` the '&' flag can't be
+			used, it's recognized as a pattern separator.
+			The space between `:substitute` and the 'c', 'g',
+			'i', 'I' and 'r' flags isn't required, but in scripts
+			it's a good idea to keep it to avoid confusion.
+
+:[range]~[&][flags] [count]					*:~*
+			Repeat last substitute with same substitute string
+			but with last used search pattern.  This is like
+			`:&r`.  See |:s_flags| for [flags].
+
+								*&*
+&			Synonym for `:s` (repeat last substitute).  Note
+			that the flags are not remembered, thus it might
+			actually work differently.  You can use `:&&` to keep
+			the flags.
+
+								*g&*
+g&			Synonym for `:%s//~/&` (repeat last substitute with
+			last search pattern on all lines with the same flags).
+			For example, when you first do a substitution with
+			`:s/pattern/repl/flags` and then `/search` for
+			something else, `g&` will do `:%s/search/repl/flags`.
+			Mnemonic: global substitute.
+
+						*:snomagic* *:sno*
+:[range]sno[magic] ...	Same as `:substitute`, but always use 'nomagic'.
+
+						*:smagic* *:sm*
+:[range]sm[agic] ...	Same as `:substitute`, but always use 'magic'.
+
+							*:s_flags*
+The flags that you can use for the substitute commands:
+
+							*:&&*
+[&]	Must be the first one: Keep the flags from the previous substitute
+	command.  Examples: >
+		:&&
+		:s/this/that/&
+<	Note that `:s` and `:&` don't keep the flags.
+
+[c]	Confirm each substitution.  Vim highlights the matching string (with
+	|hl-IncSearch|).  You can type:				*:s_c*
+	    'y'	    to substitute this match
+	    'l'	    to substitute this match and then quit ("last")
+	    'n'	    to skip this match
+	    <Esc>   to quit substituting
+	    'a'	    to substitute this and all remaining matches
+	    'q'	    to quit substituting
+	    CTRL-E  to scroll the screen up
+	    CTRL-Y  to scroll the screen down
+	If the 'edcompatible' option is on, Vim remembers the [c] flag and
+	toggles it each time you use it, but resets it when you give a new
+	search pattern.
+
+							*:s_e*
+[e]     When the search pattern fails, do not issue an error message and, in
+	particular, continue in maps as if no error occurred.  This is most
+	useful to prevent the "No match" error from breaking a mapping.  Vim
+	does not suppress the following error messages, however:
+		Regular expressions can't be delimited by letters
+		\ should be followed by /, ? or &
+		No previous substitute regular expression
+		Trailing characters
+		Interrupted
+
+							*:s_g*
+[g]	Replace all occurrences in the line.  Without this argument,
+	replacement occurs only for the first occurrence in each line.  If
+	the 'edcompatible' option is on, Vim remembers this flag and toggles
+	it each time you use it, but resets it when you give a new search
+	pattern.  If the 'gdefault' option is on, this flag is on by default
+	and the [g] argument switches it off.
+
+							*:s_i*
+[i]	Ignore case for the pattern.  The 'ignorecase' and 'smartcase' options
+	are not used.
+
+							*:s_I*
+[I]	Don't ignore case for the pattern.  The 'ignorecase' and 'smartcase'
+	options are not used.
+
+							*:s_n*
+[n]	Report the number of matches, do not actually substitute.  The [c]
+	flag is ignored.  The matches are reported as if 'report' is zero.
+	Useful to |count-items|.
+	If \= |sub-replace-expression| is used, the expression will be
+	evaluated in the |sandbox| at every match.
+
+[p]	Print the line containing the last substitute.  *:s_p*
+
+[#]	Like [p] and prepend the line number.  *:s_#*
+
+[l]	Like [p] but print the text like |:list|.  *:s_l*
+
+							*:s_r*
+[r]	Only useful in combination with `:&` or `:s` without arguments.  `:&r`
+	works the same way as `:~`:  When the search pattern is empty, use the
+	previously used search pattern instead of the search pattern from the
+	last substitute or `:global`.  If the last command that did a search
+	was a substitute or `:global`, there is no effect.  If the last
+	command was a search command such as "/", use the pattern from that
+	command.
+	For `:s` with an argument this already happens: >
+		:s/blue/red/
+		/green
+		:s//red/   or  :~   or  :&r
+<	The last commands will replace "green" with "red". >
+		:s/blue/red/
+		/green
+		:&
+<	The last command will replace "blue" with "red".
+
+Note that there is no flag to change the "magicness" of the pattern.  A
+different command is used instead, or you can use |/\v| and friends.  The
+reason is that the flags can only be found by skipping the pattern, and in
+order to skip the pattern the "magicness" must be known.  Catch 22!
+
+If the {pattern} for the substitute command is empty, the command uses the
+pattern from the last substitute or `:global` command.  If there is none, but
+there is a previous search pattern, that one is used.  With the [r] flag, the
+command uses the pattern from the last substitute, `:global`, or search
+command.
+
+If the {string} is omitted the substitute is done as if it's empty.  Thus the
+matched pattern is deleted.  The separator after {pattern} can also be left
+out then.  Example: >
+	:%s/TESTING
+This deletes "TESTING" from all lines, but only one per line.
+
+For compatibility with Vi these two exceptions are allowed:
+"\/{string}/" and "\?{string}?" do the same as "//{string}/r".
+"\&{string}&" does the same as "//{string}/".
+						*pattern-delimiter* *E146*
+Instead of the '/' which surrounds the pattern and replacement string, you
+can use any other single-byte character, but not an alphanumeric character,
+'\', '"' or '|'.  This is useful if you want to include a '/' in the search
+pattern or replacement string.  Example: >
+	:s+/+//+
+
+For the definition of a pattern, see |pattern|.  In Visual block mode, use
+|/\%V| in the pattern to have the substitute work in the block only.
+Otherwise it works on whole lines anyway.
+
+					*sub-replace-special* *:s\=*
+When the {string} starts with "\=" it is evaluated as an expression, see
+|sub-replace-expression|.  You can use that for complex replacement or special
+characters.
+
+Otherwise these characters in {string} have a special meaning:
+								*:s%*
+When {string} is equal to "%" and '/' is included with the 'cpoptions' option,
+then the {string} of the previous substitute command is used, see |cpo-/|
+
+magic	nomagic	  action    ~
+  &	  \&	  replaced with the whole matched pattern	     *s/\&*
+ \&	   &	  replaced with &
+      \0	  replaced with the whole matched pattern	   *\0* *s/\0*
+      \1	  replaced with the matched pattern in the first
+		  pair of ()					     *s/\1*
+      \2	  replaced with the matched pattern in the second
+		  pair of ()					     *s/\2*
+      ..	  ..						     *s/\3*
+      \9	  replaced with the matched pattern in the ninth
+		  pair of ()					     *s/\9*
+  ~	  \~	  replaced with the {string} of the previous
+		  substitute					     *s~*
+ \~	   ~	  replaced with ~				     *s/\~*
+      \u	  next character made uppercase			     *s/\u*
+      \U	  following characters made uppercase, until \E      *s/\U*
+      \l	  next character made lowercase			     *s/\l*
+      \L	  following characters made lowercase, until \E      *s/\L*
+      \e	  end of \u, \U, \l and \L (NOTE: not <Esc>!)	     *s/\e*
+      \E	  end of \u, \U, \l and \L			     *s/\E*
+      <CR>	  split line in two at this point
+		  (Type the <CR> as CTRL-V <Enter>)		     *s<CR>*
+      \r	  idem						     *s/\r*
+      \<CR>	  insert a carriage-return (CTRL-M)
+		  (Type the <CR> as CTRL-V <Enter>)		     *s/\<CR>*
+      \n	  insert a <NL> (<NUL> in the file)
+		  (does NOT break the line)			     *s/\n*
+      \b	  insert a <BS>					     *s/\b*
+      \t	  insert a <Tab>				     *s/\t*
+      \\	  insert a single backslash			     *s/\\*
+      \x	  where x is any character not mentioned above:
+		  Reserved for future expansion
+
+The special meaning is also used inside the third argument {sub} of
+the |substitute()| function with the following exceptions:
+  - A % inserts a percent literally without regard to 'cpoptions'.
+  - magic is always set without regard to 'magic'.
+  - A ~ inserts a tilde literally.
+  - <CR> and \r inserts a carriage-return (CTRL-M).
+  - \<CR> does not have a special meaning. It's just one of \x.
+
+Examples: >
+  :s/a\|b/xxx\0xxx/g		 modifies "a b"	     to "xxxaxxx xxxbxxx"
+  :s/\([abc]\)\([efg]\)/\2\1/g	 modifies "af fa bg" to "fa fa gb"
+  :s/abcde/abc^Mde/		 modifies "abcde"    to "abc", "de" (two lines)
+  :s/$/\^M/			 modifies "abcde"    to "abcde^M"
+  :s/\w\+/\u\0/g		 modifies "bla bla"  to "Bla Bla"
+  :s/\w\+/\L\u\0/g		 modifies "BLA bla"  to "Bla Bla"
+
+Note: "\L\u" can be used to capitalize the first letter of a word.  This is
+not compatible with Vi and older versions of Vim, where the "\u" would cancel
+out the "\L". Same for "\U\l".
+
+Note: In previous versions CTRL-V was handled in a special way.  Since this is
+not Vi compatible, this was removed.  Use a backslash instead.
+
+command		text	result ~
+:s/aa/a^Ma/	aa	a<line-break>a
+:s/aa/a\^Ma/	aa	a^Ma
+:s/aa/a\\^Ma/	aa	a\<line-break>a
+
+(you need to type CTRL-V <CR> to get a ^M here)
+
+The numbering of "\1", "\2" etc. is done based on which "\(" comes first in
+the pattern (going left to right).  When a parentheses group matches several
+times, the last one will be used for "\1", "\2", etc.  Example: >
+  :s/\(\(a[a-d] \)*\)/\2/      modifies "aa ab x" to "ab x"
+The "\2" is for "\(a[a-d] \)".  At first it matches "aa ", secondly "ab ".
+
+When using parentheses in combination with '|', like in \([ab]\)\|\([cd]\),
+either the first or second pattern in parentheses did not match, so either
+\1 or \2 is empty.  Example: >
+  :s/\([ab]\)\|\([cd]\)/\1x/g   modifies "a b c d"  to "ax bx x x"
+<
+
+		*:sc* *:sce* *:scg* *:sci* *:scI* *:scl* *:scp* *:sg* *:sgc*
+		*:sge* *:sgi* *:sgI* *:sgl* *:sgn* *:sgp* *:sgr* *:sI* *:si*
+		*:sic* *:sIc* *:sie* *:sIe* *:sIg* *:sIl* *:sin* *:sIn* *:sIp*
+		*:sip* *:sIr* *:sir* *:sr* *:src* *:srg* *:sri* *:srI* *:srl*
+		*:srn* *:srp*
+2-letter and 3-letter :substitute commands ~
+
+     List of :substitute commands
+     |      c    e    g    i    I    n    p    l    r
+     | c  :sc  :sce :scg :sci :scI :scn :scp :scl  ---
+     | e
+     | g  :sgc :sge :sg  :sgi :sgI :sgn :sgp :sgl :sgr
+     | i  :sic :sie  --- :si  :siI :sin :sip  --- :sir
+     | I  :sIc :sIe :sIg :sIi :sI  :sIn :sIp :sIl :sIr
+     | n
+     | p
+     | l
+     | r  :src  --- :srg :sri :srI :srn :srp :srl :sr
+
+Exceptions:
+     :scr  is  `:scriptnames`
+     :se   is  `:set`
+     :sig  is  `:sign`
+     :sil  is  `:silent`
+     :sn   is  `:snext`
+     :sp   is  `:split`
+     :sl   is  `:sleep`
+     :sre  is  `:srewind`
+
+
+Substitute with an expression			*sub-replace-expression*
+						*sub-replace-\=* *s/\=*
+When the substitute string starts with "\=" the remainder is interpreted as an
+expression.
+
+The special meaning for characters as mentioned at |sub-replace-special| does
+not apply except for "<CR>".  A <NL> character is used as a line break, you
+can get one with a double-quote string: "\n".  Prepend a backslash to get a
+real <NL> character (which will be a NUL in the file).
+
+The "\=" notation can also be used inside the third argument {sub} of
+|substitute()| function.  In this case, the special meaning for characters as
+mentioned at |sub-replace-special| does not apply at all. Especially, <CR> and
+<NL> are interpreted not as a line break but as a carriage-return and a
+new-line respectively.
+
+When the result is a |List| then the items are joined with separating line
+breaks.  Thus each item becomes a line, except that they can contain line
+breaks themselves.
+
+The |submatch()| function can be used to obtain matched text.  The whole
+matched text can be accessed with "submatch(0)".  The text matched with the
+first pair of () with "submatch(1)".  Likewise for further sub-matches in ().
+
+Be careful: The separation character must not appear in the expression!
+Consider using a character like "@" or ":".  There is no problem if the result
+of the expression contains the separation character.
+
+Examples: >
+	:s@\n@\="\r" . expand("$HOME") . "\r"@
+This replaces an end-of-line with a new line containing the value of $HOME. >
+
+	s/E/\="\<Char-0x20ac>"/g
+This replaces each 'E' character with a euro sign.  Read more in |<Char->|.
+
+
+4.3 Search and replace					*search-replace*
+
+							*:pro* *:promptfind*
+:promptf[ind] [string]
+			Put up a Search dialog.  When [string] is given, it is
+			used as the initial search string.
+			{only for Win32, Motif and GTK GUI}
+
+						*:promptr* *:promptrepl*
+:promptr[epl] [string]
+			Put up a Search/Replace dialog.  When [string] is
+			given, it is used as the initial search string.
+			{only for Win32, Motif and GTK GUI}
+
+
+4.4 Changing tabs					*change-tabs*
+							*:ret* *:retab* *:retab!*
+:[range]ret[ab][!] [new_tabstop]
+			Replace all sequences of white-space containing a
+			<Tab> with new strings of white-space using the new
+			tabstop value given.  If you do not specify a new
+			tabstop size or it is zero, Vim uses the current value
+			of 'tabstop'.
+			The current value of 'tabstop' is always used to
+			compute the width of existing tabs.
+			With !, Vim also replaces strings of only normal
+			spaces with tabs where appropriate.
+			With 'expandtab' on, Vim replaces all tabs with the
+			appropriate number of spaces.
+			This command sets 'tabstop' to the new value given,
+			and if performed on the whole file, which is default,
+			should not make any visible change.
+			Careful: This command modifies any <Tab> characters
+			inside of strings in a C program.  Use "\t" to avoid
+			this (that's a good habit anyway).
+			`:retab!` may also change a sequence of spaces by
+			<Tab> characters, which can mess up a printf().
+			If the |+vartabs| feature is enabled then a list of
+			tab widths separated by commas may be used in place of
+			a single tabstop.  Each value in the list represents
+			the width of one tabstop, except the final value which
+			applies to all following tabstops.
+
+							*retab-example*
+Example for using autocommands and ":retab" to edit a file which is stored
+with tabstops at 8 but edited with tabstops set at 4.  Warning: white space
+inside of strings can change!  Also see 'softtabstop' option. >
+
+  :auto BufReadPost	*.xx	retab! 4
+  :auto BufWritePre	*.xx	retab! 8
+  :auto BufWritePost	*.xx	retab! 4
+  :auto BufNewFile	*.xx	set ts=4
+

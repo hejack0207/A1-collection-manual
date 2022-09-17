@@ -1,0 +1,146 @@
+1. Starting the GUI				*gui-start* *E229* *E233*
+
+First you must make sure you actually have a version of Vim with the GUI code
+included.  You can check this with the ":version" command, it says "with xxx
+GUI", where "xxx" is X11-Motif, X11-Athena, Photon, GTK2, GTK3, etc., or
+"MS-Windows 32 bit GUI version".
+
+How to start the GUI depends on the system used.  Mostly you can run the
+GUI version of Vim with:
+    gvim [options] [files...]
+
+The X11 version of Vim can run both in GUI and in non-GUI mode.  See
+|gui-x11-start|.
+
+			*gui-init* *gvimrc* *.gvimrc* *_gvimrc* *$MYGVIMRC*
+The gvimrc file is where GUI-specific startup commands should be placed.  It
+is always sourced after the |vimrc| file.  If you have one then the $MYGVIMRC
+environment variable has its name.
+
+When the GUI starts up initializations are carried out, in this order:
+- The 'term' option is set to "builtin_gui" and terminal options are reset to
+  their default value for the GUI |terminal-options|.
+- If the system menu file exists, it is sourced.  The name of this file is
+  normally "$VIMRUNTIME/menu.vim".  You can check this with ":version".  Also
+  see |$VIMRUNTIME|.  To skip loading the system menu include 'M' in
+  'guioptions'.				*buffers-menu* *no_buffers_menu*
+  The system menu file includes a "Buffers" menu.  If you don't want this, set
+  the "no_buffers_menu" variable in your .vimrc (not .gvimrc!): >
+	:let no_buffers_menu = 1
+< NOTE: Switching on syntax highlighting also loads the menu file, thus
+  disabling the Buffers menu must be done before ":syntax on".
+  The path names are truncated to 35 characters.  You can truncate them at a
+  different length, for example 50, like this: >
+	:let bmenu_max_pathlen = 50
+- If the "-U {gvimrc}" command-line option has been used when starting Vim,
+  the {gvimrc} file will be read for initializations.  The following
+  initializations are skipped.  When {gvimrc} is "NONE" no file will be read
+  for initializations.
+- For Unix and MS-Windows, if the system gvimrc exists, it is sourced.  The
+  name of this file is normally "$VIM/gvimrc".  You can check this with
+  ":version".  Also see |$VIM|.
+- The following are tried, and only the first one that exists is used:
+  - If the GVIMINIT environment variable exists and is not empty, it is
+    executed as an Ex command.
+  - If the user gvimrc file exists, it is sourced.  The name of this file is
+    normally "$HOME/.gvimrc".  You can check this with ":version".
+  - For Win32, $HOME is set by Vim if needed, see |$HOME-windows|.
+  - When a "_gvimrc" file is not found, ".gvimrc" is tried too.  And vice
+    versa.
+  The name of the first file found is stored in $MYGVIMRC, unless it was
+  already set.
+- If the 'exrc' option is set (which is NOT the default) the file ./.gvimrc
+  is sourced, if it exists and isn't the same file as the system or user
+  gvimrc file.  If this file is not owned by you, some security restrictions
+  apply.  When ".gvimrc" is not found, "_gvimrc" is tried too.  For Macintosh
+  and DOS/Win32 "_gvimrc" is tried first.
+
+NOTE: All but the first one are not carried out if Vim was started with
+"-u NONE" or "-u DEFAULTS" and no "-U" argument was given, or when started
+with "-U NONE".
+
+All this happens AFTER the normal Vim initializations, like reading your
+.vimrc file.  See |initialization|.
+But the GUI window is only opened after all the initializations have been
+carried out.  If you want some commands to be executed just after opening the
+GUI window, use the |GUIEnter| autocommand event.  Example: >
+	:autocmd GUIEnter * winpos 100 50
+
+You can use the gvimrc files to set up your own customized menus (see |:menu|)
+and initialize other things that you may want to set up differently from the
+terminal version.
+
+Recommended place for your personal GUI initializations:
+	Unix		    $HOME/.gvimrc or $HOME/.vim/gvimrc
+	Win32    	    $HOME/_gvimrc, $HOME/vimfiles/gvimrc
+			    or $VIM/_gvimrc
+	Amiga		    s:.gvimrc, home:.gvimrc, home:vimfiles:gvimrc
+			    or $VIM/.gvimrc
+	Haiku	            $HOME/config/settings/vim/gvimrc
+
+The personal initialization files are searched in the order specified above
+and only the first one that is found is read.
+
+There are a number of options which only have meaning in the GUI version of
+Vim.  These are 'guicursor', 'guifont', 'guipty' and 'guioptions'.  They are
+documented in |options.txt| with all the other options.
+
+If using the Motif or Athena version of the GUI (but not for the GTK+ or
+Win32 version), a number of X resources are available.  See |gui-resources|.
+
+Another way to set the colors for different occasions is with highlight
+groups.  The "Normal" group is used to set the background and foreground
+colors.  Example (which looks nice): >
+
+	:highlight Normal guibg=grey90
+
+The "guibg" and "guifg" settings override the normal background and
+foreground settings.  The other settings for the Normal highlight group are
+not used.  Use the 'guifont' option to set the font.
+
+Also check out the 'guicursor' option, to set the colors for the cursor in
+various modes.
+
+Vim tries to make the window fit on the screen when it starts up.  This avoids
+that you can't see part of it.  On the X Window System this requires a bit of
+guesswork.  You can change the height that is used for the window title and a
+task bar with the 'guiheadroom' option.
+
+						*:winp* *:winpos* *E188*
+:winp[os]
+		Display current position of the top left corner of the GUI vim
+		window in pixels.  Does not work in all versions.
+		Also see |getwinpos()|, |getwinposx()| and |getwinposy()|.
+
+:winp[os] {X} {Y}							*E466*
+		Put the GUI vim window at the given {X} and {Y} coordinates.
+		The coordinates should specify the position in pixels of the
+		top left corner of the window.  Does not work in all versions.
+		Does work in an (new) xterm |xterm-color|.
+		When the GUI window has not been opened yet, the values are
+		remembered until the window is opened.  The position is
+		adjusted to make the window fit on the screen (if possible).
+
+						    *:win* *:winsize* *E465*
+:win[size] {width} {height}
+		Set the window height to {width} by {height} characters.
+		Obsolete, use ":set lines=11 columns=22".
+		If you get less lines than expected, check the 'guiheadroom'
+		option.
+
+If you are running the X Window System, you can get information about the
+window Vim is running in with these commands: >
+	:!xwininfo -id $WINDOWID
+	:!xprop -id $WINDOWID
+	:execute '!xwininfo -id ' . v:windowid
+	:execute '!xprop -id ' . v:windowid
+<
+							*gui-IME* *iBus*
+Input methods for international characters in X that rely on the XIM
+framework, most notably iBus, have been known to produce undesirable results
+in gvim. These may include an inability to enter spaces, or long delays
+between typing a character and it being recognized by the application.
+
+One workaround that has been successful, for unknown reasons, is to prevent
+gvim from forking into the background by starting it with the |-f| argument.
+

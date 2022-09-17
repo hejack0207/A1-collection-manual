@@ -1,0 +1,138 @@
+1. Introduction						*popup-intro*
+
+We are talking about popup windows here, text that goes on top of the regular
+windows and is under control of a plugin.  You cannot edit the text in the
+popup window like with regular windows.
+
+A popup window can be used for such things as:
+- briefly show a message without overwriting the command line
+- prompt the user with a dialog
+- display contextual information while typing
+- give extra information for auto-completion
+
+The text in the popup window can be colored with |text-properties|.  It is
+also possible to use syntax highlighting.
+
+The default color used is "Pmenu".  If you prefer something else use the
+"highlight" argument or the 'wincolor' option, e.g.: >
+	hi MyPopupColor ctermbg=lightblue guibg=lightblue
+	call setwinvar(winid, '&wincolor', 'MyPopupColor')
+
+'hlsearch' highlighting is not displayed in a popup window.
+
+A popup window has a window-ID like other windows, but behaves differently.
+The size can be up to the whole Vim window and it overlaps other windows.
+Popup windows can also overlap each other.  The "zindex" property specifies
+what goes on top of what.
+
+The popup window contains a buffer, and that buffer is always associated with
+the popup window.  The window cannot be in Normal, Visual or Insert mode, it
+does not get keyboard focus.  You can use functions like `setbufline()` to
+change the text in the buffer.  There are more differences from how this
+window and buffer behave compared to regular windows and buffers, see
+|popup-buffer|.
+
+If this is not what you are looking for, check out other popup functionality:
+- popup menu, see |popup-menu|
+- balloon, see |balloon-eval|
+
+
+WINDOW POSITION AND SIZE				*popup-position*
+
+The height of the window is normally equal to the number of, possibly
+wrapping, lines in the buffer.  It can be limited with the "maxheight"
+property.  You can use empty lines to increase the height or the "minheight"
+property.
+
+The width of the window is normally equal to the longest line in the buffer.
+It can be limited with the "maxwidth" property.  You can use spaces to
+increase the width or use the "minwidth" property.
+
+By default the 'wrap' option is set, so that no text disappears.  Otherwise,
+if there is not enough space then the window is shifted left in order to
+display more text.  When right-aligned the window is shifted right to display
+more text.  The shifting can be disabled with the "fixed" property.
+
+Vim tries to show the popup in the location you specify.  In some cases, e.g.
+when the popup would go outside of the Vim window, it will show it somewhere
+nearby.  E.g. if you use `popup_atcursor()` the popup normally shows just above
+the current cursor position, but if the cursor is close to the top of the Vim
+window it will be placed below the cursor position.
+
+When the screen scrolls up for output of an Ex command, popups move too, so
+that they will not cover the output.
+
+The current cursor position is displayed even when it is under a popup window.
+That way you can still see where it is, even though you cannot see the text
+that it is in.
+
+
+CLOSING THE POPUP WINDOW				*popup-close*
+
+Normally the plugin that created the popup window is also in charge of closing
+it.  If somehow a popup hangs around, you can close all of them with: >
+	call popup_clear()
+Some popups, such as notifications, close after a specified time.  This can be
+set with the "time" property on `popup_create()`.
+Otherwise, a popup can be closed by clicking on the X in the top-right corner
+or by clicking anywhere inside the popup.  This must be enabled with the
+"close" property.  It is set by default for notifications.
+
+
+POPUP BUFFER AND WINDOW					*popup-buffer*
+
+If a popup function is called to create a popup from text, a new buffer is
+created to hold the text and text properties of the popup window.  The buffer
+is always associated with the popup window and manipulation is restricted:
+- the buffer has no name
+- 'buftype' is "popup"
+- 'swapfile' is off
+- 'bufhidden' is "hide"
+- 'buflisted' is off
+- 'undolevels' is -1: no undo at all
+- all other buffer-local and window-local options are set to their Vim default
+  value.
+
+It is possible to change the specifically mentioned options, but anything
+might break then, so better leave them alone.
+
+The window does have a cursor position, but the cursor is not displayed.  In
+fact, the cursor in the underlying window is displayed, as if it peeks through
+the popup, so you can see where it is.
+
+To execute a command in the context of the popup window and buffer use
+`win_execute()`.  Example: >
+	call win_execute(winid, 'syntax enable')
+
+Options can be set on the window with `setwinvar()`, e.g.: >
+	call setwinvar(winid, '&wrap', 0)
+And options can be set on the buffer with `setbufvar()`, e.g.: >
+	call setbufvar(winbufnr(winid), '&filetype', 'java')
+You can also use `win_execute()` with a ":setlocal" command.
+
+
+TERMINAL IN POPUP WINDOW				 *popup-terminal*
+
+A special case is running a terminal in a popup window.  Many rules are then
+different:						*E863*
+- The popup window always has focus, it is not possible to switch to another
+  window.
+- When the job ends, the popup window closes.
+- The popup window can be closed with `popup_close()`, the terminal buffer
+  then becomes hidden.
+- It is not possible to open a second popup window with a terminal. *E861*
+- The default Pmenu color is only used for the border and padding.  To change
+  the color of the terminal itself set the Terminal highlight group before
+  creating the terminal.  Setting 'wincolor' later can work but requires the
+  program in the terminal to redraw everything.
+- The default minimal size is 5 lines of 20 characters; Use the "minwidth" and
+  "minheight" parameters to set a different value.
+- The terminal size will grow if the program running in the terminal writes
+  text.  Set "maxheight" and "maxwidth" to restrict the size.
+
+To run a terminal in a popup window, first create the terminal hidden.  Then
+pass the buffer number to popup_create().  Example: >
+	hi link Terminal Search
+	let buf = term_start(['picker', 'Something'], #{hidden: 1, term_finish: 'close'})
+	let winid = popup_create(buf, #{minwidth: 50, minheight: 20})
+

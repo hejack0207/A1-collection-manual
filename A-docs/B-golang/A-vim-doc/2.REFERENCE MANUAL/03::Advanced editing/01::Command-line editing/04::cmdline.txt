@@ -1,0 +1,119 @@
+4. Ex command-line ranges	*cmdline-ranges* *[range]* *E16*
+
+Some Ex commands accept a line range in front of them.  This is noted as
+[range].  It consists of one or more line specifiers, separated with ',' or
+';'.
+
+The basics are explained in section |10.3| of the user manual.
+
+						*:,* *:;*
+When separated with ';' the cursor position will be set to that line
+before interpreting the next line specifier.  This doesn't happen for ','.
+Examples: >
+   4,/this line/
+<	from line 4 till match with "this line" after the cursor line. >
+   5;/that line/
+<	from line 5 till match with "that line" after line 5.
+
+The default line specifier for most commands is the cursor position, but the
+commands ":write" and ":global" have the whole file (1,$) as default.
+
+If more line specifiers are given than required for the command, the first
+one(s) will be ignored.
+
+Line numbers may be specified with:		*:range* *{address}*
+	{number}	an absolute line number
+	.		the current line			  *:.*
+	$		the last line in the file		  *:$*
+	%		equal to 1,$ (the entire file)		  *:%*
+	't		position of mark t (lowercase)		  *:'*
+	'T		position of mark T (uppercase); when the mark is in
+			another file it cannot be used in a range
+	/{pattern}[/]	the next line where {pattern} matches	  *:/*
+	?{pattern}[?]	the previous line where {pattern} matches *:?*
+	\/		the next line where the previously used search
+			pattern matches
+	\?		the previous line where the previously used search
+			pattern matches
+	\&		the next line where the previously used substitute
+			pattern matches
+
+Each may be followed (several times) by '+' or '-' and an optional number.
+This number is added or subtracted from the preceding line number.  If the
+number is omitted, 1 is used.
+
+The "/" and "?" after {pattern} are required to separate the pattern from
+anything that follows.
+
+The "/" and "?" may be preceded with another address.  The search starts from
+there.  The difference from using ';' is that the cursor isn't moved.
+Examples: >
+	/pat1//pat2/	Find line containing "pat2" after line containing
+			"pat1", without moving the cursor.
+	7;/pat2/	Find line containing "pat2", after line 7, leaving
+			the cursor in line 7.
+
+The {number} must be between 0 and the number of lines in the file.  When
+using a 0 (zero) this is interpreted as a 1 by most commands.  Commands that
+use it as a count do use it as a zero (|:tag|, |:pop|, etc).  Some commands
+interpret the zero as "before the first line" (|:read|, search pattern, etc).
+
+Examples: >
+	.+3		three lines below the cursor
+	/that/+1	the line below the next line containing "that"
+	.,$		from current line until end of file
+	0;/that		the first line containing "that", also matches in the
+			first line.
+	1;/that		the first line after line 1 containing "that"
+
+Some commands allow for a count after the command.  This count is used as the
+number of lines to be used, starting with the line given in the last line
+specifier (the default is the cursor line).  The commands that accept a count
+are the ones that use a range but do not have a file name argument (because
+a file name can also be a number).
+
+Examples: >
+	:s/x/X/g 5	substitute 'x' by 'X' in the current line and four
+			following lines
+	:23d 4		delete lines 23, 24, 25 and 26
+
+
+Folds and Range
+
+When folds are active the line numbers are rounded off to include the whole
+closed fold.  See |fold-behavior|.
+
+
+Reverse Range						*E493*
+
+A range should have the lower line number first.  If this is not the case, Vim
+will ask you if it should swap the line numbers.
+	Backwards range given, OK to swap ~
+This is not done within the global command ":g".
+
+You can use ":silent" before a command to avoid the question, the range will
+always be swapped then.
+
+
+Count and Range						*N:*
+
+When giving a count before entering ":", this is translated into:
+		:.,.+(count - 1)
+In words: The 'count' lines at and after the cursor.  Example: To delete
+three lines: >
+		3:d<CR>		is translated into: .,.+2d<CR>
+<
+
+Visual Mode and Range					*v_:*
+
+{Visual}:	Starts a command-line with the Visual selected lines as a
+		range.  The code `:'<,'>` is used for this range, which makes
+		it possible to select a similar line from the command-line
+		history for repeating a command on different Visually selected
+		lines.
+		When Visual mode was already ended, a short way to use the
+		Visual area for a range is `:*`.  This requires that "*" does
+		not appear in 'cpo', see |cpo-star|.  Otherwise you will have
+		to type `:'<,'>`
+
+

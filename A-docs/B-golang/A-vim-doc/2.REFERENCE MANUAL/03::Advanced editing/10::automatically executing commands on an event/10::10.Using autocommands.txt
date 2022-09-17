@@ -1,0 +1,212 @@
+10. Using autocommands					*autocmd-use*
+
+For WRITING FILES there are four possible sets of events.  Vim uses only one
+of these sets for a write command:
+
+BufWriteCmd	BufWritePre	BufWritePost	writing the whole buffer
+		FilterWritePre	FilterWritePost	writing to filter temp file
+FileAppendCmd	FileAppendPre	FileAppendPost	appending to a file
+FileWriteCmd	FileWritePre	FileWritePost	any other file write
+
+When there is a matching "*Cmd" autocommand, it is assumed it will do the
+writing.  No further writing is done and the other events are not triggered.
+|Cmd-event|
+
+Note that the *WritePost commands should undo any changes to the buffer that
+were caused by the *WritePre commands; otherwise, writing the file will have
+the side effect of changing the buffer.
+
+Before executing the autocommands, the buffer from which the lines are to be
+written temporarily becomes the current buffer.  Unless the autocommands
+change the current buffer or delete the previously current buffer, the
+previously current buffer is made the current buffer again.
+
+The *WritePre and *AppendPre autocommands must not delete the buffer from
+which the lines are to be written.
+
+The '[ and '] marks have a special position:
+- Before the *ReadPre event the '[ mark is set to the line just above where
+  the new lines will be inserted.
+- Before the *ReadPost event the '[ mark is set to the first line that was
+  just read, the '] mark to the last line.
+- Before executing the *WriteCmd, *WritePre and *AppendPre autocommands the '[
+  mark is set to the first line that will be written, the '] mark to the last
+  line.
+Careful: '[ and '] change when using commands that change the buffer.
+
+In commands which expect a file name, you can use "<afile>" for the file name
+that is being read |:<afile>| (you can also use "%" for the current file
+name).  "<abuf>" can be used for the buffer number of the currently effective
+buffer.  This also works for buffers that don't have a name.  But it doesn't
+work for files without a buffer (e.g., with ":r file").
+
+							*gzip-example*
+Examples for reading and writing compressed files: >
+  :augroup gzip
+  :  autocmd!
+  :  autocmd BufReadPre,FileReadPre	*.gz set bin
+  :  autocmd BufReadPost,FileReadPost	*.gz '[,']!gunzip
+  :  autocmd BufReadPost,FileReadPost	*.gz set nobin
+  :  autocmd BufReadPost,FileReadPost	*.gz execute ":doautocmd BufReadPost " . expand("%:r")
+  :  autocmd BufWritePost,FileWritePost	*.gz !mv <afile> <afile>:r
+  :  autocmd BufWritePost,FileWritePost	*.gz !gzip <afile>:r
+
+  :  autocmd FileAppendPre		*.gz !gunzip <afile>
+  :  autocmd FileAppendPre		*.gz !mv <afile>:r <afile>
+  :  autocmd FileAppendPost		*.gz !mv <afile> <afile>:r
+  :  autocmd FileAppendPost		*.gz !gzip <afile>:r
+  :augroup END
+
+The "gzip" group is used to be able to delete any existing autocommands with
+":autocmd!", for when the file is sourced twice.
+
+("<afile>:r" is the file name without the extension, see |:_%:|)
+
+The commands executed for the BufNewFile, BufRead/BufReadPost, BufWritePost,
+FileAppendPost and VimLeave events do not set or reset the changed flag of the
+buffer.  When you decompress the buffer with the BufReadPost autocommands, you
+can still exit with ":q".  When you use ":undo" in BufWritePost to undo the
+changes made by BufWritePre commands, you can still do ":q" (this also makes
+"ZZ" work).  If you do want the buffer to be marked as modified, set the
+'modified' option.
+
+To execute Normal mode commands from an autocommand, use the ":normal"
+command.  Use with care!  If the Normal mode command is not finished, the user
+needs to type characters (e.g., after ":normal m" you need to type a mark
+name).
+
+If you want the buffer to be unmodified after changing it, reset the
+'modified' option.  This makes it possible to exit the buffer with ":q"
+instead of ":q!".
+
+							*autocmd-nested* *E218*
+By default, autocommands do not nest.  For example, if you use ":e" or ":w" in
+an autocommand, Vim does not execute the BufRead and BufWrite autocommands for
+those commands.  If you do want this, use the "nested" flag for those commands
+in which you want nesting.  For example: >
+  :autocmd FileChangedShell *.c ++nested e!
+The nesting is limited to 10 levels to get out of recursive loops.
+
+It's possible to use the ":au" command in an autocommand.  This can be a
+self-modifying command!  This can be useful for an autocommand that should
+execute only once.
+
+If you want to skip autocommands for one command, use the |:noautocmd| command
+modifier or the 'eventignore' option.
+
+Note: When reading a file (with ":read file" or with a filter command) and the
+last line in the file does not have an <EOL>, Vim remembers this.  At the next
+write (with ":write file" or with a filter command), if the same line is
+written again as the last line in a file AND 'binary' is set, Vim does not
+supply an <EOL>.  This makes a filter command on the just read lines write the
+same file as was read, and makes a write command on just filtered lines write
+the same file as was read from the filter.  For example, another way to write
+a compressed file: >
+
+  :autocmd FileWritePre *.gz   set bin|'[,']!gzip
+  :autocmd FileWritePost *.gz  undo|set nobin
+<
+							*autocommand-pattern*
+You can specify multiple patterns, separated by commas.  Here are some
+examples: >
+
+  :autocmd BufRead   *		set tw=79 nocin ic infercase fo=2croq
+  :autocmd BufRead   .letter	set tw=72 fo=2tcrq
+  :autocmd BufEnter  .letter	set dict=/usr/lib/dict/words
+  :autocmd BufLeave  .letter	set dict=
+  :autocmd BufRead,BufNewFile   *.c,*.h	set tw=0 cin noic
+  :autocmd BufEnter  *.c,*.h	abbr FOR for (i = 0; i < 3; ++i)<CR>{<CR>}<Esc>O
+  :autocmd BufLeave  *.c,*.h	unabbr FOR
+
+For makefiles (makefile, Makefile, imakefile, makefile.unix, etc.): >
+
+  :autocmd BufEnter  ?akefile*	set include=^s\=include
+  :autocmd BufLeave  ?akefile*	set include&
+
+To always start editing C files at the first function: >
+
+  :autocmd BufRead   *.c,*.h	1;/^{
+
+Without the "1;" above, the search would start from wherever the file was
+entered, rather than from the start of the file.
+
+						*skeleton* *template*
+To read a skeleton (template) file when opening a new file: >
+
+  :autocmd BufNewFile  *.c	0r ~/vim/skeleton.c
+  :autocmd BufNewFile  *.h	0r ~/vim/skeleton.h
+  :autocmd BufNewFile  *.java	0r ~/vim/skeleton.java
+
+To insert the current date and time in a *.html file when writing it: >
+
+  :autocmd BufWritePre,FileWritePre *.html   ks|call LastMod()|'s
+  :fun LastMod()
+  :  if line("$") > 20
+  :    let l = 20
+  :  else
+  :    let l = line("$")
+  :  endif
+  :  exe "1," . l . "g/Last modified: /s/Last modified: .*/Last modified: " .
+  :  \ strftime("%Y %b %d")
+  :endfun
+
+You need to have a line "Last modified: <date time>" in the first 20 lines
+of the file for this to work.  Vim replaces <date time> (and anything in the
+same line after it) with the current date and time.  Explanation:
+	ks		mark current position with mark 's'
+	call LastMod()  call the LastMod() function to do the work
+	's		return the cursor to the old position
+The LastMod() function checks if the file is shorter than 20 lines, and then
+uses the ":g" command to find lines that contain "Last modified: ".  For those
+lines the ":s" command is executed to replace the existing date with the
+current one.  The ":execute" command is used to be able to use an expression
+for the ":g" and ":s" commands.  The date is obtained with the strftime()
+function.  You can change its argument to get another date string.
+
+When entering :autocmd on the command-line, completion of events and command
+names may be done (with <Tab>, CTRL-D, etc.) where appropriate.
+
+Vim executes all matching autocommands in the order that you specify them.
+It is recommended that your first autocommand be used for all files by using
+"*" as the file pattern.  This means that you can define defaults you like
+here for any settings, and if there is another matching autocommand it will
+override these.  But if there is no other matching autocommand, then at least
+your default settings are recovered (if entering this file from another for
+which autocommands did match).  Note that "*" will also match files starting
+with ".", unlike Unix shells.
+
+						    *autocmd-searchpat*
+Autocommands do not change the current search patterns.  Vim saves the current
+search patterns before executing autocommands then restores them after the
+autocommands finish.  This means that autocommands do not affect the strings
+highlighted with the 'hlsearch' option.  Within autocommands, you can still
+use search patterns normally, e.g., with the "n" command.
+If you want an autocommand to set the search pattern, such that it is used
+after the autocommand finishes, use the ":let @/ =" command.
+The search-highlighting cannot be switched off with ":nohlsearch" in an
+autocommand.  Use the 'h' flag in the 'viminfo' option to disable search-
+highlighting when starting Vim.
+
+							*Cmd-event*
+When using one of the "*Cmd" events, the matching autocommands are expected to
+do the file reading, writing or sourcing.  This can be used when working with
+a special kind of file, for example on a remote system.
+CAREFUL: If you use these events in a wrong way, it may have the effect of
+making it impossible to read or write the matching files!  Make sure you test
+your autocommands properly.  Best is to use a pattern that will never match a
+normal file name, for example "ftp://*".
+
+When defining a BufReadCmd it will be difficult for Vim to recover a crashed
+editing session.  When recovering from the original file, Vim reads only those
+parts of a file that are not found in the swap file.  Since that is not
+possible with a BufReadCmd, use the |:preserve| command to make sure the
+original file isn't needed for recovery.  You might want to do this only when
+you expect the file to be modified.
+
+For file read and write commands the |v:cmdarg| variable holds the "++enc="
+and "++ff=" argument that are effective.  These should be used for the command
+that reads/writes the file.  The |v:cmdbang| variable is one when "!" was
+used, zero otherwise.
+
+See the $VIMRUNTIME/plugin/netrwPlugin.vim for examples.
+

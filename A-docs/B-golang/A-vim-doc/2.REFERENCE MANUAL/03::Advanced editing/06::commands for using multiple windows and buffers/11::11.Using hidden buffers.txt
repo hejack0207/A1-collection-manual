@@ -1,0 +1,300 @@
+11. Using hidden buffers				*buffer-hidden*
+
+A hidden buffer is not displayed in a window, but is still loaded into memory.
+This makes it possible to jump from file to file, without the need to read or
+write the file every time you get another buffer in a window.
+
+							*:buffer-!*
+If the option 'hidden' ('hid') is set, abandoned buffers are kept for all
+commands that start editing another file: ":edit", ":next", ":tag", etc.  The
+commands that move through the buffer list sometimes make the current buffer
+hidden although the 'hidden' option is not set.  This happens when a buffer is
+modified, but is forced (with '!') to be removed from a window, and
+'autowrite' is off or the buffer can't be written.
+
+You can make a hidden buffer not hidden by starting to edit it with any
+command.  Or by deleting it with the ":bdelete" command.
+
+The 'hidden' is global, it is used for all buffers.  The 'bufhidden' option
+can be used to make an exception for a specific buffer.  It can take these
+values:
+	<empty>		Use the value of 'hidden'.
+	hide		Hide this buffer, also when 'hidden' is not set.
+	unload		Don't hide but unload this buffer, also when 'hidden'
+			is set.
+	delete		Delete the buffer.
+
+							*hidden-quit*
+When you try to quit Vim while there is a hidden, modified buffer, you will
+get an error message and Vim will make that buffer the current buffer.  You
+can then decide to write this buffer (":wq") or quit without writing (":q!").
+Be careful: there may be more hidden, modified buffers!
+
+A buffer can also be unlisted.  This means it exists, but it is not in the
+list of buffers. |unlisted-buffer|
+
+
+:files[!] [flags]				*:files*
+:buffers[!] [flags]				*:buffers* *:ls*
+:ls[!] [flags]
+		Show all buffers.  Example:
+
+			1 #h   "/test/text"		line 1 ~
+			2u     "asdf"			line 0 ~
+			3 %a + "version.c"		line 1 ~
+
+		When the [!] is included the list will show unlisted buffers
+		(the term "unlisted" is a bit confusing then...).
+
+		Each buffer has a unique number.  That number will not change,
+		thus you can always go to a specific buffer with ":buffer N"
+		or "N CTRL-^", where N is the buffer number.
+
+		For the file name these special values are used:
+			[Prompt]	|prompt-buffer|
+			[Popup]		buffer of a |popup-window|
+			[Scratch]	'buftype' is "nofile"
+			[No Name]	no file name specified
+		For a |terminal-window| buffer the status is used.
+
+		Indicators (chars in the same column are mutually exclusive):
+		u	an unlisted buffer (only displayed when [!] is used)
+			   |unlisted-buffer|
+		 %	the buffer in the current window
+		 #	the alternate buffer for ":e #" and CTRL-^
+		  a	an active buffer: it is loaded and visible
+		  h	a hidden buffer: It is loaded, but currently not
+			   displayed in a window |hidden-buffer|
+		   -	a buffer with 'modifiable' off
+		   =	a readonly buffer
+		   R	a terminal buffer with a running job
+		   F	a terminal buffer with a finished job
+		   ?    a terminal buffer without a job: `:terminal NONE`
+		    +	a modified buffer
+		    x   a buffer with read errors
+
+		[flags] can be a combination of the following characters,
+		which restrict the buffers to be listed:
+		     +   modified buffers
+		     -   buffers with 'modifiable' off
+		     =   readonly buffers
+		     a   active buffers
+		     u   unlisted buffers (overrides the "!")
+		     h   hidden buffers
+		     x   buffers with a read error
+		     %   current buffer
+		     #   alternate buffer
+		     R	 terminal buffers with a running job
+		     F	 terminal buffers with a finished job
+		     ?   terminal buffers without a job: `:terminal NONE`
+		     t   show time last used and sort buffers
+		Combining flags means they are "and"ed together, e.g.:
+		     h+   hidden buffers which are modified
+		     a+   active buffers which are modified
+
+		When using |:filter| the pattern is matched against the
+		displayed buffer name, e.g.: >
+			filter /\.vim/ ls
+<
+						*:bad* *:badd*
+:bad[d]	[+lnum] {fname}
+		Add file name {fname} to the buffer list, without loading it.
+		If "lnum" is specified, the cursor will be positioned at that
+		line when the buffer is first entered.  Note that other
+		commands after the + will be ignored.
+
+:[N]bd[elete][!]			*:bd* *:bdel* *:bdelete* *E516*
+:bd[elete][!] [N]
+		Unload buffer [N] (default: current buffer) and delete it from
+		the buffer list.  If the buffer was changed, this fails,
+		unless when [!] is specified, in which case changes are lost.
+		The file remains unaffected.  Any windows for this buffer are
+		closed.  If buffer [N] is the current buffer, another buffer
+		will be displayed instead.  This is the most recent entry in
+		the jump list that points into a loaded buffer.
+		Actually, the buffer isn't completely deleted, it is removed
+		from the buffer list |unlisted-buffer| and option values,
+		variables and mappings/abbreviations for the buffer are
+		cleared. Examples: >
+		    :.,$-bdelete    " delete buffers from the current one to
+				    " last but one
+		    :%bdelete	    " delete all buffers
+<
+
+:bdelete[!] {bufname}						*E93* *E94*
+		Like ":bdelete[!] [N]", but buffer given by name, see
+		|{bufname}|.
+
+:bdelete[!] N1 N2 ...
+		Do ":bdelete[!]" for buffer N1, N2, etc.  The arguments can be
+		buffer numbers or buffer names (but not buffer names that are
+		a number).  Insert a backslash before a space in a buffer
+		name.
+
+:N,Mbdelete[!]	Do ":bdelete[!]" for all buffers in the range N to M
+		|inclusive|.
+
+:[N]bw[ipeout][!]			*:bw* *:bwipe* *:bwipeout* *E517*
+:bw[ipeout][!] {bufname}
+:N,Mbw[ipeout][!]
+:bw[ipeout][!] N1 N2 ...
+		Like |:bdelete|, but really delete the buffer.  Everything
+		related to the buffer is lost.  All marks in this buffer
+		become invalid, option settings are lost, etc.  Don't use this
+		unless you know what you are doing. Examples: >
+		    :.+,$bwipeout   " wipe out all buffers after the current
+				    " one
+		    :%bwipeout	    " wipe out all buffers
+<
+
+:[N]bun[load][!]				*:bun* *:bunload* *E515*
+:bun[load][!] [N]
+		Unload buffer [N] (default: current buffer).  The memory
+		allocated for this buffer will be freed.  The buffer remains
+		in the buffer list.
+		If the buffer was changed, this fails, unless when [!] is
+		specified, in which case the changes are lost.
+		Any windows for this buffer are closed.  If buffer [N] is the
+		current buffer, another buffer will be displayed instead.
+		This is the most recent entry in the jump list that points
+		into a loaded buffer.
+
+:bunload[!] {bufname}
+		Like ":bunload[!] [N]", but buffer given by name.
+		Also see |{bufname}|.
+
+:N,Mbunload[!]	Do ":bunload[!]" for all buffers in the range N to M
+		|inclusive|.
+
+:bunload[!] N1 N2 ...
+		Do ":bunload[!]" for buffer N1, N2, etc.  The arguments can be
+		buffer numbers or buffer names (but not buffer names that are
+		a number).  Insert a backslash before a space in a buffer
+		name.
+
+:[N]b[uffer][!] [+cmd] [N]		*:b* *:bu* *:buf* *:buffer* *E86*
+		Edit buffer [N] from the buffer list.  If [N] is not given,
+		the current buffer remains being edited.  See |:buffer-!| for
+		[!].  This will also edit a buffer that is not in the buffer
+		list, without setting the 'buflisted' flag.
+		Also see |+cmd|.
+
+:[N]b[uffer][!] [+cmd] {bufname}				*{bufname}*
+		Edit buffer for {bufname} from the buffer list.  A partial
+		name also works, so long as it is unique in the list of
+		buffers.
+		Note that a buffer whose name is a number cannot be referenced
+		by that name; use the buffer number instead.
+		Insert a backslash before a space in a buffer name.
+		See |:buffer-!| for [!].
+		This will also edit a buffer that is not in the buffer list,
+		without setting the 'buflisted' flag.
+		Also see |+cmd|.
+
+:[N]sb[uffer] [+cmd] [N]				*:sb* *:sbuffer*
+		Split window and edit buffer [N] from the buffer list.  If [N]
+		is not given, the current buffer is edited.  Respects the
+		"useopen" setting of 'switchbuf' when splitting.  This will
+		also edit a buffer that is not in the buffer list, without
+		setting the 'buflisted' flag.
+		Also see |+cmd|.
+
+:[N]sb[uffer] [+cmd] {bufname}
+		Split window and edit buffer for |{bufname}| from the buffer
+		list.  This will also edit a buffer that is not in the buffer
+		list, without setting the 'buflisted' flag.
+		Note: If what you want to do is split the buffer, make a copy
+		under another name, you can do it this way: >
+			:w foobar | sp #
+<		Also see |+cmd|.
+
+:[N]bn[ext][!] [+cmd] [N]				*:bn* *:bnext* *E87*
+		Go to [N]th next buffer in buffer list.  [N] defaults to one.
+		Wraps around the end of the buffer list.
+		See |:buffer-!| for [!].
+		Also see |+cmd|.
+		If you are in a help buffer, this takes you to the next help
+		buffer (if there is one).  Similarly, if you are in a normal
+		(non-help) buffer, this takes you to the next normal buffer.
+		This is so that if you have invoked help, it doesn't get in
+		the way when you're browsing code/text buffers.  The next three
+		commands also work like this.
+
+							*:sbn* *:sbnext*
+:[N]sbn[ext] [+cmd] [N]
+		Split window and go to [N]th next buffer in buffer list.
+		Wraps around the end of the buffer list.  Uses 'switchbuf'
+		Also see |+cmd|.
+
+:[N]bN[ext][!] [+cmd] [N]		*:bN* *:bNext* *:bp* *:bprevious* *E88*
+:[N]bp[revious][!] [+cmd] [N]
+		Go to [N]th previous buffer in buffer list.  [N] defaults to
+		one.  Wraps around the start of the buffer list.
+		See |:buffer-!| for [!] and 'switchbuf'.
+		Also see |+cmd|.
+
+:[N]sbN[ext] [+cmd] [N]			*:sbN* *:sbNext* *:sbp* *:sbprevious*
+:[N]sbp[revious] [+cmd] [N]
+		Split window and go to [N]th previous buffer in buffer list.
+		Wraps around the start of the buffer list.
+		Uses 'switchbuf'.
+		Also see |+cmd|.
+
+:br[ewind][!] [+cmd]					*:br* *:bre* *:brewind*
+		Go to first buffer in buffer list.  If the buffer list is
+		empty, go to the first unlisted buffer.
+		See |:buffer-!| for [!].
+
+:bf[irst] [+cmd]					*:bf* *:bfirst*
+		Same as |:brewind|.
+		Also see |+cmd|.
+
+:sbr[ewind] [+cmd]					*:sbr* *:sbrewind*
+		Split window and go to first buffer in buffer list.  If the
+		buffer list is empty, go to the first unlisted buffer.
+		Respects the 'switchbuf' option.
+		Also see |+cmd|.
+
+:sbf[irst] [+cmd]					*:sbf* *:sbfirst*
+		Same as ":sbrewind".
+
+:bl[ast][!] [+cmd]					*:bl* *:blast*
+		Go to last buffer in buffer list.  If the buffer list is
+		empty, go to the last unlisted buffer.
+		See |:buffer-!| for [!].
+
+:sbl[ast] [+cmd]					*:sbl* *:sblast*
+		Split window and go to last buffer in buffer list.  If the
+		buffer list is empty, go to the last unlisted buffer.
+		Respects 'switchbuf' option.
+
+:[N]bm[odified][!] [+cmd] [N]			*:bm* *:bmodified* *E84*
+		Go to [N]th next modified buffer.  Note: this command also
+		finds unlisted buffers.  If there is no modified buffer the
+		command fails.
+
+:[N]sbm[odified] [+cmd] [N]				*:sbm* *:sbmodified*
+		Split window and go to [N]th next modified buffer.
+		Respects 'switchbuf' option.
+		Note: this command also finds buffers not in the buffer list.
+
+:[N]unh[ide] [N]			*:unh* *:unhide* *:sun* *:sunhide*
+:[N]sun[hide] [N]
+		Rearrange the screen to open one window for each loaded buffer
+		in the buffer list.  When a count is given, this is the
+		maximum number of windows to open.
+
+:[N]ba[ll] [N]					*:ba* *:ball* *:sba* *:sball*
+:[N]sba[ll] [N]	Rearrange the screen to open one window for each buffer in
+		the buffer list.  When a count is given, this is the maximum
+		number of windows to open.  'winheight' also limits the number
+		of windows opened ('winwidth' if |:vertical| was prepended).
+		Buf/Win Enter/Leave autocommands are not executed for the new
+		windows here, that's only done when they are really entered.
+		When the |:tab| modifier is used new windows are opened in a
+		new tab, up to 'tabpagemax'.
+
+Note: All the commands above that start editing another buffer, keep the
+'readonly' flag as it was.  This differs from the ":edit" command, which sets
+the 'readonly' flag each time the file is read.
+

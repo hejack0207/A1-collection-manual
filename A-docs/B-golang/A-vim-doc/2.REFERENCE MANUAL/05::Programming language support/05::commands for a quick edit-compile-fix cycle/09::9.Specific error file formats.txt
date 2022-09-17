@@ -1,0 +1,157 @@
+9. Specific error file formats			*errorformats*
+
+						*errorformat-Jikes*
+Jikes(TM), a source-to-bytecode Java compiler published by IBM Research,
+produces simple multi-line error messages.
+
+An 'errorformat' string matching the produced messages is shown below.
+The following lines can be placed in the user's |vimrc| to overwrite Vim's
+recognized default formats, or see |:set+=| how to install this format
+additionally to the default. >
+
+  :set efm=%A%f:%l:%c:%*\\d:%*\\d:,
+	\%C%*\\s%trror:%m,
+	\%+C%*[^:]%trror:%m,
+	\%C%*\\s%tarning:%m,
+	\%C%m
+<
+Jikes(TM) produces a single-line error message when invoked with the option
+"+E", and can be matched with the following: >
+
+  :setl efm=%f:%l:%v:%*\\d:%*\\d:%*\\s%m
+<
+						*errorformat-javac*
+This 'errorformat' has been reported to work well for javac, which outputs a
+line with "^" to indicate the column of the error: >
+  :setl efm=%A%f:%l:\ %m,%-Z%p^,%-C%.%#
+or: >
+  :setl efm=%A%f:%l:\ %m,%+Z%p^,%+C%.%#,%-G%.%#
+<
+Here is an alternative from Michael F. Lamb for Unix that filters the errors
+first: >
+  :setl errorformat=%Z%f:%l:\ %m,%A%p^,%-G%*[^sl]%.%#
+  :setl makeprg=javac\ %:S\ 2>&1\ \\\|\ vim-javac-filter
+
+You need to put the following in "vim-javac-filter" somewhere in your path
+(e.g., in ~/bin) and make it executable: >
+   #!/bin/sed -f
+   /\^$/s/\t/\ /g;/:[0-9]\+:/{h;d};/^[ \t]*\^/G;
+
+In English, that sed script:
+- Changes single tabs to single spaces and
+- Moves the line with the filename, line number, error message to just after
+  the pointer line. That way, the unused error text between doesn't break
+  vim's notion of a "multi-line message" and also doesn't force us to include
+  it as a "continuation of a multi-line message."
+
+						*errorformat-ant*
+For ant (http://jakarta.apache.org/) the above errorformat has to be modified
+to honour the leading [javac] in front of each javac output line: >
+  :set efm=%A\ %#[javac]\ %f:%l:\ %m,%-Z\ %#[javac]\ %p^,%-C%.%#
+
+The 'errorformat' can also be configured to handle ant together with either
+javac or jikes.  If you're using jikes, you should tell ant to use jikes' +E
+command line switch which forces jikes to generate one-line error messages.
+This is what the second line (of a build.xml file) below does: >
+  <property name = "build.compiler"       value = "jikes"/>
+  <property name = "build.compiler.emacs" value = "true"/>
+
+The 'errorformat' which handles ant with both javac and jikes is: >
+  :set efm=\ %#[javac]\ %#%f:%l:%c:%*\\d:%*\\d:\ %t%[%^:]%#:%m,
+	   \%A\ %#[javac]\ %f:%l:\ %m,%-Z\ %#[javac]\ %p^,%-C%.%#
+<
+						*errorformat-jade*
+parsing jade (see http://www.jclark.com/) errors is simple: >
+  :set efm=jade:%f:%l:%c:%t:%m
+<
+						*errorformat-LaTeX*
+The following is an example how an 'errorformat' string can be specified
+for the (La)TeX typesetting system which displays error messages over
+multiple lines.  The output of ":clist" and ":cc" etc. commands displays
+multi-lines in a single line, leading white space is removed.
+It should be easy to adopt the above LaTeX errorformat to any compiler output
+consisting of multi-line errors.
+
+The commands can be placed in a |vimrc| file or some other Vim script file,
+e.g. a script containing LaTeX related stuff which is loaded only when editing
+LaTeX sources.
+Make sure to copy all lines of the example (in the given order), afterwards
+remove the comment lines.  For the '\' notation at the start of some lines see
+|line-continuation|.
+
+		First prepare 'makeprg' such that LaTeX will report multiple
+		errors; do not stop when the first error has occurred: >
+ :set makeprg=latex\ \\\\nonstopmode\ \\\\input\\{$*}
+<
+		Start of multi-line error messages: >
+ :set efm=%E!\ LaTeX\ %trror:\ %m,
+	\%E!\ %m,
+<		Start of multi-line warning messages; the first two also
+		include the line number.  Meaning of some regular expressions:
+		  - "%.%#"  (".*")   matches a (possibly empty) string
+		  - "%*\\d" ("\d\+") matches a number >
+	\%+WLaTeX\ %.%#Warning:\ %.%#line\ %l%.%#,
+	\%+W%.%#\ at\ lines\ %l--%*\\d,
+	\%WLaTeX\ %.%#Warning:\ %m,
+<		Possible continuations of error/warning messages; the first
+		one also includes the line number: >
+	\%Cl.%l\ %m,
+	\%+C\ \ %m.,
+	\%+C%.%#-%.%#,
+	\%+C%.%#[]%.%#,
+	\%+C[]%.%#,
+	\%+C%.%#%[{}\\]%.%#,
+	\%+C<%.%#>%.%#,
+	\%C\ \ %m,
+<		Lines that match the following patterns do not contain any
+		important information; do not include them in messages: >
+	\%-GSee\ the\ LaTeX%m,
+	\%-GType\ \ H\ <return>%m,
+	\%-G\ ...%.%#,
+	\%-G%.%#\ (C)\ %.%#,
+	\%-G(see\ the\ transcript%.%#),
+<		Generally exclude any empty or whitespace-only line from
+		being displayed: >
+	\%-G\\s%#,
+<		The LaTeX output log does not specify the names of erroneous
+		source files per line; rather they are given globally,
+		enclosed in parentheses.
+		The following patterns try to match these names and store
+		them in an internal stack.  The patterns possibly scan over
+		the same input line (one after another), the trailing "%r"
+		conversion indicates the "rest" of the line that will be
+		parsed in the next go until the end of line is reached.
+
+		Overread a file name enclosed in '('...')'; do not push it
+		on a stack since the file apparently does not contain any
+		error: >
+	\%+O(%f)%r,
+<		Push a file name onto the stack.  The name is given after '(': >
+	\%+P(%f%r,
+	\%+P\ %\\=(%f%r,
+	\%+P%*[^()](%f%r,
+	\%+P[%\\d%[^()]%#(%f%r,
+<		Pop the last stored file name when a ')' is scanned: >
+	\%+Q)%r,
+	\%+Q%*[^()])%r,
+	\%+Q[%\\d%*[^()])%r
+
+Note that in some cases file names in the LaTeX output log cannot be parsed
+properly.  The parser might have been messed up by unbalanced parentheses
+then.  The above example tries to catch the most relevant cases only.
+You can customize the given setting to suit your own purposes, for example,
+all the annoying "Overfull ..." warnings could be excluded from being
+recognized as an error.
+Alternatively to filtering the LaTeX compiler output, it is also possible
+to directly read the *.log file that is produced by the [La]TeX compiler.
+This contains even more useful information about possible error causes.
+However, to properly parse such a complex file, an external filter should
+be used.  See the description further above how to make such a filter known
+by Vim.
+
+						*errorformat-Perl*
+In $VIMRUNTIME/tools you can find the efm_perl.pl script, which filters Perl
+error messages into a format that quickfix mode will understand.  See the
+start of the file about how to use it.  (This script is deprecated, see
+|compiler-perl|.)
+

@@ -1,0 +1,191 @@
+11. Synchronizing				*:syn-sync* *E403* *E404*
+
+Vim wants to be able to start redrawing in any position in the document.  To
+make this possible it needs to know the syntax state at the position where
+redrawing starts.
+
+:sy[ntax] sync [ccomment [group-name] | minlines={N} | ...]
+
+There are four ways to synchronize:
+1. Always parse from the start of the file.
+   |:syn-sync-first|
+2. Based on C-style comments.  Vim understands how C-comments work and can
+   figure out if the current line starts inside or outside a comment.
+   |:syn-sync-second|
+3. Jumping back a certain number of lines and start parsing there.
+   |:syn-sync-third|
+4. Searching backwards in the text for a pattern to sync on.
+   |:syn-sync-fourth|
+
+				*:syn-sync-maxlines* *:syn-sync-minlines*
+For the last three methods, the line range where the parsing can start is
+limited by "minlines" and "maxlines".
+
+If the "minlines={N}" argument is given, the parsing always starts at least
+that many lines backwards.  This can be used if the parsing may take a few
+lines before it's correct, or when it's not possible to use syncing.
+
+If the "maxlines={N}" argument is given, the number of lines that are searched
+for a comment or syncing pattern is restricted to N lines backwards (after
+adding "minlines").  This is useful if you have few things to sync on and a
+slow machine.  Example: >
+   :syntax sync maxlines=500 ccomment
+<
+						*:syn-sync-linebreaks*
+When using a pattern that matches multiple lines, a change in one line may
+cause a pattern to no longer match in a previous line.	This means has to
+start above where the change was made.	How many lines can be specified with
+the "linebreaks" argument.  For example, when a pattern may include one line
+break use this: >
+   :syntax sync linebreaks=1
+The result is that redrawing always starts at least one line before where a
+change was made.  The default value for "linebreaks" is zero.  Usually the
+value for "minlines" is bigger than "linebreaks".
+
+
+First syncing method:			*:syn-sync-first*
+>
+   :syntax sync fromstart
+
+The file will be parsed from the start.  This makes syntax highlighting
+accurate, but can be slow for long files.  Vim caches previously parsed text,
+so that it's only slow when parsing the text for the first time.  However,
+when making changes some part of the text needs to be parsed again (worst
+case: to the end of the file).
+
+Using "fromstart" is equivalent to using "minlines" with a very large number.
+
+
+Second syncing method:			*:syn-sync-second* *:syn-sync-ccomment*
+
+For the second method, only the "ccomment" argument needs to be given.
+Example: >
+   :syntax sync ccomment
+
+When Vim finds that the line where displaying starts is inside a C-style
+comment, the last region syntax item with the group-name "Comment" will be
+used.  This requires that there is a region with the group-name "Comment"!
+An alternate group name can be specified, for example: >
+   :syntax sync ccomment javaComment
+This means that the last item specified with "syn region javaComment" will be
+used for the detected C comment region.  This only works properly if that
+region does have a start pattern "\/*" and an end pattern "*\/".
+
+The "maxlines" argument can be used to restrict the search to a number of
+lines.	The "minlines" argument can be used to at least start a number of
+lines back (e.g., for when there is some construct that only takes a few
+lines, but it hard to sync on).
+
+Note: Syncing on a C comment doesn't work properly when strings are used
+that cross a line and contain a "*/".  Since letting strings cross a line
+is a bad programming habit (many compilers give a warning message), and the
+chance of a "*/" appearing inside a comment is very small, this restriction
+is hardly ever noticed.
+
+
+Third syncing method:				*:syn-sync-third*
+
+For the third method, only the "minlines={N}" argument needs to be given.
+Vim will subtract {N} from the line number and start parsing there.  This
+means {N} extra lines need to be parsed, which makes this method a bit slower.
+Example: >
+   :syntax sync minlines=50
+
+"lines" is equivalent to "minlines" (used by older versions).
+
+
+Fourth syncing method:				*:syn-sync-fourth*
+
+The idea is to synchronize on the end of a few specific regions, called a
+sync pattern.  Only regions can cross lines, so when we find the end of some
+region, we might be able to know in which syntax item we are.  The search
+starts in the line just above the one where redrawing starts.  From there
+the search continues backwards in the file.
+
+This works just like the non-syncing syntax items.  You can use contained
+matches, nextgroup, etc.  But there are a few differences:
+- Keywords cannot be used.
+- The syntax items with the "sync" keyword form a completely separated group
+  of syntax items.  You can't mix syncing groups and non-syncing groups.
+- The matching works backwards in the buffer (line by line), instead of
+  forwards.
+- A line continuation pattern can be given.  It is used to decide which group
+  of lines need to be searched like they were one line.  This means that the
+  search for a match with the specified items starts in the first of the
+  consecutive that contain the continuation pattern.
+- When using "nextgroup" or "contains", this only works within one line (or
+  group of continued lines).
+- When using a region, it must start and end in the same line (or group of
+  continued lines).  Otherwise the end is assumed to be at the end of the
+  line (or group of continued lines).
+- When a match with a sync pattern is found, the rest of the line (or group of
+  continued lines) is searched for another match.  The last match is used.
+  This is used when a line can contain both the start end the end of a region
+  (e.g., in a C-comment like /* this */, the last "*/" is used).
+
+There are two ways how a match with a sync pattern can be used:
+1. Parsing for highlighting starts where redrawing starts (and where the
+   search for the sync pattern started).  The syntax group that is expected
+   to be valid there must be specified.  This works well when the regions
+   that cross lines cannot contain other regions.
+2. Parsing for highlighting continues just after the match.  The syntax group
+   that is expected to be present just after the match must be specified.
+   This can be used when the previous method doesn't work well.  It's much
+   slower, because more text needs to be parsed.
+Both types of sync patterns can be used at the same time.
+
+Besides the sync patterns, other matches and regions can be specified, to
+avoid finding unwanted matches.
+
+[The reason that the sync patterns are given separately, is that mostly the
+search for the sync point can be much simpler than figuring out the
+highlighting.  The reduced number of patterns means it will go (much)
+faster.]
+
+					    *syn-sync-grouphere* *E393* *E394*
+    :syntax sync match {sync-group-name} grouphere {group-name} "pattern" ..
+
+	Define a match that is used for syncing.  {group-name} is the
+	name of a syntax group that follows just after the match.  Parsing
+	of the text for highlighting starts just after the match.  A region
+	must exist for this {group-name}.  The first one defined will be used.
+	"NONE" can be used for when there is no syntax group after the match.
+
+						*syn-sync-groupthere*
+    :syntax sync match {sync-group-name} groupthere {group-name} "pattern" ..
+
+	Like "grouphere", but {group-name} is the name of a syntax group that
+	is to be used at the start of the line where searching for the sync
+	point started.	The text between the match and the start of the sync
+	pattern searching is assumed not to change the syntax highlighting.
+	For example, in C you could search backwards for "/*" and "*/".  If
+	"/*" is found first, you know that you are inside a comment, so the
+	"groupthere" is "cComment".  If "*/" is found first, you know that you
+	are not in a comment, so the "groupthere" is "NONE".  (in practice
+	it's a bit more complicated, because the "/*" and "*/" could appear
+	inside a string.  That's left as an exercise to the reader...).
+
+    :syntax sync match ..
+    :syntax sync region ..
+
+	Without a "groupthere" argument.  Define a region or match that is
+	skipped while searching for a sync point.
+
+						*syn-sync-linecont*
+    :syntax sync linecont {pattern}
+
+	When {pattern} matches in a line, it is considered to continue in
+	the next line.	This means that the search for a sync point will
+	consider the lines to be concatenated.
+
+If the "maxlines={N}" argument is given too, the number of lines that are
+searched for a match is restricted to N.  This is useful if you have very
+few things to sync on and a slow machine.  Example: >
+   :syntax sync maxlines=100
+
+You can clear all sync settings with: >
+   :syntax sync clear
+
+You can clear specific sync patterns with: >
+   :syntax sync clear {sync-group-name} ..
+

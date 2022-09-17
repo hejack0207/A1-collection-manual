@@ -1,0 +1,131 @@
+1. Starting diff mode					*start-vimdiff*
+
+The easiest way to start editing in diff mode is with the "vimdiff" command.
+This starts Vim as usual, and additionally sets up for viewing the differences
+between the arguments. >
+
+	vimdiff file1 file2 [file3 [file4]]
+
+This is equivalent to: >
+
+	vim -d file1 file2 [file3 [file4]]
+
+You may also use "gvimdiff" or "vim -d -g".  The GUI is started then.
+You may also use "viewdiff" or "gviewdiff".  Vim starts in readonly mode then.
+"r" may be prepended for restricted mode (see |-Z|).
+
+The second and following arguments may also be a directory name.  Vim will
+then append the file name of the first argument to the directory name to find
+the file.
+
+By default an internal diff library will be used.  When 'diffopt' or
+'diffexpr' has been set an external "diff" command will be used.  This only
+works when such a diff program is available.
+
+Diffs are local to the current tab page |tab-page|.  You can't see diffs with
+a window in another tab page.  This does make it possible to have several
+diffs at the same time, each in their own tab page.
+
+What happens is that Vim opens a window for each of the files.  This is like
+using the |-O| argument.  This uses vertical splits.  If you prefer horizontal
+splits add the |-o| argument: >
+
+	vimdiff -o file1 file2 [file3 [file4]]
+
+If you always prefer horizontal splits include "horizontal" in 'diffopt'.
+
+In each of the edited files these options are set:
+
+	'diff'		on
+	'scrollbind'	on
+	'cursorbind'	on
+	'scrollopt'	includes "hor"
+	'wrap'		off
+	'foldmethod'	"diff"
+	'foldcolumn'	value from 'diffopt', default is 2
+
+These options are set local to the window.  When editing another file they are
+reset to the global value.
+The options can still be overruled from a modeline when re-editing the file.
+However, 'foldmethod' and 'wrap' won't be set from a modeline when 'diff' is
+set.
+See `:diffoff` for an easy way to revert the options.
+
+The differences shown are actually the differences in the buffer.  Thus if you
+make changes after loading a file, these will be included in the displayed
+diffs.  You might have to do ":diffupdate" now and then, not all changes are
+immediately taken into account, especially when using an external diff command.
+
+In your .vimrc file you could do something special when Vim was started in
+diff mode.  You could use a construct like this: >
+
+	if &diff
+	   setup for diff mode
+	else
+	   setup for non-diff mode
+	endif
+
+While already in Vim you can start diff mode in three ways.
+
+							*E98*
+:diffs[plit] {filename}					*:diffs* *:diffsplit*
+		Open a new window on the file {filename}.  The options are set
+		as for "vimdiff" for the current and the newly opened window.
+		Also see 'diffexpr'.
+
+							*:difft* *:diffthis*
+:difft[his]	Make the current window part of the diff windows.  This sets
+		the options like for "vimdiff".
+
+:diffp[atch] {patchfile}			 *E816* *:diffp* *:diffpatch*
+		Use the current buffer, patch it with the diff found in
+		{patchfile} and open a buffer on the result.  The options are
+		set as for "vimdiff".
+		{patchfile} can be in any format that the "patch" program
+		understands or 'patchexpr' can handle.
+		Note that {patchfile} should only contain a diff for one file,
+		the current file.  If {patchfile} contains diffs for other
+		files as well, the results are unpredictable.  Vim changes
+		directory to /tmp to avoid files in the current directory
+		accidentally being patched.  But it may still result in
+		various ".rej" files to be created.  And when absolute path
+		names are present these files may get patched anyway.
+
+To make these commands use a vertical split, prepend |:vertical|.  Examples: >
+
+	:vert diffsplit main.c~
+	:vert diffpatch /tmp/diff
+
+If you always prefer a vertical split include "vertical" in 'diffopt'.
+
+							*E96*
+There can be up to eight buffers with 'diff' set.
+
+Since the option values are remembered with the buffer, you can edit another
+file for a moment and come back to the same file and be in diff mode again.
+
+							*:diffo* *:diffoff*
+:diffo[ff]	Switch off diff mode for the current window.  Resets related
+		options also when 'diff' was not set.
+
+:diffo[ff]!	Switch off diff mode for the current window and in all windows
+		in the current tab page where 'diff' is set.  Resetting
+		related options only happens in a window that has 'diff' set,
+		if the current window does not have 'diff' set then no options
+		in it are changed.
+		Hidden buffers are also removed from the list of diff'ed
+		buffers.
+
+The `:diffoff` command resets the relevant options to the values they had when
+using `:diffsplit`, `:diffpatch` , `:diffthis`. or starting Vim in diff mode.
+When using `:diffoff` twice the last saved values are restored.
+Otherwise they are set to their default value:
+
+	'diff'		off
+	'scrollbind'	off
+	'cursorbind'	off
+	'scrollopt'	without "hor"
+	'wrap'		on
+	'foldmethod'	"manual"
+	'foldcolumn'	0
+

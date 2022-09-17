@@ -1,0 +1,124 @@
+5. Tcl buffer commands					*tcl-buffer-cmds*
+
+Buffer commands represent vim buffers.  They are created by several commands:
+	::vim::buffer {N}			|tcl-buffer|
+	::vim::buffer list			|tcl-buffer|
+	"buffer" option of a window command	|tcl-window-buffer|
+The ::vim::current(buffer) variable contains the name of the buffer command
+for the current buffer.  A buffer command is automatically deleted when the
+corresponding vim buffer is destroyed.  Whenever the buffer's contents are
+changed, all marks in the buffer are automatically adjusted.  Any changes to
+the buffer's contents made by Tcl commands can be undone with the "undo" vim
+command (see |undo|).
+
+Let's assume the name of the buffer command is stored in the Tcl variable "buf",
+i.e. "$buf" calls the command.  The following options are available: >
+
+	$buf append {n} {str}	# Append a line to buffer, after line {n}.
+	$buf command {cmd}	# Execute Ex command in buffers context.
+	$buf count		# Report number of lines in buffer.
+	$buf delcmd {cmd}	# Call Tcl command when buffer is deleted.
+	$buf delete {n}		# Delete a single line.
+	$buf delete {n} {m}	# Delete several lines.
+	$buf expr {expr}	# Evaluate vim expression in buffers context.
+	$buf get {n}		# Get a single line as a string.
+	$buf get {n} {m}	# Get several lines as a list.
+	$buf insert {n} {str}	# Insert a line in buffer, as line {n}.
+	$buf last		# Report line number of last line in buffer.
+	$buf mark {mark}	# Report position of buffer mark.
+	$buf name		# Report name of file in buffer.
+	$buf number		# Report number of this buffer.
+	$buf option {opt} [val]	# Get/Set vim option in buffers context.
+	$buf set {n} {text}	# Replace a single line.
+	$buf set {n} {m} {list}	# Replace several lines.
+	$buf windows		# Create Tcl commands for buffer's windows.
+<
+							*tcl-linenumbers*
+Most buffer commands take line numbers as arguments.  How Tcl treats these
+numbers depends on the "::vim::lbase" variable (see |tcl-var-lbase|).  Instead
+of line numbers, several keywords can be also used: "top", "start", "begin",
+"first", "bottom", "end" and "last".
+
+Options:
+	$buf append {n} {str}				*tcl-buffer-append*
+	$buf insert {n} {str}				*tcl-buffer-insert*
+	Add a line to the buffer.  With the "insert" option, the string
+	becomes the new line {n}, with "append" it is inserted after line {n}.
+	Example: >
+		$buf insert top "This is the beginning."
+		$buf append end "This is the end."
+<	To add a list of lines to the buffer, use a loop: >
+		foreach line $list { $buf append $num $line ; incr num }
+<
+	$buf count					*tcl-buffer-count*
+	Reports the total number of lines in the buffer.
+
+	$buf delcmd {cmd}				*tcl-buffer-delcmd*
+	Registers the Tcl command {cmd} as a deletion callback for the buffer.
+	This command is executed (in the global scope) just before the buffer
+	is deleted.  Complex commands should be build with "list": >
+		$buf delcmd [list puts vimerr "buffer [$buf number] gone"]
+<	See also |tcl-window-delcmd|.
+
+	$buf delete {n}					*tcl-buffer-delete*
+	$buf delete {n} {m}
+	Deletes line {n} or lines {n} through {m} from the buffer.
+	This example deletes everything except the last line: >
+		$buf delete first [expr [$buf last] - 1]
+<
+	$buf get {n}					*tcl-buffer-get*
+	$buf get {n} {m}
+	Gets one or more lines from the buffer.  For a single line, the result
+	is a string; for several lines, a list of strings.
+	Example: >
+		set topline [$buf get top]
+<
+	$buf last					*tcl-buffer-last*
+	Reports the line number of the last line.  This value depends on the
+	"::vim::lbase" variable.  See |tcl-var-lbase|.
+
+	$buf mark {mark}				*tcl-buffer-mark*
+	Reports the position of the named mark as a string, similar to the
+	cursor position of the "cursor" option of a window command (see
+	|tcl-window-cursor|).  This can be converted to a Tcl array variable: >
+		array set mpos [$buf mark "a"]
+<	"mpos(column)" and "mpos(row)" now contain the position of the mark.
+	If the mark is not set, a standard Tcl error results.
+
+	$buf name
+	Reports the name of the file in the buffer.  For a buffer without a
+	file, this is an empty string.
+
+	$buf number
+	Reports the number of this buffer.  See |:buffers|.
+	This example deletes a buffer from vim: >
+		::vim::command "bdelete [$buf number]"
+<
+	$buf set {n} {string}				*tcl-buffer-set*
+	$buf set {n} {m} {list}
+	Replace one or several lines in the buffer.  If the list contains more
+	elements than there are lines to replace, they are inserted into the
+	buffer.  If the list contains fewer elements, any unreplaced line is
+	deleted from the buffer.
+
+	$buf windows					*tcl-buffer-windows*
+	Creates a window command for each window that displays this buffer, and
+	returns a list of the command names as the result.
+	Example: >
+		set winlist [$buf windows]
+		foreach win $winlist { $win height 4 }
+<	See |tcl-window-cmds| for the available options.
+
+	$buf command [-quiet] {cmd}			*tcl-buffer-command*
+	$buf expr {expr}				*tcl-buffer-expr*
+	$buf option {opt} [val]				*tcl-buffer-option*
+	These are similar to "::vim::command" etc., except that everything is
+	done in the context of the buffer represented by $buf, instead of the
+	current buffer.  For example, setting an option that is marked 'local
+	to buffer' affects the buffer $buf.  Anything that affects or queries
+	a window uses the first window in vim's window list that displays this
+	buffer (i.e. the first entry in the list returned by "$buf windows").
+	See |tcl-command|, |tcl-expr| and |tcl-option| for more information.
+	Example: >
+		if { [$buf option modified] } { $buf command "w" }
+

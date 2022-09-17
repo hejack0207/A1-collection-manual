@@ -1,0 +1,177 @@
+8. Syntax patterns				*:syn-pattern* *E401* *E402*
+
+In the syntax commands, a pattern must be surrounded by two identical
+characters.  This is like it works for the ":s" command.  The most common to
+use is the double quote.  But if the pattern contains a double quote, you can
+use another character that is not used in the pattern.	Examples: >
+  :syntax region Comment  start="/\*"  end="\*/"
+  :syntax region String   start=+"+    end=+"+	 skip=+\\"+
+
+See |pattern| for the explanation of what a pattern is.  Syntax patterns are
+always interpreted like the 'magic' option is set, no matter what the actual
+value of 'magic' is.  And the patterns are interpreted like the 'l' flag is
+not included in 'cpoptions'.  This was done to make syntax files portable and
+independent of 'compatible' and 'magic' settings.
+
+Try to avoid patterns that can match an empty string, such as "[a-z]*".
+This slows down the highlighting a lot, because it matches everywhere.
+
+						*:syn-pattern-offset*
+The pattern can be followed by a character offset.  This can be used to
+change the highlighted part, and to change the text area included in the
+match or region (which only matters when trying to match other items).	Both
+are relative to the matched pattern.  The character offset for a skip
+pattern can be used to tell where to continue looking for an end pattern.
+
+The offset takes the form of "{what}={offset}"
+The {what} can be one of seven strings:
+
+ms	Match Start	offset for the start of the matched text
+me	Match End	offset for the end of the matched text
+hs	Highlight Start	offset for where the highlighting starts
+he	Highlight End	offset for where the highlighting ends
+rs	Region Start	offset for where the body of a region starts
+re	Region End	offset for where the body of a region ends
+lc	Leading Context	offset past "leading context" of pattern
+
+The {offset} can be:
+
+s	start of the matched pattern
+s+{nr}	start of the matched pattern plus {nr} chars to the right
+s-{nr}	start of the matched pattern plus {nr} chars to the left
+e	end of the matched pattern
+e+{nr}	end of the matched pattern plus {nr} chars to the right
+e-{nr}	end of the matched pattern plus {nr} chars to the left
+{nr}	(for "lc" only): start matching {nr} chars right of the start
+
+Examples: "ms=s+1", "hs=e-2", "lc=3".
+
+Although all offsets are accepted after any pattern, they are not always
+meaningful.  This table shows which offsets are actually used:
+
+		    ms	 me   hs   he	rs   re	  lc ~
+match item	    yes  yes  yes  yes	-    -	  yes
+region item start   yes  -    yes  -	yes  -	  yes
+region item skip    -	 yes  -    -	-    -	  yes
+region item end     -	 yes  -    yes	-    yes  yes
+
+Offsets can be concatenated, with a ',' in between.  Example: >
+  :syn match String  /"[^"]*"/hs=s+1,he=e-1
+<
+    some "string" text
+	  ^^^^^^		highlighted
+
+Notes:
+- There must be no white space between the pattern and the character
+  offset(s).
+- The highlighted area will never be outside of the matched text.
+- A negative offset for an end pattern may not always work, because the end
+  pattern may be detected when the highlighting should already have stopped.
+- Before Vim 7.2 the offsets were counted in bytes instead of characters.
+  This didn't work well for multi-byte characters, so it was changed with the
+  Vim 7.2 release.
+- The start of a match cannot be in a line other than where the pattern
+  matched.  This doesn't work: "a\nb"ms=e.  You can make the highlighting
+  start in another line, this does work: "a\nb"hs=e.
+
+Example (match a comment but don't highlight the /* and */): >
+  :syntax region Comment start="/\*"hs=e+1 end="\*/"he=s-1
+<
+	/* this is a comment */
+	  ^^^^^^^^^^^^^^^^^^^	  highlighted
+
+A more complicated Example: >
+  :syn region Exa matchgroup=Foo start="foo"hs=s+2,rs=e+2 matchgroup=Bar end="bar"me=e-1,he=e-1,re=s-1
+<
+	 abcfoostringbarabc
+	    mmmmmmmmmmm	    match
+	      sssrrreee	    highlight start/region/end ("Foo", "Exa" and "Bar")
+
+Leading context			*:syn-lc* *:syn-leading* *:syn-context*
+
+Note: This is an obsolete feature, only included for backwards compatibility
+with previous Vim versions.  It's now recommended to use the |/\@<=| construct
+in the pattern.
+
+The "lc" offset specifies leading context -- a part of the pattern that must
+be present, but is not considered part of the match.  An offset of "lc=n" will
+cause Vim to step back n columns before attempting the pattern match, allowing
+characters which have already been matched in previous patterns to also be
+used as leading context for this match.  This can be used, for instance, to
+specify that an "escaping" character must not precede the match: >
+
+  :syn match ZNoBackslash "[^\\]z"ms=s+1
+  :syn match WNoBackslash "[^\\]w"lc=1
+  :syn match Underline "_\+"
+<
+	  ___zzzz ___wwww
+	  ^^^	  ^^^	  matches Underline
+	      ^ ^	  matches ZNoBackslash
+		     ^^^^ matches WNoBackslash
+
+The "ms" offset is automatically set to the same value as the "lc" offset,
+unless you set "ms" explicitly.
+
+
+Multi-line patterns					*:syn-multi-line*
+
+The patterns can include "\n" to match an end-of-line.	Mostly this works as
+expected, but there are a few exceptions.
+
+When using a start pattern with an offset, the start of the match is not
+allowed to start in a following line.  The highlighting can start in a
+following line though.  Using the "\zs" item also requires that the start of
+the match doesn't move to another line.
+
+The skip pattern can include the "\n", but the search for an end pattern will
+continue in the first character of the next line, also when that character is
+matched by the skip pattern.  This is because redrawing may start in any line
+halfway a region and there is no check if the skip pattern started in a
+previous line.	For example, if the skip pattern is "a\nb" and an end pattern
+is "b", the end pattern does match in the second line of this: >
+	 x x a
+	 b x x
+Generally this means that the skip pattern should not match any characters
+after the "\n".
+
+
+External matches					*:syn-ext-match*
+
+These extra regular expression items are available in region patterns:
+
+					*/\z(* */\z(\)* *E50* *E52* *E879*
+    \z(\)	Marks the sub-expression as "external", meaning that it can be
+		accessed from another pattern match.  Currently only usable in
+		defining a syntax region start pattern.
+
+					*/\z1* */\z2* */\z3* */\z4* */\z5*
+    \z1  ...  \z9			*/\z6* */\z7* */\z8* */\z9* *E66* *E67*
+		Matches the same string that was matched by the corresponding
+		sub-expression in a previous start pattern match.
+
+Sometimes the start and end patterns of a region need to share a common
+sub-expression.  A common example is the "here" document in Perl and many Unix
+shells.  This effect can be achieved with the "\z" special regular expression
+items, which marks a sub-expression as "external", in the sense that it can be
+referenced from outside the pattern in which it is defined.  The here-document
+example, for instance, can be done like this: >
+  :syn region hereDoc start="<<\z(\I\i*\)" end="^\z1$"
+
+As can be seen here, the \z actually does double duty.	In the start pattern,
+it marks the "\(\I\i*\)" sub-expression as external; in the end pattern, it
+changes the \z1 back-reference into an external reference referring to the
+first external sub-expression in the start pattern.  External references can
+also be used in skip patterns: >
+  :syn region foo start="start \(\I\i*\)" skip="not end \z1" end="end \z1"
+
+Note that normal and external sub-expressions are completely orthogonal and
+indexed separately; for instance, if the pattern "\z(..\)\(..\)" is applied
+to the string "aabb", then \1 will refer to "bb" and \z1 will refer to "aa".
+Note also that external sub-expressions cannot be accessed as back-references
+within the same pattern like normal sub-expressions.  If you want to use one
+sub-expression as both a normal and an external sub-expression, you can nest
+the two, as in "\(\z(...\)\)".
+
+Note that only matches within a single line can be used.  Multi-line matches
+cannot be referred to.
+

@@ -1,0 +1,188 @@
+*41.12*	Writing a filetype plugin	*write-filetype-plugin* *ftplugin*
+
+A filetype plugin is like a global plugin, except that it sets options and
+defines mappings for the current buffer only.  See |add-filetype-plugin| for
+how this type of plugin is used.
+
+First read the section on global plugins above |41.11|.  All that is said there
+also applies to filetype plugins.  There are a few extras, which are explained
+here.  The essential thing is that a filetype plugin should only have an
+effect on the current buffer.
+
+
+DISABLING
+
+If you are writing a filetype plugin to be used by many people, they need a
+chance to disable loading it.  Put this at the top of the plugin: >
+
+	" Only do this when not done yet for this buffer
+	if exists("b:did_ftplugin")
+	  finish
+	endif
+	let b:did_ftplugin = 1
+
+This also needs to be used to avoid that the same plugin is executed twice for
+the same buffer (happens when using an ":edit" command without arguments).
+
+Now users can disable loading the default plugin completely by making a
+filetype plugin with only this line: >
+
+	let b:did_ftplugin = 1
+
+This does require that the filetype plugin directory comes before $VIMRUNTIME
+in 'runtimepath'!
+
+If you do want to use the default plugin, but overrule one of the settings,
+you can write the different setting in a script: >
+
+	setlocal textwidth=70
+
+Now write this in the "after" directory, so that it gets sourced after the
+distributed "vim.vim" ftplugin |after-directory|.  For Unix this would be
+"~/.vim/after/ftplugin/vim.vim".  Note that the default plugin will have set
+"b:did_ftplugin", but it is ignored here.
+
+
+OPTIONS
+
+To make sure the filetype plugin only affects the current buffer use the >
+
+	:setlocal
+
+command to set options.  And only set options which are local to a buffer (see
+the help for the option to check that).  When using |:setlocal| for global
+options or options local to a window, the value will change for many buffers,
+and that is not what a filetype plugin should do.
+
+When an option has a value that is a list of flags or items, consider using
+"+=" and "-=" to keep the existing value.  Be aware that the user may have
+changed an option value already.  First resetting to the default value and
+then changing it is often a good idea.  Example: >
+
+	:setlocal formatoptions& formatoptions+=ro
+
+
+MAPPINGS
+
+To make sure mappings will only work in the current buffer use the >
+
+	:map <buffer>
+
+command.  This needs to be combined with the two-step mapping explained above.
+An example of how to define functionality in a filetype plugin: >
+
+	if !hasmapto('<Plug>JavaImport')
+	  map <buffer> <unique> <LocalLeader>i <Plug>JavaImport
+	endif
+	noremap <buffer> <unique> <Plug>JavaImport oimport ""<Left><Esc>
+
+|hasmapto()| is used to check if the user has already defined a map to
+<Plug>JavaImport.  If not, then the filetype plugin defines the default
+mapping.  This starts with |<LocalLeader>|, which allows the user to select
+the key(s) he wants filetype plugin mappings to start with.  The default is a
+backslash.
+"<unique>" is used to give an error message if the mapping already exists or
+overlaps with an existing mapping.
+|:noremap| is used to avoid that any other mappings that the user has defined
+interferes.  You might want to use ":noremap <script>" to allow remapping
+mappings defined in this script that start with <SID>.
+
+The user must have a chance to disable the mappings in a filetype plugin,
+without disabling everything.  Here is an example of how this is done for a
+plugin for the mail filetype: >
+
+	" Add mappings, unless the user didn't want this.
+	if !exists("no_plugin_maps") && !exists("no_mail_maps")
+	  " Quote text by inserting "> "
+	  if !hasmapto('<Plug>MailQuote')
+	    vmap <buffer> <LocalLeader>q <Plug>MailQuote
+	    nmap <buffer> <LocalLeader>q <Plug>MailQuote
+	  endif
+	  vnoremap <buffer> <Plug>MailQuote :s/^/> /<CR>
+	  nnoremap <buffer> <Plug>MailQuote :.,$s/^/> /<CR>
+	endif
+
+Two global variables are used:
+|no_plugin_maps|	disables mappings for all filetype plugins
+|no_mail_maps|		disables mappings for the "mail" filetype
+
+
+USER COMMANDS
+
+To add a user command for a specific file type, so that it can only be used in
+one buffer, use the "-buffer" argument to |:command|.  Example: >
+
+	:command -buffer  Make  make %:r.s
+
+
+VARIABLES
+
+A filetype plugin will be sourced for each buffer of the type it's for.  Local
+script variables |s:var| will be shared between all invocations.  Use local
+buffer variables |b:var| if you want a variable specifically for one buffer.
+
+
+FUNCTIONS
+
+When defining a function, this only needs to be done once.  But the filetype
+plugin will be sourced every time a file with this filetype will be opened.
+This construct makes sure the function is only defined once: >
+
+	:if !exists("*s:Func")
+	:  function s:Func(arg)
+	:    ...
+	:  endfunction
+	:endif
+<
+
+UNDO						*undo_indent* *undo_ftplugin*
+
+When the user does ":setfiletype xyz" the effect of the previous filetype
+should be undone.  Set the b:undo_ftplugin variable to the commands that will
+undo the settings in your filetype plugin.  Example: >
+
+	let b:undo_ftplugin = "setlocal fo< com< tw< commentstring<"
+		\ . "| unlet b:match_ignorecase b:match_words b:match_skip"
+
+Using ":setlocal" with "<" after the option name resets the option to its
+global value.  That is mostly the best way to reset the option value.
+
+This does require removing the "C" flag from 'cpoptions' to allow line
+continuation, as mentioned above |use-cpo-save|.
+
+For undoing the effect of an indent script, the b:undo_indent variable should
+be set accordingly.
+
+
+FILE NAME
+
+The filetype must be included in the file name |ftplugin-name|.  Use one of
+these three forms:
+
+	.../ftplugin/stuff.vim
+	.../ftplugin/stuff_foo.vim
+	.../ftplugin/stuff/bar.vim
+
+"stuff" is the filetype, "foo" and "bar" are arbitrary names.
+
+
+SUMMARY							*ftplugin-special*
+
+Summary of special things to use in a filetype plugin:
+
+<LocalLeader>		Value of "maplocalleader", which the user defines as
+			the keys that filetype plugin mappings start with.
+
+:map <buffer>		Define a mapping local to the buffer.
+
+:noremap <script>	Only remap mappings defined in this script that start
+			with <SID>.
+
+:setlocal		Set an option for the current buffer only.
+
+:command -buffer	Define a user command local to the buffer.
+
+exists("*s:Func")	Check if a function was already defined.
+
+Also see |plugin-special|, the special things used for all plugins.
+

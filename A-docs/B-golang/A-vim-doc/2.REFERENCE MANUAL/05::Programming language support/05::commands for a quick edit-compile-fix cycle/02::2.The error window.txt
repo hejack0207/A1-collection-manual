@@ -1,0 +1,258 @@
+2. The error window					*quickfix-window*
+
+					    *:cope* *:copen* *w:quickfix_title*
+:cope[n] [height]	Open a window to show the current list of errors.
+
+			When [height] is given, the window becomes that high
+			(if there is room).  When [height] is omitted the
+			window is made ten lines high.
+
+			If there already is a quickfix window, it will be made
+			the current window.  It is not possible to open a
+			second quickfix window.  If [height] is given the
+			existing window will be resized to it.
+
+							*quickfix-buffer*
+			The window will contain a special buffer, with
+			'buftype' equal to "quickfix".  Don't change this!
+			The window will have the w:quickfix_title variable set
+			which will indicate the command that produced the
+			quickfix list. This can be used to compose a custom
+			status line if the value of 'statusline' is adjusted
+			properly. Whenever this buffer is modified by a
+			quickfix command or function, the |b:changedtick|
+			variable is incremented.  You can get the number of
+			this buffer using the getqflist() and getloclist()
+			functions by passing the 'qfbufnr' item. For a
+			location list, this buffer is wiped out when the
+			location list is removed.
+
+							*:lop* *:lopen*
+:lop[en] [height]	Open a window to show the location list for the
+			current window. Works only when the location list for
+			the current window is present.  You can have more than
+			one location window opened at a time.  Otherwise, it
+			acts the same as ":copen".
+
+							*:ccl* *:cclose*
+:ccl[ose]		Close the quickfix window.
+
+							*:lcl* *:lclose*
+:lcl[ose]		Close the window showing the location list for the
+			current window.
+
+							*:cw* *:cwindow*
+:cw[indow] [height]	Open the quickfix window when there are recognized
+			errors.  If the window is already open and there are
+			no recognized errors, close the window.
+
+							*:lw* *:lwindow*
+:lw[indow] [height]	Same as ":cwindow", except use the window showing the
+			location list for the current window.
+
+							*:cbo* *:cbottom*
+:cbo[ttom]		Put the cursor in the last line of the quickfix window
+			and scroll to make it visible.  This is useful for
+			when errors are added by an asynchronous callback.
+			Only call it once in a while if there are many
+			updates to avoid a lot of redrawing.
+
+							*:lbo* *:lbottom*
+:lbo[ttom]		Same as ":cbottom", except use the window showing the
+			location list for the current window.
+
+Normally the quickfix window is at the bottom of the screen.  If there are
+vertical splits, it's at the bottom of the rightmost column of windows.  To
+make it always occupy the full width: >
+	:botright cwindow
+You can move the window around with |window-moving| commands.
+For example, to move it to the top: CTRL-W K
+The 'winfixheight' option will be set, which means that the window will mostly
+keep its height, ignoring 'winheight' and 'equalalways'.  You can change the
+height manually (e.g., by dragging the status line above it with the mouse).
+
+In the quickfix window, each line is one error.  The line number is equal to
+the error number.  The current entry is highlighted with the QuickFixLine
+highlighting.  You can change it to your liking, e.g.: >
+	:hi QuickFixLine ctermbg=Yellow guibg=Yellow
+
+You can use ":.cc" to jump to the error under the cursor.
+Hitting the <Enter> key or double-clicking the mouse on a line has the same
+effect.  The file containing the error is opened in the window above the
+quickfix window.  If there already is a window for that file, it is used
+instead.  If the buffer in the used window has changed, and the error is in
+another file, jumping to the error will fail.  You will first have to make
+sure the window contains a buffer which can be abandoned.
+					*CTRL-W_<Enter>* *CTRL-W_<CR>*
+You can use CTRL-W <Enter> to open a new window and jump to the error there.
+
+When the quickfix window has been filled, two autocommand events are
+triggered.  First the 'filetype' option is set to "qf", which triggers the
+FileType event (also see |qf.vim|).  Then the BufReadPost event is triggered,
+using "quickfix" for the buffer name.  This can be used to perform some action
+on the listed errors.  Example: >
+	au BufReadPost quickfix  setlocal modifiable
+		\ | silent exe 'g/^/s//\=line(".")." "/'
+		\ | setlocal nomodifiable
+This prepends the line number to each line.  Note the use of "\=" in the
+substitute string of the ":s" command, which is used to evaluate an
+expression.
+The BufWinEnter event is also triggered, again using "quickfix" for the buffer
+name.
+
+Note: When adding to an existing quickfix list the autocommand are not
+triggered.
+
+Note: Making changes in the quickfix window has no effect on the list of
+errors.  'modifiable' is off to avoid making changes.  If you delete or insert
+lines anyway, the relation between the text and the error number is messed up.
+If you really want to do this, you could write the contents of the quickfix
+window to a file and use ":cfile" to have it parsed and used as the new error
+list.
+
+						*location-list-window*
+The location list window displays the entries in a location list.  When you
+open a location list window, it is created below the current window and
+displays the location list for the current window.  The location list window
+is similar to the quickfix window, except that you can have more than one
+location list window open at a time. When you use a location list command in
+this window, the displayed location list is used.
+
+When you select a file from the location list window, the following steps are
+used to find a window to edit the file:
+
+1. If a window with the location list displayed in the location list window is
+   present, then the file is opened in that window.
+2. If the above step fails and if the file is already opened in another
+   window, then that window is used.
+3. If the above step fails then an existing window showing a buffer with
+   'buftype' not set is used.
+4. If the above step fails, then the file is edited in a new window.
+
+In all of the above cases, if the location list for the selected window is not
+yet set, then it is set to the location list displayed in the location list
+window.
+
+							*quickfix-window-ID*
+You can use the |getqflist()| and |getloclist()| functions to obtain the
+window ID of the quickfix window and location list window respectively (if
+present).  Examples: >
+	echo getqflist({'winid' : 1}).winid
+	echo getloclist(2, {'winid' : 1}).winid
+<
+							*getqflist-examples*
+The |getqflist()| and |getloclist()| functions can be used to get the various
+attributes of a quickfix and location list respectively. Some examples for
+using these functions are below:
+>
+    " get the title of the current quickfix list
+    :echo getqflist({'title' : 0}).title
+
+    " get the identifier of the current quickfix list
+    :let qfid = getqflist({'id' : 0}).id
+
+    " get the identifier of the fourth quickfix list in the stack
+    :let qfid = getqflist({'nr' : 4, 'id' : 0}).id
+
+    " check whether a quickfix list with a specific identifier exists
+    :if getqflist({'id' : qfid}).id == qfid
+
+    " get the index of the current quickfix list in the stack
+    :let qfnum = getqflist({'nr' : 0}).nr
+
+    " get the items of a quickfix list specified by an identifier
+    :echo getqflist({'id' : qfid, 'items' : 0}).items
+
+    " get the number of entries in a quickfix list specified by an id
+    :echo getqflist({'id' : qfid, 'size' : 0}).size
+
+    " get the context of the third quickfix list in the stack
+    :echo getqflist({'nr' : 3, 'context' : 0}).context
+
+    " get the number of quickfix lists in the stack
+    :echo getqflist({'nr' : '$'}).nr
+
+    " get the number of times the current quickfix list is changed
+    :echo getqflist({'changedtick' : 0}).changedtick
+
+    " get the current entry in a quickfix list specified by an identifier
+    :echo getqflist({'id' : qfid, 'idx' : 0}).idx
+
+    " get all the quickfix list attributes using an identifier
+    :echo getqflist({'id' : qfid, 'all' : 0})
+
+    " parse text from a List of lines and return a quickfix list
+    :let myList = ["a.java:10:L10", "b.java:20:L20"]
+    :echo getqflist({'lines' : myList}).items
+
+    " parse text using a custom 'efm' and return a quickfix list
+    :echo getqflist({'lines' : ['a.c#10#Line 10'], 'efm':'%f#%l#%m'}).items
+
+    " get the quickfix list window id
+    :echo getqflist({'winid' : 0}).winid
+
+    " get the quickfix list window buffer number
+    :echo getqflist({'qfbufnr' : 0}).qfbufnr
+
+    " get the context of the current location list
+    :echo getloclist(0, {'context' : 0}).context
+
+    " get the location list window id of the third window
+    :echo getloclist(3, {'winid' : 0}).winid
+
+    " get the location list window buffer number of the third window
+    :echo getloclist(3, {'qfbufnr' : 0}).qfbufnr
+
+    " get the file window id of a location list window (winnr: 4)
+    :echo getloclist(4, {'filewinid' : 0}).filewinid
+<
+							*setqflist-examples*
+The |setqflist()| and |setloclist()| functions can be used to set the various
+attributes of a quickfix and location list respectively. Some examples for
+using these functions are below:
+>
+    " create an empty quickfix list with a title and a context
+    :let t = 'Search results'
+    :let c = {'cmd' : 'grep'}
+    :call setqflist([], ' ', {'title' : t, 'context' : c})
+
+    " set the title of the current quickfix list
+    :call setqflist([], 'a', {'title' : 'Mytitle'})
+
+    " change the current entry in the list specified by an identifier
+    :call setqflist([], 'a', {'id' : qfid, 'idx' : 10})
+
+    " set the context of a quickfix list specified by an identifier
+    :call setqflist([], 'a', {'id' : qfid, 'context' : {'val' : 100}})
+
+    " create a new quickfix list from a command output
+    :call setqflist([], ' ', {'lines' : systemlist('grep -Hn main *.c')})
+
+    " parse text using a custom efm and add to a particular quickfix list
+    :call setqflist([], 'a', {'id' : qfid,
+		\ 'lines' : ["a.c#10#L10", "b.c#20#L20"], 'efm':'%f#%l#%m'})
+
+    " add items to the quickfix list specified by an identifier
+    :let newItems = [{'filename' : 'a.txt', 'lnum' : 10, 'text' : "Apple"},
+		    \ {'filename' : 'b.txt', 'lnum' : 20, 'text' : "Orange"}]
+    :call setqflist([], 'a', {'id' : qfid, 'items' : newItems})
+
+    " empty a quickfix list specified by an identifier
+    :call setqflist([], 'r', {'id' : qfid, 'items' : []})
+
+    " free all the quickfix lists in the stack
+    :call setqflist([], 'f')
+
+    " set the title of the fourth quickfix list
+    :call setqflist([], 'a', {'nr' : 4, 'title' : 'SomeTitle'})
+
+    " create a new quickfix list at the end of the stack
+    :call setqflist([], ' ', {'nr' : '$',
+			\ 'lines' : systemlist('grep -Hn class *.java')})
+
+    " create a new location list from a command output
+    :call setloclist(0, [], ' ', {'lines' : systemlist('grep -Hn main *.c')})
+
+    " replace the location list entries for the third window
+    :call setloclist(3, [], 'r', {'items' : newItems})
+<

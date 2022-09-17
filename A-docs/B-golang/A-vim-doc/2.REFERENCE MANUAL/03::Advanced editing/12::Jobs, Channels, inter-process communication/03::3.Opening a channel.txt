@@ -1,0 +1,119 @@
+3. Opening a channel					*channel-open*
+
+To open a channel: >
+    let channel = ch_open({address} [, {options}])
+    if ch_status(channel) == "open"
+      " use the channel
+
+Use |ch_status()| to see if the channel could be opened.
+
+{address} has the form "hostname:port".  E.g., "localhost:8765".
+
+When using an IPv6 address, enclose it within square brackets.  E.g.,
+"[2001:db8::1]:8765".
+
+{options} is a dictionary with optional entries:	*channel-open-options*
+
+"mode" can be:						*channel-mode*
+	"json" - Use JSON, see below; most convenient way. Default.
+	"js"   - Use JS (JavaScript) encoding, more efficient than JSON.
+	"nl"   - Use messages that end in a NL character
+	"raw"  - Use raw messages
+						*channel-callback* *E921*
+"callback"	A function that is called when a message is received that is
+		not handled otherwise.  It gets two arguments: the channel
+		and the received message. Example: >
+	func Handle(channel, msg)
+	  echo 'Received: ' . a:msg
+	endfunc
+	let channel = ch_open("localhost:8765", {"callback": "Handle"})
+<
+		When "mode" is "json" or "js" the "msg" argument is the body
+		of the received message, converted to Vim types.
+		When "mode" is "nl" the "msg" argument is one message,
+		excluding the NL.
+		When "mode" is "raw" the "msg" argument is the whole message
+		as a string.
+
+		For all callbacks: Use |function()| to bind it to arguments
+		and/or a Dictionary.  Or use the form "dict.function" to bind
+		the Dictionary.
+
+		Callbacks are only called at a "safe" moment, usually when Vim
+		is waiting for the user to type a character.  Vim does not use
+		multi-threading.
+
+							*close_cb*
+"close_cb"	A function that is called when the channel gets closed, other
+		than by calling ch_close().  It should be defined like this: >
+	func MyCloseHandler(channel)
+<		Vim will invoke callbacks that handle data before invoking
+		close_cb, thus when this function is called no more data will
+		be passed to the callbacks.  However, if a callback causes Vim
+		to check for messages, the close_cb may be invoked while still
+		in the callback.  The plugin must handle this somehow, it can
+		be useful to know that no more data is coming.
+							*channel-drop*
+"drop"		Specifies when to drop messages:
+		    "auto"	When there is no callback to handle a message.
+				The "close_cb" is also considered for this.
+		    "never"	All messages will be kept.
+
+							*channel-noblock*
+"noblock"	Same effect as |job-noblock|.  Only matters for writing.
+
+							*waittime*
+"waittime"	The time to wait for the connection to be made in
+		milliseconds.  A negative number waits forever.
+
+		The default is zero, don't wait, which is useful if a local
+		server is supposed to be running already.  On Unix Vim
+		actually uses a 1 msec timeout, that is required on many
+		systems.  Use a larger value for a remote server, e.g.  10
+		msec at least.
+							*channel-timeout*
+"timeout"	The time to wait for a request when blocking, E.g. when using
+		ch_evalexpr().  In milliseconds.  The default is 2000 (2
+		seconds).
+
+When "mode" is "json" or "js" the "callback" is optional.  When omitted it is
+only possible to receive a message after sending one.
+
+To change the channel options after opening it use |ch_setoptions()|.  The
+arguments are similar to what is passed to |ch_open()|, but "waittime" cannot
+be given, since that only applies to opening the channel.
+
+For example, the handler can be added or changed: >
+    call ch_setoptions(channel, {'callback': callback})
+When "callback" is empty (zero or an empty string) the handler is removed.
+
+After a callback has been invoked Vim will update the screen and put the
+cursor back where it belongs.  Thus the callback should not need to do
+`:redraw`.
+
+The timeout can be changed: >
+    call ch_setoptions(channel, {'timeout': msec})
+<
+							  *channel-close* *E906*
+Once done with the channel, disconnect it like this: >
+    call ch_close(channel)
+When a socket is used this will close the socket for both directions.  When
+pipes are used (stdin/stdout/stderr) they are all closed.  This might not be
+what you want!  Stopping the job with job_stop() might be better.
+All readahead is discarded, callbacks will no longer be invoked.
+
+Note that a channel is closed in three stages:
+  - The I/O ends, log message: "Closing channel". There can still be queued
+    messages to read or callbacks to invoke.
+  - The readahead is cleared, log message: "Clearing channel".  Some variables
+    may still reference the channel.
+  - The channel is freed, log message: "Freeing channel".
+
+When the channel can't be opened you will get an error message.  There is a
+difference between MS-Windows and Unix: On Unix when the port doesn't exist
+ch_open() fails quickly.  On MS-Windows "waittime" applies.
+*E898* *E901* *E902*
+
+If there is an error reading or writing a channel it will be closed.
+*E630* *E631*
+

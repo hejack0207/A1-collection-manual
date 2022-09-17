@@ -1,0 +1,126 @@
+*44.7*	Other arguments
+
+MATCHGROUP
+
+When you define a region, the entire region is highlighted according to the
+group name specified.  To highlight the text enclosed in parentheses () with
+the group xInside, for example, use the following command: >
+
+	:syntax region xInside start=/(/ end=/)/
+
+Suppose, that you want to highlight the parentheses differently.  You can do
+this with a lot of convoluted region statements, or you can use the
+"matchgroup" argument.  This tells Vim to highlight the start and end of a
+region with a different highlight group (in this case, the xParen group): >
+
+	:syntax region xInside matchgroup=xParen start=/(/ end=/)/
+
+The "matchgroup" argument applies to the start or end match that comes after
+it.  In the previous example both start and end are highlighted with xParen.
+To highlight the end with xParenEnd: >
+
+	:syntax region xInside matchgroup=xParen start=/(/
+		\ matchgroup=xParenEnd end=/)/
+
+A side effect of using "matchgroup" is that contained items will not match in
+the start or end of the region.  The example for "transparent" uses this.
+
+
+TRANSPARENT
+
+In a C language file you would like to highlight the () text after a "while"
+differently from the () text after a "for".  In both of these there can be
+nested () items, which should be highlighted in the same way.  You must make
+sure the () highlighting stops at the matching ).  This is one way to do this:
+>
+	:syntax region cWhile matchgroup=cWhile start=/while\s*(/ end=/)/
+		\ contains=cCondNest
+	:syntax region cFor matchgroup=cFor start=/for\s*(/ end=/)/
+		\ contains=cCondNest
+	:syntax region cCondNest start=/(/ end=/)/ contained transparent
+
+Now you can give cWhile and cFor different highlighting.  The cCondNest item
+can appear in either of them, but take over the highlighting of the item it is
+contained in.  The "transparent" argument causes this.
+   Notice that the "matchgroup" argument has the same group as the item
+itself.  Why define it then?  Well, the side effect of using a matchgroup is
+that contained items are not found in the match with the start item then.
+This avoids that the cCondNest group matches the ( just after the "while" or
+"for".  If this would happen, it would span the whole text until the matching
+) and the region would continue after it.  Now cCondNest only matches after
+the match with the start pattern, thus after the first (.
+
+
+OFFSETS
+
+Suppose you want to define a region for the text between ( and ) after an
+"if".  But you don't want to include the "if" or the ( and ).  You can do this
+by specifying offsets for the patterns.  Example: >
+
+	:syntax region xCond start=/if\s*(/ms=e+1 end=/)/me=s-1
+
+The offset for the start pattern is "ms=e+1".  "ms" stands for Match Start.
+This defines an offset for the start of the match.  Normally the match starts
+where the pattern matches.  "e+1" means that the match now starts at the end
+of the pattern match, and then one character further.
+   The offset for the end pattern is "me=s-1".  "me" stands for Match End.
+"s-1" means the start of the pattern match and then one character back.  The
+result is that in this text:
+
+	if (foo == bar) ~
+
+Only the text "foo == bar" will be highlighted as xCond.
+
+More about offsets here: |:syn-pattern-offset|.
+
+
+ONELINE
+
+The "oneline" argument indicates that the region does not cross a line
+boundary.  For example: >
+
+	:syntax region xIfThen start=/if/ end=/then/ oneline
+
+This defines a region that starts at "if" and ends at "then".  But if there is
+no "then" after the "if", the region doesn't match.
+
+	Note:
+	When using "oneline" the region doesn't start if the end pattern
+	doesn't match in the same line.  Without "oneline" Vim does _not_
+	check if there is a match for the end pattern.  The region starts even
+	when the end pattern doesn't match in the rest of the file.
+
+
+CONTINUATION LINES AND AVOIDING THEM
+
+Things now become a little more complex.  Let's define a preprocessor line.
+This starts with a # in the first column and continues until the end of the
+line.  A line that ends with \ makes the next line a continuation line.  The
+way you handle this is to allow the syntax item to contain a continuation
+pattern: >
+
+	:syntax region xPreProc start=/^#/ end=/$/ contains=xLineContinue
+	:syntax match xLineContinue "\\$" contained
+
+In this case, although xPreProc normally matches a single line, the group
+contained in it (namely xLineContinue) lets it go on for more than one line.
+For example, it would match both of these lines:
+
+	#define SPAM  spam spam spam \ ~
+			bacon and spam ~
+
+In this case, this is what you want.  If it is not what you want, you can call
+for the region to be on a single line by adding "excludenl" to the contained
+pattern.  For example, you want to highlight "end" in xPreProc, but only at
+the end of the line.  To avoid making the xPreProc continue on the next line,
+like xLineContinue does, use "excludenl" like this: >
+
+	:syntax region xPreProc start=/^#/ end=/$/
+		\ contains=xLineContinue,xPreProcEnd
+	:syntax match xPreProcEnd excludenl /end$/ contained
+	:syntax match xLineContinue "\\$" contained
+
+"excludenl" must be placed before the pattern.  Since "xLineContinue" doesn't
+have "excludenl", a match with it will extend xPreProc to the next line as
+before.
+

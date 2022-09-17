@@ -1,0 +1,320 @@
+2. Differences from legacy Vim script			*vim9-differences*
+
+THIS IS STILL UNDER DEVELOPMENT - ANYTHING CAN BREAK - ANYTHING CAN CHANGE
+
+Comments starting with # ~
+
+In Vim script comments normally start with double quote.  That can also be the
+start of a string, thus in many places it cannot be used.  In Vim9 script a
+comment can also start with #.  In Vi this is a command to list text with
+numbers, but you can also use `:number` for that. >
+	let count = 0  # number of occurrences
+
+To improve readability there must be a space between the command and the #
+that starts a comment.  Note that #{ is the start of a dictionary, therefore
+it cannot start a comment.
+
+
+Vim9 functions ~
+
+A function defined with `:def` is compiled.  Execution is many times faster,
+often 10x to 100x times.
+
+Many errors are already found when compiling, before the function is executed.
+The syntax is strict, to enforce code that is easy to read and understand.
+
+Compilation is done when the function is first called, or when the
+`:defcompile` command is encountered in the script where the function was
+defined.
+
+`:def` has no options like `:function` does: "range", "abort", "dict" or
+"closure".  A `:def` function always aborts on an error, does not get a range
+passed and cannot be a "dict" function.
+
+The argument types and return type need to be specified.  The "any" type can
+be used, type checking will then be done at runtime, like with legacy
+functions.
+
+Arguments are accessed by name, without "a:".  There is no "a:" dictionary or
+"a:000" list.
+
+Variable arguments are defined as the last argument, with a name and have a
+list type, similar to Typescript.  For example, a list of numbers: >
+  	def MyFunc(...itemlist: list<number>)
+	   for item in itemlist
+	     ...
+
+
+Functions and variables are script-local by default ~
+							*vim9-scopes*
+When using `:function` or `:def` to specify a new function at the script level
+in a Vim9 script, the function is local to the script, as if "s:" was
+prefixed.  Using the "s:" prefix is optional.
+
+To define or use a global function or variable the "g:" prefix must be used.
+
+When using `:function` or `:def` to specify a new function inside a function,
+the function is local to the function.  It is not possible to define a
+script-local function inside a function. It is possible to define a global
+function, using the "g:" prefix.
+
+When referring to a function and no "s:" or "g:" prefix is used, Vim will
+search for the function in this order:
+- Local to the current scope and outer scopes up to the function scope.
+- Local to the current script file.
+- Imported functions, see `:import`.
+In all cases the function must be defined before used.  That is when it is
+first called or when `:defcompile` causes the call to be compiled.
+
+The result is that functions and variables without a namespace can always be
+found in the script, either defined there or imported.  Global functions and
+variables could be defined anywhere (good luck finding where!).
+
+Global functions can be still be defined and deleted at nearly any time.  In
+Vim9 script script-local functions are defined once when the script is sourced
+and cannot be deleted or replaced.
+
+
+Variable declarations with :let and :const ~
+							*vim9-declaration*
+Local variables need to be declared with `:let`.  Local constants need to be
+declared with `:const`.  We refer to both as "variables".
+
+Variables can be local to a script, function or code block: >
+	vim9script
+	let script_var = 123
+	def SomeFunc()
+	  let func_var = script_var
+	  if cond
+	    let block_var = func_var
+	  ...
+
+The variables are only visible in the block where they are defined and nested
+blocks.  Once the block ends the variable is no longer accessible: >
+	if cond
+	   let inner = 5
+	else
+	   let inner = 0
+	endif
+	echo inner  " Error!
+
+The declaration must be done earlier: >
+	let inner: number
+	if cond
+	   inner = 5
+	else
+	   inner = 0
+	endif
+	echo inner
+
+To intentionally avoid a variable being available later, a block can be used:
+>
+	{
+	   let temp = 'temp'
+	   ...
+	}
+	echo temp  " Error!
+
+An existing variable cannot be assigned to with `:let`, since that implies a
+declaration.  An exception is global variables: these can be both used with
+and without `:let`, because there is no rule about where they are declared.
+
+Variables cannot shadow previously defined variables.
+Variables may shadow Ex commands, rename the variable if needed.
+
+Global variables and user defined functions must be prefixed with "g:", also
+at the script level. >
+	vim9script
+	let script_local = 'text'
+	let g:global = 'value'
+	let Funcref = g:ThatFunction
+
+Since "&opt = value" is now assigning a value to option "opt", ":&" cannot be
+used to repeat a `:substitute` command.
+
+
+Omitting :call and :eval ~
+
+Functions can be called without `:call`: >
+  	writefile(lines, 'file')
+Using `:call` is still possible, but this is discouraged.
+
+A method call without `eval` is possible, so long as the start is an
+identifier or can't be an Ex command.  It does NOT work for string constants: >
+	myList->add(123)		" works
+	g:myList->add(123)		" works
+	[1, 2, 3]->Process()		" works
+	#{a: 1, b: 2}->Process()	" works
+	{'a': 1, 'b': 2}->Process()	" works
+	"foobar"->Process()		" does NOT work
+	("foobar")->Process()		" works
+	'foobar'->Process()		" does NOT work
+	('foobar')->Process()		" works
+
+In case there is ambiguity between a function name and an Ex command, use ":"
+to make clear you want to use the Ex command.  For example, there is both the
+`:substitute` command and the `substitute()` function.  When the line starts
+with `substitute(` this will use the function, prepend a colon to use the
+command instead: >
+	:substitute(pattern (replacement (
+
+Note that while variables need to be defined before they can be used,
+functions can be called before being defined.  This is required to be able
+have cyclic dependencies between functions.  It is slightly less efficient,
+since the function has to be looked up by name.  And a typo in the function
+name will only be found when the call is executed.
+
+
+Omitting function() ~
+
+A user defined function can be used as a function reference in an expression
+without `function()`. The argument types and return type will then be checked.
+The function must already have been defined. >
+
+	let Funcref = MyFunction
+
+When using `function()` the resulting type is "func", a function with any
+number of arguments and any return type.  The function can be defined later.
+
+
+Automatic line continuation ~
+
+In many cases it is obvious that an expression continues on the next line.  In
+those cases there is no need to prefix the line with a backslash.  For
+example, when a list spans multiple lines: >
+	let mylist = [
+		'one',
+		'two',
+		]
+And when a dict spans multiple lines: >
+	let mydict = #{
+		one: 1,
+		two: 2,
+		}
+Function call: >
+	let result = Func(
+			arg1,
+			arg2
+			)
+
+For binary operators in expressions not in [], {} or () a line break is
+possible just before or after the operator.  For example: >
+	let text = lead
+		   .. middle
+		   .. end
+	let total = start +
+	            end -
+		    correction
+	let result = positive
+			? PosFunc(arg)
+			: NegFunc(arg)
+
+	let result = GetBuilder()
+			->BuilderSetWidth(333)
+			->BuilderSetHeight(777)
+			->BuilderBuild()
+
+<							*E1050*
+To make it possible for the operator at the start of the line to be
+recognized, it is required to put a colon before a range.  This will adde
+"start" and print: >
+	let result = start
+	+ print
+This will assign "start" and print a line: >
+	let result = start
+	:+ print
+
+It is also possible to split a function header over multiple lines, in between
+arguments: >
+	def MyFunc(
+		text: string,
+		separator = '-'
+		): string
+
+Note that "enddef" cannot be used at the start of a continuation line, it ends
+the current function.
+
+
+No curly braces expansion ~
+
+|curly-braces-names| cannot be used.
+
+
+No :append, :change or :insert ~
+
+These commands are too quickly confused with local variable names.
+
+
+Comparators ~
+
+The 'ignorecase' option is not used for comparators that use strings.
+
+
+White space ~
+
+Vim9 script enforces proper use of white space.  This is no longer allowed: >
+	let var=234	" Error!
+	let var= 234	" Error!
+	let var =234	" Error!
+There must be white space before and after the "=": >
+	let var = 234	" OK
+White space must also be put before the # that starts a comment: >
+	let var = 234# Error!
+	let var = 234 # OK
+
+White space is required around most operators.
+
+White space is not allowed:
+- Between a function name and the "(": >
+  	call Func (arg)	   " Error!
+  	call Func
+	     \ (arg)	   " Error!
+  	call Func(arg)	   " OK
+  	call Func(
+	     \ arg)	   " OK
+  	call Func(
+	     \ arg	   " OK
+	     \ )
+
+
+Conditions and expressions ~
+
+Conditions and expression are mostly working like they do in JavaScript.  A
+difference is made where JavaScript does not work like most people expect.
+Specifically, an empty list is falsey.
+
+Any type of variable can be used as a condition, there is no error, not even
+for using a list or job.  This is very much like JavaScript, but there are a
+few exceptions.
+
+	type		TRUE when ~
+	bool		v:true
+	number		non-zero
+	float		non-zero
+	string		non-empty
+	blob		non-empty
+	list		non-empty (different from JavaScript)
+	dictionary	non-empty (different from JavaScript)
+	func		when there is a function name
+	special		v:true
+	job		when not NULL
+	channel		when not NULL
+	class		when not NULL
+	object		when not NULL (TODO: when isTrue() returns v:true)
+
+The boolean operators "||" and "&&" do not change the value: >
+	8 || 2   == 8
+	0 || 2   == 2
+	0 || ''  == ''
+	8 && 2   == 2
+	0 && 2   == 0
+	[] && 2  == []
+
+When using `..` for string concatenation the arguments are always converted to
+string. >
+	'hello ' .. 123  == 'hello 123'
+	'hello ' .. v:true  == 'hello true'
+
+In Vim9 script one can use "true" for v:true and "false" for v:false.
+
+

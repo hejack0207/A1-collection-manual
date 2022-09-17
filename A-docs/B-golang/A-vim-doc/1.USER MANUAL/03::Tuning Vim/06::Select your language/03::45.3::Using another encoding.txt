@@ -1,0 +1,119 @@
+*45.3*	Using another encoding
+
+Vim guesses that the files you are going to edit are encoded for your
+language.  For many European languages this is "latin1".  Then each byte is
+one character.  That means there are 256 different characters possible.  For
+Asian languages this is not sufficient.  These mostly use a double-byte
+encoding, providing for over ten thousand possible characters.  This still
+isn't enough when a text is to contain several different languages.  This is
+where Unicode comes in.  It was designed to include all characters used in
+commonly used languages.  This is the "Super encoding that replaces all
+others".  But it isn't used that much yet.
+   Fortunately, Vim supports these three kinds of encodings.  And, with some
+restrictions, you can use them even when your environment uses another
+language than the text.
+   Nevertheless, when you only edit files that are in the encoding of your
+language, the default should work fine and you don't need to do anything.  The
+following is only relevant when you want to edit different languages.
+
+
+USING UNICODE IN THE GUI
+
+The nice thing about Unicode is that other encodings can be converted to it
+and back without losing information.  When you make Vim use Unicode
+internally, you will be able to edit files in any encoding.
+   Unfortunately, the number of systems supporting Unicode is still limited.
+Thus it's unlikely that your language uses it.  You need to tell Vim you want
+to use Unicode, and how to handle interfacing with the rest of the system.
+   Let's start with the GUI version of Vim, which is able to display Unicode
+characters.  This should work: >
+
+	:set encoding=utf-8
+	:set guifont=-misc-fixed-medium-r-normal--18-120-100-100-c-90-iso10646-1
+
+The 'encoding' option tells Vim the encoding of the characters that you use.
+This applies to the text in buffers (files you are editing), registers, Vim
+script files, etc.  You can regard 'encoding' as the setting for the internals
+of Vim.
+   This example assumes you have this font on your system.  The name in the
+example is for the X Window System.  This font is in a package that is used to
+enhance xterm with Unicode support.  If you don't have this font, you might
+find it here:
+
+	http://www.cl.cam.ac.uk/~mgk25/download/ucs-fonts.tar.gz ~
+
+For MS-Windows, some fonts have a limited number of Unicode characters.  Try
+using the "Courier New" font.  You can use the Edit/Select Font... menu to
+select and try out the fonts available.  Only fixed-width fonts can be used
+though.  Example: >
+
+	:set guifont=courier_new:h12
+
+If it doesn't work well, try getting a fontpack.  If Microsoft didn't move it,
+you can find it here:
+
+	http://www.microsoft.com/typography/fonts/default.aspx ~
+
+Now you have told Vim to use Unicode internally and display text with a
+Unicode font.  Typed characters still arrive in the encoding of your original
+language.  This requires converting them to Unicode.  Tell Vim the language
+from which to convert with the 'termencoding' option.  You can do it like
+this: >
+
+	:let &termencoding = &encoding
+	:set encoding=utf-8
+
+This assigns the old value of 'encoding' to 'termencoding' before setting
+'encoding' to utf-8.  You will have to try out if this really works for your
+setup.  It should work especially well when using an input method for an Asian
+language, and you want to edit Unicode text.
+
+
+USING UNICODE IN A UNICODE TERMINAL
+
+There are terminals that support Unicode directly.  The standard xterm that
+comes with XFree86 is one of them.  Let's use that as an example.
+   First of all, the xterm must have been compiled with Unicode support.  See
+|UTF8-xterm| how to check that and how to compile it when needed.
+   Start the xterm with the "-u8" argument.  You might also need so specify a
+font.  Example: >
+
+   xterm -u8 -fn -misc-fixed-medium-r-normal--18-120-100-100-c-90-iso10646-1
+
+Now you can run Vim inside this terminal.  Set 'encoding' to "utf-8" as
+before.  That's all.
+
+
+USING UNICODE IN AN ORDINARY TERMINAL
+
+Suppose you want to work with Unicode files, but don't have a terminal with
+Unicode support.  You can do this with Vim, although characters that are not
+supported by the terminal will not be displayed.  The layout of the text
+will be preserved.  >
+
+	:let &termencoding = &encoding
+	:set encoding=utf-8
+
+This is the same as what was used for the GUI.  But it works differently: Vim
+will convert the displayed text before sending it to the terminal.  That
+avoids that the display is messed up with strange characters.
+   For this to work the conversion between 'termencoding' and 'encoding' must
+be possible.  Vim will convert from latin1 to Unicode, thus that always works.
+For other conversions the |+iconv| feature is required.
+   Try editing a file with Unicode characters in it.  You will notice that Vim
+will put a question mark (or underscore or some other character) in places
+where a character should be that the terminal can't display.  Move the cursor
+to a question mark and use this command: >
+
+	ga
+
+Vim will display a line with the code of the character.  This gives you a hint
+about what character it is.  You can look it up in a Unicode table.  You could
+actually view a file that way, if you have lots of time at hand.
+
+	Note:
+	Since 'encoding' is used for all text inside Vim, changing it makes
+	all non-ASCII text invalid.  You will notice this when using registers
+	and the 'viminfo' file (e.g., a remembered search pattern).  It's
+	recommended to set 'encoding' in your vimrc file, and leave it alone.
+

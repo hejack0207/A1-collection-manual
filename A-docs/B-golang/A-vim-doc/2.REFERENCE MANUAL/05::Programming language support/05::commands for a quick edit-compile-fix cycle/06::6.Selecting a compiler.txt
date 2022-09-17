@@ -1,0 +1,140 @@
+6. Selecting a compiler					*compiler-select*
+
+						*:comp* *:compiler* *E666*
+:comp[iler][!] {name}		Set options to work with compiler {name}.
+				Without the "!" options are set for the
+				current buffer.  With "!" global options are
+				set.
+				If you use ":compiler foo" in "file.foo" and
+				then ":compiler! bar" in another buffer, Vim
+				will keep on using "foo" in "file.foo".
+				{not available when compiled without the
+				|+eval| feature}
+
+
+The Vim plugins in the "compiler" directory will set options to use the
+selected compiler.  For `:compiler` local options are set, for `:compiler!`
+global options.
+							*current_compiler*
+To support older Vim versions, the plugins always use "current_compiler" and
+not "b:current_compiler".  What the command actually does is the following:
+
+- Delete the "current_compiler" and "b:current_compiler" variables.
+- Define the "CompilerSet" user command.  With "!" it does ":set", without "!"
+  it does ":setlocal".
+- Execute ":runtime! compiler/{name}.vim".  The plugins are expected to set
+  options with "CompilerSet" and set the "current_compiler" variable to the
+  name of the compiler.
+- Delete the "CompilerSet" user command.
+- Set "b:current_compiler" to the value of "current_compiler".
+- Without "!" the old value of "current_compiler" is restored.
+
+
+For writing a compiler plugin, see |write-compiler-plugin|.
+
+
+GCC					*quickfix-gcc*	*compiler-gcc*
+
+There's one variable you can set for the GCC compiler:
+
+g:compiler_gcc_ignore_unmatched_lines
+				Ignore lines that don't match any patterns
+				defined for GCC.  Useful if output from
+				commands run from make are generating false
+				positives.
+
+
+MANX AZTEC C				*quickfix-manx* *compiler-manx*
+
+To use Vim with Manx's Aztec C compiler on the Amiga you should do the
+following:
+- Set the CCEDIT environment variable with the command: >
+	mset "CCEDIT=vim -q"
+- Compile with the -qf option.  If the compiler finds any errors, Vim is
+  started and the cursor is positioned on the first error.  The error message
+  will be displayed on the last line.  You can go to other errors with the
+  commands mentioned above.  You can fix the errors and write the file(s).
+- If you exit Vim normally the compiler will re-compile the same file.  If you
+  exit with the :cq command, the compiler will terminate.  Do this if you
+  cannot fix the error, or if another file needs to be compiled first.
+
+There are some restrictions to the Quickfix mode on the Amiga.  The
+compiler only writes the first 25 errors to the errorfile (Manx's
+documentation does not say how to get more).  If you want to find the others,
+you will have to fix a few errors and exit the editor.  After recompiling,
+up to 25 remaining errors will be found.
+
+If Vim was started from the compiler, the :sh and some :!  commands will not
+work, because Vim is then running in the same process as the compiler and
+stdin (standard input) will not be interactive.
+
+
+PERL					*quickfix-perl* *compiler-perl*
+
+The Perl compiler plugin doesn't actually compile, but invokes Perl's internal
+syntax checking feature and parses the output for possible errors so you can
+correct them in quick-fix mode.
+
+Warnings are forced regardless of "no warnings" or "$^W = 0" within the file
+being checked.  To disable this set g:perl_compiler_force_warnings to a zero
+value.  For example: >
+	let g:perl_compiler_force_warnings = 0
+
+
+PYUNIT COMPILER						*compiler-pyunit*
+
+This is not actually a compiler, but a unit testing framework for the
+Python language.  It is included into standard Python distribution
+starting from version 2.0.  For older versions, you can get it from
+http://pyunit.sourceforge.net.
+
+When you run your tests with the help of the framework, possible errors
+are parsed by Vim and presented for you in quick-fix mode.
+
+Unfortunately, there is no standard way to run the tests.
+The alltests.py script seems to be used quite often, that's all.
+Useful values for the 'makeprg' options therefore are:
+ setlocal makeprg=./alltests.py " Run a testsuite
+ setlocal makeprg=python\ %:S   " Run a single testcase
+
+Also see http://vim.sourceforge.net/tip_view.php?tip_id=280.
+
+
+TEX COMPILER						*compiler-tex*
+
+Included in the distribution compiler for TeX ($VIMRUNTIME/compiler/tex.vim)
+uses make command if possible.  If the compiler finds a file named "Makefile"
+or "makefile" in the current directory, it supposes that you want to process
+your *TeX files with make, and the makefile does the right work.  In this case
+compiler sets 'errorformat' for *TeX output and leaves 'makeprg' untouched.  If
+neither "Makefile" nor "makefile" is found, the compiler will not use make.
+You can force the compiler to ignore makefiles by defining
+b:tex_ignore_makefile or g:tex_ignore_makefile variable (they are checked for
+existence only).
+
+If the compiler chose not to use make, it needs to choose a right program for
+processing your input.  If b:tex_flavor or g:tex_flavor (in this precedence)
+variable exists, it defines TeX flavor for :make (actually, this is the name
+of executed command), and if both variables do not exist, it defaults to
+"latex".  For example, while editing chapter2.tex \input-ed from mypaper.tex
+written in AMS-TeX: >
+
+	:let b:tex_flavor = 'amstex'
+	:compiler tex
+<	[editing...] >
+	:make mypaper
+
+Note that you must specify a name of the file to process as an argument (to
+process the right file when editing \input-ed or \include-ed file; portable
+solution for substituting % for no arguments is welcome).  This is not in the
+semantics of make, where you specify a target, not source, but you may specify
+filename without extension ".tex" and mean this as "make filename.dvi or
+filename.pdf or filename.some_result_extension according to compiler".
+
+Note: tex command line syntax is set to usable both for MikTeX (suggestion
+by Srinath Avadhanula) and teTeX (checked by Artem Chuprina).  Suggestion
+from |errorformat-LaTeX| is too complex to keep it working for different
+shells and OSes and also does not allow to use other available TeX options,
+if any.  If your TeX doesn't support "-interaction=nonstopmode", please
+report it with different means to express \nonstopmode from the command line.
+

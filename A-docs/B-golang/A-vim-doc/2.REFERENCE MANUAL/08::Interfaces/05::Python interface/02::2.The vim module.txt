@@ -1,0 +1,285 @@
+2. The vim module					*python-vim*
+
+Python code gets all of its access to vim (with one exception - see
+|python-output| below) via the "vim" module.  The vim module implements two
+methods, three constants, and one error object.  You need to import the vim
+module before using it: >
+	:python import vim
+
+Overview >
+	:py print "Hello"		# displays a message
+	:py vim.command(cmd)		# execute an Ex command
+	:py w = vim.windows[n]		# gets window "n"
+	:py cw = vim.current.window	# gets the current window
+	:py b = vim.buffers[n]		# gets buffer "n"
+	:py cb = vim.current.buffer	# gets the current buffer
+	:py w.height = lines		# sets the window height
+	:py w.cursor = (row, col)	# sets the window cursor position
+	:py pos = w.cursor		# gets a tuple (row, col)
+	:py name = b.name		# gets the buffer file name
+	:py line = b[n]			# gets a line from the buffer
+	:py lines = b[n:m]		# gets a list of lines
+	:py num = len(b)		# gets the number of lines
+	:py b[n] = str			# sets a line in the buffer
+	:py b[n:m] = [str1, str2, str3]	# sets a number of lines at once
+	:py del b[n]			# deletes a line
+	:py del b[n:m]			# deletes a number of lines
+
+
+Methods of the "vim" module
+
+vim.command(str)					*python-command*
+	Executes the vim (ex-mode) command str.  Returns None.
+	Examples: >
+	    :py vim.command("set tw=72")
+	    :py vim.command("%s/aaa/bbb/g")
+<	The following definition executes Normal mode commands: >
+		def normal(str):
+			vim.command("normal "+str)
+		# Note the use of single quotes to delimit a string containing
+		# double quotes
+		normal('"a2dd"aP')
+<								*E659*
+	The ":python" command cannot be used recursively with Python 2.2 and
+	older.  This only works with Python 2.3 and later: >
+	    :py vim.command("python print 'Hello again Python'")
+
+vim.eval(str)						*python-eval*
+	Evaluates the expression str using the vim internal expression
+	evaluator (see |expression|).  Returns the expression result as:
+	- a string if the Vim expression evaluates to a string or number
+	- a list if the Vim expression evaluates to a Vim list
+	- a dictionary if the Vim expression evaluates to a Vim dictionary
+	Dictionaries and lists are recursively expanded.
+	Examples: >
+	    :" value of the 'textwidth' option
+	    :py text_width = vim.eval("&tw")
+	    :
+	    :" contents of the 'a' register
+	    :py a_reg = vim.eval("@a")
+	    :
+	    :" Result is a string! Use string.atoi() to convert to a number.
+	    :py str = vim.eval("12+12")
+	    :
+	    :py tagList = vim.eval('taglist("eval_expr")')
+<	The latter will return a python list of python dicts, for instance:
+	[{'cmd': '/^eval_expr(arg, nextcmd)$/', 'static': 0, 'name': ~
+	'eval_expr', 'kind': 'f', 'filename': './src/eval.c'}] ~
+
+vim.bindeval(str)					*python-bindeval*
+	Like |python-eval|, but returns special objects described in
+	|python-bindeval-objects|. These python objects let you modify (|List|
+	or |Dictionary|) or call (|Funcref|) vim objects.
+
+vim.strwidth(str)					*python-strwidth*
+	Like |strwidth()|: returns number of display cells str occupies, tab
+	is counted as one cell.
+
+vim.foreach_rtp(callable)				*python-foreach_rtp*
+	Call the given callable for each path in 'runtimepath' until either
+	callable returns something but None, the exception is raised or there
+	are no longer paths. If stopped in case callable returned non-None,
+	vim.foreach_rtp function returns the value returned by callable.
+
+vim.chdir(*args, **kwargs)				*python-chdir*
+vim.fchdir(*args, **kwargs)				*python-fchdir*
+	Run os.chdir or os.fchdir, then all appropriate vim stuff.
+	Note: you should not use these functions directly, use os.chdir and
+	      os.fchdir instead. Behavior of vim.fchdir is undefined in case
+	      os.fchdir does not exist.
+
+Error object of the "vim" module
+
+vim.error						*python-error*
+	Upon encountering a Vim error, Python raises an exception of type
+	vim.error.
+	Example: >
+		try:
+			vim.command("put a")
+		except vim.error:
+			# nothing in register a
+
+Constants of the "vim" module
+
+	Note that these are not actually constants - you could reassign them.
+	But this is silly, as you would then lose access to the vim objects
+	to which the variables referred.
+
+vim.buffers						*python-buffers*
+	A mapping object providing access to the list of vim buffers.  The
+	object supports the following operations: >
+	    :py b = vim.buffers[i]	# Indexing (read-only)
+	    :py b in vim.buffers	# Membership test
+	    :py n = len(vim.buffers)	# Number of elements
+	    :py for b in vim.buffers:	# Iterating over buffer list
+<
+vim.windows						*python-windows*
+	A sequence object providing access to the list of vim windows.  The
+	object supports the following operations: >
+	    :py w = vim.windows[i]	# Indexing (read-only)
+	    :py w in vim.windows	# Membership test
+	    :py n = len(vim.windows)	# Number of elements
+	    :py for w in vim.windows:	# Sequential access
+<	Note: vim.windows object always accesses current tab page.
+	|python-tabpage|.windows objects are bound to parent |python-tabpage|
+	object and always use windows from that tab page (or throw vim.error
+	in case tab page was deleted). You can keep a reference to both
+	without keeping a reference to vim module object or |python-tabpage|,
+	they will not lose their properties in this case.
+
+vim.tabpages						*python-tabpages*
+	A sequence object providing access to the list of vim tab pages. The
+	object supports the following operations: >
+	    :py t = vim.tabpages[i]	# Indexing (read-only)
+	    :py t in vim.tabpages	# Membership test
+	    :py n = len(vim.tabpages)	# Number of elements
+	    :py for t in vim.tabpages:	# Sequential access
+<
+vim.current						*python-current*
+	An object providing access (via specific attributes) to various
+	"current" objects available in vim:
+		vim.current.line	The current line (RW)		String
+		vim.current.buffer	The current buffer (RW)		Buffer
+		vim.current.window	The current window (RW)		Window
+		vim.current.tabpage	The current tab page (RW)	TabPage
+		vim.current.range	The current line range (RO)	Range
+
+	The last case deserves a little explanation.  When the :python or
+	:pyfile command specifies a range, this range of lines becomes the
+	"current range".  A range is a bit like a buffer, but with all access
+	restricted to a subset of lines.  See |python-range| for more details.
+
+	Note: When assigning to vim.current.{buffer,window,tabpage} it expects
+	valid |python-buffer|, |python-window| or |python-tabpage| objects
+	respectively. Assigning triggers normal (with |autocommand|s)
+	switching to given buffer, window or tab page. It is the only way to
+	switch UI objects in python: you can't assign to
+	|python-tabpage|.window attribute. To switch without triggering
+	autocommands use >
+	    py << EOF
+	    saved_eventignore = vim.options['eventignore']
+	    vim.options['eventignore'] = 'all'
+	    try:
+	        vim.current.buffer = vim.buffers[2] # Switch to buffer 2
+	    finally:
+	        vim.options['eventignore'] = saved_eventignore
+	    EOF
+<
+vim.vars						*python-vars*
+vim.vvars						*python-vvars*
+	Dictionary-like objects holding dictionaries with global (|g:|) and
+	vim (|v:|) variables respectively. Identical to `vim.bindeval("g:")`,
+	but faster.
+
+vim.options						*python-options*
+	Object partly supporting mapping protocol (supports setting and
+	getting items) providing a read-write access to global options.
+	Note: unlike |:set| this provides access only to global options. You
+	cannot use this object to obtain or set local options' values or
+	access local-only options in any fashion. Raises KeyError if no global
+	option with such name exists (i.e. does not raise KeyError for
+	|global-local| options and global only options, but does for window-
+	and buffer-local ones).  Use |python-buffer| objects to access to
+	buffer-local options and |python-window| objects to access to
+	window-local options.
+
+	Type of this object is available via "Options" attribute of vim
+	module.
+
+Output from Python					*python-output*
+	Vim displays all Python code output in the Vim message area.  Normal
+	output appears as information messages, and error output appears as
+	error messages.
+
+	In implementation terms, this means that all output to sys.stdout
+	(including the output from print statements) appears as information
+	messages, and all output to sys.stderr (including error tracebacks)
+	appears as error messages.
+
+							*python-input*
+	Input (via sys.stdin, including input() and raw_input()) is not
+	supported, and may cause the program to crash.  This should probably be
+	fixed.
+
+		    *python2-directory* *python3-directory* *pythonx-directory*
+Python 'runtimepath' handling				*python-special-path*
+
+In python vim.VIM_SPECIAL_PATH special directory is used as a replacement for
+the list of paths found in 'runtimepath': with this directory in sys.path and
+vim.path_hooks in sys.path_hooks python will try to load module from
+{rtp}/python2 (or python3) and {rtp}/pythonx (for both python versions) for
+each {rtp} found in 'runtimepath'.
+
+Implementation is similar to the following, but written in C: >
+
+    from imp import find_module, load_module
+    import vim
+    import sys
+
+    class VimModuleLoader(object):
+        def __init__(self, module):
+            self.module = module
+
+        def load_module(self, fullname, path=None):
+            return self.module
+
+    def _find_module(fullname, oldtail, path):
+        idx = oldtail.find('.')
+        if idx > 0:
+            name = oldtail[:idx]
+            tail = oldtail[idx+1:]
+            fmr = find_module(name, path)
+            module = load_module(fullname[:-len(oldtail)] + name, *fmr)
+            return _find_module(fullname, tail, module.__path__)
+        else:
+            fmr = find_module(fullname, path)
+            return load_module(fullname, *fmr)
+
+    # It uses vim module itself in place of VimPathFinder class: it does not
+    # matter for python which object has find_module function attached to as
+    # an attribute.
+    class VimPathFinder(object):
+        @classmethod
+        def find_module(cls, fullname, path=None):
+            try:
+                return VimModuleLoader(_find_module(fullname, fullname, path or vim._get_paths()))
+            except ImportError:
+                return None
+
+        @classmethod
+        def load_module(cls, fullname, path=None):
+            return _find_module(fullname, fullname, path or vim._get_paths())
+
+    def hook(path):
+        if path == vim.VIM_SPECIAL_PATH:
+            return VimPathFinder
+        else:
+            raise ImportError
+
+    sys.path_hooks.append(hook)
+
+vim.VIM_SPECIAL_PATH					*python-VIM_SPECIAL_PATH*
+	String constant used in conjunction with vim path hook. If path hook
+	installed by vim is requested to handle anything but path equal to
+	vim.VIM_SPECIAL_PATH constant it raises ImportError. In the only other
+	case it uses special loader.
+
+	Note: you must not use value of this constant directly, always use
+	      vim.VIM_SPECIAL_PATH object.
+
+vim.find_module(...)					*python-find_module*
+vim.path_hook(path)					*python-path_hook*
+	Methods or objects used to implement path loading as described above.
+	You should not be using any of these directly except for vim.path_hook
+	in case you need to do something with sys.meta_path. It is not
+	guaranteed that any of the objects will exist in the future vim
+	versions.
+
+vim._get_paths						*python-_get_paths*
+	Methods returning a list of paths which will be searched for by path
+	hook. You should not rely on this method being present in future
+	versions, but can use it for debugging.
+
+	It returns a list of {rtp}/python2 (or {rtp}/python3) and
+	{rtp}/pythonx directories for each {rtp} in 'runtimepath'.
+

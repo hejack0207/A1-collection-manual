@@ -1,0 +1,704 @@
+7. Commands						*expression-commands*
+
+Note: in Vim9 script `:let` is used for variable declaration, not assignment.
+An assignment leaves out the `:let` command.  |vim9-declaration|
+
+:let {var-name} = {expr1}				*:let* *E18*
+			Set internal variable {var-name} to the result of the
+			expression {expr1}.  The variable will get the type
+			from the {expr}.  If {var-name} didn't exist yet, it
+			is created.
+
+:let {var-name}[{idx}] = {expr1}			*E689*
+			Set a list item to the result of the expression
+			{expr1}.  {var-name} must refer to a list and {idx}
+			must be a valid index in that list.  For nested list
+			the index can be repeated.
+			This cannot be used to add an item to a |List|.
+			This cannot be used to set a byte in a String.  You
+			can do that like this: >
+				:let var = var[0:2] . 'X' . var[4:]
+<			When {var-name} is a |Blob| then {idx} can be the
+			length of the blob, in which case one byte is
+			appended.
+
+							*E711* *E719*
+:let {var-name}[{idx1}:{idx2}] = {expr1}		*E708* *E709* *E710*
+			Set a sequence of items in a |List| to the result of
+			the expression {expr1}, which must be a list with the
+			correct number of items.
+			{idx1} can be omitted, zero is used instead.
+			{idx2} can be omitted, meaning the end of the list.
+			When the selected range of items is partly past the
+			end of the list, items will be added.
+
+			*:let+=* *:let-=* *:letstar=*
+			*:let/=* *:let%=* *:let.=* *:let..=* *E734* *E985*
+:let {var} += {expr1}	Like ":let {var} = {var} + {expr1}".
+:let {var} -= {expr1}	Like ":let {var} = {var} - {expr1}".
+:let {var} *= {expr1}	Like ":let {var} = {var} * {expr1}".
+:let {var} /= {expr1}	Like ":let {var} = {var} / {expr1}".
+:let {var} %= {expr1}	Like ":let {var} = {var} % {expr1}".
+:let {var} .= {expr1}	Like ":let {var} = {var} . {expr1}".
+:let {var} ..= {expr1}	Like ":let {var} = {var} .. {expr1}".
+			These fail if {var} was not set yet and when the type
+			of {var} and {expr1} don't fit the operator.
+			`.=` is not supported with Vim script version 2 and
+			later, see |vimscript-version|.
+
+
+:let ${env-name} = {expr1}			*:let-environment* *:let-$*
+			Set environment variable {env-name} to the result of
+			the expression {expr1}.  The type is always String.
+
+			On some systems making an environment variable empty
+			causes it to be deleted.  Many systems do not make a
+			difference between an environment variable that is not
+			set and an environment variable that is empty.
+
+:let ${env-name} .= {expr1}
+			Append {expr1} to the environment variable {env-name}.
+			If the environment variable didn't exist yet this
+			works like "=".
+
+:let @{reg-name} = {expr1}			*:let-register* *:let-@*
+			Write the result of the expression {expr1} in register
+			{reg-name}.  {reg-name} must be a single letter, and
+			must be the name of a writable register (see
+			|registers|).  "@@" can be used for the unnamed
+			register, "@/" for the search pattern.
+			If the result of {expr1} ends in a <CR> or <NL>, the
+			register will be linewise, otherwise it will be set to
+			characterwise.
+			This can be used to clear the last search pattern: >
+				:let @/ = ""
+<			This is different from searching for an empty string,
+			that would match everywhere.
+
+:let @{reg-name} .= {expr1}
+			Append {expr1} to register {reg-name}.  If the
+			register was empty it's like setting it to {expr1}.
+
+:let &{option-name} = {expr1}			*:let-option* *:let-&*
+			Set option {option-name} to the result of the
+			expression {expr1}.  A String or Number value is
+			always converted to the type of the option.
+			For an option local to a window or buffer the effect
+			is just like using the |:set| command: both the local
+			value and the global value are changed.
+			Example: >
+				:let &path = &path . ',/usr/local/include'
+<			This also works for terminal codes in the form t_xx.
+			But only for alphanumerical names.  Example: >
+				:let &t_k1 = "\<Esc>[234;"
+<			When the code does not exist yet it will be created as
+			a terminal key code, there is no error.
+
+:let &{option-name} .= {expr1}
+			For a string option: Append {expr1} to the value.
+			Does not insert a comma like |:set+=|.
+
+:let &{option-name} += {expr1}
+:let &{option-name} -= {expr1}
+			For a number or boolean option: Add or subtract
+			{expr1}.
+
+:let &l:{option-name} = {expr1}
+:let &l:{option-name} .= {expr1}
+:let &l:{option-name} += {expr1}
+:let &l:{option-name} -= {expr1}
+			Like above, but only set the local value of an option
+			(if there is one).  Works like |:setlocal|.
+
+:let &g:{option-name} = {expr1}
+:let &g:{option-name} .= {expr1}
+:let &g:{option-name} += {expr1}
+:let &g:{option-name} -= {expr1}
+			Like above, but only set the global value of an option
+			(if there is one).  Works like |:setglobal|.
+
+:let [{name1}, {name2}, ...] = {expr1}		*:let-unpack* *E687* *E688*
+			{expr1} must evaluate to a |List|.  The first item in
+			the list is assigned to {name1}, the second item to
+			{name2}, etc.
+			The number of names must match the number of items in
+			the |List|.
+			Each name can be one of the items of the ":let"
+			command as mentioned above.
+			Example: >
+				:let [s, item] = GetItem(s)
+<			Detail: {expr1} is evaluated first, then the
+			assignments are done in sequence.  This matters if
+			{name2} depends on {name1}.  Example: >
+				:let x = [0, 1]
+				:let i = 0
+				:let [i, x[i]] = [1, 2]
+				:echo x
+<			The result is [0, 2].
+
+:let [{name1}, {name2}, ...] .= {expr1}
+:let [{name1}, {name2}, ...] += {expr1}
+:let [{name1}, {name2}, ...] -= {expr1}
+			Like above, but append/add/subtract the value for each
+			|List| item.
+
+:let [{name}, ..., ; {lastname}] = {expr1}				*E452*
+			Like |:let-unpack| above, but the |List| may have more
+			items than there are names.  A list of the remaining
+			items is assigned to {lastname}.  If there are no
+			remaining items {lastname} is set to an empty list.
+			Example: >
+				:let [a, b; rest] = ["aval", "bval", 3, 4]
+<
+:let [{name}, ..., ; {lastname}] .= {expr1}
+:let [{name}, ..., ; {lastname}] += {expr1}
+:let [{name}, ..., ; {lastname}] -= {expr1}
+			Like above, but append/add/subtract the value for each
+			|List| item.
+
+						*:let=<<* *:let-heredoc*
+						*E990* *E991* *E172* *E221*
+:let {var-name} =<< [trim] {endmarker}
+text...
+text...
+{endmarker}
+			Set internal variable {var-name} to a List containing
+			the lines of text bounded by the string {endmarker}.
+			{endmarker} must not contain white space.
+			{endmarker} cannot start with a lower case character.
+			The last line should end only with the {endmarker}
+			string without any other character.  Watch out for
+			white space after {endmarker}!
+
+			Without "trim" any white space characters in the lines
+			of text are preserved.  If "trim" is specified before
+			{endmarker}, then indentation is stripped so you can
+			do: >
+				let text =<< trim END
+				   if ok
+				     echo 'done'
+				   endif
+				END
+<			Results in: ["if ok", "  echo 'done'", "endif"]
+			The marker must line up with "let" and the indentation
+			of the first line is removed from all the text lines.
+			Specifically: all the leading indentation exactly
+			matching the leading indentation of the first
+			non-empty text line is stripped from the input lines.
+			All leading indentation exactly matching the leading
+			indentation before `let` is stripped from the line
+			containing {endmarker}.  Note that the difference
+			between space and tab matters here.
+
+			If {var-name} didn't exist yet, it is created.
+			Cannot be followed by another command, but can be
+			followed by a comment.
+
+			To avoid line continuation to be applied, consider
+			adding 'C' to 'cpoptions': >
+				set cpo+=C
+				let var =<< END
+				   \ leading backslash
+				END
+				set cpo-=C
+<
+			Examples: >
+				let var1 =<< END
+				Sample text 1
+				    Sample text 2
+				Sample text 3
+				END
+
+				let data =<< trim DATA
+					1 2 3 4
+					5 6 7 8
+				DATA
+<
+								*E121*
+:let {var-name}	..	List the value of variable {var-name}.  Multiple
+			variable names may be given.  Special names recognized
+			here:				*E738*
+			  g:	global variables
+			  b:	local buffer variables
+			  w:	local window variables
+			  t:	local tab page variables
+			  s:	script-local variables
+			  l:	local function variables
+			  v:	Vim variables.
+			This does not work in Vim9 script. |vim9-declaration|
+
+:let			List the values of all variables.  The type of the
+			variable is indicated before the value:
+			    <nothing>	String
+				#	Number
+				*	Funcref
+			This does not work in Vim9 script. |vim9-declaration|
+
+:unl[et][!] {name} ...				*:unlet* *:unl* *E108* *E795*
+			Remove the internal variable {name}.  Several variable
+			names can be given, they are all removed.  The name
+			may also be a |List| or |Dictionary| item.
+			With [!] no error message is given for non-existing
+			variables.
+			One or more items from a |List| can be removed: >
+				:unlet list[3]	  " remove fourth item
+				:unlet list[3:]   " remove fourth item to last
+<			One item from a |Dictionary| can be removed at a time: >
+				:unlet dict['two']
+				:unlet dict.two
+<			This is especially useful to clean up used global
+			variables and script-local variables (these are not
+			deleted when the script ends).  Function-local
+			variables are automatically deleted when the function
+			ends.
+
+:unl[et] ${env-name} ...			*:unlet-environment* *:unlet-$*
+			Remove environment variable {env-name}.
+			Can mix {name} and ${env-name} in one :unlet command.
+			No error message is given for a non-existing
+			variable, also without !.
+			If the system does not support deleting an environment
+			variable, it is made empty.
+
+						*:cons* *:const*
+:cons[t] {var-name} = {expr1}
+:cons[t] [{name1}, {name2}, ...] = {expr1}
+:cons[t] [{name}, ..., ; {lastname}] = {expr1}
+:cons[t] {var-name} =<< [trim] {marker}
+text...
+text...
+{marker}
+			Similar to |:let|, but additionally lock the variable
+			after setting the value.  This is the same as locking
+			the variable with |:lockvar| just after |:let|, thus: >
+				:const x = 1
+<			is equivalent to: >
+				:let x = 1
+				:lockvar 1 x
+<			This is useful if you want to make sure the variable
+			is not modified.
+							*E995*
+			|:const| does not allow to for changing a variable: >
+				:let x = 1
+				:const x = 2  " Error!
+<							*E996*
+			Note that environment variables, option values and
+			register values cannot be used here, since they cannot
+			be locked.
+
+:cons[t]
+:cons[t] {var-name}
+			If no argument is given or only {var-name} is given,
+			the behavior is the same as |:let|.
+
+:lockv[ar][!] [depth] {name} ...			*:lockvar* *:lockv*
+			Lock the internal variable {name}.  Locking means that
+			it can no longer be changed (until it is unlocked).
+			A locked variable can be deleted: >
+				:lockvar v
+				:let v = 'asdf'		" fails!
+				:unlet v
+<							*E741* *E940*
+			If you try to change a locked variable you get an
+			error message: "E741: Value is locked: {name}".
+			If you try to lock or unlock a built-in variable you
+			get an error message: "E940: Cannot lock or unlock
+			variable {name}".
+
+			[depth] is relevant when locking a |List| or
+			|Dictionary|.  It specifies how deep the locking goes:
+				1	Lock the |List| or |Dictionary| itself,
+					cannot add or remove items, but can
+					still change their values.
+				2	Also lock the values, cannot change
+					the items.  If an item is a |List| or
+					|Dictionary|, cannot add or remove
+					items, but can still change the
+					values.
+				3	Like 2 but for the |List| /
+					|Dictionary| in the |List| /
+					|Dictionary|, one level deeper.
+			The default [depth] is 2, thus when {name} is a |List|
+			or |Dictionary| the values cannot be changed.
+								*E743*
+			For unlimited depth use [!] and omit [depth].
+			However, there is a maximum depth of 100 to catch
+			loops.
+
+			Note that when two variables refer to the same |List|
+			and you lock one of them, the |List| will also be
+			locked when used through the other variable.
+			Example: >
+				:let l = [0, 1, 2, 3]
+				:let cl = l
+				:lockvar l
+				:let cl[1] = 99		" won't work!
+<			You may want to make a copy of a list to avoid this.
+			See |deepcopy()|.
+
+
+:unlo[ckvar][!] [depth] {name} ...			*:unlockvar* *:unlo*
+			Unlock the internal variable {name}.  Does the
+			opposite of |:lockvar|.
+
+:if {expr1}			*:if* *:end* *:endif* *:en* *E171* *E579* *E580*
+:en[dif]		Execute the commands until the next matching ":else"
+			or ":endif" if {expr1} evaluates to non-zero.
+
+			From Vim version 4.5 until 5.0, every Ex command in
+			between the ":if" and ":endif" is ignored.  These two
+			commands were just to allow for future expansions in a
+			backward compatible way.  Nesting was allowed.  Note
+			that any ":else" or ":elseif" was ignored, the "else"
+			part was not executed either.
+
+			You can use this to remain compatible with older
+			versions: >
+				:if version >= 500
+				:  version-5-specific-commands
+				:endif
+<			The commands still need to be parsed to find the
+			"endif".  Sometimes an older Vim has a problem with a
+			new command.  For example, ":silent" is recognized as
+			a ":substitute" command.  In that case ":execute" can
+			avoid problems: >
+				:if version >= 600
+				:  execute "silent 1,$delete"
+				:endif
+<
+			NOTE: The ":append" and ":insert" commands don't work
+			properly in between ":if" and ":endif".
+
+						*:else* *:el* *E581* *E583*
+:el[se]			Execute the commands until the next matching ":else"
+			or ":endif" if they previously were not being
+			executed.
+
+					*:elseif* *:elsei* *E582* *E584*
+:elsei[f] {expr1}	Short for ":else" ":if", with the addition that there
+			is no extra ":endif".
+
+:wh[ile] {expr1}			*:while* *:endwhile* *:wh* *:endw*
+						*E170* *E585* *E588* *E733*
+:endw[hile]		Repeat the commands between ":while" and ":endwhile",
+			as long as {expr1} evaluates to non-zero.
+			When an error is detected from a command inside the
+			loop, execution continues after the "endwhile".
+			Example: >
+				:let lnum = 1
+				:while lnum <= line("$")
+				   :call FixLine(lnum)
+				   :let lnum = lnum + 1
+				:endwhile
+<
+			NOTE: The ":append" and ":insert" commands don't work
+			properly inside a ":while" and ":for" loop.
+
+:for {var} in {object}					*:for* *E690* *E732*
+:endfo[r]						*:endfo* *:endfor*
+			Repeat the commands between ":for" and ":endfor" for
+			each item in {object}.  {object} can be a |List| or
+			a |Blob|.  Variable {var} is set to the value of each
+			item.  When an error is detected for a command inside
+			the loop, execution continues after the "endfor".
+			Changing {object} inside the loop affects what items
+			are used.  Make a copy if this is unwanted: >
+				:for item in copy(mylist)
+<
+			When {object} is a |List| and not making a copy, Vim
+			stores a reference to the next item in the |List|
+			before executing the commands with the current item.
+			Thus the current item can be removed without effect.
+			Removing any later item means it will not be found.
+			Thus the following example works (an inefficient way
+			to make a |List| empty): >
+				for item in mylist
+				   call remove(mylist, 0)
+				endfor
+<			Note that reordering the |List| (e.g., with sort() or
+			reverse()) may have unexpected effects.
+
+			When {object} is a |Blob|, Vim always makes a copy to
+			iterate over.  Unlike with |List|, modifying the
+			|Blob| does not affect the iteration.
+
+:for [{var1}, {var2}, ...] in {listlist}
+:endfo[r]
+			Like ":for" above, but each item in {listlist} must be
+			a list, of which each item is assigned to {var1},
+			{var2}, etc.  Example: >
+				:for [lnum, col] in [[1, 3], [2, 5], [3, 8]]
+				   :echo getline(lnum)[col]
+				:endfor
+<
+						*:continue* *:con* *E586*
+:con[tinue]		When used inside a ":while" or ":for" loop, jumps back
+			to the start of the loop.
+			If it is used after a |:try| inside the loop but
+			before the matching |:finally| (if present), the
+			commands following the ":finally" up to the matching
+			|:endtry| are executed first.  This process applies to
+			all nested ":try"s inside the loop.  The outermost
+			":endtry" then jumps back to the start of the loop.
+
+						*:break* *:brea* *E587*
+:brea[k]		When used inside a ":while" or ":for" loop, skips to
+			the command after the matching ":endwhile" or
+			":endfor".
+			If it is used after a |:try| inside the loop but
+			before the matching |:finally| (if present), the
+			commands following the ":finally" up to the matching
+			|:endtry| are executed first.  This process applies to
+			all nested ":try"s inside the loop.  The outermost
+			":endtry" then jumps to the command after the loop.
+
+:try				*:try* *:endt* *:endtry* *E600* *E601* *E602*
+:endt[ry]		Change the error handling for the commands between
+			":try" and ":endtry" including everything being
+			executed across ":source" commands, function calls,
+			or autocommand invocations.
+
+			When an error or interrupt is detected and there is
+			a |:finally| command following, execution continues
+			after the ":finally".  Otherwise, or when the
+			":endtry" is reached thereafter, the next
+			(dynamically) surrounding ":try" is checked for
+			a corresponding ":finally" etc.  Then the script
+			processing is terminated.  Whether a function
+			definition has an "abort" argument does not matter.
+			Example: >
+		try | call Unknown() | finally | echomsg "cleanup" | endtry
+		echomsg "not reached"
+<
+			Moreover, an error or interrupt (dynamically) inside
+			":try" and ":endtry" is converted to an exception.  It
+			can be caught as if it were thrown by a |:throw|
+			command (see |:catch|).  In this case, the script
+			processing is not terminated.
+
+			The value "Vim:Interrupt" is used for an interrupt
+			exception.  An error in a Vim command is converted
+			to a value of the form "Vim({command}):{errmsg}",
+			other errors are converted to a value of the form
+			"Vim:{errmsg}".  {command} is the full command name,
+			and {errmsg} is the message that is displayed if the
+			error exception is not caught, always beginning with
+			the error number.
+			Examples: >
+		try | sleep 100 | catch /^Vim:Interrupt$/ | endtry
+		try | edit | catch /^Vim(edit):E\d\+/ | echo "error" | endtry
+<
+					*:cat* *:catch* *E603* *E604* *E605*
+:cat[ch] /{pattern}/	The following commands until the next |:catch|,
+			|:finally|, or |:endtry| that belongs to the same
+			|:try| as the ":catch" are executed when an exception
+			matching {pattern} is being thrown and has not yet
+			been caught by a previous ":catch".  Otherwise, these
+			commands are skipped.
+			When {pattern} is omitted all errors are caught.
+			Examples: >
+		:catch /^Vim:Interrupt$/	 " catch interrupts (CTRL-C)
+		:catch /^Vim\%((\a\+)\)\=:E/	 " catch all Vim errors
+		:catch /^Vim\%((\a\+)\)\=:/	 " catch errors and interrupts
+		:catch /^Vim(write):/		 " catch all errors in :write
+		:catch /^Vim\%((\a\+)\)\=:E123:/ " catch error E123
+		:catch /my-exception/		 " catch user exception
+		:catch /.*/			 " catch everything
+		:catch				 " same as /.*/
+<
+			Another character can be used instead of / around the
+			{pattern}, so long as it does not have a special
+			meaning (e.g., '|' or '"') and doesn't occur inside
+			{pattern}.
+			Information about the exception is available in
+			|v:exception|.  Also see |throw-variables|.
+			NOTE: It is not reliable to ":catch" the TEXT of
+			an error message because it may vary in different
+			locales.
+
+					*:fina* *:finally* *E606* *E607*
+:fina[lly]		The following commands until the matching |:endtry|
+			are executed whenever the part between the matching
+			|:try| and the ":finally" is left:  either by falling
+			through to the ":finally" or by a |:continue|,
+			|:break|, |:finish|, or |:return|, or by an error or
+			interrupt or exception (see |:throw|).
+
+							*:th* *:throw* *E608*
+:th[row] {expr1}	The {expr1} is evaluated and thrown as an exception.
+			If the ":throw" is used after a |:try| but before the
+			first corresponding |:catch|, commands are skipped
+			until the first ":catch" matching {expr1} is reached.
+			If there is no such ":catch" or if the ":throw" is
+			used after a ":catch" but before the |:finally|, the
+			commands following the ":finally" (if present) up to
+			the matching |:endtry| are executed.  If the ":throw"
+			is after the ":finally", commands up to the ":endtry"
+			are skipped.  At the ":endtry", this process applies
+			again for the next dynamically surrounding ":try"
+			(which may be found in a calling function or sourcing
+			script), until a matching ":catch" has been found.
+			If the exception is not caught, the command processing
+			is terminated.
+			Example: >
+		:try | throw "oops" | catch /^oo/ | echo "caught" | endtry
+<			Note that "catch" may need to be on a separate line
+			for when an error causes the parsing to skip the whole
+			line and not see the "|" that separates the commands.
+
+							*:ec* *:echo*
+:ec[ho] {expr1} ..	Echoes each {expr1}, with a space in between.  The
+			first {expr1} starts on a new line.
+			Also see |:comment|.
+			Use "\n" to start a new line.  Use "\r" to move the
+			cursor to the first column.
+			Uses the highlighting set by the |:echohl| command.
+			Cannot be followed by a comment.
+			Example: >
+		:echo "the value of 'shell' is" &shell
+<							*:echo-redraw*
+			A later redraw may make the message disappear again.
+			And since Vim mostly postpones redrawing until it's
+			finished with a sequence of commands this happens
+			quite often.  To avoid that a command from before the
+			":echo" causes a redraw afterwards (redraws are often
+			postponed until you type something), force a redraw
+			with the |:redraw| command.  Example: >
+		:new | redraw | echo "there is a new window"
+<
+							*:echon*
+:echon {expr1} ..	Echoes each {expr1}, without anything added.  Also see
+			|:comment|.
+			Uses the highlighting set by the |:echohl| command.
+			Cannot be followed by a comment.
+			Example: >
+				:echon "the value of 'shell' is " &shell
+<
+			Note the difference between using ":echo", which is a
+			Vim command, and ":!echo", which is an external shell
+			command: >
+		:!echo %		--> filename
+<			The arguments of ":!" are expanded, see |:_%|. >
+		:!echo "%"		--> filename or "filename"
+<			Like the previous example.  Whether you see the double
+			quotes or not depends on your 'shell'. >
+		:echo %			--> nothing
+<			The '%' is an illegal character in an expression. >
+		:echo "%"		--> %
+<			This just echoes the '%' character. >
+		:echo expand("%")	--> filename
+<			This calls the expand() function to expand the '%'.
+
+							*:echoh* *:echohl*
+:echoh[l] {name}	Use the highlight group {name} for the following
+			|:echo|, |:echon| and |:echomsg| commands.  Also used
+			for the |input()| prompt.  Example: >
+		:echohl WarningMsg | echo "Don't panic!" | echohl None
+<			Don't forget to set the group back to "None",
+			otherwise all following echo's will be highlighted.
+
+							*:echom* *:echomsg*
+:echom[sg] {expr1} ..	Echo the expression(s) as a true message, saving the
+			message in the |message-history|.
+			Spaces are placed between the arguments as with the
+			|:echo| command.  But unprintable characters are
+			displayed, not interpreted.
+			The parsing works slightly different from |:echo|,
+			more like |:execute|.  All the expressions are first
+			evaluated and concatenated before echoing anything.
+			If expressions does not evaluate to a Number or
+			String, string() is used to turn it into a string.
+			Uses the highlighting set by the |:echohl| command.
+			Example: >
+		:echomsg "It's a Zizzer Zazzer Zuzz, as you can plainly see."
+<			See |:echo-redraw| to avoid the message disappearing
+			when the screen is redrawn.
+							*:echoe* *:echoerr*
+:echoe[rr] {expr1} ..	Echo the expression(s) as an error message, saving the
+			message in the |message-history|.  When used in a
+			script or function the line number will be added.
+			Spaces are placed between the arguments as with the
+			|:echomsg| command.  When used inside a try conditional,
+			the message is raised as an error exception instead
+			(see |try-echoerr|).
+			Example: >
+		:echoerr "This script just failed!"
+<			If you just want a highlighted message use |:echohl|.
+			And to get a beep: >
+		:exe "normal \<Esc>"
+<
+							*:eval*
+:eval {expr}		Evaluate {expr} and discard the result.  Example: >
+				:eval Getlist()->Filter()->append('$')
+
+<			The expression is supposed to have a side effect,
+			since the resulting value is not used.  In the example
+			the `append()` call appends the List with text to the
+			buffer.  This is similar to `:call` but works with any
+			expression.
+
+			The command can be shortened to `:ev` or `:eva`, but
+			these are hard to recognize and therefore not to be
+			used.
+
+			The command cannot be followed by "|" and another
+			command, since "|" is seen as part of the expression.
+
+
+							*:exe* *:execute*
+:exe[cute] {expr1} ..	Executes the string that results from the evaluation
+			of {expr1} as an Ex command.
+			Multiple arguments are concatenated, with a space in
+			between.  To avoid the extra space use the "."
+			operator to concatenate strings into one argument.
+			{expr1} is used as the processed command, command line
+			editing keys are not recognized.
+			Cannot be followed by a comment.
+			Examples: >
+		:execute "buffer" nextbuf
+		:execute "normal" count . "w"
+<
+			":execute" can be used to append a command to commands
+			that don't accept a '|'.  Example: >
+		:execute '!ls' | echo "theend"
+
+<			":execute" is also a nice way to avoid having to type
+			control characters in a Vim script for a ":normal"
+			command: >
+		:execute "normal ixxx\<Esc>"
+<			This has an <Esc> character, see |expr-string|.
+
+			Be careful to correctly escape special characters in
+			file names.  The |fnameescape()| function can be used
+			for Vim commands, |shellescape()| for |:!| commands.
+			Examples: >
+		:execute "e " . fnameescape(filename)
+		:execute "!ls " . shellescape(filename, 1)
+<
+			Note: The executed string may be any command-line, but
+			starting or ending "if", "while" and "for" does not
+			always work, because when commands are skipped the
+			":execute" is not evaluated and Vim loses track of
+			where blocks start and end.  Also "break" and
+			"continue" should not be inside ":execute".
+			This example does not work, because the ":execute" is
+			not evaluated and Vim does not see the "while", and
+			gives an error for finding an ":endwhile": >
+		:if 0
+		: execute 'while i > 5'
+		:  echo "test"
+		: endwhile
+		:endif
+<
+			It is allowed to have a "while" or "if" command
+			completely in the executed string: >
+		:execute 'while i < 5 | echo i | let i = i + 1 | endwhile'
+<
+
+							*:exe-comment*
+			":execute", ":echo" and ":echon" cannot be followed by
+			a comment directly, because they see the '"' as the
+			start of a string.  But, you can use '|' followed by a
+			comment.  Example: >
+		:echo "foo" | "this is a comment
+

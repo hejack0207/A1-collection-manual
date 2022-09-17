@@ -1,0 +1,47 @@
+2. Channel demo				*channel-demo* *demoserver.py*
+
+This requires Python.  The demo program can be found in
+$VIMRUNTIME/tools/demoserver.py
+Run it in one terminal.  We will call this T1.
+
+Run Vim in another terminal.  Connect to the demo server with: >
+	let channel = ch_open('localhost:8765')
+
+In T1 you should see:
+	=== socket opened === ~
+
+You can now send a message to the server: >
+	echo ch_evalexpr(channel, 'hello!')
+
+The message is received in T1 and a response is sent back to Vim.
+You can see the raw messages in T1.  What Vim sends is:
+	[1,"hello!"] ~
+And the response is:
+	[1,"got it"] ~
+The number will increase every time you send a message.
+
+The server can send a command to Vim.  Type this on T1 (literally, including
+the quotes):
+	["ex","echo 'hi there'"] ~
+And you should see the message in Vim. You can move the cursor a word forward:
+	["normal","w"] ~
+
+To handle asynchronous communication a callback needs to be used: >
+	func MyHandler(channel, msg)
+	  echo "from the handler: " . a:msg
+	endfunc
+	call ch_sendexpr(channel, 'hello!', {'callback': "MyHandler"})
+Vim will not wait for a response.  Now the server can send the response later
+and MyHandler will be invoked.
+
+Instead of giving a callback with every send call, it can also be specified
+when opening the channel: >
+	call ch_close(channel)
+	let channel = ch_open('localhost:8765', {'callback': "MyHandler"})
+	call ch_sendexpr(channel, 'hello!')
+
+When trying out channels it's useful to see what is going on.  You can tell
+Vim to write lines in log file: >
+	call ch_logfile('channellog', 'w')
+See |ch_logfile()|.
+
