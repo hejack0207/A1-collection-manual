@@ -1,0 +1,1 @@
+../../translations/zh_CN/sound/hd-audio/controls.rst
