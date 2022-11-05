@@ -1,0 +1,376 @@
+       Block device options
+
+       -fda file
+       -fdb file
+           Use file as floppy disk 0/1 image.
+
+       -hda file
+       -hdb file
+       -hdc file
+       -hdd file
+           Use file as hard disk 0, 1, 2 or 3 image.
+
+       -cdrom file
+           Use file as CD-ROM image (you cannot use -hdc and -cdrom at the same time). You can use the host CD-ROM by using /dev/cdrom as filename.
+
+       -blockdev option[,option[,option[,...]]]
+           Define a new block driver node. Some of the options apply to all block drivers, other options are only accepted for a specific block driver. See below for a list of generic
+           options and options for the most common block drivers.
+
+           Options that expect a reference to another node (e.g. "file") can be given in two ways. Either you specify the node name of an already existing node (file=node-name), or you
+           define a new node inline, adding options for the referenced node after a dot (file.filename=path,file.aio=native).
+
+           A block driver node created with -blockdev can be used for a guest device by specifying its node name for the "drive" property in a -device argument that defines a block
+           device.
+
+           Valid options for any block driver node:
+               "driver"
+                   Specifies the block driver to use for the given node.
+
+               "node-name"
+                   This defines the name of the block driver node by which it will be referenced later. The name must be unique, i.e. it must not match the name of a different block
+                   driver node, or (if you use -drive as well) the ID of a drive.
+
+                   If no node name is specified, it is automatically generated. The generated node name is not intended to be predictable and changes between QEMU invocations.  For the
+                   top level, an explicit node name must be specified.
+
+               "read-only"
+                   Open the node read-only. Guest write attempts will fail.
+
+               "cache.direct"
+                   The host page cache can be avoided with cache.direct=on. This will attempt to do disk IO directly to the guest's memory. QEMU may still perform an internal copy of
+                   the data.
+
+               "cache.no-flush"
+                   In case you don't care about data integrity over host failures, you can use cache.no-flush=on. This option tells QEMU that it never needs to write any data to the
+                   disk but can instead keep things in cache. If anything goes wrong, like your host losing power, the disk storage getting disconnected accidentally, etc. your image
+                   will most probably be rendered unusable.
+
+               "discard=discard"
+                   discard is one of "ignore" (or "off") or "unmap" (or "on") and controls whether "discard" (also known as "trim" or "unmap") requests are ignored or passed to the
+                   filesystem. Some machine types may not support discard requests.
+
+               "detect-zeroes=detect-zeroes"
+                   detect-zeroes is "off", "on" or "unmap" and enables the automatic conversion of plain zero writes by the OS to driver specific optimized zero write commands. You may
+                   even choose "unmap" if discard is set to "unmap" to allow a zero write to be converted to an "unmap" operation.
+
+           Driver-specific options for "file"
+               This is the protocol-level block driver for accessing regular files.
+
+               "filename"
+                   The path to the image file in the local filesystem
+
+               "aio"
+                   Specifies the AIO backend (threads/native, default: threads)
+
+               "locking"
+                   Specifies whether the image file is protected with Linux OFD / POSIX locks. The default is to use the Linux Open File Descriptor API if available, otherwise no lock
+                   is applied.  (auto/on/off, default: auto)
+
+               Example:
+
+                       -blockdev driver=file,node-name=disk,filename=disk.img
+
+           Driver-specific options for "raw"
+               This is the image format block driver for raw images. It is usually stacked on top of a protocol level block driver such as "file".
+
+               "file"
+                   Reference to or definition of the data source block driver node (e.g. a "file" driver node)
+
+               Example 1:
+
+                       -blockdev driver=file,node-name=disk_file,filename=disk.img
+                       -blockdev driver=raw,node-name=disk,file=disk_file
+
+               Example 2:
+
+                       -blockdev driver=raw,node-name=disk,file.driver=file,file.filename=disk.img
+
+           Driver-specific options for "qcow2"
+               This is the image format block driver for qcow2 images. It is usually stacked on top of a protocol level block driver such as "file".
+
+               "file"
+                   Reference to or definition of the data source block driver node (e.g. a "file" driver node)
+
+               "backing"
+                   Reference to or definition of the backing file block device (default is taken from the image file). It is allowed to pass "null" here in order to disable the default
+                   backing file.
+
+               "lazy-refcounts"
+                   Whether to enable the lazy refcounts feature (on/off; default is taken from the image file)
+
+               "cache-size"
+                   The maximum total size of the L2 table and refcount block caches in bytes (default: the sum of l2-cache-size and refcount-cache-size)
+
+               "l2-cache-size"
+                   The maximum size of the L2 table cache in bytes (default: if cache-size is not specified - 32M on Linux platforms, and 8M on non-Linux platforms; otherwise, as large
+                   as possible within the cache-size, while permitting the requested or the minimal refcount cache size)
+
+               "refcount-cache-size"
+                   The maximum size of the refcount block cache in bytes (default: 4 times the cluster size; or if cache-size is specified, the part of it which is not used for the L2
+                   cache)
+
+               "cache-clean-interval"
+                   Clean unused entries in the L2 and refcount caches. The interval is in seconds.  The default value is 600 on supporting platforms, and 0 on other platforms.  Setting
+                   it to 0 disables this feature.
+
+               "pass-discard-request"
+                   Whether discard requests to the qcow2 device should be forwarded to the data source (on/off; default: on if discard=unmap is specified, off otherwise)
+
+               "pass-discard-snapshot"
+                   Whether discard requests for the data source should be issued when a snapshot operation (e.g. deleting a snapshot) frees clusters in the qcow2 file (on/off; default:
+                   on)
+
+               "pass-discard-other"
+                   Whether discard requests for the data source should be issued on other occasions where a cluster gets freed (on/off; default: off)
+
+               "overlap-check"
+                   Which overlap checks to perform for writes to the image (none/constant/cached/all; default: cached). For details or finer granularity control refer to the QAPI
+                   documentation of "blockdev-add".
+
+               Example 1:
+
+                       -blockdev driver=file,node-name=my_file,filename=/tmp/disk.qcow2
+                       -blockdev driver=qcow2,node-name=hda,file=my_file,overlap-check=none,cache-size=16777216
+
+               Example 2:
+
+                       -blockdev driver=qcow2,node-name=disk,file.driver=http,file.filename=http://example.com/image.qcow2
+
+           Driver-specific options for other drivers
+               Please refer to the QAPI documentation of the "blockdev-add" QMP command.
+
+       -drive option[,option[,option[,...]]]
+           Define a new drive. This includes creating a block driver node (the backend) as well as a guest device, and is mostly a shortcut for defining the corresponding -blockdev and
+           -device options.
+
+           -drive accepts all options that are accepted by -blockdev. In addition, it knows the following options:
+
+           file=file
+               This option defines which disk image to use with this drive. If the filename contains comma, you must double it (for instance, "file=my,,file" to use file "my,file").
+
+               Special files such as iSCSI devices can be specified using protocol specific URLs. See the section for "Device URL Syntax" for more information.
+
+           if=interface
+               This option defines on which type on interface the drive is connected.  Available types are: ide, scsi, sd, mtd, floppy, pflash, virtio, none.
+
+           bus=bus,unit=unit
+               These options define where is connected the drive by defining the bus number and the unit id.
+
+           index=index
+               This option defines where is connected the drive by using an index in the list of available connectors of a given interface type.
+
+           media=media
+               This option defines the type of the media: disk or cdrom.
+
+           snapshot=snapshot
+               snapshot is "on" or "off" and controls snapshot mode for the given drive (see -snapshot).
+
+           cache=cache
+               cache is "none", "writeback", "unsafe", "directsync" or "writethrough" and controls how the host cache is used to access block data. This is a shortcut that sets the
+               cache.direct and cache.no-flush options (as in -blockdev), and additionally cache.writeback, which provides a default for the write-cache option of block guest devices
+               (as in -device). The modes correspond to the following settings:
+
+                                    | cache.writeback   cache.direct   cache.no-flush
+                       -------------+-------------------------------------------------
+                       writeback    | on                off            off
+                       none         | on                on             off
+                       writethrough | off               off            off
+                       directsync   | off               on             off
+                       unsafe       | on                off            on
+
+               The default mode is cache=writeback.
+
+           aio=aio
+               aio is "threads", or "native" and selects between pthread based disk I/O and native Linux AIO.
+
+           format=format
+               Specify which disk format will be used rather than detecting the format.  Can be used to specify format=raw to avoid interpreting an untrusted format header.
+
+           werror=action,rerror=action
+               Specify which action to take on write and read errors. Valid actions are: "ignore" (ignore the error and try to continue), "stop" (pause QEMU), "report" (report the error
+               to the guest), "enospc" (pause QEMU only if the host disk is full; report the error to the guest otherwise).  The default setting is werror=enospc and rerror=report.
+
+           copy-on-read=copy-on-read
+               copy-on-read is "on" or "off" and enables whether to copy read backing file sectors into the image file.
+
+           bps=b,bps_rd=r,bps_wr=w
+               Specify bandwidth throttling limits in bytes per second, either for all request types or for reads or writes only.  Small values can lead to timeouts or hangs inside the
+               guest.  A safe minimum for disks is 2 MB/s.
+
+           bps_max=bm,bps_rd_max=rm,bps_wr_max=wm
+               Specify bursts in bytes per second, either for all request types or for reads or writes only.  Bursts allow the guest I/O to spike above the limit temporarily.
+
+           iops=i,iops_rd=r,iops_wr=w
+               Specify request rate limits in requests per second, either for all request types or for reads or writes only.
+
+           iops_max=bm,iops_rd_max=rm,iops_wr_max=wm
+               Specify bursts in requests per second, either for all request types or for reads or writes only.  Bursts allow the guest I/O to spike above the limit temporarily.
+
+           iops_size=is
+               Let every is bytes of a request count as a new request for iops throttling purposes.  Use this option to prevent guests from circumventing iops limits by sending fewer
+               but larger requests.
+
+           group=g
+               Join a throttling quota group with given name g.  All drives that are members of the same group are accounted for together.  Use this option to prevent guests from
+               circumventing throttling limits by using many small disks instead of a single larger disk.
+
+           By default, the cache.writeback=on mode is used. It will report data writes as completed as soon as the data is present in the host page cache.  This is safe as long as your
+           guest OS makes sure to correctly flush disk caches where needed. If your guest OS does not handle volatile disk write caches correctly and your host crashes or loses power,
+           then the guest may experience data corruption.
+
+           For such guests, you should consider using cache.writeback=off. This means that the host page cache will be used to read and write data, but write notification will be sent
+           to the guest only after QEMU has made sure to flush each write to the disk. Be aware that this has a major impact on performance.
+
+           When using the -snapshot option, unsafe caching is always used.
+
+           Copy-on-read avoids accessing the same backing file sectors repeatedly and is useful when the backing file is over a slow network.  By default copy-on-read is off.
+
+           Instead of -cdrom you can use:
+
+                   qemu-system-i386 -drive file=file,index=2,media=cdrom
+
+           Instead of -hda, -hdb, -hdc, -hdd, you can use:
+
+                   qemu-system-i386 -drive file=file,index=0,media=disk
+                   qemu-system-i386 -drive file=file,index=1,media=disk
+                   qemu-system-i386 -drive file=file,index=2,media=disk
+                   qemu-system-i386 -drive file=file,index=3,media=disk
+
+           You can open an image using pre-opened file descriptors from an fd set:
+
+                   qemu-system-i386
+                   -add-fd fd=3,set=2,opaque="rdwr:/path/to/file"
+                   -add-fd fd=4,set=2,opaque="rdonly:/path/to/file"
+                   -drive file=/dev/fdset/2,index=0,media=disk
+
+           You can connect a CDROM to the slave of ide0:
+
+                   qemu-system-i386 -drive file=file,if=ide,index=1,media=cdrom
+
+           If you don't specify the "file=" argument, you define an empty drive:
+
+                   qemu-system-i386 -drive if=ide,index=1,media=cdrom
+
+           Instead of -fda, -fdb, you can use:
+
+                   qemu-system-i386 -drive file=file,index=0,if=floppy
+                   qemu-system-i386 -drive file=file,index=1,if=floppy
+
+           By default, interface is "ide" and index is automatically incremented:
+
+                   qemu-system-i386 -drive file=a -drive file=b"
+
+           is interpreted like:
+
+                   qemu-system-i386 -hda a -hdb b
+
+       -mtdblock file
+           Use file as on-board Flash memory image.
+
+       -sd file
+           Use file as SecureDigital card image.
+
+       -pflash file
+           Use file as a parallel flash image.
+
+       -snapshot
+           Write to temporary files instead of disk image files. In this case, the raw disk image you use is not written back. You can however force the write back by pressing C-a s.
+
+       -fsdev fsdriver,id=id,path=path,[security_model=security_model][,writeout=writeout][,readonly][,socket=socket|sock_fd=sock_fd][,fmode=fmode][,dmode=dmode]
+           Define a new file system device. Valid options are:
+
+           fsdriver
+               This option specifies the fs driver backend to use.  Currently "local", "handle" and "proxy" file system drivers are supported.
+
+           id=id
+               Specifies identifier for this device
+
+           path=path
+               Specifies the export path for the file system device. Files under this path will be available to the 9p client on the guest.
+
+           security_model=security_model
+               Specifies the security model to be used for this export path.  Supported security models are "passthrough", "mapped-xattr", "mapped-file" and "none".  In "passthrough"
+               security model, files are stored using the same credentials as they are created on the guest. This requires QEMU to run as root. In "mapped-xattr" security model, some of
+               the file attributes like uid, gid, mode bits and link target are stored as file attributes. For "mapped-file" these attributes are stored in the hidden .virtfs_metadata
+               directory. Directories exported by this security model cannot interact with other unix tools. "none" security model is same as passthrough except the sever won't report
+               failures if it fails to set file attributes like ownership. Security model is mandatory only for local fsdriver. Other fsdrivers (like handle, proxy) don't take security
+               model as a parameter.
+
+           writeout=writeout
+               This is an optional argument. The only supported value is "immediate".  This means that host page cache will be used to read and write data but write notification will be
+               sent to the guest only when the data has been reported as written by the storage subsystem.
+
+           readonly
+               Enables exporting 9p share as a readonly mount for guests. By default read-write access is given.
+
+           socket=socket
+               Enables proxy filesystem driver to use passed socket file for communicating with virtfs-proxy-helper
+
+           sock_fd=sock_fd
+               Enables proxy filesystem driver to use passed socket descriptor for communicating with virtfs-proxy-helper. Usually a helper like libvirt will create socketpair and pass
+               one of the fds as sock_fd
+
+           fmode=fmode
+               Specifies the default mode for newly created files on the host. Works only with security models "mapped-xattr" and "mapped-file".
+
+           dmode=dmode
+               Specifies the default mode for newly created directories on the host. Works only with security models "mapped-xattr" and "mapped-file".
+
+           -fsdev option is used along with -device driver "virtio-9p-pci".
+
+       -device virtio-9p-pci,fsdev=id,mount_tag=mount_tag
+           Options for virtio-9p-pci driver are:
+
+           fsdev=id
+               Specifies the id value specified along with -fsdev option
+
+           mount_tag=mount_tag
+               Specifies the tag name to be used by the guest to mount this export point
+
+       -virtfs fsdriver[,path=path],mount_tag=mount_tag[,security_model=security_model][,writeout=writeout][,readonly][,socket=socket|sock_fd=sock_fd][,fmode=fmode][,dmode=dmode]
+           The general form of a Virtual File system pass-through options are:
+
+           fsdriver
+               This option specifies the fs driver backend to use.  Currently "local", "handle" and "proxy" file system drivers are supported.
+
+           id=id
+               Specifies identifier for this device
+
+           path=path
+               Specifies the export path for the file system device. Files under this path will be available to the 9p client on the guest.
+
+           security_model=security_model
+               Specifies the security model to be used for this export path.  Supported security models are "passthrough", "mapped-xattr", "mapped-file" and "none".  In "passthrough"
+               security model, files are stored using the same credentials as they are created on the guest. This requires QEMU to run as root. In "mapped-xattr" security model, some of
+               the file attributes like uid, gid, mode bits and link target are stored as file attributes. For "mapped-file" these attributes are stored in the hidden .virtfs_metadata
+               directory. Directories exported by this security model cannot interact with other unix tools. "none" security model is same as passthrough except the sever won't report
+               failures if it fails to set file attributes like ownership. Security model is mandatory only for local fsdriver. Other fsdrivers (like handle, proxy) don't take security
+               model as a parameter.
+
+           writeout=writeout
+               This is an optional argument. The only supported value is "immediate".  This means that host page cache will be used to read and write data but write notification will be
+               sent to the guest only when the data has been reported as written by the storage subsystem.
+
+           readonly
+               Enables exporting 9p share as a readonly mount for guests. By default read-write access is given.
+
+           socket=socket
+               Enables proxy filesystem driver to use passed socket file for communicating with virtfs-proxy-helper. Usually a helper like libvirt will create socketpair and pass one of
+               the fds as sock_fd
+
+           sock_fd
+               Enables proxy filesystem driver to use passed 'sock_fd' as the socket descriptor for interfacing with virtfs-proxy-helper
+
+           fmode=fmode
+               Specifies the default mode for newly created files on the host. Works only with security models "mapped-xattr" and "mapped-file".
+
+           dmode=dmode
+               Specifies the default mode for newly created directories on the host. Works only with security models "mapped-xattr" and "mapped-file".
+
+       -virtfs_synth
+           Create synthetic file system image
+
+       -iscsi
+           Configure iSCSI session parameters.
+

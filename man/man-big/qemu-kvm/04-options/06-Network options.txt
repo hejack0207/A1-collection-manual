@@ -1,0 +1,332 @@
+       Network options
+
+       -nic [tap|bridge|user|l2tpv3|vde|netmap|vhost-user|socket][,...][,mac=macaddr][,model=mn]
+           This option is a shortcut for configuring both the on-board (default) guest NIC hardware and the host network backend in one go. The host backend options are the same as with
+           the corresponding -netdev options below.  The guest NIC model can be set with model=modelname.  Use model=help to list the available device types.  The hardware MAC address
+           can be set with mac=macaddr.
+
+           The following two example do exactly the same, to show how -nic can be used to shorten the command line length (note that the e1000 is the default on i386, so the model=e1000
+           parameter could even be omitted here, too):
+
+                   qemu-system-i386 -netdev user,id=n1,ipv6=off -device e1000,netdev=n1,mac=52:54:98:76:54:32
+                   qemu-system-i386 -nic user,ipv6=off,model=e1000,mac=52:54:98:76:54:32
+
+       -nic none
+           Indicate that no network devices should be configured. It is used to override the default configuration (default NIC with "user" host network backend) which is activated if
+           no other networking options are provided.
+
+       -netdev user,id=id[,option][,option][,...]
+           Configure user mode host network backend which requires no administrator privilege to run. Valid options are:
+
+           id=id
+               Assign symbolic name for use in monitor commands.
+
+           ipv4=on|off and ipv6=on|off
+               Specify that either IPv4 or IPv6 must be enabled. If neither is specified both protocols are enabled.
+
+           net=addr[/mask]
+               Set IP network address the guest will see. Optionally specify the netmask, either in the form a.b.c.d or as number of valid top-most bits. Default is 10.0.2.0/24.
+
+           host=addr
+               Specify the guest-visible address of the host. Default is the 2nd IP in the guest network, i.e. x.x.x.2.
+
+           ipv6-net=addr[/int]
+               Set IPv6 network address the guest will see (default is fec0::/64). The network prefix is given in the usual hexadecimal IPv6 address notation. The prefix size is
+               optional, and is given as the number of valid top-most bits (default is 64).
+
+           ipv6-host=addr
+               Specify the guest-visible IPv6 address of the host. Default is the 2nd IPv6 in the guest network, i.e. xxxx::2.
+
+           restrict=on|off
+               If this option is enabled, the guest will be isolated, i.e. it will not be able to contact the host and no guest IP packets will be routed over the host to the outside.
+               This option does not affect any explicitly set forwarding rules.
+
+           hostname=name
+               Specifies the client hostname reported by the built-in DHCP server.
+
+           dhcpstart=addr
+               Specify the first of the 16 IPs the built-in DHCP server can assign. Default is the 15th to 31st IP in the guest network, i.e. x.x.x.15 to x.x.x.31.
+
+           dns=addr
+               Specify the guest-visible address of the virtual nameserver. The address must be different from the host address. Default is the 3rd IP in the guest network, i.e.
+               x.x.x.3.
+
+           ipv6-dns=addr
+               Specify the guest-visible address of the IPv6 virtual nameserver. The address must be different from the host address. Default is the 3rd IP in the guest network, i.e.
+               xxxx::3.
+
+           dnssearch=domain
+               Provides an entry for the domain-search list sent by the built-in DHCP server. More than one domain suffix can be transmitted by specifying this option multiple times. If
+               supported, this will cause the guest to automatically try to append the given domain suffix(es) in case a domain name can not be resolved.
+
+               Example:
+
+                       qemu-system-i386 -nic user,dnssearch=mgmt.example.org,dnssearch=example.org
+
+           domainname=domain
+               Specifies the client domain name reported by the built-in DHCP server.
+
+           tftp=dir
+               When using the user mode network stack, activate a built-in TFTP server. The files in dir will be exposed as the root of a TFTP server.  The TFTP client on the guest must
+               be configured in binary mode (use the command "bin" of the Unix TFTP client).
+
+           tftp-server-name=name
+               In BOOTP reply, broadcast name as the "TFTP server name" (RFC2132 option 66). This can be used to advise the guest to load boot files or configurations from a different
+               server than the host address.
+
+           bootfile=file
+               When using the user mode network stack, broadcast file as the BOOTP filename. In conjunction with tftp, this can be used to network boot a guest from a local directory.
+
+               Example (using pxelinux):
+
+                       qemu-system-i386 -hda linux.img -boot n -device e1000,netdev=n1 \
+                       -netdev user,id=n1,tftp=/path/to/tftp/files,bootfile=/pxelinux.0
+
+           smb=dir[,smbserver=addr]
+               When using the user mode network stack, activate a built-in SMB server so that Windows OSes can access to the host files in dir transparently. The IP address of the SMB
+               server can be set to addr. By default the 4th IP in the guest network is used, i.e. x.x.x.4.
+
+               In the guest Windows OS, the line:
+
+                       10.0.2.4 smbserver
+
+               must be added in the file C:\WINDOWS\LMHOSTS (for windows 9x/Me) or C:\WINNT\SYSTEM32\DRIVERS\ETC\LMHOSTS (Windows NT/2000).
+
+               Then dir can be accessed in \\smbserver\qemu.
+
+               Note that a SAMBA server must be installed on the host OS.
+
+           hostfwd=[tcp|udp]:[hostaddr]:hostport-[guestaddr]:guestport
+               Redirect incoming TCP or UDP connections to the host port hostport to the guest IP address guestaddr on guest port guestport. If guestaddr is not specified, its value is
+               x.x.x.15 (default first address given by the built-in DHCP server). By specifying hostaddr, the rule can be bound to a specific host interface. If no connection type is
+               set, TCP is used. This option can be given multiple times.
+
+               For example, to redirect host X11 connection from screen 1 to guest screen 0, use the following:
+
+                       # on the host
+                       qemu-system-i386 -nic user,hostfwd=tcp:127.0.0.1:6001-:6000
+                       # this host xterm should open in the guest X11 server
+                       xterm -display :1
+
+               To redirect telnet connections from host port 5555 to telnet port on the guest, use the following:
+
+                       # on the host
+                       qemu-system-i386 -nic user,hostfwd=tcp::5555-:23
+                       telnet localhost 5555
+
+               Then when you use on the host "telnet localhost 5555", you connect to the guest telnet server.
+
+           guestfwd=[tcp]:server:port-dev
+           guestfwd=[tcp]:server:port-cmd:command
+               Forward guest TCP connections to the IP address server on port port to the character device dev or to a program executed by cmd:command which gets spawned for each
+               connection. This option can be given multiple times.
+
+               You can either use a chardev directly and have that one used throughout QEMU's lifetime, like in the following example:
+
+                       # open 10.10.1.1:4321 on bootup, connect 10.0.2.100:1234 to it whenever
+                       # the guest accesses it
+                       qemu-system-i386 -nic user,guestfwd=tcp:10.0.2.100:1234-tcp:10.10.1.1:4321
+
+               Or you can execute a command on every TCP connection established by the guest, so that QEMU behaves similar to an inetd process for that virtual server:
+
+                       # call "netcat 10.10.1.1 4321" on every TCP connection to 10.0.2.100:1234
+                       # and connect the TCP stream to its stdin/stdout
+                       qemu-system-i386 -nic  'user,id=n1,guestfwd=tcp:10.0.2.100:1234-cmd:netcat 10.10.1.1 4321'
+
+       -netdev tap,id=id[,fd=h][,ifname=name][,script=file][,downscript=dfile][,br=bridge][,helper=helper]
+           Configure a host TAP network backend with ID id.
+
+           Use the network script file to configure it and the network script dfile to deconfigure it. If name is not provided, the OS automatically provides one. The default network
+           configure script is /etc/qemu-ifup and the default network deconfigure script is /etc/qemu-ifdown. Use script=no or downscript=no to disable script execution.
+
+           If running QEMU as an unprivileged user, use the network helper helper to configure the TAP interface and attach it to the bridge.  The default network helper executable is
+           /path/to/qemu-bridge-helper and the default bridge device is br0.
+
+           fd=h can be used to specify the handle of an already opened host TAP interface.
+
+           Examples:
+
+                   #launch a QEMU instance with the default network script
+                   qemu-system-i386 linux.img -nic tap
+
+                   #launch a QEMU instance with two NICs, each one connected
+                   #to a TAP device
+                   qemu-system-i386 linux.img \
+                   -netdev tap,id=nd0,ifname=tap0 -device e1000,netdev=nd0 \
+                   -netdev tap,id=nd1,ifname=tap1 -device rtl8139,netdev=nd1
+
+                   #launch a QEMU instance with the default network helper to
+                   #connect a TAP device to bridge br0
+                   qemu-system-i386 linux.img -device virtio-net-pci,netdev=n1 \
+                   -netdev tap,id=n1,"helper=/path/to/qemu-bridge-helper"
+
+       -netdev bridge,id=id[,br=bridge][,helper=helper]
+           Connect a host TAP network interface to a host bridge device.
+
+           Use the network helper helper to configure the TAP interface and attach it to the bridge. The default network helper executable is /path/to/qemu-bridge-helper and the default
+           bridge device is br0.
+
+           Examples:
+
+                   #launch a QEMU instance with the default network helper to
+                   #connect a TAP device to bridge br0
+                   qemu-system-i386 linux.img -netdev bridge,id=n1 -device virtio-net,netdev=n1
+
+                   #launch a QEMU instance with the default network helper to
+                   #connect a TAP device to bridge qemubr0
+                   qemu-system-i386 linux.img -netdev bridge,br=qemubr0,id=n1 -device virtio-net,netdev=n1
+
+       -netdev socket,id=id[,fd=h][,listen=[host]:port][,connect=host:port]
+           This host network backend can be used to connect the guest's network to another QEMU virtual machine using a TCP socket connection. If listen is specified, QEMU waits for
+           incoming connections on port (host is optional). connect is used to connect to another QEMU instance using the listen option. fd=h specifies an already opened TCP socket.
+
+           Example:
+
+                   # launch a first QEMU instance
+                   qemu-system-i386 linux.img \
+                   -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                   -netdev socket,id=n1,listen=:1234
+                   # connect the network of this instance to the network of the first instance
+                   qemu-system-i386 linux.img \
+                   -device e1000,netdev=n2,mac=52:54:00:12:34:57 \
+                   -netdev socket,id=n2,connect=127.0.0.1:1234
+
+       -netdev socket,id=id[,fd=h][,mcast=maddr:port[,localaddr=addr]]
+           Configure a socket host network backend to share the guest's network traffic with another QEMU virtual machines using a UDP multicast socket, effectively making a bus for
+           every QEMU with same multicast address maddr and port.  NOTES:
+
+           1.  Several QEMU can be running on different hosts and share same bus (assuming correct multicast setup for these hosts).
+
+           2.  mcast support is compatible with User Mode Linux (argument ethN=mcast), see <http://user-mode-linux.sf.net>.
+
+           3.  Use fd=h to specify an already opened UDP multicast socket.
+
+           Example:
+
+                   # launch one QEMU instance
+                   qemu-system-i386 linux.img \
+                   -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                   -netdev socket,id=n1,mcast=230.0.0.1:1234
+                   # launch another QEMU instance on same "bus"
+                   qemu-system-i386 linux.img \
+                   -device e1000,netdev=n2,mac=52:54:00:12:34:57 \
+                   -netdev socket,id=n2,mcast=230.0.0.1:1234
+                   # launch yet another QEMU instance on same "bus"
+                   qemu-system-i386 linux.img \
+                   -device e1000,netdev=n3,mac=52:54:00:12:34:58 \
+                   -netdev socket,id=n3,mcast=230.0.0.1:1234
+
+           Example (User Mode Linux compat.):
+
+                   # launch QEMU instance (note mcast address selected is UML's default)
+                   qemu-system-i386 linux.img \
+                   -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                   -netdev socket,id=n1,mcast=239.192.168.1:1102
+                   # launch UML
+                   /path/to/linux ubd0=/path/to/root_fs eth0=mcast
+
+           Example (send packets from host's 1.2.3.4):
+
+                   qemu-system-i386 linux.img \
+                   -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                   -netdev socket,id=n1,mcast=239.192.168.1:1102,localaddr=1.2.3.4
+
+       -netdev
+       l2tpv3,id=id,src=srcaddr,dst=dstaddr[,srcport=srcport][,dstport=dstport],txsession=txsession[,rxsession=rxsession][,ipv6][,udp][,cookie64][,counter][,pincounter][,txcookie=txcookie][,rxcookie=rxcookie][,offset=offset]
+           Configure a L2TPv3 pseudowire host network backend. L2TPv3 (RFC3391) is a popular protocol to transport Ethernet (and other Layer 2) data frames between two systems. It is
+           present in routers, firewalls and the Linux kernel (from version 3.3 onwards).
+
+           This transport allows a VM to communicate to another VM, router or firewall directly.
+
+           src=srcaddr
+               source address (mandatory)
+
+           dst=dstaddr
+               destination address (mandatory)
+
+           udp select udp encapsulation (default is ip).
+
+           srcport=srcport
+               source udp port.
+
+           dstport=dstport
+               destination udp port.
+
+           ipv6
+               force v6, otherwise defaults to v4.
+
+           rxcookie=rxcookie
+           txcookie=txcookie
+               Cookies are a weak form of security in the l2tpv3 specification.  Their function is mostly to prevent misconfiguration. By default they are 32 bit.
+
+           cookie64
+               Set cookie size to 64 bit instead of the default 32
+
+           counter=off
+               Force a 'cut-down' L2TPv3 with no counter as in draft-mkonstan-l2tpext-keyed-ipv6-tunnel-00
+
+           pincounter=on
+               Work around broken counter handling in peer. This may also help on networks which have packet reorder.
+
+           offset=offset
+               Add an extra offset between header and data
+
+           For example, to attach a VM running on host 4.3.2.1 via L2TPv3 to the bridge br-lan on the remote Linux host 1.2.3.4:
+
+                   # Setup tunnel on linux host using raw ip as encapsulation
+                   # on 1.2.3.4
+                   ip l2tp add tunnel remote 4.3.2.1 local 1.2.3.4 tunnel_id 1 peer_tunnel_id 1 \
+                   encap udp udp_sport 16384 udp_dport 16384
+                   ip l2tp add session tunnel_id 1 name vmtunnel0 session_id \
+                   0xFFFFFFFF peer_session_id 0xFFFFFFFF
+                   ifconfig vmtunnel0 mtu 1500
+                   ifconfig vmtunnel0 up
+                   brctl addif br-lan vmtunnel0
+
+                   # on 4.3.2.1
+                   # launch QEMU instance - if your network has reorder or is very lossy add ,pincounter
+
+                   qemu-system-i386 linux.img -device e1000,netdev=n1 \
+                   -netdev l2tpv3,id=n1,src=4.2.3.1,dst=1.2.3.4,udp,srcport=16384,dstport=16384,rxsession=0xffffffff,txsession=0xffffffff,counter
+
+       -netdev vde,id=id[,sock=socketpath][,port=n][,group=groupname][,mode=octalmode]
+           Configure VDE backend to connect to PORT n of a vde switch running on host and listening for incoming connections on socketpath. Use GROUP groupname and MODE octalmode to
+           change default ownership and permissions for communication port. This option is only available if QEMU has been compiled with vde support enabled.
+
+           Example:
+
+                   # launch vde switch
+                   vde_switch -F -sock /tmp/myswitch
+                   # launch QEMU instance
+                   qemu-system-i386 linux.img -nic vde,sock=/tmp/myswitch
+
+       -netdev vhost-user,chardev=id[,vhostforce=on|off][,queues=n]
+           Establish a vhost-user netdev, backed by a chardev id. The chardev should be a unix domain socket backed one. The vhost-user uses a specifically defined protocol to pass
+           vhost ioctl replacement messages to an application on the other end of the socket. On non-MSIX guests, the feature can be forced with vhostforce. Use 'queues=n' to specify
+           the number of queues to be created for multiqueue vhost-user.
+
+           Example:
+
+                   qemu -m 512 -object memory-backend-file,id=mem,size=512M,mem-path=/hugetlbfs,share=on \
+                   -numa node,memdev=mem \
+                   -chardev socket,id=chr0,path=/path/to/socket \
+                   -netdev type=vhost-user,id=net0,chardev=chr0 \
+                   -device virtio-net-pci,netdev=net0
+
+       -netdev hubport,id=id,hubid=hubid[,netdev=nd]
+           Create a hub port on the emulated hub with ID hubid.
+
+           The hubport netdev lets you connect a NIC to a QEMU emulated hub instead of a single netdev. Alternatively, you can also connect the hubport to another netdev with ID nd by
+           using the netdev=nd option.
+
+       -net nic[,netdev=nd][,macaddr=mac][,model=type] [,name=name][,addr=addr][,vectors=v]
+           Legacy option to configure or create an on-board (or machine default) Network Interface Card(NIC) and connect it either to the emulated hub with ID 0 (i.e.  the default hub),
+           or to the netdev nd.  The NIC is an e1000 by default on the PC target. Optionally, the MAC address can be changed to mac, the device address set to addr (PCI cards only), and
+           a name can be assigned for use in monitor commands.  Optionally, for PCI cards, you can specify the number v of MSI-X vectors that the card should have; this option currently
+           only affects virtio cards; set v = 0 to disable MSI-X. If no -net option is specified, a single NIC is created.  QEMU can emulate several different models of network card.
+           Use "-net nic,model=help" for a list of available devices for your target.
+
+       -net user|tap|bridge|socket|l2tpv3|vde[,...][,name=name]
+           Configure a host network backend (with the options corresponding to the same -netdev option) and connect it to the emulated hub 0 (the default hub). Use name to specify the
+           name of the hub port.
+

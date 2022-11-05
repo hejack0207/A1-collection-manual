@@ -1,0 +1,276 @@
+       Standard options
+
+       -h  Display help and exit
+
+       -version
+           Display version information and exit
+
+       -machine [type=]name[,prop=value[,...]]
+           Select the emulated machine by name. Use "-machine help" to list available machines.
+
+           For architectures which aim to support live migration compatibility across releases, each release will introduce a new versioned machine type. For example, the 2.8.0 release
+           introduced machine types "pc-i440fx-2.8" and "pc-q35-2.8" for the x86_64/i686 architectures.
+
+           To allow live migration of guests from QEMU version 2.8.0, to QEMU version 2.9.0, the 2.9.0 version must support the "pc-i440fx-2.8" and "pc-q35-2.8" machines too. To allow
+           users live migrating VMs to skip multiple intermediate releases when upgrading, new releases of QEMU will support machine types from many previous versions.
+
+           Supported machine properties are:
+
+           accel=accels1[:accels2[:...]]
+               This is used to enable an accelerator. Depending on the target architecture, kvm, xen, hax, hvf, whpx or tcg can be available. By default, tcg is used. If there is more
+               than one accelerator specified, the next one is used if the previous one fails to initialize.
+
+           kernel_irqchip=on|off
+               Controls in-kernel irqchip support for the chosen accelerator when available.
+
+           gfx_passthru=on|off
+               Enables IGD GFX passthrough support for the chosen machine when available.
+
+           vmport=on|off|auto
+               Enables emulation of VMWare IO port, for vmmouse etc. auto says to select the value based on accel. For accel=xen the default is off otherwise the default is on.
+
+           kvm_shadow_mem=size
+               Defines the size of the KVM shadow MMU.
+
+           dump-guest-core=on|off
+               Include guest memory in a core dump. The default is on.
+
+           mem-merge=on|off
+               Enables or disables memory merge support. This feature, when supported by the host, de-duplicates identical memory pages among VMs instances (enabled by default).
+
+           aes-key-wrap=on|off
+               Enables or disables AES key wrapping support on s390-ccw hosts. This feature controls whether AES wrapping keys will be created to allow execution of AES cryptographic
+               functions.  The default is on.
+
+           dea-key-wrap=on|off
+               Enables or disables DEA key wrapping support on s390-ccw hosts. This feature controls whether DEA wrapping keys will be created to allow execution of DEA cryptographic
+               functions.  The default is on.
+
+           nvdimm=on|off
+               Enables or disables NVDIMM support. The default is off.
+
+           enforce-config-section=on|off
+               If enforce-config-section is set to on, force migration code to send configuration section even if the machine-type sets the migration.send-configuration property to off.
+               NOTE: this parameter is deprecated. Please use -global migration.send-configuration=on|off instead.
+
+           memory-encryption=
+               Memory encryption object to use. The default is none.
+
+       -cpu model
+           Select CPU model ("-cpu help" for list and additional feature selection)
+
+       -accel name[,prop=value[,...]]
+           This is used to enable an accelerator. Depending on the target architecture, kvm, xen, hax, hvf, whpx or tcg can be available. By default, tcg is used. If there is more than
+           one accelerator specified, the next one is used if the previous one fails to initialize.
+
+           thread=single|multi
+               Controls number of TCG threads. When the TCG is multi-threaded there will be one thread per vCPU therefor taking advantage of additional host cores. The default is to
+               enable multi-threading where both the back-end and front-ends support it and no incompatible TCG features have been enabled (e.g. icount/replay).
+
+       -smp [cpus=]n[,cores=cores][,threads=threads][,sockets=sockets][,maxcpus=maxcpus]
+           Simulate an SMP system with n CPUs. On the PC target, up to 255 CPUs are supported. On Sparc32 target, Linux limits the number of usable CPUs to 4.  For the PC target, the
+           number of cores per socket, the number of threads per cores and the total number of sockets can be specified. Missing values will be computed. If any on the three values is
+           given, the total number of CPUs n can be omitted. maxcpus specifies the maximum number of hotpluggable CPUs.
+
+       -numa node[,mem=size][,cpus=firstcpu[-lastcpu]][,nodeid=node]
+       -numa node[,memdev=id][,cpus=firstcpu[-lastcpu]][,nodeid=node]
+       -numa dist,src=source,dst=destination,val=distance
+       -numa cpu,node-id=node[,socket-id=x][,core-id=y][,thread-id=z]
+           Define a NUMA node and assign RAM and VCPUs to it.  Set the NUMA distance from a source node to a destination node.
+
+           Legacy VCPU assignment uses cpus option where firstcpu and lastcpu are CPU indexes. Each cpus option represent a contiguous range of CPU indexes (or a single VCPU if lastcpu
+           is omitted). A non-contiguous set of VCPUs can be represented by providing multiple cpus options. If cpus is omitted on all nodes, VCPUs are automatically split between them.
+
+           For example, the following option assigns VCPUs 0, 1, 2 and 5 to a NUMA node:
+
+                   -numa node,cpus=0-2,cpus=5
+
+           cpu option is a new alternative to cpus option which uses socket-id|core-id|thread-id properties to assign CPU objects to a node using topology layout properties of CPU.  The
+           set of properties is machine specific, and depends on used machine type/smp options. It could be queried with hotpluggable-cpus monitor command.  node-id property specifies
+           node to which CPU object will be assigned, it's required for node to be declared with node option before it's used with cpu option.
+
+           For example:
+
+                   -M pc \
+                   -smp 1,sockets=2,maxcpus=2 \
+                   -numa node,nodeid=0 -numa node,nodeid=1 \
+                   -numa cpu,node-id=0,socket-id=0 -numa cpu,node-id=1,socket-id=1
+
+           mem assigns a given RAM amount to a node. memdev assigns RAM from a given memory backend device to a node. If mem and memdev are omitted in all nodes, RAM is split equally
+           between them.
+
+           mem and memdev are mutually exclusive. Furthermore, if one node uses memdev, all of them have to use it.
+
+           source and destination are NUMA node IDs.  distance is the NUMA distance from source to destination.  The distance from a node to itself is always 10. If any pair of nodes is
+           given a distance, then all pairs must be given distances. Although, when distances are only given in one direction for each pair of nodes, then the distances in the opposite
+           directions are assumed to be the same. If, however, an asymmetrical pair of distances is given for even one node pair, then all node pairs must be provided distance values
+           for both directions, even when they are symmetrical. When a node is unreachable from another node, set the pair's distance to 255.
+
+           Note that the -numa option doesn't allocate any of the specified resources, it just assigns existing resources to NUMA nodes. This means that one still has to use the -m,
+           -smp options to allocate RAM and VCPUs respectively.
+
+       -add-fd fd=fd,set=set[,opaque=opaque]
+           Add a file descriptor to an fd set.  Valid options are:
+
+           fd=fd
+               This option defines the file descriptor of which a duplicate is added to fd set.  The file descriptor cannot be stdin, stdout, or stderr.
+
+           set=set
+               This option defines the ID of the fd set to add the file descriptor to.
+
+           opaque=opaque
+               This option defines a free-form string that can be used to describe fd.
+
+           You can open an image using pre-opened file descriptors from an fd set:
+
+                   qemu-system-i386
+                   -add-fd fd=3,set=2,opaque="rdwr:/path/to/file"
+                   -add-fd fd=4,set=2,opaque="rdonly:/path/to/file"
+                   -drive file=/dev/fdset/2,index=0,media=disk
+
+       -set group.id.arg=value
+           Set parameter arg for item id of type group
+
+       -global driver.prop=value
+       -global driver=driver,property=property,value=value
+           Set default value of driver's property prop to value, e.g.:
+
+                   qemu-system-i386 -global ide-hd.physical_block_size=4096 disk-image.img
+
+           In particular, you can use this to set driver properties for devices which are created automatically by the machine model. To create a device which is not created
+           automatically and set properties on it, use -device.
+
+           -global driver.prop=value is shorthand for -global driver=driver,property=prop,value=value.  The longhand syntax works even when driver contains a dot.
+
+       -boot [order=drives][,once=drives][,menu=on|off][,splash=sp_name][,splash-time=sp_time][,reboot-timeout=rb_timeout][,strict=on|off]
+           Specify boot order drives as a string of drive letters. Valid drive letters depend on the target architecture. The x86 PC uses: a, b (floppy 1 and 2), c (first hard disk), d
+           (first CD-ROM), n-p (Etherboot from network adapter 1-4), hard disk boot is the default. To apply a particular boot order only on the first startup, specify it via once. Note
+           that the order or once parameter should not be used together with the bootindex property of devices, since the firmware implementations normally do not support both at the
+           same time.
+
+           Interactive boot menus/prompts can be enabled via menu=on as far as firmware/BIOS supports them. The default is non-interactive boot.
+
+           A splash picture could be passed to bios, enabling user to show it as logo, when option splash=sp_name is given and menu=on, If firmware/BIOS supports them. Currently Seabios
+           for X86 system support it.  limitation: The splash file could be a jpeg file or a BMP file in 24 BPP format(true color). The resolution should be supported by the SVGA mode,
+           so the recommended is 320x240, 640x480, 800x640.
+
+           A timeout could be passed to bios, guest will pause for rb_timeout ms when boot failed, then reboot. If rb_timeout is '-1', guest will not reboot, qemu passes '-1' to bios by
+           default. Currently Seabios for X86 system support it.
+
+           Do strict boot via strict=on as far as firmware/BIOS supports it. This only effects when boot priority is changed by bootindex options. The default is non-strict boot.
+
+                   # try to boot from network first, then from hard disk
+                   qemu-system-i386 -boot order=nc
+                   # boot from CD-ROM first, switch back to default order after reboot
+                   qemu-system-i386 -boot once=d
+                   # boot with a splash picture for 5 seconds.
+                   qemu-system-i386 -boot menu=on,splash=/root/boot.bmp,splash-time=5000
+
+           Note: The legacy format '-boot drives' is still supported but its use is discouraged as it may be removed from future versions.
+
+       -m [size=]megs[,slots=n,maxmem=size]
+           Sets guest startup RAM size to megs megabytes. Default is 128 MiB.  Optionally, a suffix of "M" or "G" can be used to signify a value in megabytes or gigabytes respectively.
+           Optional pair slots, maxmem could be used to set amount of hotpluggable memory slots and maximum amount of memory. Note that maxmem must be aligned to the page size.
+
+           For example, the following command-line sets the guest startup RAM size to 1GB, creates 3 slots to hotplug additional memory and sets the maximum memory the guest can reach
+           to 4GB:
+
+                   qemu-system-x86_64 -m 1G,slots=3,maxmem=4G
+
+           If slots and maxmem are not specified, memory hotplug won't be enabled and the guest startup RAM will never increase.
+
+       -mem-path path
+           Allocate guest RAM from a temporarily created file in path.
+
+       -mem-prealloc
+           Preallocate memory when using -mem-path.
+
+       -k language
+           Use keyboard layout language (for example "fr" for French). This option is only needed where it is not easy to get raw PC keycodes (e.g. on Macs, with some X11 servers or
+           with a VNC or curses display). You don't normally need to use it on PC/Linux or PC/Windows hosts.
+
+           The available layouts are:
+
+                   ar  de-ch  es  fo     fr-ca  hu  ja  mk     no  pt-br  sv
+                   da  en-gb  et  fr     fr-ch  is  lt  nl     pl  ru     th
+                   de  en-us  fi  fr-be  hr     it  lv  nl-be  pt  sl     tr
+
+           The default is "en-us".
+
+       -audio-help
+           Will show the audio subsystem help: list of drivers, tunable parameters.
+
+       -soundhw card1[,card2,...] or -soundhw all
+           Enable audio and selected sound hardware. Use 'help' to print all available sound hardware.
+
+                   qemu-system-i386 -soundhw sb16,adlib disk.img
+                   qemu-system-i386 -soundhw es1370 disk.img
+                   qemu-system-i386 -soundhw ac97 disk.img
+                   qemu-system-i386 -soundhw hda disk.img
+                   qemu-system-i386 -soundhw all disk.img
+                   qemu-system-i386 -soundhw help
+
+           Note that Linux's i810_audio OSS kernel (for AC97) module might require manually specifying clocking.
+
+                   modprobe i810_audio clocking=48000
+
+       -device driver[,prop[=value][,...]]
+           Add device driver.  prop=value sets driver properties.  Valid properties depend on the driver.  To get help on possible drivers and properties, use "-device help" and
+           "-device driver,help".
+
+           Some drivers are:
+
+       -device ipmi-bmc-sim,id=id[,slave_addr=val][,sdrfile=file][,furareasize=val][,furdatafile=file]
+           Add an IPMI BMC.  This is a simulation of a hardware management interface processor that normally sits on a system.  It provides a watchdog and the ability to reset and power
+           control the system.  You need to connect this to an IPMI interface to make it useful
+
+           The IPMI slave address to use for the BMC.  The default is 0x20.  This address is the BMC's address on the I2C network of management controllers.  If you don't know what this
+           means, it is safe to ignore it.
+
+           bmc=id
+               The BMC to connect to, one of ipmi-bmc-sim or ipmi-bmc-extern above.
+
+           slave_addr=val
+               Define slave address to use for the BMC.  The default is 0x20.
+
+           sdrfile=file
+               file containing raw Sensor Data Records (SDR) data. The default is none.
+
+           fruareasize=val
+               size of a Field Replaceable Unit (FRU) area.  The default is 1024.
+
+           frudatafile=file
+               file containing raw Field Replaceable Unit (FRU) inventory data. The default is none.
+
+       -device ipmi-bmc-extern,id=id,chardev=id[,slave_addr=val]
+           Add a connection to an external IPMI BMC simulator.  Instead of locally emulating the BMC like the above item, instead connect to an external entity that provides the IPMI
+           services.
+
+           A connection is made to an external BMC simulator.  If you do this, it is strongly recommended that you use the "reconnect=" chardev option to reconnect to the simulator if
+           the connection is lost.  Note that if this is not used carefully, it can be a security issue, as the interface has the ability to send resets, NMIs, and power off the VM.
+           It's best if QEMU makes a connection to an external simulator running on a secure port on localhost, so neither the simulator nor QEMU is exposed to any outside network.
+
+           See the "lanserv/README.vm" file in the OpenIPMI library for more details on the external interface.
+
+       -device isa-ipmi-kcs,bmc=id[,ioport=val][,irq=val]
+           Add a KCS IPMI interafce on the ISA bus.  This also adds a corresponding ACPI and SMBIOS entries, if appropriate.
+
+           bmc=id
+               The BMC to connect to, one of ipmi-bmc-sim or ipmi-bmc-extern above.
+
+           ioport=val
+               Define the I/O address of the interface.  The default is 0xca0 for KCS.
+
+           irq=val
+               Define the interrupt to use.  The default is 5.  To disable interrupts, set this to 0.
+
+       -device isa-ipmi-bt,bmc=id[,ioport=val][,irq=val]
+           Like the KCS interface, but defines a BT interface.  The default port is 0xe4 and the default interrupt is 5.
+
+       -name name
+           Sets the name of the guest.  This name will be displayed in the SDL window caption.  The name will also be used for the VNC server.  Also optionally set the top visible
+           process name in Linux.  Naming of individual threads can also be enabled on Linux to aid debugging.
+
+       -uuid uuid
+           Set system UUID.
+

@@ -1,0 +1,183 @@
+       Character device options
+
+       The general form of a character device option is:
+
+       -chardev backend,id=id[,mux=on|off][,options]
+           Backend is one of: null, socket, udp, msmouse, vc, ringbuf, file, pipe, console, serial, pty, stdio, braille, tty, parallel, parport, spicevmc, spiceport.  The specific
+           backend will determine the applicable options.
+
+           Use "-chardev help" to print all available chardev backend types.
+
+           All devices must have an id, which can be any string up to 127 characters long.  It is used to uniquely identify this device in other command line directives.
+
+           A character device may be used in multiplexing mode by multiple front-ends.  Specify mux=on to enable this mode.  A multiplexer is a "1:N" device, and here the "1" end is
+           your specified chardev backend, and the "N" end is the various parts of QEMU that can talk to a chardev.  If you create a chardev with id=myid and mux=on, QEMU will create a
+           multiplexer with your specified ID, and you can then configure multiple front ends to use that chardev ID for their input/output. Up to four different front ends can be
+           connected to a single multiplexed chardev. (Without multiplexing enabled, a chardev can only be used by a single front end.)  For instance you could use this to allow a
+           single stdio chardev to be used by two serial ports and the QEMU monitor:
+
+                   -chardev stdio,mux=on,id=char0 \
+                   -mon chardev=char0,mode=readline \
+                   -serial chardev:char0 \
+                   -serial chardev:char0
+
+           You can have more than one multiplexer in a system configuration; for instance you could have a TCP port multiplexed between UART 0 and UART 1, and stdio multiplexed between
+           the QEMU monitor and a parallel port:
+
+                   -chardev stdio,mux=on,id=char0 \
+                   -mon chardev=char0,mode=readline \
+                   -parallel chardev:char0 \
+                   -chardev tcp,...,mux=on,id=char1 \
+                   -serial chardev:char1 \
+                   -serial chardev:char1
+
+           When you're using a multiplexed character device, some escape sequences are interpreted in the input.
+
+           Note that some other command line options may implicitly create multiplexed character backends; for instance -serial mon:stdio creates a multiplexed stdio backend connected
+           to the serial port and the QEMU monitor, and -nographic also multiplexes the console and the monitor to stdio.
+
+           There is currently no support for multiplexing in the other direction (where a single QEMU front end takes input and output from multiple chardevs).
+
+           Every backend supports the logfile option, which supplies the path to a file to record all data transmitted via the backend. The logappend option controls whether the log
+           file will be truncated or appended to when opened.
+
+       The available backends are:
+
+       -chardev null,id=id
+           A void device. This device will not emit any data, and will drop any data it receives. The null backend does not take any options.
+
+       -chardev socket,id=id[,TCP options or unix options][,server][,nowait][,telnet][,websocket][,reconnect=seconds][,tls-creds=id]
+           Create a two-way stream socket, which can be either a TCP or a unix socket. A unix socket will be created if path is specified. Behaviour is undefined if TCP options are
+           specified for a unix socket.
+
+           server specifies that the socket shall be a listening socket.
+
+           nowait specifies that QEMU should not block waiting for a client to connect to a listening socket.
+
+           telnet specifies that traffic on the socket should interpret telnet escape sequences.
+
+           websocket specifies that the socket uses WebSocket protocol for communication.
+
+           reconnect sets the timeout for reconnecting on non-server sockets when the remote end goes away.  qemu will delay this many seconds and then attempt to reconnect.  Zero
+           disables reconnecting, and is the default.
+
+           tls-creds requests enablement of the TLS protocol for encryption, and specifies the id of the TLS credentials to use for the handshake. The credentials must be previously
+           created with the -object tls-creds argument.
+
+           TCP and unix socket options are given below:
+
+           TCP options: port=port[,host=host][,to=to][,ipv4][,ipv6][,nodelay]
+               host for a listening socket specifies the local address to be bound.  For a connecting socket species the remote host to connect to. host is optional for listening
+               sockets. If not specified it defaults to 0.0.0.0.
+
+               port for a listening socket specifies the local port to be bound. For a connecting socket specifies the port on the remote host to connect to.  port can be given as
+               either a port number or a service name.  port is required.
+
+               to is only relevant to listening sockets. If it is specified, and port cannot be bound, QEMU will attempt to bind to subsequent ports up to and including to until it
+               succeeds. to must be specified as a port number.
+
+               ipv4 and ipv6 specify that either IPv4 or IPv6 must be used.  If neither is specified the socket may use either protocol.
+
+               nodelay disables the Nagle algorithm.
+
+           unix options: path=path
+               path specifies the local path of the unix socket. path is required.
+
+       -chardev udp,id=id[,host=host],port=port[,localaddr=localaddr][,localport=localport][,ipv4][,ipv6]
+           Sends all traffic from the guest to a remote host over UDP.
+
+           host specifies the remote host to connect to. If not specified it defaults to "localhost".
+
+           port specifies the port on the remote host to connect to. port is required.
+
+           localaddr specifies the local address to bind to. If not specified it defaults to 0.0.0.0.
+
+           localport specifies the local port to bind to. If not specified any available local port will be used.
+
+           ipv4 and ipv6 specify that either IPv4 or IPv6 must be used.  If neither is specified the device may use either protocol.
+
+       -chardev msmouse,id=id
+           Forward QEMU's emulated msmouse events to the guest. msmouse does not take any options.
+
+       -chardev vc,id=id[[,width=width][,height=height]][[,cols=cols][,rows=rows]]
+           Connect to a QEMU text console. vc may optionally be given a specific size.
+
+           width and height specify the width and height respectively of the console, in pixels.
+
+           cols and rows specify that the console be sized to fit a text console with the given dimensions.
+
+       -chardev ringbuf,id=id[,size=size]
+           Create a ring buffer with fixed size size.  size must be a power of two and defaults to "64K".
+
+       -chardev file,id=id,path=path
+           Log all traffic received from the guest to a file.
+
+           path specifies the path of the file to be opened. This file will be created if it does not already exist, and overwritten if it does. path is required.
+
+       -chardev pipe,id=id,path=path
+           Create a two-way connection to the guest. The behaviour differs slightly between Windows hosts and other hosts:
+
+           On Windows, a single duplex pipe will be created at \\.pipe\path.
+
+           On other hosts, 2 pipes will be created called path.in and path.out. Data written to path.in will be received by the guest. Data written by the guest can be read from
+           path.out. QEMU will not create these fifos, and requires them to be present.
+
+           path forms part of the pipe path as described above. path is required.
+
+       -chardev console,id=id
+           Send traffic from the guest to QEMU's standard output. console does not take any options.
+
+           console is only available on Windows hosts.
+
+       -chardev serial,id=id,path=path
+           Send traffic from the guest to a serial device on the host.
+
+           On Unix hosts serial will actually accept any tty device, not only serial lines.
+
+           path specifies the name of the serial device to open.
+
+       -chardev pty,id=id
+           Create a new pseudo-terminal on the host and connect to it. pty does not take any options.
+
+           pty is not available on Windows hosts.
+
+       -chardev stdio,id=id[,signal=on|off]
+           Connect to standard input and standard output of the QEMU process.
+
+           signal controls if signals are enabled on the terminal, that includes exiting QEMU with the key sequence Control-c. This option is enabled by default, use signal=off to
+           disable it.
+
+       -chardev braille,id=id
+           Connect to a local BrlAPI server. braille does not take any options.
+
+       -chardev tty,id=id,path=path
+           tty is only available on Linux, Sun, FreeBSD, NetBSD, OpenBSD and DragonFlyBSD hosts.  It is an alias for serial.
+
+           path specifies the path to the tty. path is required.
+
+       -chardev parallel,id=id,path=path
+       -chardev parport,id=id,path=path
+           parallel is only available on Linux, FreeBSD and DragonFlyBSD hosts.
+
+           Connect to a local parallel port.
+
+           path specifies the path to the parallel port device. path is required.
+
+       -chardev spicevmc,id=id,debug=debug,name=name
+           spicevmc is only available when spice support is built in.
+
+           debug debug level for spicevmc
+
+           name name of spice channel to connect to
+
+           Connect to a spice virtual machine channel, such as vdiport.
+
+       -chardev spiceport,id=id,debug=debug,name=name
+           spiceport is only available when spice support is built in.
+
+           debug debug level for spicevmc
+
+           name name of spice port to connect to
+
+           Connect to a spice port, allowing a Spice client to handle the traffic identified by a name (preferably a fqdn).
+
