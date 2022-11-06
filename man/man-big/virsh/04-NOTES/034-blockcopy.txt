@@ -1,0 +1,50 @@
+   blockcopy
+       Syntax:
+
+          blockcopy domain path { dest [format] [--blockdev] | --xml file }
+             [--shallow] [--reuse-external] [bandwidth]
+             [--wait [--async] [--verbose]] [{--pivot | --finish}]
+             [--timeout seconds] [granularity] [buf-size] [--bytes]
+             [--transient-job]
+
+       Copy a disk backing image chain to a destination.  Either dest as the destination file name, or --xml with the
+       name of an XML file containing a top-level <disk> element describing the destination, must be present.   Addi-
+       tionally,  if dest is given, format should be specified to declare the format of the destination (if format is
+       omitted, then libvirt will reuse the format of the source, or with --reuse-external will be  forced  to  probe
+       the  destination  format,  which could be a potential security hole).  The command supports --raw as a boolean
+       flag synonym for --format=raw.  When using dest, the destination is treated as a regular file unless  --block-
+       dev  is  used  to signal that it is a block device. By default, this command flattens the entire chain; but if
+       --shallow is specified, the copy shares the backing chain.
+
+       If --reuse-external is specified, then the destination must exist and have sufficient space to hold the  copy.
+       If  --shallow  is used in conjunction with --reuse-external then the pre-created image must have guest visible
+       contents identical to guest visible contents of the backing file of the original image. This may  be  used  to
+       modify the backing file names on the destination.
+
+       By default, the copy job runs in the background, and consists of two phases.  Initially, the job must copy all
+       data from the source, and during this phase, the job can only be canceled to revert back to the  source  disk,
+       with no guarantees about the destination.  After this phase completes, both the source and the destination re-
+       main mirrored until a call to blockjob with the --abort and --pivot flags pivots over to the copy, or  a  call
+       without --pivot leaves the destination as a faithful copy of that point in time.  However, if --wait is speci-
+       fied, then this command will block until the mirroring phase begins, or cancel the operation if  the  optional
+       timeout  in  seconds  elapses or SIGINT is sent (usually with Ctrl-C).  Using --verbose along with --wait will
+       produce periodic status updates.  Using --pivot (similar to blockjob --pivot) or --finish (similar to blockjob
+       --abort) implies --wait, and will additionally end the job cleanly rather than leaving things in the mirroring
+       phase.  If job cancellation is triggered by timeout or by --finish, --async will return control to the user as
+       fast as possible, otherwise the command may continue to block a little while longer until the job has actually
+       cancelled.
+
+       path specifies fully-qualified path of the disk.  bandwidth specifies copying bandwidth limit in MiB/s. Speci-
+       fying  a negative value is interpreted as an unsigned long long value that might be essentially unlimited, but
+       more likely would overflow; it is safer to use 0 for that purpose. For further information  on  the  bandwidth
+       argument see the corresponding section for the blockjob command.  Specifying granularity allows fine-tuning of
+       the granularity that will be copied when a dirty region is detected; larger values trigger less  I/O  overhead
+       but may end up copying more data overall (the default value is usually correct); hypervisors may restrict this
+       to be a power of two or fall within a certain range. Specifying buf-size will control how much data can be si-
+       multaneously in-flight during the copy; larger values use more memory but may allow faster completion (the de-
+       fault value is usually correct).
+
+       --transient-job allows specifying that the user does not require the job to be recovered if the VM crashes  or
+       is turned off before the job completes. This flag removes the restriction of copy jobs to transient domains if
+       that restriction is applied by the hypervisor.
+

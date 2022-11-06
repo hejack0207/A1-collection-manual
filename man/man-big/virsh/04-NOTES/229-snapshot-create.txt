@@ -1,0 +1,56 @@
+   snapshot-create
+       Syntax:
+
+          snapshot-create domain [xmlfile] {[--redefine [--current]] |
+             [--no-metadata] [--halt] [--disk-only] [--reuse-external]
+             [--quiesce] [--atomic] [--live]} [--validate]
+
+       Create a snapshot for domain domain with the properties specified in xmlfile.   Optionally, the --validate op-
+       tion can be passed to validate the format of the input XML file against an internal RNG schema  (identical  to
+       using  the  virt-xml-validate(1)  tool).  Normally, the only properties settable for a domain snapshot are the
+       <name> and <description> elements, as well as <disks> if --disk-only is given; the rest of the fields are  ig-
+       nored,  and  automatically filled in by libvirt.  If xmlfile is completely omitted, then libvirt will choose a
+       value for all fields.  The new snapshot will become current, as listed by snapshot-current.
+
+       If --halt is specified, the domain will be left in an inactive state after the snapshot is created.
+
+       If --disk-only is specified, the snapshot will only include disk content rather than  the  usual  full  system
+       snapshot  with  vm  state.   Disk snapshots are captured faster than full system snapshots, but reverting to a
+       disk snapshot may require fsck or journal replays, since it is like the disk state at the point when the power
+       cord  is abruptly pulled; and mixing --halt and --disk-only loses any data that was not flushed to disk at the
+       time.
+
+       If --redefine is specified, then all XML elements produced by snapshot-dumpxml are valid; this can be used  to
+       migrate  snapshot hierarchy from one machine to another, to recreate hierarchy for the case of a transient do-
+       main that goes away and is later recreated with the same name and UUID, or to make slight alterations  in  the
+       snapshot  metadata (such as host-specific aspects of the domain XML embedded in the snapshot).  When this flag
+       is supplied, the xmlfile argument is mandatory, and the domain's current snapshot will not be  altered  unless
+       the --current flag is also given.
+
+       If  --no-metadata  is  specified, then the snapshot data is created, but any metadata is immediately discarded
+       (that is, libvirt does not treat the snapshot as current, and cannot revert to the snapshot unless  --redefine
+       is later used to teach libvirt about the metadata again).
+
+       If  --reuse-external is specified, and the snapshot XML requests an external snapshot with a destination of an
+       existing file, then the destination must exist and be pre-created with correct format and metadata.  The  file
+       is then reused; otherwise, a snapshot is refused to avoid losing contents of the existing files.
+
+       If  --quiesce  is  specified, libvirt will try to use guest agent to freeze and unfreeze domain's mounted file
+       systems. However, if domain has no guest  agent,  snapshot  creation  will  fail.   Currently,  this  requires
+       --disk-only to be passed as well.
+
+       If  --atomic is specified, libvirt will guarantee that the snapshot either succeeds, or fails with no changes;
+       not all hypervisors support this.  If this flag is not specified, then some hypervisors may  fail  after  par-
+       tially performing the action, and dumpxml must be used to see whether any partial changes occurred.
+
+       If  --live  is specified, libvirt takes the snapshot while the guest is running. Both disk snapshot and domain
+       memory snapshot are taken. This increases the size of the memory image of the external snapshot. This is  cur-
+       rently supported only for full system external snapshots.
+
+       Existence  of snapshot metadata will prevent attempts to undefine a persistent domain.  However, for transient
+       domains, snapshot metadata is silently lost when the domain quits running (whether by command such as  destroy
+       or by internal guest action).
+
+       For  now,  it  is not possible to create snapshots in a domain that has checkpoints, although this restriction
+       will be lifted in a future release.
+

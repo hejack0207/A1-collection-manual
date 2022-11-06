@@ -1,0 +1,148 @@
+   migrate
+       Syntax:
+
+          migrate [--live] [--offline] [--direct] [--p2p [--tunnelled]]
+             [--persistent] [--undefinesource] [--suspend] [--copy-storage-all]
+             [--copy-storage-inc] [--change-protection] [--unsafe] [--verbose]
+             [--rdma-pin-all] [--abort-on-error] [--postcopy] [--postcopy-after-precopy]
+             domain desturi [migrateuri] [graphicsuri] [listen-address] [dname]
+             [--timeout seconds [--timeout-suspend | --timeout-postcopy]]
+             [--xml file] [--migrate-disks disk-list] [--disks-port port]
+             [--compressed] [--comp-methods method-list]
+             [--comp-mt-level] [--comp-mt-threads] [--comp-mt-dthreads]
+             [--comp-xbzrle-cache] [--auto-converge] [auto-converge-initial]
+             [auto-converge-increment] [--persistent-xml file] [--tls]
+             [--postcopy-bandwidth bandwidth]
+             [--parallel [--parallel-connections connections]]
+             [--bandwidth bandwidth] [--tls-destination hostname]
+
+       Migrate domain to another host.  Add --live for live migration; <--p2p> for  peer-2-peer  migration;  --direct
+       for  direct  migration;  or --tunnelled for tunnelled migration.  --offline migrates domain definition without
+       starting the domain on destination and without stopping it on source host.  Offline migration may be used with
+       inactive  domains  and it must be used with --persistent option.  --persistent leaves the domain persistent on
+       destination host, --undefinesource undefines the domain on the source host, and --suspend  leaves  the  domain
+       paused on the destination host.  --copy-storage-all indicates migration with non-shared storage with full disk
+       copy, --copy-storage-inc indicates migration with non-shared storage with incremental copy  (same  base  image
+       shared  between source and destination).  In both cases the disk images have to exist on destination host, the
+       --copy-storage-... options only tell libvirt to transfer data from the images on source  host  to  the  images
+       found  at  the  same  place on the destination host. By default only non-shared non-readonly images are trans-
+       ferred. Use --migrate-disks to explicitly specify a list of disk targets to transfer via the  comma  separated
+       disk-list  argument.  --change-protection  enforces that no incompatible configuration changes will be made to
+       the domain while the migration is underway; this flag is implicitly enabled when supported by the  hypervisor,
+       but  can be explicitly used to reject the migration if the hypervisor lacks change protection support.  --ver-
+       bose displays the progress of migration.  --abort-on-error cancels the migration if a soft error (for  example
+       I/O  error)  happens during the migration. --postcopy enables post-copy logic in migration, but does not actu-
+       ally start post-copy, i.e., migration is started in pre-copy mode.  Once migration is running,  the  user  may
+       switch  to post-copy using the migrate-postcopy command sent from another virsh instance or use --postcopy-af-
+       ter-precopy along with --postcopy to let libvirt automatically switch to post-copy after  the  first  pass  of
+       pre-copy  is finished.  The maximum bandwidth consumed during the post-copy phase may be limited using --post-
+       copy-bandwidth. The maximum bandwidth consumed during the pre-copy phase may be limited using --bandwidth.
+
+       --auto-converge forces convergence during live migration. The initial guest CPU throttling  rate  can  be  set
+       with  auto-converge-initial.  If  the initial throttling rate is not enough to ensure convergence, the rate is
+       periodically increased by auto-converge-increment.
+
+       --rdma-pin-all can be used with RDMA migration (i.e., when migrateuri starts with rdma://) to tell the  hyper-
+       visor  to  pin  all domain's memory at once before migration starts rather than letting it pin memory pages as
+       needed. For QEMU/KVM this requires hard_limit memory tuning element (in the domain XML) to be used and set  to
+       the  maximum  memory  configured for the domain plus any memory consumed by the QEMU process itself. Beware of
+       setting the memory limit too high (and thus allowing the domain to lock most of the host's memory).  Doing  so
+       may be dangerous to both the domain and the host itself since the host's kernel may run out of memory.
+
+       Note:  Individual  hypervisors  usually do not support all possible types of migration. For example, QEMU does
+       not support direct migration.
+
+       In some cases libvirt may refuse to migrate the domain because doing so may lead to potential problems such as
+       data  corruption,  and thus the migration is considered unsafe. For QEMU domain, this may happen if the domain
+       uses disks without explicitly setting cache mode to "none". Migrating such domains is unsafe unless  the  disk
+       images  are  stored  on  coherent clustered filesystem, such as GFS2 or GPFS. If you are sure the migration is
+       safe or you just do not care, use --unsafe to force the migration.
+
+       dname is used for renaming the domain to new name during migration, which also usually can be omitted.   Like-
+       wise, --xml file is usually omitted, but can be used to supply an alternative XML file for use on the destina-
+       tion to supply a larger set of changes to any host-specific portions of the domain XML, such as accounting for
+       naming  differences  between  source  and destination in accessing underlying storage.  If --persistent is en-
+       abled, --persistent-xml file can be used to supply an alternative XML file which will be used as  the  persis-
+       tent domain definition on the destination host.
+
+       --timeout seconds tells virsh to run a specified action when live migration exceeds that many seconds.  It can
+       only be used with --live.  If --timeout-suspend is specified, the domain will be suspended after  the  timeout
+       and  the  migration  will complete offline; this is the default if no --timeout-\`` option is specified on the
+       command line.  When *--timeout-postcopy is used, virsh will switch migration from pre-copy to  post-copy  upon
+       timeout; migration has to be started with --postcopy option for this to work.
+
+       --compressed  activates  compression,  the compression method is chosen with --comp-methods. Supported methods
+       are "mt" and "xbzrle" and can be used in any combination. When no methods are specified, a hypervisor  default
+       methods  will  be  used.  QEMU defaults to "xbzrle". Compression methods can be tuned further. --comp-mt-level
+       sets compression level.  Values are in range from 0 to 9, where 1 is maximum speed and 9 is  maximum  compres-
+       sion.  --comp-mt-threads and --comp-mt-dthreads set the number of compress threads on source and the number of
+       decompress threads on target respectively. --comp-xbzrle-cache sets size of page cache in bytes.
+
+       Providing --tls causes the migration to use the host configured TLS setup  (see  migrate_tls_x509_cert_dir  in
+       /etc/libvirt/qemu.conf)  in  order to perform the migration of the domain. Usage requires proper TLS setup for
+       both source and target. Normally the TLS certificate from the destination host must match +the host's name for
+       TLS  verification  to  succeed. When the certificate does not +match the destination hostname and the expected
+       certificate's hostname is +known, --tls-destination can be used to pass the expected hostname  when  +starting
+       the migration.
+
+       --parallel  option will cause migration data to be sent over multiple parallel connections. The number of such
+       connections can be set using --parallel-connections. Parallel connections may help with saturating the network
+       link between the source and the target and thus speeding up the migration.
+
+       Running  migration can be canceled by interrupting virsh (usually using Ctrl-C) or by domjobabort command sent
+       from another virsh instance.
+
+       The desturi and migrateuri parameters can be used to control which destination the migration uses.  desturi is
+       important for managed migration, but unused for direct migration; migrateuri is required for direct migration,
+       but can usually be automatically determined for managed migration.
+
+       Note: The desturi parameter for normal migration and peer2peer migration has different semantics:
+
+       o normal migration: the desturi is an address of the target host as seen from the client machine.
+
+       o peer2peer migration: the desturi is an address of the target host as seen from the source machine.
+
+       When migrateuri is not specified, libvirt will automatically determine the hypervisor specific URI.  Some  hy-
+       pervisors, including QEMU, have an optional "migration_host" configuration parameter (useful when the host has
+       multiple network interfaces).  If this is unspecified, libvirt determines a name  by  looking  up  the  target
+       host's configured hostname.
+
+       There are a few scenarios where specifying migrateuri may help:
+
+       o The  configured hostname is incorrect, or DNS is broken.  If a host has a hostname which will not resolve to
+         match one of its public IP addresses, then libvirt will generate an incorrect URI.  In this case  migrateuri
+         should be explicitly specified, using an IP address, or a correct hostname.
+
+       o The  host has multiple network interfaces.  If a host has multiple network interfaces, it might be desirable
+         for the migration data stream to be sent over a specific interface for either security or  performance  rea-
+         sons.   In this case migrateuri should be explicitly specified, using an IP address associated with the net-
+         work to be used.
+
+       o The firewall restricts what ports are available.  When libvirt generates a migration URI,  it  will  pick  a
+         port  number using hypervisor specific rules.  Some hypervisors only require a single port to be open in the
+         firewalls, while others require a whole range of port numbers.  In the latter case migrateuri might be spec-
+         ified  to  choose  a  specific  port number outside the default range in order to comply with local firewall
+         policies.
+
+       See https://libvirt.org/migration.html#uris for more details on migration URIs.
+
+       Optional graphicsuri overrides connection parameters used for automatically reconnecting a  graphical  clients
+       at  the  end of migration. If omitted, libvirt will compute the parameters based on target host IP address. In
+       case the client does not have a direct access to the network virtualization hosts are connected to  and  needs
+       to  connect  through a proxy, graphicsuri may be used to specify the address the client should connect to. The
+       URI is formed as follows:
+
+          protocol://hostname[:port]/[?parameters]
+
+       where protocol is either "spice" or "vnc" and parameters is a list of protocol specific  parameters  separated
+       by '&'. Currently recognized parameters are "tlsPort" and "tlsSubject". For example,
+
+          spice://target.host.com:1234/?tlsPort=4567
+
+       Optional listen-address sets the listen address that hypervisor on the destination side should bind to for in-
+       coming migration. Both IPv4 and IPv6 addresses are accepted as well as hostnames (the  resolving  is  done  on
+       destination). Some hypervisors do not support this feature and will return an error if this parameter is used.
+
+       Optional  disks-port sets the port that hypervisor on destination side should bind to for incoming disks traf-
+       fic. Currently it is supported only by QEMU.
+
