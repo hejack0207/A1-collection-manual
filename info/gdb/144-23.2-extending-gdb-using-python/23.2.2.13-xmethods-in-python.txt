@@ -1,0 +1,50 @@
+23.2.2.13 Xmethods In Python
+............................
+
+"Xmethods" are additional methods or replacements for existing methods
+of a C++ class.  This feature is useful for those cases where a method
+defined in C++ source code could be inlined or optimized out by the
+compiler, making it unavailable to GDB.  For such cases, one can define
+an xmethod to serve as a replacement for the method defined in the C++
+source code.  GDB will then invoke the xmethod, instead of the C++
+method, to evaluate expressions.  One can also use xmethods when
+debugging with core files.  Moreover, when debugging live programs,
+invoking an xmethod need not involve running the inferior (which can
+potentially perturb its state).  Hence, even if the C++ method is
+available, it is better to use its replacement xmethod if one is
+defined.
+
+   The xmethods feature in Python is available via the concepts of an
+"xmethod matcher" and an "xmethod worker".  To implement an xmethod, one
+has to implement a matcher and a corresponding worker for it (more than
+one worker can be implemented, each catering to a different overloaded
+instance of the method).  Internally, GDB invokes the 'match' method of
+a matcher to match the class type and method name.  On a match, the
+'match' method returns a list of matching _worker_ objects.  Each worker
+object typically corresponds to an overloaded instance of the xmethod.
+They implement a 'get_arg_types' method which returns a sequence of
+types corresponding to the arguments the xmethod requires.  GDB uses
+this sequence of types to perform overload resolution and picks a
+winning xmethod worker.  A winner is also selected from among the
+methods GDB finds in the C++ source code.  Next, the winning xmethod
+worker and the winning C++ method are compared to select an overall
+winner.  In case of a tie between a xmethod worker and a C++ method, the
+xmethod worker is selected as the winner.  That is, if a winning xmethod
+worker is found to be equivalent to the winning C++ method, then the
+xmethod worker is treated as a replacement for the C++ method.  GDB uses
+the overall winner to invoke the method.  If the winning xmethod worker
+is the overall winner, then the corresponding xmethod is invoked via the
+'__call__' method of the worker object.
+
+   If one wants to implement an xmethod as a replacement for an existing
+C++ method, then they have to implement an equivalent xmethod which has
+exactly the same name and takes arguments of exactly the same type as
+the C++ method.  If the user wants to invoke the C++ method even though
+a replacement xmethod is available for that method, then they can
+disable the xmethod.
+
+   *Note Xmethod API::, for API to implement xmethods in Python.  *Note
+Writing an Xmethod::, for implementing xmethods in Python.
+
+File: gdb.info,  Node: Xmethod API,  Next: Writing an Xmethod,  Prev: Xmethods In Python,  Up: Python API
+

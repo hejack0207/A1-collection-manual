@@ -1,0 +1,190 @@
+23.2.2.25 Accessing inferior stack frames from Python
+.....................................................
+
+When the debugged program stops, GDB is able to analyze its call stack
+(*note Stack frames: Frames.).  The 'gdb.Frame' class represents a frame
+in the stack.  A 'gdb.Frame' object is only valid while its
+corresponding frame exists in the inferior's stack.  If you try to use
+an invalid frame object, GDB will throw a 'gdb.error' exception (*note
+Exception Handling::).
+
+   Two 'gdb.Frame' objects can be compared for equality with the '=='
+operator, like:
+
+     (gdb) python print gdb.newest_frame() == gdb.selected_frame ()
+     True
+
+   The following frame-related functions are available in the 'gdb'
+module:
+
+ -- Function: gdb.selected_frame ()
+     Return the selected frame object.  (*note Selecting a Frame:
+     Selection.).
+
+ -- Function: gdb.newest_frame ()
+     Return the newest frame object for the selected thread.
+
+ -- Function: gdb.frame_stop_reason_string (reason)
+     Return a string explaining the reason why GDB stopped unwinding
+     frames, as expressed by the given REASON code (an integer, see the
+     'unwind_stop_reason' method further down in this section).
+
+ -- Function: gdb.invalidate_cached_frames
+     GDB internally keeps a cache of the frames that have been unwound.
+     This function invalidates this cache.
+
+     This function should not generally be called by ordinary Python
+     code.  It is documented for the sake of completeness.
+
+   A 'gdb.Frame' object has the following methods:
+
+ -- Function: Frame.is_valid ()
+     Returns true if the 'gdb.Frame' object is valid, false if not.  A
+     frame object can become invalid if the frame it refers to doesn't
+     exist anymore in the inferior.  All 'gdb.Frame' methods will throw
+     an exception if it is invalid at the time the method is called.
+
+ -- Function: Frame.name ()
+     Returns the function name of the frame, or 'None' if it can't be
+     obtained.
+
+ -- Function: Frame.architecture ()
+     Returns the 'gdb.Architecture' object corresponding to the frame's
+     architecture.  *Note Architectures In Python::.
+
+ -- Function: Frame.type ()
+     Returns the type of the frame.  The value can be one of:
+     'gdb.NORMAL_FRAME'
+          An ordinary stack frame.
+
+     'gdb.DUMMY_FRAME'
+          A fake stack frame that was created by GDB when performing an
+          inferior function call.
+
+     'gdb.INLINE_FRAME'
+          A frame representing an inlined function.  The function was
+          inlined into a 'gdb.NORMAL_FRAME' that is older than this one.
+
+     'gdb.TAILCALL_FRAME'
+          A frame representing a tail call.  *Note Tail Call Frames::.
+
+     'gdb.SIGTRAMP_FRAME'
+          A signal trampoline frame.  This is the frame created by the
+          OS when it calls into a signal handler.
+
+     'gdb.ARCH_FRAME'
+          A fake stack frame representing a cross-architecture call.
+
+     'gdb.SENTINEL_FRAME'
+          This is like 'gdb.NORMAL_FRAME', but it is only used for the
+          newest frame.
+
+ -- Function: Frame.unwind_stop_reason ()
+     Return an integer representing the reason why it's not possible to
+     find more frames toward the outermost frame.  Use
+     'gdb.frame_stop_reason_string' to convert the value returned by
+     this function to a string.  The value can be one of:
+
+     'gdb.FRAME_UNWIND_NO_REASON'
+          No particular reason (older frames should be available).
+
+     'gdb.FRAME_UNWIND_NULL_ID'
+          The previous frame's analyzer returns an invalid result.  This
+          is no longer used by GDB, and is kept only for backward
+          compatibility.
+
+     'gdb.FRAME_UNWIND_OUTERMOST'
+          This frame is the outermost.
+
+     'gdb.FRAME_UNWIND_UNAVAILABLE'
+          Cannot unwind further, because that would require knowing the
+          values of registers or memory that have not been collected.
+
+     'gdb.FRAME_UNWIND_INNER_ID'
+          This frame ID looks like it ought to belong to a NEXT frame,
+          but we got it for a PREV frame.  Normally, this is a sign of
+          unwinder failure.  It could also indicate stack corruption.
+
+     'gdb.FRAME_UNWIND_SAME_ID'
+          This frame has the same ID as the previous one.  That means
+          that unwinding further would almost certainly give us another
+          frame with exactly the same ID, so break the chain.  Normally,
+          this is a sign of unwinder failure.  It could also indicate
+          stack corruption.
+
+     'gdb.FRAME_UNWIND_NO_SAVED_PC'
+          The frame unwinder did not find any saved PC, but we needed
+          one to unwind further.
+
+     'gdb.FRAME_UNWIND_MEMORY_ERROR'
+          The frame unwinder caused an error while trying to access
+          memory.
+
+     'gdb.FRAME_UNWIND_FIRST_ERROR'
+          Any stop reason greater or equal to this value indicates some
+          kind of error.  This special value facilitates writing code
+          that tests for errors in unwinding in a way that will work
+          correctly even if the list of the other values is modified in
+          future GDB versions.  Using it, you could write:
+               reason = gdb.selected_frame().unwind_stop_reason ()
+               reason_str =  gdb.frame_stop_reason_string (reason)
+               if reason >=  gdb.FRAME_UNWIND_FIRST_ERROR:
+                   print "An error occured: %s" % reason_str
+
+ -- Function: Frame.pc ()
+     Returns the frame's resume address.
+
+ -- Function: Frame.block ()
+     Return the frame's code block.  *Note Blocks In Python::.  If the
+     frame does not have a block - for example, if there is no debugging
+     information for the code in question - then this will throw an
+     exception.
+
+ -- Function: Frame.function ()
+     Return the symbol for the function corresponding to this frame.
+     *Note Symbols In Python::.
+
+ -- Function: Frame.older ()
+     Return the frame that called this frame.
+
+ -- Function: Frame.newer ()
+     Return the frame called by this frame.
+
+ -- Function: Frame.find_sal ()
+     Return the frame's symtab and line object.  *Note Symbol Tables In
+     Python::.
+
+ -- Function: Frame.read_register (register)
+     Return the value of REGISTER in this frame.  Returns a 'Gdb.Value'
+     object.  Throws an exception if REGISTER does not exist.  The
+     REGISTER argument must be one of the following:
+       1. A string that is the name of a valid register (e.g., ''sp'' or
+          ''rax'').
+       2. A 'gdb.RegisterDescriptor' object (*note Registers In
+          Python::).
+       3. A GDB internal, platform specific number.  Using these numbers
+          is supported for historic reasons, but is not recommended as
+          future changes to GDB could change the mapping between numbers
+          and the registers they represent, breaking any Python code
+          that uses the platform-specific numbers.  The numbers are
+          usually found in the corresponding 'PLATFORM-tdep.h' file in
+          the GDB source tree.
+     Using a string to access registers will be slightly slower than the
+     other two methods as GDB must look up the mapping between name and
+     internal register number.  If performance is critical consider
+     looking up and caching a 'gdb.RegisterDescriptor' object.
+
+ -- Function: Frame.read_var (variable [, block])
+     Return the value of VARIABLE in this frame.  If the optional
+     argument BLOCK is provided, search for the variable from that
+     block; otherwise start at the frame's current block (which is
+     determined by the frame's current program counter).  The VARIABLE
+     argument must be a string or a 'gdb.Symbol' object; BLOCK must be a
+     'gdb.Block' object.
+
+ -- Function: Frame.select ()
+     Set this frame to be the selected frame.  *Note Examining the
+     Stack: Stack.
+
+File: gdb.info,  Node: Blocks In Python,  Next: Symbols In Python,  Prev: Frames In Python,  Up: Python API
+

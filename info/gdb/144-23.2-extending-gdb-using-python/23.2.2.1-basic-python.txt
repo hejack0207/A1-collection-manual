@@ -1,0 +1,254 @@
+23.2.2.1 Basic Python
+.....................
+
+At startup, GDB overrides Python's 'sys.stdout' and 'sys.stderr' to
+print using GDB's output-paging streams.  A Python program which outputs
+to one of these streams may have its output interrupted by the user
+(*note Screen Size::).  In this situation, a Python 'KeyboardInterrupt'
+exception is thrown.
+
+   Some care must be taken when writing Python code to run in GDB.  Two
+things worth noting in particular:
+
+   * GDB install handlers for 'SIGCHLD' and 'SIGINT'.  Python code must
+     not override these, or even change the options using 'sigaction'.
+     If your program changes the handling of these signals, GDB will
+     most likely stop working correctly.  Note that it is unfortunately
+     common for GUI toolkits to install a 'SIGCHLD' handler.
+
+   * GDB takes care to mark its internal file descriptors as
+     close-on-exec.  However, this cannot be done in a thread-safe way
+     on all platforms.  Your Python programs should be aware of this and
+     should both create new file descriptors with the close-on-exec flag
+     set and arrange to close unneeded file descriptors before starting
+     a child process.
+
+   GDB introduces a new Python module, named 'gdb'.  All methods and
+classes added by GDB are placed in this module.  GDB automatically
+'import's the 'gdb' module for use in all scripts evaluated by the
+'python' command.
+
+   Some types of the 'gdb' module come with a textual representation
+(accessible through the 'repr' or 'str' functions).  These are offered
+for debugging purposes only, expect them to change over time.
+
+ -- Variable: gdb.PYTHONDIR
+     A string containing the python directory (*note Python::).
+
+ -- Function: gdb.execute (command [, from_tty [, to_string]])
+     Evaluate COMMAND, a string, as a GDB CLI command.  If a GDB
+     exception happens while COMMAND runs, it is translated as described
+     in *note Exception Handling: Exception Handling.
+
+     The FROM_TTY flag specifies whether GDB ought to consider this
+     command as having originated from the user invoking it
+     interactively.  It must be a boolean value.  If omitted, it
+     defaults to 'False'.
+
+     By default, any output produced by COMMAND is sent to GDB's
+     standard output (and to the log output if logging is turned on).
+     If the TO_STRING parameter is 'True', then output will be collected
+     by 'gdb.execute' and returned as a string.  The default is 'False',
+     in which case the return value is 'None'.  If TO_STRING is 'True',
+     the GDB virtual terminal will be temporarily set to unlimited width
+     and height, and its pagination will be disabled; *note Screen
+     Size::.
+
+ -- Function: gdb.breakpoints ()
+     Return a sequence holding all of GDB's breakpoints.  *Note
+     Breakpoints In Python::, for more information.  In GDB version 7.11
+     and earlier, this function returned 'None' if there were no
+     breakpoints.  This peculiarity was subsequently fixed, and now
+     'gdb.breakpoints' returns an empty sequence in this case.
+
+ -- Function: gdb.rbreak (regex [, minsyms [, throttle, [, symtabs ]]])
+     Return a Python list holding a collection of newly set
+     'gdb.Breakpoint' objects matching function names defined by the
+     REGEX pattern.  If the MINSYMS keyword is 'True', all system
+     functions (those not explicitly defined in the inferior) will also
+     be included in the match.  The THROTTLE keyword takes an integer
+     that defines the maximum number of pattern matches for functions
+     matched by the REGEX pattern.  If the number of matches exceeds the
+     integer value of THROTTLE, a 'RuntimeError' will be raised and no
+     breakpoints will be created.  If THROTTLE is not defined then there
+     is no imposed limit on the maximum number of matches and
+     breakpoints to be created.  The SYMTABS keyword takes a Python
+     iterable that yields a collection of 'gdb.Symtab' objects and will
+     restrict the search to those functions only contained within the
+     'gdb.Symtab' objects.
+
+ -- Function: gdb.parameter (parameter)
+     Return the value of a GDB PARAMETER given by its name, a string;
+     the parameter name string may contain spaces if the parameter has a
+     multi-part name.  For example, 'print object' is a valid parameter
+     name.
+
+     If the named parameter does not exist, this function throws a
+     'gdb.error' (*note Exception Handling::).  Otherwise, the
+     parameter's value is converted to a Python value of the appropriate
+     type, and returned.
+
+ -- Function: gdb.history (number)
+     Return a value from GDB's value history (*note Value History::).
+     The NUMBER argument indicates which history element to return.  If
+     NUMBER is negative, then GDB will take its absolute value and count
+     backward from the last element (i.e., the most recent element) to
+     find the value to return.  If NUMBER is zero, then GDB will return
+     the most recent element.  If the element specified by NUMBER
+     doesn't exist in the value history, a 'gdb.error' exception will be
+     raised.
+
+     If no exception is raised, the return value is always an instance
+     of 'gdb.Value' (*note Values From Inferior::).
+
+ -- Function: gdb.convenience_variable (name)
+     Return the value of the convenience variable (*note Convenience
+     Vars::) named NAME.  NAME must be a string.  The name should not
+     include the '$' that is used to mark a convenience variable in an
+     expression.  If the convenience variable does not exist, then
+     'None' is returned.
+
+ -- Function: gdb.set_convenience_variable (name, value)
+     Set the value of the convenience variable (*note Convenience
+     Vars::) named NAME.  NAME must be a string.  The name should not
+     include the '$' that is used to mark a convenience variable in an
+     expression.  If VALUE is 'None', then the convenience variable is
+     removed.  Otherwise, if VALUE is not a 'gdb.Value' (*note Values
+     From Inferior::), it is is converted using the 'gdb.Value'
+     constructor.
+
+ -- Function: gdb.parse_and_eval (expression)
+     Parse EXPRESSION, which must be a string, as an expression in the
+     current language, evaluate it, and return the result as a
+     'gdb.Value'.
+
+     This function can be useful when implementing a new command (*note
+     Commands In Python::), as it provides a way to parse the command's
+     argument as an expression.  It is also useful simply to compute
+     values.
+
+ -- Function: gdb.find_pc_line (pc)
+     Return the 'gdb.Symtab_and_line' object corresponding to the PC
+     value.  *Note Symbol Tables In Python::.  If an invalid value of PC
+     is passed as an argument, then the 'symtab' and 'line' attributes
+     of the returned 'gdb.Symtab_and_line' object will be 'None' and 0
+     respectively.  This is identical to
+     'gdb.current_progspace().find_pc_line(pc)' and is included for
+     historical compatibility.
+
+ -- Function: gdb.post_event (event)
+     Put EVENT, a callable object taking no arguments, into GDB's
+     internal event queue.  This callable will be invoked at some later
+     point, during GDB's event processing.  Events posted using
+     'post_event' will be run in the order in which they were posted;
+     however, there is no way to know when they will be processed
+     relative to other events inside GDB.
+
+     GDB is not thread-safe.  If your Python program uses multiple
+     threads, you must be careful to only call GDB-specific functions in
+     the GDB thread.  'post_event' ensures this.  For example:
+
+          (gdb) python
+          >import threading
+          >
+          >class Writer():
+          > def __init__(self, message):
+          >        self.message = message;
+          > def __call__(self):
+          >        gdb.write(self.message)
+          >
+          >class MyThread1 (threading.Thread):
+          > def run (self):
+          >        gdb.post_event(Writer("Hello "))
+          >
+          >class MyThread2 (threading.Thread):
+          > def run (self):
+          >        gdb.post_event(Writer("World\n"))
+          >
+          >MyThread1().start()
+          >MyThread2().start()
+          >end
+          (gdb) Hello World
+
+ -- Function: gdb.write (string [, stream])
+     Print a string to GDB's paginated output stream.  The optional
+     STREAM determines the stream to print to.  The default stream is
+     GDB's standard output stream.  Possible stream values are:
+
+     'gdb.STDOUT'
+          GDB's standard output stream.
+
+     'gdb.STDERR'
+          GDB's standard error stream.
+
+     'gdb.STDLOG'
+          GDB's log stream (*note Logging Output::).
+
+     Writing to 'sys.stdout' or 'sys.stderr' will automatically call
+     this function and will automatically direct the output to the
+     relevant stream.
+
+ -- Function: gdb.flush ()
+     Flush the buffer of a GDB paginated stream so that the contents are
+     displayed immediately.  GDB will flush the contents of a stream
+     automatically when it encounters a newline in the buffer.  The
+     optional STREAM determines the stream to flush.  The default stream
+     is GDB's standard output stream.  Possible stream values are:
+
+     'gdb.STDOUT'
+          GDB's standard output stream.
+
+     'gdb.STDERR'
+          GDB's standard error stream.
+
+     'gdb.STDLOG'
+          GDB's log stream (*note Logging Output::).
+
+     Flushing 'sys.stdout' or 'sys.stderr' will automatically call this
+     function for the relevant stream.
+
+ -- Function: gdb.target_charset ()
+     Return the name of the current target character set (*note
+     Character Sets::).  This differs from
+     'gdb.parameter('target-charset')' in that 'auto' is never returned.
+
+ -- Function: gdb.target_wide_charset ()
+     Return the name of the current target wide character set (*note
+     Character Sets::).  This differs from
+     'gdb.parameter('target-wide-charset')' in that 'auto' is never
+     returned.
+
+ -- Function: gdb.solib_name (address)
+     Return the name of the shared library holding the given ADDRESS as
+     a string, or 'None'.  This is identical to
+     'gdb.current_progspace().solib_name(address)' and is included for
+     historical compatibility.
+
+ -- Function: gdb.decode_line ([expression])
+     Return locations of the line specified by EXPRESSION, or of the
+     current line if no argument was given.  This function returns a
+     Python tuple containing two elements.  The first element contains a
+     string holding any unparsed section of EXPRESSION (or 'None' if the
+     expression has been fully parsed).  The second element contains
+     either 'None' or another tuple that contains all the locations that
+     match the expression represented as 'gdb.Symtab_and_line' objects
+     (*note Symbol Tables In Python::).  If EXPRESSION is provided, it
+     is decoded the way that GDB's inbuilt 'break' or 'edit' commands do
+     (*note Specify Location::).
+
+ -- Function: gdb.prompt_hook (current_prompt)
+
+     If PROMPT_HOOK is callable, GDB will call the method assigned to
+     this operation before a prompt is displayed by GDB.
+
+     The parameter 'current_prompt' contains the current GDB prompt.
+     This method must return a Python string, or 'None'.  If a string is
+     returned, the GDB prompt will be set to that string.  If 'None' is
+     returned, GDB will continue to use the current prompt.
+
+     Some prompts cannot be substituted in GDB.  Secondary prompts such
+     as those used by readline for command input, and annotation related
+     prompts are prohibited from being changed.
+
+File: gdb.info,  Node: Exception Handling,  Next: Values From Inferior,  Prev: Basic Python,  Up: Python API
+

@@ -1,0 +1,163 @@
+23.2.2.21 Parameters In Python
+..............................
+
+You can implement new GDB parameters using Python.  A new parameter is
+implemented as an instance of the 'gdb.Parameter' class.
+
+   Parameters are exposed to the user via the 'set' and 'show' commands.
+*Note Help::.
+
+   There are many parameters that already exist and can be set in GDB.
+Two examples are: 'set follow fork' and 'set charset'.  Setting these
+parameters influences certain behavior in GDB.  Similarly, you can
+define parameters that can be used to influence behavior in custom
+Python scripts and commands.
+
+ -- Function: Parameter.__init__ (name, COMMAND-CLASS, PARAMETER-CLASS
+          [, ENUM-SEQUENCE])
+     The object initializer for 'Parameter' registers the new parameter
+     with GDB.  This initializer is normally invoked from the subclass'
+     own '__init__' method.
+
+     NAME is the name of the new parameter.  If NAME consists of
+     multiple words, then the initial words are looked for as prefix
+     parameters.  An example of this can be illustrated with the 'set
+     print' set of parameters.  If NAME is 'print foo', then 'print'
+     will be searched as the prefix parameter.  In this case the
+     parameter can subsequently be accessed in GDB as 'set print foo'.
+
+     If NAME consists of multiple words, and no prefix parameter group
+     can be found, an exception is raised.
+
+     COMMAND-CLASS should be one of the 'COMMAND_' constants (*note
+     Commands In Python::).  This argument tells GDB how to categorize
+     the new parameter in the help system.
+
+     PARAMETER-CLASS should be one of the 'PARAM_' constants defined
+     below.  This argument tells GDB the type of the new parameter; this
+     information is used for input validation and completion.
+
+     If PARAMETER-CLASS is 'PARAM_ENUM', then ENUM-SEQUENCE must be a
+     sequence of strings.  These strings represent the possible values
+     for the parameter.
+
+     If PARAMETER-CLASS is not 'PARAM_ENUM', then the presence of a
+     fourth argument will cause an exception to be thrown.
+
+     The help text for the new parameter is taken from the Python
+     documentation string for the parameter's class, if there is one.
+     If there is no documentation string, a default value is used.
+
+ -- Variable: Parameter.set_doc
+     If this attribute exists, and is a string, then its value is used
+     as the help text for this parameter's 'set' command.  The value is
+     examined when 'Parameter.__init__' is invoked; subsequent changes
+     have no effect.
+
+ -- Variable: Parameter.show_doc
+     If this attribute exists, and is a string, then its value is used
+     as the help text for this parameter's 'show' command.  The value is
+     examined when 'Parameter.__init__' is invoked; subsequent changes
+     have no effect.
+
+ -- Variable: Parameter.value
+     The 'value' attribute holds the underlying value of the parameter.
+     It can be read and assigned to just as any other attribute.  GDB
+     does validation when assignments are made.
+
+   There are two methods that may be implemented in any 'Parameter'
+class.  These are:
+
+ -- Function: Parameter.get_set_string (self)
+     If this method exists, GDB will call it when a PARAMETER's value
+     has been changed via the 'set' API (for example, 'set foo off').
+     The 'value' attribute has already been populated with the new value
+     and may be used in output.  This method must return a string.  If
+     the returned string is not empty, GDB will present it to the user.
+
+     If this method raises the 'gdb.GdbError' exception (*note Exception
+     Handling::), then GDB will print the exception's string and the
+     'set' command will fail.  Note, however, that the 'value' attribute
+     will not be reset in this case.  So, if your parameter must
+     validate values, it should store the old value internally and reset
+     the exposed value, like so:
+
+          class ExampleParam (gdb.Parameter):
+             def __init__ (self, name):
+                super (ExampleParam, self).__init__ (name,
+                             gdb.COMMAND_DATA,
+                             gdb.PARAM_BOOLEAN)
+                self.value = True
+                self.saved_value = True
+             def validate(self):
+                return False
+             def get_set_string (self):
+                if not self.validate():
+                  self.value = self.saved_value
+                  raise gdb.GdbError('Failed to validate')
+                self.saved_value = self.value
+
+ -- Function: Parameter.get_show_string (self, svalue)
+     GDB will call this method when a PARAMETER's 'show' API has been
+     invoked (for example, 'show foo').  The argument 'svalue' receives
+     the string representation of the current value.  This method must
+     return a string.
+
+   When a new parameter is defined, its type must be specified.  The
+available types are represented by constants defined in the 'gdb'
+module:
+
+'gdb.PARAM_BOOLEAN'
+     The value is a plain boolean.  The Python boolean values, 'True'
+     and 'False' are the only valid values.
+
+'gdb.PARAM_AUTO_BOOLEAN'
+     The value has three possible states: true, false, and 'auto'.  In
+     Python, true and false are represented using boolean constants, and
+     'auto' is represented using 'None'.
+
+'gdb.PARAM_UINTEGER'
+     The value is an unsigned integer.  The value of 0 should be
+     interpreted to mean "unlimited".
+
+'gdb.PARAM_INTEGER'
+     The value is a signed integer.  The value of 0 should be
+     interpreted to mean "unlimited".
+
+'gdb.PARAM_STRING'
+     The value is a string.  When the user modifies the string, any
+     escape sequences, such as '\t', '\f', and octal escapes, are
+     translated into corresponding characters and encoded into the
+     current host charset.
+
+'gdb.PARAM_STRING_NOESCAPE'
+     The value is a string.  When the user modifies the string, escapes
+     are passed through untranslated.
+
+'gdb.PARAM_OPTIONAL_FILENAME'
+     The value is a either a filename (a string), or 'None'.
+
+'gdb.PARAM_FILENAME'
+     The value is a filename.  This is just like
+     'PARAM_STRING_NOESCAPE', but uses file names for completion.
+
+'gdb.PARAM_ZINTEGER'
+     The value is an integer.  This is like 'PARAM_INTEGER', except 0 is
+     interpreted as itself.
+
+'gdb.PARAM_ZUINTEGER'
+     The value is an unsigned integer.  This is like 'PARAM_INTEGER',
+     except 0 is interpreted as itself, and the value cannot be
+     negative.
+
+'gdb.PARAM_ZUINTEGER_UNLIMITED'
+     The value is a signed integer.  This is like 'PARAM_ZUINTEGER',
+     except the special value -1 should be interpreted to mean
+     "unlimited".  Other negative values are not allowed.
+
+'gdb.PARAM_ENUM'
+     The value is a string, which must be one of a collection string
+     constants provided when the parameter is created.
+
+File: gdb.info,  Node: Functions In Python,  Next: Progspaces In Python,  Prev: Parameters In Python,  Up: Python API
+

@@ -1,0 +1,156 @@
+23.2.2.35 Implementing new TUI windows
+......................................
+
+New TUI (*note TUI::) windows can be implemented in Python.
+
+ -- Function: gdb.register_window_type (NAME, FACTORY)
+     Because TUI windows are created and destroyed depending on the
+     layout the user chooses, new window types are implemented by
+     registering a factory function with GDB.
+
+     NAME is the name of the new window.  It's an error to try to
+     replace one of the built-in windows, but other window types can be
+     replaced.
+
+     FUNCTION is a factory function that is called to create the TUI
+     window.  This is called with a single argument of type
+     'gdb.TuiWindow', described below.  It should return an object that
+     implements the TUI window protocol, also described below.
+
+   As mentioned above, when a factory function is called, it is passed a
+an object of type 'gdb.TuiWindow'.  This object has these methods and
+attributes:
+
+ -- Function: TuiWindow.is_valid ()
+     This method returns 'True' when this window is valid.  When the
+     user changes the TUI layout, windows no longer visible in the new
+     layout will be destroyed.  At this point, the 'gdb.TuiWindow' will
+     no longer be valid, and methods (and attributes) other than
+     'is_valid' will throw an exception.
+
+ -- Variable: TuiWindow.width
+     This attribute holds the width of the window.  It is not writable.
+
+ -- Variable: TuiWindow.height
+     This attribute holds the height of the window.  It is not writable.
+
+ -- Variable: TuiWindow.title
+     This attribute holds the window's title, a string.  This is
+     normally displayed above the window.  This attribute can be
+     modified.
+
+ -- Function: TuiWindow.erase ()
+     Remove all the contents of the window.
+
+ -- Function: TuiWindow.write (STRING)
+     Write STRING to the window.  STRING can contain ANSI terminal
+     escape styling sequences; GDB will translate these as appropriate
+     for the terminal.
+
+   The factory function that you supply should return an object
+conforming to the TUI window protocol.  These are the method that can be
+called on this object, which is referred to below as the "window
+object".  The methods documented below are optional; if the object does
+not implement one of these methods, GDB will not attempt to call it.
+Additional new methods may be added to the window protocol in the
+future.  GDB guarantees that they will begin with a lower-case letter,
+so you can start implementation methods with upper-case letters or
+underscore to avoid any future conflicts.
+
+ -- Function: Window.close ()
+     When the TUI window is closed, the 'gdb.TuiWindow' object will be
+     put into an invalid state.  At this time, GDB will call 'close'
+     method on the window object.
+
+     After this method is called, GDB will discard any references it
+     holds on this window object, and will no longer call methods on
+     this object.
+
+ -- Function: Window.render ()
+     In some situations, a TUI window can change size.  For example,
+     this can happen if the user resizes the terminal, or changes the
+     layout.  When this happens, GDB will call the 'render' method on
+     the window object.
+
+     If your window is intended to update in response to changes in the
+     inferior, you will probably also want to register event listeners
+     and send output to the 'gdb.TuiWindow'.
+
+ -- Function: Window.hscroll (NUM)
+     This is a request to scroll the window horizontally.  NUM is the
+     amount by which to scroll, with negative numbers meaning to scroll
+     right.  In the TUI model, it is the viewport that moves, not the
+     contents.  A positive argument should cause the viewport to move
+     right, and so the content should appear to move to the left.
+
+ -- Function: Window.vscroll (NUM)
+     This is a request to scroll the window vertically.  NUM is the
+     amount by which to scroll, with negative numbers meaning to scroll
+     backward.  In the TUI model, it is the viewport that moves, not the
+     contents.  A positive argument should cause the viewport to move
+     down, and so the content should appear to move up.
+
+File: gdb.info,  Node: Python Auto-loading,  Next: Python modules,  Prev: Python API,  Up: Python
+
+23.2.3 Python Auto-loading
+--------------------------
+
+When a new object file is read (for example, due to the 'file' command,
+or because the inferior has loaded a shared library), GDB will look for
+Python support scripts in several ways: 'OBJFILE-gdb.py' and
+'.debug_gdb_scripts' section.  *Note Auto-loading extensions::.
+
+   The auto-loading feature is useful for supplying application-specific
+debugging commands and scripts.
+
+   Auto-loading can be enabled or disabled, and the list of auto-loaded
+scripts can be printed.
+
+'set auto-load python-scripts [on|off]'
+     Enable or disable the auto-loading of Python scripts.
+
+'show auto-load python-scripts'
+     Show whether auto-loading of Python scripts is enabled or disabled.
+
+'info auto-load python-scripts [REGEXP]'
+     Print the list of all Python scripts that GDB auto-loaded.
+
+     Also printed is the list of Python scripts that were mentioned in
+     the '.debug_gdb_scripts' section and were either not found (*note
+     dotdebug_gdb_scripts section::) or were not auto-loaded due to
+     'auto-load safe-path' rejection (*note Auto-loading::).  This is
+     useful because their names are not printed when GDB tries to load
+     them and fails.  There may be many of them, and printing an error
+     message for each one is problematic.
+
+     If REGEXP is supplied only Python scripts with matching names are
+     printed.
+
+     Example:
+
+          (gdb) info auto-load python-scripts
+          Loaded Script
+          Yes    py-section-script.py
+                 full name: /tmp/py-section-script.py
+          No     my-foo-pretty-printers.py
+
+   When reading an auto-loaded file or script, GDB sets the "current
+objfile".  This is available via the 'gdb.current_objfile' function
+(*note Objfiles In Python::).  This can be useful for registering
+objfile-specific pretty-printers and frame-filters.
+
+File: gdb.info,  Node: Python modules,  Prev: Python Auto-loading,  Up: Python
+
+23.2.4 Python modules
+---------------------
+
+GDB comes with several modules to assist writing Python code.
+
+* Menu:
+
+* gdb.printing::       Building and registering pretty-printers.
+* gdb.types::          Utilities for working with types.
+* gdb.prompt::         Utilities for prompt value substitution.
+
+File: gdb.info,  Node: gdb.printing,  Next: gdb.types,  Up: Python modules
+

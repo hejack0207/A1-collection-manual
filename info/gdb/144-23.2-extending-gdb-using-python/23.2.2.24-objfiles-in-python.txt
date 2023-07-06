@@ -1,0 +1,150 @@
+23.2.2.24 Objfiles In Python
+............................
+
+GDB loads symbols for an inferior from various symbol-containing files
+(*note Files::).  These include the primary executable file, any shared
+libraries used by the inferior, and any separate debug info files (*note
+Separate Debug Files::).  GDB calls these symbol-containing files
+"objfiles".
+
+   The following objfile-related functions are available in the 'gdb'
+module:
+
+ -- Function: gdb.current_objfile ()
+     When auto-loading a Python script (*note Python Auto-loading::),
+     GDB sets the "current objfile" to the corresponding objfile.  This
+     function returns the current objfile.  If there is no current
+     objfile, this function returns 'None'.
+
+ -- Function: gdb.objfiles ()
+     Return a sequence of objfiles referenced by the current program
+     space.  *Note Objfiles In Python::, and *note Progspaces In
+     Python::.  This is identical to
+     'gdb.selected_inferior().progspace.objfiles()' and is included for
+     historical compatibility.
+
+ -- Function: gdb.lookup_objfile (name [, by_build_id])
+     Look up NAME, a file name or build ID, in the list of objfiles for
+     the current program space (*note Progspaces In Python::).  If the
+     objfile is not found throw the Python 'ValueError' exception.
+
+     If NAME is a relative file name, then it will match any source file
+     name with the same trailing components.  For example, if NAME is
+     'gcc/expr.c', then it will match source file name of
+     '/build/trunk/gcc/expr.c', but not '/build/trunk/libcpp/expr.c' or
+     '/build/trunk/gcc/x-expr.c'.
+
+     If BY_BUILD_ID is provided and is 'True' then NAME is the build ID
+     of the objfile.  Otherwise, NAME is a file name.  This is supported
+     only on some operating systems, notably those which use the ELF
+     format for binary files and the GNU Binutils.  For more details
+     about this feature, see the description of the '--build-id'
+     command-line option in *note Command Line Options: (ld)Options.
+
+   Each objfile is represented by an instance of the 'gdb.Objfile'
+class.
+
+ -- Variable: Objfile.filename
+     The file name of the objfile as a string, with symbolic links
+     resolved.
+
+     The value is 'None' if the objfile is no longer valid.  See the
+     'gdb.Objfile.is_valid' method, described below.
+
+ -- Variable: Objfile.username
+     The file name of the objfile as specified by the user as a string.
+
+     The value is 'None' if the objfile is no longer valid.  See the
+     'gdb.Objfile.is_valid' method, described below.
+
+ -- Variable: Objfile.owner
+     For separate debug info objfiles this is the corresponding
+     'gdb.Objfile' object that debug info is being provided for.
+     Otherwise this is 'None'.  Separate debug info objfiles are added
+     with the 'gdb.Objfile.add_separate_debug_file' method, described
+     below.
+
+ -- Variable: Objfile.build_id
+     The build ID of the objfile as a string.  If the objfile does not
+     have a build ID then the value is 'None'.
+
+     This is supported only on some operating systems, notably those
+     which use the ELF format for binary files and the GNU Binutils.
+     For more details about this feature, see the description of the
+     '--build-id' command-line option in *note Command Line Options:
+     (ld)Options.
+
+ -- Variable: Objfile.progspace
+     The containing program space of the objfile as a 'gdb.Progspace'
+     object.  *Note Progspaces In Python::.
+
+ -- Variable: Objfile.pretty_printers
+     The 'pretty_printers' attribute is a list of functions.  It is used
+     to look up pretty-printers.  A 'Value' is passed to each function
+     in order; if the function returns 'None', then the search
+     continues.  Otherwise, the return value should be an object which
+     is used to format the value.  *Note Pretty Printing API::, for more
+     information.
+
+ -- Variable: Objfile.type_printers
+     The 'type_printers' attribute is a list of type printer objects.
+     *Note Type Printing API::, for more information.
+
+ -- Variable: Objfile.frame_filters
+     The 'frame_filters' attribute is a dictionary of frame filter
+     objects.  *Note Frame Filter API::, for more information.
+
+   One may add arbitrary attributes to 'gdb.Objfile' objects in the
+usual Python way.  This is useful if, for example, one needs to do some
+extra record keeping associated with the objfile.
+
+   In this contrived example we record the time when GDB loaded the
+objfile.
+
+     (gdb) python
+     import datetime
+     def new_objfile_handler(event):
+         # Set the time_loaded attribute of the new objfile.
+         event.new_objfile.time_loaded = datetime.datetime.today()
+     gdb.events.new_objfile.connect(new_objfile_handler)
+     end
+     (gdb) file ./hello
+     Reading symbols from ./hello...
+     (gdb) python print gdb.objfiles()[0].time_loaded
+     2014-10-09 11:41:36.770345
+
+   A 'gdb.Objfile' object has the following methods:
+
+ -- Function: Objfile.is_valid ()
+     Returns 'True' if the 'gdb.Objfile' object is valid, 'False' if
+     not.  A 'gdb.Objfile' object can become invalid if the object file
+     it refers to is not loaded in GDB any longer.  All other
+     'gdb.Objfile' methods will throw an exception if it is invalid at
+     the time the method is called.
+
+ -- Function: Objfile.add_separate_debug_file (file)
+     Add FILE to the list of files that GDB will search for debug
+     information for the objfile.  This is useful when the debug info
+     has been removed from the program and stored in a separate file.
+     GDB has built-in support for finding separate debug info files
+     (*note Separate Debug Files::), but if the file doesn't live in one
+     of the standard places that GDB searches then this function can be
+     used to add a debug info file from a different place.
+
+ -- Function: Objfile.lookup_global_symbol (name [, domain])
+     Search for a global symbol named NAME in this objfile.  Optionally,
+     the search scope can be restricted with the DOMAIN argument.  The
+     DOMAIN argument must be a domain constant defined in the 'gdb'
+     module and described in *note Symbols In Python::.  This function
+     is similar to 'gdb.lookup_global_symbol', except that the search is
+     limited to this objfile.
+
+     The result is a 'gdb.Symbol' object or 'None' if the symbol is not
+     found.
+
+ -- Function: Objfile.lookup_static_symbol (name [, domain])
+     Like 'Objfile.lookup_global_symbol', but searches for a global
+     symbol with static linkage named NAME in this objfile.
+
+File: gdb.info,  Node: Frames In Python,  Next: Blocks In Python,  Prev: Objfiles In Python,  Up: Python API
+

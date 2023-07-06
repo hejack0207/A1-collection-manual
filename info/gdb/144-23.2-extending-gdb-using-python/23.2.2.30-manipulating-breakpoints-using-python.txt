@@ -1,0 +1,216 @@
+23.2.2.30 Manipulating breakpoints using Python
+...............................................
+
+Python code can manipulate breakpoints via the 'gdb.Breakpoint' class.
+
+   A breakpoint can be created using one of the two forms of the
+'gdb.Breakpoint' constructor.  The first one accepts a string like one
+would pass to the 'break' (*note Setting Breakpoints: Set Breaks.) and
+'watch' (*note Setting Watchpoints: Set Watchpoints.) commands, and can
+be used to create both breakpoints and watchpoints.  The second accepts
+separate Python arguments similar to *note Explicit Locations::, and can
+only be used to create breakpoints.
+
+ -- Function: Breakpoint.__init__ (spec [, type ][, wp_class ][,
+          internal ][, temporary ][, qualified ])
+     Create a new breakpoint according to SPEC, which is a string naming
+     the location of a breakpoint, or an expression that defines a
+     watchpoint.  The string should describe a location in a format
+     recognized by the 'break' command (*note Setting Breakpoints: Set
+     Breaks.) or, in the case of a watchpoint, by the 'watch' command
+     (*note Setting Watchpoints: Set Watchpoints.).
+
+     The optional TYPE argument specifies the type of the breakpoint to
+     create, as defined below.
+
+     The optional WP_CLASS argument defines the class of watchpoint to
+     create, if TYPE is 'gdb.BP_WATCHPOINT'.  If WP_CLASS is omitted, it
+     defaults to 'gdb.WP_WRITE'.
+
+     The optional INTERNAL argument allows the breakpoint to become
+     invisible to the user.  The breakpoint will neither be reported
+     when created, nor will it be listed in the output from 'info
+     breakpoints' (but will be listed with the 'maint info breakpoints'
+     command).
+
+     The optional TEMPORARY argument makes the breakpoint a temporary
+     breakpoint.  Temporary breakpoints are deleted after they have been
+     hit.  Any further access to the Python breakpoint after it has been
+     hit will result in a runtime error (as that breakpoint has now been
+     automatically deleted).
+
+     The optional QUALIFIED argument is a boolean that allows
+     interpreting the function passed in 'spec' as a fully-qualified
+     name.  It is equivalent to 'break''s '-qualified' flag (*note
+     Linespec Locations:: and *note Explicit Locations::).
+
+ -- Function: Breakpoint.__init__ ([ source ][, function ][, label ][,
+          line ], ][ internal ][, temporary ][, qualified ])
+     This second form of creating a new breakpoint specifies the
+     explicit location (*note Explicit Locations::) using keywords.  The
+     new breakpoint will be created in the specified source file SOURCE,
+     at the specified FUNCTION, LABEL and LINE.
+
+     INTERNAL, TEMPORARY and QUALIFIED have the same usage as explained
+     previously.
+
+   The available types are represented by constants defined in the 'gdb'
+module:
+
+'gdb.BP_BREAKPOINT'
+     Normal code breakpoint.
+
+'gdb.BP_WATCHPOINT'
+     Watchpoint breakpoint.
+
+'gdb.BP_HARDWARE_WATCHPOINT'
+     Hardware assisted watchpoint.
+
+'gdb.BP_READ_WATCHPOINT'
+     Hardware assisted read watchpoint.
+
+'gdb.BP_ACCESS_WATCHPOINT'
+     Hardware assisted access watchpoint.
+
+   The available watchpoint types represented by constants are defined
+in the 'gdb' module:
+
+'gdb.WP_READ'
+     Read only watchpoint.
+
+'gdb.WP_WRITE'
+     Write only watchpoint.
+
+'gdb.WP_ACCESS'
+     Read/Write watchpoint.
+
+ -- Function: Breakpoint.stop (self)
+     The 'gdb.Breakpoint' class can be sub-classed and, in particular,
+     you may choose to implement the 'stop' method.  If this method is
+     defined in a sub-class of 'gdb.Breakpoint', it will be called when
+     the inferior reaches any location of a breakpoint which
+     instantiates that sub-class.  If the method returns 'True', the
+     inferior will be stopped at the location of the breakpoint,
+     otherwise the inferior will continue.
+
+     If there are multiple breakpoints at the same location with a
+     'stop' method, each one will be called regardless of the return
+     status of the previous.  This ensures that all 'stop' methods have
+     a chance to execute at that location.  In this scenario if one of
+     the methods returns 'True' but the others return 'False', the
+     inferior will still be stopped.
+
+     You should not alter the execution state of the inferior (i.e.,
+     step, next, etc.), alter the current frame context (i.e., change
+     the current active frame), or alter, add or delete any breakpoint.
+     As a general rule, you should not alter any data within GDB or the
+     inferior at this time.
+
+     Example 'stop' implementation:
+
+          class MyBreakpoint (gdb.Breakpoint):
+                def stop (self):
+                  inf_val = gdb.parse_and_eval("foo")
+                  if inf_val == 3:
+                    return True
+                  return False
+
+ -- Function: Breakpoint.is_valid ()
+     Return 'True' if this 'Breakpoint' object is valid, 'False'
+     otherwise.  A 'Breakpoint' object can become invalid if the user
+     deletes the breakpoint.  In this case, the object still exists, but
+     the underlying breakpoint does not.  In the cases of watchpoint
+     scope, the watchpoint remains valid even if execution of the
+     inferior leaves the scope of that watchpoint.
+
+ -- Function: Breakpoint.delete ()
+     Permanently deletes the GDB breakpoint.  This also invalidates the
+     Python 'Breakpoint' object.  Any further access to this object's
+     attributes or methods will raise an error.
+
+ -- Variable: Breakpoint.enabled
+     This attribute is 'True' if the breakpoint is enabled, and 'False'
+     otherwise.  This attribute is writable.  You can use it to enable
+     or disable the breakpoint.
+
+ -- Variable: Breakpoint.silent
+     This attribute is 'True' if the breakpoint is silent, and 'False'
+     otherwise.  This attribute is writable.
+
+     Note that a breakpoint can also be silent if it has commands and
+     the first command is 'silent'.  This is not reported by the
+     'silent' attribute.
+
+ -- Variable: Breakpoint.pending
+     This attribute is 'True' if the breakpoint is pending, and 'False'
+     otherwise.  *Note Set Breaks::.  This attribute is read-only.
+
+ -- Variable: Breakpoint.thread
+     If the breakpoint is thread-specific, this attribute holds the
+     thread's global id.  If the breakpoint is not thread-specific, this
+     attribute is 'None'.  This attribute is writable.
+
+ -- Variable: Breakpoint.task
+     If the breakpoint is Ada task-specific, this attribute holds the
+     Ada task id.  If the breakpoint is not task-specific (or the
+     underlying language is not Ada), this attribute is 'None'.  This
+     attribute is writable.
+
+ -- Variable: Breakpoint.ignore_count
+     This attribute holds the ignore count for the breakpoint, an
+     integer.  This attribute is writable.
+
+ -- Variable: Breakpoint.number
+     This attribute holds the breakpoint's number -- the identifier used
+     by the user to manipulate the breakpoint.  This attribute is not
+     writable.
+
+ -- Variable: Breakpoint.type
+     This attribute holds the breakpoint's type -- the identifier used
+     to determine the actual breakpoint type or use-case.  This
+     attribute is not writable.
+
+ -- Variable: Breakpoint.visible
+     This attribute tells whether the breakpoint is visible to the user
+     when set, or when the 'info breakpoints' command is run.  This
+     attribute is not writable.
+
+ -- Variable: Breakpoint.temporary
+     This attribute indicates whether the breakpoint was created as a
+     temporary breakpoint.  Temporary breakpoints are automatically
+     deleted after that breakpoint has been hit.  Access to this
+     attribute, and all other attributes and functions other than the
+     'is_valid' function, will result in an error after the breakpoint
+     has been hit (as it has been automatically deleted).  This
+     attribute is not writable.
+
+ -- Variable: Breakpoint.hit_count
+     This attribute holds the hit count for the breakpoint, an integer.
+     This attribute is writable, but currently it can only be set to
+     zero.
+
+ -- Variable: Breakpoint.location
+     This attribute holds the location of the breakpoint, as specified
+     by the user.  It is a string.  If the breakpoint does not have a
+     location (that is, it is a watchpoint) the attribute's value is
+     'None'.  This attribute is not writable.
+
+ -- Variable: Breakpoint.expression
+     This attribute holds a breakpoint expression, as specified by the
+     user.  It is a string.  If the breakpoint does not have an
+     expression (the breakpoint is not a watchpoint) the attribute's
+     value is 'None'.  This attribute is not writable.
+
+ -- Variable: Breakpoint.condition
+     This attribute holds the condition of the breakpoint, as specified
+     by the user.  It is a string.  If there is no condition, this
+     attribute's value is 'None'.  This attribute is writable.
+
+ -- Variable: Breakpoint.commands
+     This attribute holds the commands attached to the breakpoint.  If
+     there are commands, this attribute's value is a string holding all
+     the commands, separated by newlines.  If there are no commands,
+     this attribute is 'None'.  This attribute is writable.
+
+File: gdb.info,  Node: Finish Breakpoints in Python,  Next: Lazy Strings In Python,  Prev: Breakpoints In Python,  Up: Python API
+
