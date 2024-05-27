@@ -4,7 +4,7 @@ id=${1:?id not specified}
 category=${2:?category not specified}
 
 if [[ ! -d latex/$id ]]; then
-	arxiv-sfetch.py --target_dir=latex $id
+	arxiv-fetch.py --target_dir=latex $id
 else
 	echo "latex/$id already exists"
 fi
