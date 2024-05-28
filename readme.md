@@ -5,6 +5,9 @@
 # books
 * [milewski-ctfp-pdf](https://github.com/hmemcpy/milewski-ctfp-pdf)
 
+# arxiv
+* [HuggingArxiv](https://github.com/HuggingAGI/HuggingArxiv)
+
 # image
 ![image1](/md/x.pngx)
 ![image2](https://github.com/hejack0207/A1-collection-manual/blob/master/md/x.pngx)
