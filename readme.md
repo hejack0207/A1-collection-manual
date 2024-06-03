@@ -9,7 +9,6 @@
 * [HuggingArxiv](https://github.com/HuggingAGI/HuggingArxiv)
 
 # image
-![image1](/md/x.pngx)
-![image2](https://github.com/hejack0207/A1-collection-manual/blob/master/md/x.pngx)
+![image1](/md/2_image_0.png)
+![image2](https://github.com/hejack0207/A1-collection-manual/blob/master/md/2_image_0.png)
 ![watermark example](https://i.imgur.com/GIRsTnT.png)
-[![image1](/md/x.pngx)]](https://bing.com)
