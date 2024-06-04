@@ -13,7 +13,7 @@ if [[ -z "$title" ]] then
 fi
 
 if [[ ! -d latex/$id ]]; then
-	arxiv-fetch.py --target_dir=$basedir/latex/$title $id
+	arxiv-fetch.py --target_dir=$basedir/latex/"$id $title" $id
 else
 	echo "latex/$id already exists"
 fi
