@@ -5,6 +5,9 @@
 # books
 * [milewski-ctfp-pdf](https://github.com/hmemcpy/milewski-ctfp-pdf)
 
+# spec
+* [virtio-spec](https://github.com/oasis-tcs/virtio-spec)
+
 # arxiv
 * [HuggingArxiv](https://github.com/HuggingAGI/HuggingArxiv)
 
