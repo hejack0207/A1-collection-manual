@@ -8,6 +8,7 @@
 
 # codes
 * [llm-gpt](https://github.com/huangjia2019/llm-gpt)
+* [ai-assisted-programming-book](https://github.com/huangjia2019/AI-Assisted-Programming-Book)
 * [inside-llvm-code-gen](https://github.com/inside-compiler/Inside-LLVM-Code-Gen)
 * [benos](https://github.com/runninglinuxkernel/BenOS)
 * [arm64_programming_practice](https://github.com/runninglinuxkernel/arm64_programming_practice)
