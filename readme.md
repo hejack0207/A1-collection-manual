@@ -6,6 +6,7 @@
 * [milewski-ctfp-pdf](https://github.com/hmemcpy/milewski-ctfp-pdf)
 * [5G](https://github.com/SystemsApproach/5G)
 * [freertos-kernel-book](https://github.com/FreeRTOS/FreeRTOS-Kernel-Book)
+* [esp32-c3-book](https://github.com/espressif/esp32-c3-book-en)
 
 # codes
 * [llm-gpt](https://github.com/huangjia2019/llm-gpt)
