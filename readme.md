@@ -10,9 +10,16 @@
 * [async-book](https://github.com/rust-lang/async-book)
 
 # codes
+## llm
 * [llm-gpt](https://github.com/huangjia2019/llm-gpt)
 * [ai-assisted-programming-book](https://github.com/ttaulli/AI-Assisted-Programming-Book)
 * [generative-deep-learning-2nd-edition](https://github.com/davidADSP/Generative_Deep_Learning_2nd_Edition)
+
+## transforms
+* [nlp-with-transformers](https://github.com/nlp-with-transformers/notebooks)
+* [transformers-the-definitive-guide](https://github.com/Nicolepcx/transformers-the-definitive-guide)
+
+## others
 * [inside-llvm-code-gen](https://github.com/inside-compiler/Inside-LLVM-Code-Gen)
 * [benos](https://github.com/runninglinuxkernel/BenOS)
 * [arm64_programming_practice](https://github.com/runninglinuxkernel/arm64_programming_practice)
