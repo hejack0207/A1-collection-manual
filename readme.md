@@ -29,7 +29,7 @@
 * [virtio-spec](https://github.com/oasis-tcs/virtio-spec)
 
 # arxiv
-* [HuggingArxiv](https://github.com/HuggingAGI/HuggingArxiv)
+* [Attention Is All You Need](https://arxiv.org/html/1706.03762)
 
 # image
 ![image1](/md/2_image_0.png)
